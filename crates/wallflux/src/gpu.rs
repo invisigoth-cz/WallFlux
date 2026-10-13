@@ -152,16 +152,18 @@ impl Gpu {
 
     /// Draws one frame and presents it. Presenting commits the surface, so the
     /// caller does not commit separately.
-    pub fn draw(&self, time: f32) -> Result<(), String> {
+    pub fn draw(&self, image: &crate::texture::Texture) -> Result<(), String> {
         let (w, h) = self.size;
+        let (sx, sy) = image.image_scale();
         unsafe {
             self.gl.viewport(0, 0, w as i32, h as i32);
             self.gl.use_program(Some(self.program));
-            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_time") {
-                self.gl.uniform_1_f32(Some(&loc), time);
+            image.bind(&self.gl, 0);
+            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_image") {
+                self.gl.uniform_1_i32(Some(&loc), 0);
             }
-            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_resolution") {
-                self.gl.uniform_2_f32(Some(&loc), w as f32, h as f32);
+            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_imageScale") {
+                self.gl.uniform_2_f32(Some(&loc), sx, sy);
             }
             // The quad is generated in the vertex shader from gl_VertexID, so
             // there are no buffers to bind; the array object is only here
@@ -186,11 +188,11 @@ impl Drop for Gpu {
 
 const VERTEX: &str = r#"#version 330 core
 // A full-screen quad with no vertex data: the four corners come from the
-// vertex index, which keeps the first renderer free of buffer plumbing.
+// vertex index, which keeps the renderer free of buffer plumbing.
 out vec2 v_uv;
 void main() {
     vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
-    v_uv = corner;
+    v_uv = vec2(corner.x, 1.0 - corner.y);
     gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
 }
 "#;
@@ -198,14 +200,12 @@ void main() {
 const FRAGMENT: &str = r#"#version 330 core
 in vec2 v_uv;
 out vec4 fragColor;
-uniform float u_time;
-uniform vec2 u_resolution;
+uniform sampler2D u_image;
+// The image sits in the top-left of a power-of-two texture, so coordinates are
+// scaled to its share or the sampling runs off into the empty margin.
+uniform vec2 u_imageScale;
 void main() {
-    vec2 p = v_uv * vec2(u_resolution.x / u_resolution.y, 1.0);
-    float wave = sin(p.x * 6.0 + u_time * 1.5) * 0.5 + 0.5;
-    float band = cos(p.y * 4.0 - u_time) * 0.5 + 0.5;
-    float v = wave * band;
-    fragColor = vec4(0.35 + 0.5 * v * v_uv.y, 0.08 + 0.35 * (1.0 - v), 0.16 + 0.7 * v, 1.0);
+    fragColor = texture(u_image, v_uv * u_imageScale);
 }
 "#;
 

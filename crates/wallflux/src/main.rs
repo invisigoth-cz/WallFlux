@@ -12,10 +12,12 @@
 //! behind.
 //!
 //! ```text
-//! cargo run -p wallflux -- [seconds] [namespace]
+//! cargo run -p wallflux -- <wallpaper-dir> [seconds] [namespace]
 //! ```
 
 mod gpu;
+mod texture;
+mod wallpaper;
 
 use std::time::{Duration, Instant};
 
@@ -35,13 +37,18 @@ use smithay_client_toolkit::shell::wlr_layer::{
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 
 use gpu::Gpu;
+use wallpaper::Wallpaper;
 
 fn main() {
+    let Some(dir) = std::env::args_os().nth(1).map(std::path::PathBuf::from) else {
+        eprintln!("usage: wallflux <wallpaper-dir> [seconds] [namespace]");
+        std::process::exit(2);
+    };
     let seconds: u64 = std::env::args()
-        .nth(1)
+        .nth(2)
         .and_then(|a| a.parse().ok())
         .unwrap_or(8);
-    let namespace = std::env::args().nth(2).unwrap_or_else(|| "desktop".into());
+    let namespace = std::env::args().nth(3).unwrap_or_else(|| "desktop".into());
 
     let conn =
         Connection::connect_to_env().expect("no Wayland display; is this a Wayland session?");
@@ -66,12 +73,14 @@ fn main() {
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    let mut app = Wallpaper {
+    let mut app = App {
+        dir,
         registry_state: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
         conn: conn.clone(),
         layer,
         gpu: None,
+        wallpaper: None,
         size: (0, 0),
         started: Instant::now(),
         frames: 0,
@@ -91,12 +100,14 @@ fn main() {
     );
 }
 
-struct Wallpaper {
+struct App {
+    dir: std::path::PathBuf,
     registry_state: RegistryState,
     output_state: OutputState,
     conn: Connection,
     layer: LayerSurface,
     gpu: Option<Gpu>,
+    wallpaper: Option<Wallpaper>,
     size: (u32, u32),
     started: Instant,
     frames: u32,
@@ -104,7 +115,7 @@ struct Wallpaper {
     done: bool,
 }
 
-impl Wallpaper {
+impl App {
     fn draw(&mut self, qh: &QueueHandle<Self>) {
         if self.started.elapsed() >= self.run_for {
             self.done = true;
@@ -132,10 +143,35 @@ impl Wallpaper {
         let Some(gpu) = self.gpu.as_mut() else { return };
         gpu.resize(w, h);
 
+        if self.wallpaper.is_none() {
+            match Wallpaper::load(&gpu.gl, &self.dir) {
+                Ok(loaded) => {
+                    println!(
+                        "object {:?}: texture {}x{}, {} mip levels, scene {}x{}",
+                        loaded.name,
+                        loaded.texture.width,
+                        loaded.texture.height,
+                        loaded.texture.levels,
+                        loaded.scene_size.0,
+                        loaded.scene_size.1,
+                    );
+                    self.wallpaper = Some(loaded);
+                }
+                Err(e) => {
+                    eprintln!("cannot load wallpaper: {e}");
+                    self.done = true;
+                    return;
+                }
+            }
+        }
+        let Some(wallpaper) = self.wallpaper.as_ref() else {
+            return;
+        };
+
         // Ask for the next frame before presenting: swapping buffers commits
         // the surface, and a callback requested afterwards would miss it.
         surface.frame(qh, FrameCallbackData(surface.clone()));
-        if let Err(e) = gpu.draw(self.started.elapsed().as_secs_f32()) {
+        if let Err(e) = gpu.draw(&wallpaper.texture) {
             eprintln!("frame failed: {e}");
             self.done = true;
             return;
@@ -144,7 +180,7 @@ impl Wallpaper {
     }
 }
 
-impl LayerShellHandler for Wallpaper {
+impl LayerShellHandler for App {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
         self.done = true;
     }
@@ -173,7 +209,7 @@ impl LayerShellHandler for Wallpaper {
     }
 }
 
-impl CompositorHandler for Wallpaper {
+impl CompositorHandler for App {
     fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
         self.draw(qh);
     }
@@ -215,7 +251,7 @@ impl CompositorHandler for Wallpaper {
     }
 }
 
-impl OutputHandler for Wallpaper {
+impl OutputHandler for App {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.output_state
     }
@@ -224,12 +260,12 @@ impl OutputHandler for Wallpaper {
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 
-impl ProvidesRegistryState for Wallpaper {
+impl ProvidesRegistryState for App {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry_state
     }
     registry_handlers![OutputState];
 }
 
-delegate_registry!(Wallpaper);
-delegate_dispatch2!(Wallpaper);
+delegate_registry!(App);
+delegate_dispatch2!(App);
