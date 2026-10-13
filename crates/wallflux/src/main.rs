@@ -1,23 +1,21 @@
-//! Opens a wallpaper-sized surface on the background layer and animates it.
+//! Draws a wallpaper on the background layer of a Wayland desktop.
 //!
-//! This exists to settle one question before any rendering work is built on
-//! top of it: whether a wallpaper can sit behind a working desktop rather than
-//! replacing it. Two things make that so. The surface is placed on the
-//! background layer, under everything the desktop puts on screen, and it is
-//! given an **empty input region**, so every click, drag and scroll passes
-//! straight through to whatever is above it.
+//! The surface is placed on the background layer, under everything the desktop
+//! puts on screen, and given an **empty input region**, so every click, drag
+//! and scroll passes straight through to whatever is above it.
 //!
 //! The namespace given when the surface is created is not cosmetic on KWin: it
-//! decides the window type the surface is treated as, and so where in the
-//! stack it lands relative to the desktop that draws the icons. It is an
-//! argument here so the choice can be tested rather than assumed.
+//! decides the window type the surface is treated as. It is an argument here so
+//! the choice can be tested rather than assumed.
 //!
-//! Runs for a few seconds and exits, so a failed experiment cannot leave
-//! anything behind.
+//! Runs for a few seconds and exits, so a failed experiment leaves nothing
+//! behind.
 //!
 //! ```text
 //! cargo run -p wallflux -- [seconds] [namespace]
 //! ```
+
+mod gpu;
 
 use std::time::{Duration, Instant};
 
@@ -26,17 +24,17 @@ use smithay_client_toolkit::compositor::{
 };
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::client::globals::registry_queue_init;
-use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_shm, wl_surface};
-use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
+use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_surface};
+use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::{
     Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
     LayerSurfaceConfigure,
 };
-use smithay_client_toolkit::shm::slot::SlotPool;
-use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
+
+use gpu::Gpu;
 
 fn main() {
     let seconds: u64 = std::env::args()
@@ -53,7 +51,6 @@ fn main() {
     let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor missing");
     let shell = LayerShell::bind(&globals, &qh)
         .expect("this compositor has no wlr-layer-shell, so it cannot host a wallpaper");
-    let shm = Shm::bind(&globals, &qh).expect("wl_shm missing");
 
     let surface = compositor.create_surface(&qh);
 
@@ -69,17 +66,13 @@ fn main() {
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    let pool = SlotPool::new(4, &shm).expect("cannot create a buffer pool");
-
     let mut app = Wallpaper {
         registry_state: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
-        shm,
-        pool,
+        conn: conn.clone(),
         layer,
-        width: 0,
-        height: 0,
-        configured: false,
+        gpu: None,
+        size: (0, 0),
         started: Instant::now(),
         frames: 0,
         run_for: Duration::from_secs(seconds),
@@ -101,12 +94,10 @@ fn main() {
 struct Wallpaper {
     registry_state: RegistryState,
     output_state: OutputState,
-    shm: Shm,
-    pool: SlotPool,
+    conn: Connection,
     layer: LayerSurface,
-    width: u32,
-    height: u32,
-    configured: bool,
+    gpu: Option<Gpu>,
+    size: (u32, u32),
     started: Instant,
     frames: u32,
     run_for: Duration,
@@ -119,42 +110,37 @@ impl Wallpaper {
             self.done = true;
             return;
         }
-        let (w, h) = (self.width, self.height);
+        let (w, h) = self.size;
         if w == 0 || h == 0 {
             return;
         }
 
-        let stride = w as i32 * 4;
-        let (buffer, canvas) = self
-            .pool
-            .create_buffer(w as i32, h as i32, stride, wl_shm::Format::Xrgb8888)
-            .expect("cannot create a buffer");
-
-        // Something obviously moving, so the question "is it animating while I
-        // work?" can be answered by looking rather than by trusting a log line.
-        let t = self.started.elapsed().as_secs_f32();
-        for (i, pixel) in canvas.chunks_exact_mut(4).enumerate() {
-            let x = (i as u32 % w) as f32 / w as f32;
-            let y = (i as u32 / w) as f32 / h as f32;
-            let wave = ((x * 6.0 + t * 1.5).sin() * 0.5 + 0.5) * ((y * 4.0 - t).cos() * 0.5 + 0.5);
-            pixel.copy_from_slice(&[
-                (40.0 + 180.0 * wave) as u8,        // blue
-                (20.0 + 90.0 * (1.0 - wave)) as u8, // green
-                (90.0 + 120.0 * wave * y) as u8,    // red
-                255,
-            ]);
-        }
-
-        self.frames += 1;
-        self.layer
-            .wl_surface()
-            .damage_buffer(0, 0, w as i32, h as i32);
         let surface = self.layer.wl_surface().clone();
+        if self.gpu.is_none() {
+            match Gpu::new(&self.conn, &surface.id(), w, h) {
+                Ok(gpu) => {
+                    println!("GL: {}", gpu.renderer());
+                    self.gpu = Some(gpu);
+                }
+                Err(e) => {
+                    eprintln!("cannot start GL: {e}");
+                    self.done = true;
+                    return;
+                }
+            }
+        }
+        let Some(gpu) = self.gpu.as_mut() else { return };
+        gpu.resize(w, h);
+
+        // Ask for the next frame before presenting: swapping buffers commits
+        // the surface, and a callback requested afterwards would miss it.
         surface.frame(qh, FrameCallbackData(surface.clone()));
-        buffer
-            .attach_to(self.layer.wl_surface())
-            .expect("cannot attach buffer");
-        self.layer.commit();
+        if let Err(e) = gpu.draw(self.started.elapsed().as_secs_f32()) {
+            eprintln!("frame failed: {e}");
+            self.done = true;
+            return;
+        }
+        self.frames += 1;
     }
 }
 
@@ -171,15 +157,15 @@ impl LayerShellHandler for Wallpaper {
         configure: LayerSurfaceConfigure,
         _: u32,
     ) {
-        (self.width, self.height) = configure.new_size;
-        if self.width == 0 || self.height == 0 {
+        if configure.new_size.0 == 0 || configure.new_size.1 == 0 {
             return;
         }
-        if !self.configured {
-            self.configured = true;
+        let first = self.size == (0, 0);
+        self.size = configure.new_size;
+        if first {
             println!(
                 "compositor gave us {}x{} on the background layer",
-                self.width, self.height
+                self.size.0, self.size.1
             );
             self.started = Instant::now();
         }
@@ -236,12 +222,6 @@ impl OutputHandler for Wallpaper {
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-}
-
-impl ShmHandler for Wallpaper {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
 }
 
 impl ProvidesRegistryState for Wallpaper {
