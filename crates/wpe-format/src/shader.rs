@@ -1,0 +1,388 @@
+//! Turning a wallpaper's shader into one a GLES 3 driver will accept.
+//!
+//! Wallpaper Engine's shaders are GLSL, which is why this renderer is built on
+//! GL at all, but they are not GLSL a modern driver compiles as-is. Three
+//! things are missing, and the engine supplies all three at compile time:
+//!
+//! - `#include "common.h"`, which is not a GLSL directive.
+//! - A set of helpers the shaders call but no shipped file defines:
+//!   `texSample2D`, `mul`, `saturate`, `frac` and the `CAST*` family. These
+//!   come from the shaders' Direct3D ancestry.
+//! - The `#define`s that select branches, which come from the material's
+//!   combos rather than from the shader.
+//!
+//! On top of that the sources are written in the older dialect, with `varying`
+//! and `gl_FragColor`, so the prelude bridges those to `in`/`out` rather than
+//! rewriting hundreds of shaders.
+
+use std::collections::BTreeMap;
+
+/// What a shader asked for but could not be given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Missing {
+    /// An `#include` naming a file neither the wallpaper nor the installation has.
+    Include { name: String, line: usize },
+    /// Includes nested far enough to look like a cycle.
+    IncludeTooDeep { name: String },
+}
+
+impl std::fmt::Display for Missing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Include { name, line } => write!(f, "line {line}: no such include {name:?}"),
+            Self::IncludeTooDeep { name } => write!(f, "include {name:?} nests too deeply"),
+        }
+    }
+}
+
+/// Which pipeline stage a shader is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    Vertex,
+    Fragment,
+}
+
+const MAX_INCLUDE_DEPTH: usize = 16;
+
+/// The compatibility layer every shader is compiled with.
+///
+/// `mul` is a plain multiply in both argument orders, because GLSL's `*`
+/// carries the same two meanings Direct3D's `mul` does: a vector on the left is
+/// a row vector, on the right a column vector. Shaders here use both.
+const PRELUDE: &str = r#"
+#define saturate(x) clamp((x), 0.0, 1.0)
+#define mul(a, b) ((a) * (b))
+#define lerp(a, b, t) mix((a), (b), (t))
+#define frac(x) fract(x)
+#define fmod(a, b) mod((a), (b))
+#define atan2(y, x) atan((y), (x))
+#define ddx(x) dFdx(x)
+#define ddy(x) dFdy(x)
+#define rsqrt(x) inversesqrt(x)
+#define CASTF(x) float(x)
+#define CASTI(x) int(x)
+#define CASTU(x) uint(x)
+#define CAST2(x) vec2(x)
+#define CAST3(x) vec3(x)
+#define CAST4(x) vec4(x)
+#define CAST2X2(x) mat2(x)
+#define CAST3X3(x) mat3(x)
+#define CAST4X4(x) mat4(x)
+#define texSample2D(s, uv) texture((s), (uv).xy)
+#define texSample2DLod(s, uv, lod) textureLod((s), (uv).xy, (lod))
+#define texSample2DCompare(s, uvz) (texture((s), (uvz).xy).r < (uvz).z ? 0.0 : 1.0)
+#define texSample3D(s, uvw) texture((s), (uvw))
+#define texSample3DLod(s, uvw, lod) textureLod((s), (uvw), (lod))
+#define texSampleCube(s, dir) texture((s), (dir))
+#define MAKE_SAMPLER2D_ARGUMENT(name) sampler2D name
+
+// Reserved in GLSL ES 3 but used as ordinary names in these shaders. Renaming
+// them with a define keeps every use consistent without editing the sources.
+#define sample wf_sample
+#define filter wf_filter
+#define input wf_input
+#define output wf_output
+#define common wf_common
+#define active wf_active
+#define partition wf_partition
+"#;
+
+/// Bridges the older dialect the sources are written in.
+const VERTEX_PRELUDE: &str = "#define varying out\n#define attribute in\n";
+const FRAGMENT_PRELUDE: &str =
+    "#define varying in\nout vec4 wf_FragColor;\n#define gl_FragColor wf_FragColor\n";
+
+/// Builds the source to hand to the driver.
+///
+/// `resolve` is given an include's name and returns its contents, so the caller
+/// decides whether a wallpaper's own copy or the installation's wins.
+pub fn preprocess(
+    source: &str,
+    stage: Stage,
+    combos: &BTreeMap<String, String>,
+    mut resolve: impl FnMut(&str) -> Option<String>,
+) -> (String, Vec<Missing>) {
+    let mut out = String::with_capacity(source.len() * 2);
+    let mut missing = Vec::new();
+
+    out.push_str("#version 330 core\n");
+    out.push_str(match stage {
+        Stage::Vertex => VERTEX_PRELUDE,
+        Stage::Fragment => FRAGMENT_PRELUDE,
+    });
+    out.push_str(PRELUDE);
+
+    // Combos select branches inside the shader. Shaders only ever test these
+    // uppercase, so they are emitted that way whatever case the material used.
+    // The body is built first: a shader declares defaults for its own options,
+    // and those declarations can come from an include.
+    let mut body = String::with_capacity(source.len() * 2);
+    expand(source, 0, &mut body, &mut missing, &mut resolve);
+
+    // What the material asked for wins; anything it left alone falls back to
+    // the default the shader declares for itself.
+    let mut settings = combo_defaults(&body);
+    for (name, value) in combos {
+        settings.insert(name.to_ascii_uppercase(), value.clone());
+    }
+    for (name, value) in &settings {
+        if !defines(&body, name) {
+            out.push_str(&format!("#define {name} {value}\n"));
+        }
+    }
+
+    // Shaders branch on which language they are being compiled for. Some set
+    // this themselves, so it is only supplied when one does not.
+    if !defines(&body, "GLSL") {
+        out.push_str("#define GLSL 1\n");
+    }
+
+    out.push_str(&body);
+    (out, missing)
+}
+
+/// The options a shader declares for itself, with the values to use when a
+/// material does not set them.
+///
+/// These ride in comments next to the code they control:
+///
+/// ```text
+/// // [COMBO] {"combo":"BLENDMODE","type":"imageblending","default":9}
+/// ```
+///
+/// Without them an option used as a value rather than in an `#if` is simply an
+/// undeclared identifier, which is where a blend mode goes missing.
+pub fn combo_defaults(source: &str) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    for line in source.lines() {
+        let line = line.trim_start();
+        if !line.starts_with("//") {
+            continue;
+        }
+        let upper = line.to_ascii_uppercase();
+        let Some(at) = upper.find("[COMBO]") else {
+            continue;
+        };
+        let Some(start) = line[at..].find('{').map(|i| at + i) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&line[start..]) else {
+            continue;
+        };
+        let (Some(name), Some(default)) = (value.get("combo"), value.get("default")) else {
+            continue;
+        };
+        let Some(name) = name.as_str() else { continue };
+        let default = match default {
+            serde_json::Value::String(s) => s.clone(),
+            other => other.to_string(),
+        };
+        out.insert(name.to_ascii_uppercase(), default);
+    }
+    out
+}
+
+/// Whether the source defines `name` itself.
+fn defines(source: &str, name: &str) -> bool {
+    source.lines().any(|line| {
+        line.trim_start()
+            .strip_prefix("#define")
+            .map(str::trim_start)
+            .and_then(|rest| {
+                rest.split(|c: char| !c.is_alphanumeric() && c != '_')
+                    .next()
+            })
+            == Some(name)
+    })
+}
+
+/// Names a shader tests in an `#if` but never defines.
+///
+/// Desktop GLSL treats an undefined name in such an expression as zero; GLSL ES
+/// rejects it outright, and these shaders lean on the desktop behaviour for
+/// every option a material did not set. Giving those a zero restores it.
+///
+fn expand(
+    source: &str,
+    depth: usize,
+    out: &mut String,
+    missing: &mut Vec<Missing>,
+    resolve: &mut impl FnMut(&str) -> Option<String>,
+) {
+    for (number, line) in source.lines().enumerate() {
+        match include_name(line) {
+            Some(name) if depth >= MAX_INCLUDE_DEPTH => {
+                missing.push(Missing::IncludeTooDeep {
+                    name: name.to_owned(),
+                });
+            }
+            Some(name) => match resolve(name) {
+                Some(text) => expand(&text, depth + 1, out, missing, resolve),
+                None => {
+                    missing.push(Missing::Include {
+                        name: name.to_owned(),
+                        line: number + 1,
+                    });
+                }
+            },
+            // A `#version` inside a wallpaper's own shader would land after the
+            // one above and be rejected, so it is dropped rather than passed on.
+            None if line.trim_start().starts_with("#version") => {}
+            // `#require` is the engine's own directive, not GLSL's. The driver
+            // rejects it outright, and what it asks for is already in scope.
+            None if line.trim_start().starts_with("#require") => {}
+            None => {
+                out.push_str(line);
+                out.push('\n');
+            }
+        }
+    }
+}
+
+/// The file named by an `#include "..."` line, if the line is one.
+fn include_name(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix("#include")?;
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    rest.split('"').next().filter(|n| !n.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn none(_: &str) -> Option<String> {
+        None
+    }
+
+    #[test]
+    fn puts_the_version_first_and_only_once() {
+        let (out, missing) = preprocess(
+            "#version 100\nvoid main() {}",
+            Stage::Fragment,
+            &BTreeMap::new(),
+            none,
+        );
+        assert!(out.starts_with("#version 330 core\n"));
+        assert_eq!(out.matches("#version").count(), 1);
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn pulls_in_includes_recursively() {
+        let (out, missing) = preprocess(
+            "#include \"a.h\"\nvoid main() {}",
+            Stage::Fragment,
+            &BTreeMap::new(),
+            |name| match name {
+                "a.h" => Some("#include \"b.h\"\nfloat a() { return 1.0; }".into()),
+                "b.h" => Some("float b() { return 2.0; }".into()),
+                _ => None,
+            },
+        );
+        assert!(out.contains("float a()") && out.contains("float b()"));
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn reports_a_missing_include_with_its_line() {
+        let (_, missing) = preprocess(
+            "\n\n#include \"gone.h\"",
+            Stage::Vertex,
+            &BTreeMap::new(),
+            none,
+        );
+        assert_eq!(
+            missing,
+            vec![Missing::Include {
+                name: "gone.h".into(),
+                line: 3
+            }]
+        );
+    }
+
+    #[test]
+    fn stops_an_include_cycle() {
+        let (_, missing) = preprocess(
+            "#include \"loop.h\"",
+            Stage::Vertex,
+            &BTreeMap::new(),
+            |_| Some("#include \"loop.h\"".into()),
+        );
+        assert!(matches!(
+            missing.first(),
+            Some(Missing::IncludeTooDeep { .. })
+        ));
+    }
+
+    /// Materials sometimes spell combos lowercase; shaders only test uppercase.
+    #[test]
+    fn a_shader_supplies_defaults_for_its_own_options() {
+        let source = r#"// [COMBO] {"combo":"BLENDMODE","type":"imageblending","default":9}
+                        void main() { ApplyBlending(BLENDMODE); }"#;
+        let (out, _) = preprocess(source, Stage::Fragment, &BTreeMap::new(), none);
+        assert!(out.contains("#define BLENDMODE 9"));
+    }
+
+    #[test]
+    fn the_material_overrides_the_shaders_default() {
+        let source = r#"// [COMBO] {"combo":"BLENDMODE","default":9}"#;
+        let combos = BTreeMap::from([("blendmode".into(), "2".into())]);
+        let (out, _) = preprocess(source, Stage::Fragment, &combos, none);
+        assert!(out.contains("#define BLENDMODE 2"));
+        assert!(!out.contains("#define BLENDMODE 9"));
+    }
+
+    #[test]
+    fn combos_are_defined_uppercase() {
+        let combos = BTreeMap::from([("audioprocessing".into(), "3".into())]);
+        let (out, _) = preprocess("", Stage::Fragment, &combos, none);
+        assert!(out.contains("#define AUDIOPROCESSING 3"));
+    }
+
+    /// A shader that sets this itself must not be given a second definition.
+    #[test]
+    fn the_language_macro_yields_to_the_shader() {
+        let (mine, _) = preprocess("void main() {}", Stage::Fragment, &BTreeMap::new(), none);
+        assert!(mine.contains("#define GLSL 1"));
+        let (theirs, _) = preprocess(
+            "#define GLSL 1
+void main() {}",
+            Stage::Fragment,
+            &BTreeMap::new(),
+            none,
+        );
+        assert_eq!(theirs.matches("#define GLSL").count(), 1);
+    }
+
+    #[test]
+    fn each_stage_gets_its_own_bridge() {
+        let (vert, _) = preprocess("", Stage::Vertex, &BTreeMap::new(), none);
+        let (frag, _) = preprocess("", Stage::Fragment, &BTreeMap::new(), none);
+        assert!(vert.contains("#define varying out"));
+        assert!(frag.contains("#define varying in"));
+        assert!(frag.contains("#define gl_FragColor"));
+        assert!(!vert.contains("gl_FragColor"));
+    }
+
+    #[test]
+    fn drops_directives_only_the_engine_understands() {
+        let (out, _) = preprocess(
+            "#require LightingV1\nvoid main() {}",
+            Stage::Fragment,
+            &BTreeMap::new(),
+            none,
+        );
+        assert!(!out.contains("#require"));
+        assert!(out.contains("void main()"));
+    }
+
+    #[test]
+    fn recognises_include_lines_and_leaves_other_lines_alone() {
+        assert_eq!(include_name("#include \"common.h\""), Some("common.h"));
+        assert_eq!(include_name("  #include   \"a/b.h\"  "), Some("a/b.h"));
+        assert_eq!(include_name("// #include is mentioned here"), None);
+        assert_eq!(include_name("#define x 1"), None);
+        assert_eq!(include_name("#include <angle.h>"), None);
+    }
+}

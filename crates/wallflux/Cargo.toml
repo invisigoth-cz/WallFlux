@@ -11,3 +11,4 @@ glow = "0.18.0"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 smithay-client-toolkit = "0.21.1"
 wayland-egl = "0.32.11"
+wpe-format = { version = "0.1.0", path = "../wpe-format" }

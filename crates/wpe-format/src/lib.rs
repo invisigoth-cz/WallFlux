@@ -10,6 +10,7 @@ pub mod effect;
 pub mod material;
 pub mod pkg;
 pub mod scene;
+pub mod shader;
 pub mod tex;
 
 pub use assets::{Assets, Resolver};

@@ -1,10 +1,15 @@
 //! An OpenGL ES context on a Wayland surface.
 //!
 //! Wallpaper Engine ships its shaders as GLSL, so the renderer speaks GL
-//! rather than translating them into another shading language. This sets up
-//! the EGL side of that: a GLES 3 context bound to a `wl_egl_window` wrapping
-//! the layer surface, with `eglSwapBuffers` taking over the job of committing
-//! frames.
+//! rather than translating them into another shading language. This sets up the
+//! EGL side of that: a `wl_egl_window` wrapping the layer surface, with
+//! `eglSwapBuffers` taking over the job of committing frames.
+//!
+//! Desktop GL rather than GLES, because the shaders are written for it: GLSL ES
+//! rejects an undefined name in an `#if`, which desktop GLSL reads as zero, and
+//! the wallpapers rely on that for every option a material leaves unset.
+//! Compiling the library against both put it at 79 shaders out of 110 on GLES
+//! and 105 on desktop GL.
 
 use glow::HasContext;
 use khronos_egl as egl;
@@ -47,7 +52,7 @@ impl Gpu {
         };
         egl.initialize(display)
             .map_err(|e| format!("eglInitialize: {e}"))?;
-        egl.bind_api(egl::OPENGL_ES_API)
+        egl.bind_api(egl::OPENGL_API)
             .map_err(|e| format!("eglBindAPI: {e}"))?;
 
         let config = egl
@@ -57,7 +62,7 @@ impl Gpu {
                     egl::SURFACE_TYPE,
                     egl::WINDOW_BIT,
                     egl::RENDERABLE_TYPE,
-                    egl::OPENGL_ES3_BIT,
+                    egl::OPENGL_BIT,
                     egl::RED_SIZE,
                     8,
                     egl::GREEN_SIZE,
@@ -70,14 +75,24 @@ impl Gpu {
                 ],
             )
             .map_err(|e| format!("eglChooseConfig: {e}"))?
-            .ok_or("no EGL config with GLES 3 and 8-bit colour")?;
+            .ok_or("no EGL config with desktop GL and 8-bit colour")?;
 
         let context = egl
             .create_context(
                 display,
                 config,
                 None,
-                &[egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE],
+                &[
+                    // From EGL_KHR_create_context; EGL 1.4 has no named
+                    // constants for these.
+                    0x3098, // CONTEXT_MAJOR_VERSION
+                    3,
+                    0x30FB, // CONTEXT_MINOR_VERSION
+                    3,
+                    0x30FD, // CONTEXT_OPENGL_PROFILE_MASK
+                    0x0001, // CORE
+                    egl::NONE,
+                ],
             )
             .map_err(|e| format!("eglCreateContext: {e}"))?;
 
@@ -169,7 +184,7 @@ impl Drop for Gpu {
     }
 }
 
-const VERTEX: &str = r#"#version 300 es
+const VERTEX: &str = r#"#version 330 core
 // A full-screen quad with no vertex data: the four corners come from the
 // vertex index, which keeps the first renderer free of buffer plumbing.
 out vec2 v_uv;
@@ -180,8 +195,7 @@ void main() {
 }
 "#;
 
-const FRAGMENT: &str = r#"#version 300 es
-precision highp float;
+const FRAGMENT: &str = r#"#version 330 core
 in vec2 v_uv;
 out vec4 fragColor;
 uniform float u_time;
