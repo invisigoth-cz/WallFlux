@@ -131,6 +131,106 @@ impl Texture {
             self.image_size.1 as f32 / self.height.max(1) as f32,
         )
     }
+
+    /// Texture coordinates that show this image on an output of a different
+    /// shape, as `(scale, offset)` to apply to a 0..1 quad.
+    pub fn cover(&self, output: (u32, u32)) -> ((f32, f32), (f32, f32)) {
+        let ((sx, sy), (ox, oy)) = cover(self.image_size, output);
+        let (mx, my) = self.image_scale();
+        ((sx * mx, sy * my), (ox * mx, oy * my))
+    }
+}
+
+/// Fits `image` onto `output` without distorting it, by cropping the overflow
+/// evenly from both sides.
+///
+/// Wallpapers are not authored at the size they are shown. This library alone
+/// holds 16:9, 16:10 and two ultrawide shapes, and no monitor matches all of
+/// them -- not even one that matches none, as 2560x1413 does. Stretching to fit
+/// is the one option that is always wrong, so the picture keeps its proportions
+/// and the parts that cannot be shown are cut from the edges rather than
+/// squeezed into view.
+///
+/// Returns `(scale, offset)` in texture coordinates. Nothing is resampled here:
+/// the full-resolution texture stays on the GPU and the hardware samples it,
+/// so a wallpaper larger than the screen loses only what the screen cannot
+/// show anyway.
+pub fn cover(image: (u32, u32), output: (u32, u32)) -> ((f32, f32), (f32, f32)) {
+    let image_aspect = image.0 as f32 / image.1.max(1) as f32;
+    let output_aspect = output.0 as f32 / output.1.max(1) as f32;
+
+    if image_aspect > output_aspect {
+        // Wider than the screen: show a centred vertical slice of it.
+        let visible = output_aspect / image_aspect;
+        ((visible, 1.0), ((1.0 - visible) / 2.0, 0.0))
+    } else {
+        let visible = image_aspect / output_aspect;
+        ((1.0, visible), (0.0, (1.0 - visible) / 2.0))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cover;
+
+    fn close(a: f32, b: f32) -> bool {
+        (a - b).abs() < 1e-5
+    }
+
+    #[test]
+    fn an_exact_match_is_left_alone() {
+        let ((sx, sy), (ox, oy)) = cover((1920, 1080), (1920, 1080));
+        assert!(close(sx, 1.0) && close(sy, 1.0) && close(ox, 0.0) && close(oy, 0.0));
+    }
+
+    /// The same shape at a different size needs no cropping either, which is
+    /// what keeps a 4K wallpaper whole on a 1080p screen.
+    #[test]
+    fn the_same_shape_at_another_size_is_left_alone() {
+        let ((sx, sy), (ox, oy)) = cover((3840, 2160), (1280, 720));
+        assert!(close(sx, 1.0) && close(sy, 1.0) && close(ox, 0.0) && close(oy, 0.0));
+    }
+
+    #[test]
+    fn an_ultrawide_wallpaper_is_cropped_sideways_not_squashed() {
+        let ((sx, sy), (ox, oy)) = cover((3440, 1440), (2560, 1440));
+        assert!(sx < 1.0, "a wider picture shows less of its width");
+        assert!(close(sy, 1.0), "its height is untouched");
+        assert!(close(ox, (1.0 - sx) / 2.0), "and the crop is centred");
+        assert!(close(oy, 0.0));
+    }
+
+    #[test]
+    fn a_taller_wallpaper_is_cropped_vertically() {
+        let ((sx, sy), (ox, oy)) = cover((1920, 1200), (2560, 1413));
+        assert!(close(sx, 1.0));
+        assert!(sy < 1.0);
+        assert!(close(oy, (1.0 - sy) / 2.0));
+        assert!(close(ox, 0.0));
+    }
+
+    /// Whatever the shapes, the visible area is never stretched: the ratio of
+    /// the two scales always undoes the difference between the two aspects.
+    #[test]
+    fn proportions_survive_every_combination() {
+        for image in [
+            (1920, 1080),
+            (3440, 1440),
+            (1920, 1200),
+            (5120, 2880),
+            (1024, 1024),
+        ] {
+            for output in [(2560, 1413), (1920, 1080), (3440, 1440), (800, 600)] {
+                let ((sx, sy), _) = cover(image, output);
+                let shown = (image.0 as f32 * sx) / (image.1 as f32 * sy);
+                let screen = output.0 as f32 / output.1 as f32;
+                assert!(
+                    (shown - screen).abs() < 1e-3,
+                    "{image:?} on {output:?} came out at {shown} not {screen}"
+                );
+            }
+        }
+    }
 }
 
 unsafe fn upload_blocks(

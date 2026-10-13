@@ -105,12 +105,15 @@ unsafe fn render(
         gl.clear(glow::COLOR_BUFFER_BIT);
         gl.use_program(Some(program));
         wallpaper.texture.bind(gl, 0);
-        let (sx, sy) = wallpaper.texture.image_scale();
+        let ((sx, sy), (ox, oy)) = wallpaper.texture.cover((width, height));
         if let Some(l) = gl.get_uniform_location(program, "u_image") {
             gl.uniform_1_i32(Some(&l), 0);
         }
-        if let Some(l) = gl.get_uniform_location(program, "u_imageScale") {
+        if let Some(l) = gl.get_uniform_location(program, "u_uvScale") {
             gl.uniform_2_f32(Some(&l), sx, sy);
+        }
+        if let Some(l) = gl.get_uniform_location(program, "u_uvOffset") {
+            gl.uniform_2_f32(Some(&l), ox, oy);
         }
         gl.bind_vertex_array(Some(vao));
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
@@ -151,9 +154,10 @@ const FRAGMENT: &str = r#"#version 330 core
 in vec2 v_uv;
 out vec4 fragColor;
 uniform sampler2D u_image;
-uniform vec2 u_imageScale;
+uniform vec2 u_uvScale;
+uniform vec2 u_uvOffset;
 void main() {
-    fragColor = texture(u_image, v_uv * u_imageScale);
+    fragColor = texture(u_image, v_uv * u_uvScale + u_uvOffset);
 }
 "#;
 

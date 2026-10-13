@@ -154,7 +154,7 @@ impl Gpu {
     /// caller does not commit separately.
     pub fn draw(&self, image: &crate::texture::Texture) -> Result<(), String> {
         let (w, h) = self.size;
-        let (sx, sy) = image.image_scale();
+        let ((sx, sy), (ox, oy)) = image.cover((w, h));
         unsafe {
             self.gl.viewport(0, 0, w as i32, h as i32);
             self.gl.use_program(Some(self.program));
@@ -162,8 +162,11 @@ impl Gpu {
             if let Some(loc) = self.gl.get_uniform_location(self.program, "u_image") {
                 self.gl.uniform_1_i32(Some(&loc), 0);
             }
-            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_imageScale") {
+            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_uvScale") {
                 self.gl.uniform_2_f32(Some(&loc), sx, sy);
+            }
+            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_uvOffset") {
+                self.gl.uniform_2_f32(Some(&loc), ox, oy);
             }
             // The quad is generated in the vertex shader from gl_VertexID, so
             // there are no buffers to bind; the array object is only here
@@ -201,11 +204,13 @@ const FRAGMENT: &str = r#"#version 330 core
 in vec2 v_uv;
 out vec4 fragColor;
 uniform sampler2D u_image;
-// The image sits in the top-left of a power-of-two texture, so coordinates are
-// scaled to its share or the sampling runs off into the empty margin.
-uniform vec2 u_imageScale;
+// The image sits in the top-left of a power-of-two texture and is rarely the
+// shape of the screen, so coordinates carry both corrections: the share of the
+// texture the image occupies, and the crop that keeps its proportions.
+uniform vec2 u_uvScale;
+uniform vec2 u_uvOffset;
 void main() {
-    fragColor = texture(u_image, v_uv * u_imageScale);
+    fragColor = texture(u_image, v_uv * u_uvScale + u_uvOffset);
 }
 "#;
 
