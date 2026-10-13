@@ -1,0 +1,10 @@
+[package]
+name = "wallflux"
+description = "Live wallpapers for Linux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+smithay-client-toolkit = "0.21.1"
