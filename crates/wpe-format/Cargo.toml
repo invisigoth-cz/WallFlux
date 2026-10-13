@@ -1,0 +1,14 @@
+[package]
+name = "wpe-format"
+description = "Reader for Wallpaper Engine package and texture containers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lz4_flex = { version = "0.11", default-features = false, features = ["safe-decode", "std"] }
+
+[dev-dependencies]
+png = "0.18"
+texpresso = "2.0.2"
