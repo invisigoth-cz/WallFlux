@@ -40,8 +40,13 @@ fn main() {
         std::process::exit(1);
     });
     println!(
-        "object {:?}: texture {}x{}, {} mip levels",
-        wallpaper.name, wallpaper.texture.width, wallpaper.texture.height, wallpaper.texture.levels
+        "object {:?}: texture {}x{}, {} mip levels, scene {}x{}",
+        wallpaper.name,
+        wallpaper.texture.width,
+        wallpaper.texture.height,
+        wallpaper.texture.levels,
+        wallpaper.scene_size.0,
+        wallpaper.scene_size.1,
     );
 
     let pixels = unsafe { render(&gl, &wallpaper, width, height) }.unwrap_or_else(|e| {
