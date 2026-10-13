@@ -30,8 +30,6 @@ pub struct Gpu {
     /// backing, so it has to outlive the surface above.
     window: WlEglSurface,
     pub gl: glow::Context,
-    program: glow::Program,
-    vao: glow::VertexArray,
     size: (u32, u32),
 }
 
@@ -113,12 +111,6 @@ impl Gpu {
             })
         };
 
-        let program = unsafe { build_program(&gl)? };
-        let vao = unsafe {
-            gl.create_vertex_array()
-                .map_err(|e| format!("vertex array: {e}"))?
-        };
-
         Ok(Self {
             egl,
             display,
@@ -126,8 +118,6 @@ impl Gpu {
             surface: egl_surface,
             window,
             gl,
-            program,
-            vao,
             size: (width, height),
         })
     }
@@ -150,30 +140,9 @@ impl Gpu {
         self.window.resize(width as i32, height as i32, 0, 0);
     }
 
-    /// Draws one frame and presents it. Presenting commits the surface, so the
+    /// Presents what has been drawn. Presenting commits the surface, so the
     /// caller does not commit separately.
-    pub fn draw(&self, image: &crate::texture::Texture) -> Result<(), String> {
-        let (w, h) = self.size;
-        let ((sx, sy), (ox, oy)) = image.cover((w, h));
-        unsafe {
-            self.gl.viewport(0, 0, w as i32, h as i32);
-            self.gl.use_program(Some(self.program));
-            image.bind(&self.gl, 0);
-            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_image") {
-                self.gl.uniform_1_i32(Some(&loc), 0);
-            }
-            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_uvScale") {
-                self.gl.uniform_2_f32(Some(&loc), sx, sy);
-            }
-            if let Some(loc) = self.gl.get_uniform_location(self.program, "u_uvOffset") {
-                self.gl.uniform_2_f32(Some(&loc), ox, oy);
-            }
-            // The quad is generated in the vertex shader from gl_VertexID, so
-            // there are no buffers to bind; the array object is only here
-            // because GLES 3 requires one to be bound.
-            self.gl.bind_vertex_array(Some(self.vao));
-            self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
-        }
+    pub fn present(&self) -> Result<(), String> {
         self.egl
             .swap_buffers(self.display, self.surface)
             .map_err(|e| format!("eglSwapBuffers: {e}"))
@@ -186,69 +155,5 @@ impl Drop for Gpu {
         let _ = self.egl.destroy_surface(self.display, self.surface);
         let _ = self.egl.destroy_context(self.display, self.context);
         let _ = self.egl.terminate(self.display);
-    }
-}
-
-const VERTEX: &str = r#"#version 330 core
-// A full-screen quad with no vertex data: the four corners come from the
-// vertex index, which keeps the renderer free of buffer plumbing.
-out vec2 v_uv;
-void main() {
-    vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
-    v_uv = vec2(corner.x, 1.0 - corner.y);
-    gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
-}
-"#;
-
-const FRAGMENT: &str = r#"#version 330 core
-in vec2 v_uv;
-out vec4 fragColor;
-uniform sampler2D u_image;
-// The image sits in the top-left of a power-of-two texture and is rarely the
-// shape of the screen, so coordinates carry both corrections: the share of the
-// texture the image occupies, and the crop that keeps its proportions.
-uniform vec2 u_uvScale;
-uniform vec2 u_uvOffset;
-void main() {
-    fragColor = texture(u_image, v_uv * u_uvScale + u_uvOffset);
-}
-"#;
-
-unsafe fn build_program(gl: &glow::Context) -> Result<glow::Program, String> {
-    unsafe {
-        let program = gl
-            .create_program()
-            .map_err(|e| format!("create program: {e}"))?;
-        let mut shaders = Vec::new();
-        for (kind, source) in [
-            (glow::VERTEX_SHADER, VERTEX),
-            (glow::FRAGMENT_SHADER, FRAGMENT),
-        ] {
-            let shader = gl
-                .create_shader(kind)
-                .map_err(|e| format!("create shader: {e}"))?;
-            gl.shader_source(shader, source);
-            gl.compile_shader(shader);
-            if !gl.get_shader_compile_status(shader) {
-                return Err(format!(
-                    "shader failed to compile: {}",
-                    gl.get_shader_info_log(shader)
-                ));
-            }
-            gl.attach_shader(program, shader);
-            shaders.push(shader);
-        }
-        gl.link_program(program);
-        if !gl.get_program_link_status(program) {
-            return Err(format!(
-                "program failed to link: {}",
-                gl.get_program_info_log(program)
-            ));
-        }
-        for shader in shaders {
-            gl.detach_shader(program, shader);
-            gl.delete_shader(shader);
-        }
-        Ok(program)
     }
 }

@@ -635,6 +635,7 @@ dependencies = [
  "image",
  "khronos-egl",
  "png",
+ "serde_json",
  "smithay-client-toolkit",
  "wayland-egl",
  "wpe-format",

@@ -1,12 +1,12 @@
 //! Renders a wallpaper to a PNG without touching the screen.
 //!
-//! The on-screen renderer can only be checked by looking at the desktop, which
-//! is awkward to do while working on it and impossible to do automatically.
-//! This runs the same loading and drawing against an off-screen buffer, so the
-//! result is a file that can be compared with the wallpaper's own preview.
+//! Runs the same loading and drawing as the on-screen renderer against an
+//! off-screen buffer, so the result is a file that can be compared with the
+//! wallpaper's own preview. Takes a time in seconds, because an animated
+//! wallpaper looks different at different moments.
 //!
 //! ```text
-//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height]
+//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds]
 //! ```
 
 use std::path::PathBuf;
@@ -14,42 +14,46 @@ use std::path::PathBuf;
 use glow::HasContext;
 use khronos_egl as egl;
 
+#[path = "../src/render.rs"]
+mod render;
 #[path = "../src/texture.rs"]
 mod texture;
-#[path = "../src/wallpaper.rs"]
-mod wallpaper;
+#[path = "../src/transform.rs"]
+mod transform;
 
-use wallpaper::Wallpaper;
+use render::Scene;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [dir, out, rest @ ..] = args.as_slice() else {
-        eprintln!("usage: shot <wallpaper-dir> <out.png> [width] [height]");
+        eprintln!("usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds]");
         std::process::exit(2);
     };
     let width: u32 = rest.first().and_then(|s| s.parse().ok()).unwrap_or(1280);
     let height: u32 = rest.get(1).and_then(|s| s.parse().ok()).unwrap_or(720);
+    let time: f32 = rest.get(2).and_then(|s| s.parse().ok()).unwrap_or(0.0);
 
     let (_egl, gl) = headless(width, height).unwrap_or_else(|e| {
         eprintln!("cannot get a GL context: {e}");
         std::process::exit(1);
     });
 
-    let wallpaper = Wallpaper::load(&gl, &PathBuf::from(dir)).unwrap_or_else(|e| {
+    let scene = Scene::load(&gl, &PathBuf::from(dir)).unwrap_or_else(|e| {
         eprintln!("cannot load wallpaper: {e}");
         std::process::exit(1);
     });
     println!(
-        "object {:?}: texture {}x{}, {} mip levels, scene {}x{}",
-        wallpaper.name,
-        wallpaper.texture.width,
-        wallpaper.texture.height,
-        wallpaper.texture.levels,
-        wallpaper.scene_size.0,
-        wallpaper.scene_size.1,
+        "scene {}x{}, {} objects: {}",
+        scene.scene_size.0,
+        scene.scene_size.1,
+        scene.len(),
+        scene.object_names().collect::<Vec<_>>().join(", ")
     );
+    for skipped in &scene.skipped {
+        eprintln!("  skipped {skipped}");
+    }
 
-    let pixels = unsafe { render(&gl, &wallpaper, width, height) }.unwrap_or_else(|e| {
+    let pixels = unsafe { render_to_image(&gl, &scene, width, height, time) }.unwrap_or_else(|e| {
         eprintln!("render failed: {e}");
         std::process::exit(1);
     });
@@ -62,14 +66,15 @@ fn main() {
         .write_header()
         .and_then(|mut w| w.write_image_data(&pixels))
         .expect("cannot write PNG");
-    println!("wrote {out} ({width}x{height})");
+    println!("wrote {out} ({width}x{height}) at t={time}s");
 }
 
-unsafe fn render(
+unsafe fn render_to_image(
     gl: &glow::Context,
-    wallpaper: &Wallpaper,
+    scene: &Scene,
     width: u32,
     height: u32,
+    time: f32,
 ) -> Result<Vec<u8>, String> {
     unsafe {
         let colour = gl.create_texture()?;
@@ -98,25 +103,10 @@ unsafe fn render(
             return Err("off-screen buffer is not complete".into());
         }
 
-        let program = build(gl)?;
-        let vao = gl.create_vertex_array()?;
         gl.viewport(0, 0, width as i32, height as i32);
         gl.clear_color(0.0, 0.0, 0.0, 1.0);
         gl.clear(glow::COLOR_BUFFER_BIT);
-        gl.use_program(Some(program));
-        wallpaper.texture.bind(gl, 0);
-        let ((sx, sy), (ox, oy)) = wallpaper.texture.cover((width, height));
-        if let Some(l) = gl.get_uniform_location(program, "u_image") {
-            gl.uniform_1_i32(Some(&l), 0);
-        }
-        if let Some(l) = gl.get_uniform_location(program, "u_uvScale") {
-            gl.uniform_2_f32(Some(&l), sx, sy);
-        }
-        if let Some(l) = gl.get_uniform_location(program, "u_uvOffset") {
-            gl.uniform_2_f32(Some(&l), ox, oy);
-        }
-        gl.bind_vertex_array(Some(vao));
-        gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+        scene.draw(gl, (width, height), time);
         gl.finish();
 
         let mut pixels = vec![0u8; (width * height * 4) as usize];
@@ -131,56 +121,12 @@ unsafe fn render(
         );
         // GL hands back the bottom row first; PNG wants the top row first.
         let stride = (width * 4) as usize;
-        let flipped = pixels
+        Ok(pixels
             .chunks_exact(stride)
             .rev()
             .flatten()
             .copied()
-            .collect();
-        Ok(flipped)
-    }
-}
-
-const VERTEX: &str = r#"#version 330 core
-out vec2 v_uv;
-void main() {
-    vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
-    v_uv = vec2(corner.x, 1.0 - corner.y);
-    gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
-}
-"#;
-
-const FRAGMENT: &str = r#"#version 330 core
-in vec2 v_uv;
-out vec4 fragColor;
-uniform sampler2D u_image;
-uniform vec2 u_uvScale;
-uniform vec2 u_uvOffset;
-void main() {
-    fragColor = texture(u_image, v_uv * u_uvScale + u_uvOffset);
-}
-"#;
-
-unsafe fn build(gl: &glow::Context) -> Result<glow::Program, String> {
-    unsafe {
-        let program = gl.create_program()?;
-        for (kind, src) in [
-            (glow::VERTEX_SHADER, VERTEX),
-            (glow::FRAGMENT_SHADER, FRAGMENT),
-        ] {
-            let shader = gl.create_shader(kind)?;
-            gl.shader_source(shader, src);
-            gl.compile_shader(shader);
-            if !gl.get_shader_compile_status(shader) {
-                return Err(gl.get_shader_info_log(shader));
-            }
-            gl.attach_shader(program, shader);
-        }
-        gl.link_program(program);
-        if !gl.get_program_link_status(program) {
-            return Err(gl.get_program_info_log(program));
-        }
-        Ok(program)
+            .collect())
     }
 }
 

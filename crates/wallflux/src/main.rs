@@ -9,16 +9,22 @@
 //! the choice can be tested rather than assumed.
 //!
 //! Runs for a few seconds and exits, so a failed experiment leaves nothing
-//! behind.
+//! behind. The clock is its own thread rather than a count of frames, because
+//! a compositor stops asking for frames once the surface is completely covered
+//! -- correct of it, and the reason a wallpaper costs nothing while you work,
+//! but it means frames are not a measure of time passing.
 //!
 //! ```text
 //! cargo run -p wallflux -- <wallpaper-dir> [seconds] [namespace]
 //! ```
 
 mod gpu;
+mod render;
 mod texture;
-mod wallpaper;
+mod transform;
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::compositor::{
@@ -37,7 +43,7 @@ use smithay_client_toolkit::shell::wlr_layer::{
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 
 use gpu::Gpu;
-use wallpaper::Wallpaper;
+use render::Scene;
 
 fn main() {
     let Some(dir) = std::env::args_os().nth(1).map(std::path::PathBuf::from) else {
@@ -80,24 +86,35 @@ fn main() {
         conn: conn.clone(),
         layer,
         gpu: None,
-        wallpaper: None,
+        scene: None,
         size: (0, 0),
         started: Instant::now(),
-        frames: 0,
+        frames: Arc::new(AtomicU32::new(0)),
         run_for: Duration::from_secs(seconds),
         done: false,
     };
 
     println!("background layer, namespace {namespace:?}, for {seconds}s");
+
+    let counter = Arc::clone(&app.frames);
+    let run_for = app.run_for;
+    std::thread::spawn(move || {
+        std::thread::sleep(run_for);
+        let drawn = counter.load(Ordering::Relaxed);
+        let seconds = run_for.as_secs_f32();
+        println!(
+            "drew {drawn} frames in {seconds:.1}s ({:.0} fps)",
+            drawn as f32 / seconds
+        );
+        if drawn <= 1 {
+            println!("only one frame: the surface is covered, so nothing asked for more");
+        }
+        std::process::exit(0);
+    });
+
     while !app.done {
         queue.blocking_dispatch(&mut app).unwrap();
     }
-    let elapsed = app.started.elapsed().as_secs_f32();
-    println!(
-        "drew {} frames in {elapsed:.1}s ({:.0} fps)",
-        app.frames,
-        app.frames as f32 / elapsed
-    );
 }
 
 struct App {
@@ -107,10 +124,10 @@ struct App {
     conn: Connection,
     layer: LayerSurface,
     gpu: Option<Gpu>,
-    wallpaper: Option<Wallpaper>,
+    scene: Option<Scene>,
     size: (u32, u32),
     started: Instant,
-    frames: u32,
+    frames: Arc<AtomicU32>,
     run_for: Duration,
     done: bool,
 }
@@ -143,19 +160,20 @@ impl App {
         let Some(gpu) = self.gpu.as_mut() else { return };
         gpu.resize(w, h);
 
-        if self.wallpaper.is_none() {
-            match Wallpaper::load(&gpu.gl, &self.dir) {
+        if self.scene.is_none() {
+            match Scene::load(&gpu.gl, &self.dir) {
                 Ok(loaded) => {
                     println!(
-                        "object {:?}: texture {}x{}, {} mip levels, scene {}x{}",
-                        loaded.name,
-                        loaded.texture.width,
-                        loaded.texture.height,
-                        loaded.texture.levels,
+                        "scene {}x{}, {} objects: {}",
                         loaded.scene_size.0,
                         loaded.scene_size.1,
+                        loaded.len(),
+                        loaded.object_names().collect::<Vec<_>>().join(", ")
                     );
-                    self.wallpaper = Some(loaded);
+                    for skipped in &loaded.skipped {
+                        eprintln!("  skipped {skipped}");
+                    }
+                    self.scene = Some(loaded);
                 }
                 Err(e) => {
                     eprintln!("cannot load wallpaper: {e}");
@@ -164,19 +182,20 @@ impl App {
                 }
             }
         }
-        let Some(wallpaper) = self.wallpaper.as_ref() else {
+        let Some(scene) = self.scene.as_ref() else {
             return;
         };
 
         // Ask for the next frame before presenting: swapping buffers commits
         // the surface, and a callback requested afterwards would miss it.
         surface.frame(qh, FrameCallbackData(surface.clone()));
-        if let Err(e) = gpu.draw(&wallpaper.texture) {
+        scene.draw(&gpu.gl, (w, h), self.started.elapsed().as_secs_f32());
+        if let Err(e) = gpu.present() {
             eprintln!("frame failed: {e}");
             self.done = true;
             return;
         }
-        self.frames += 1;
+        self.frames.fetch_add(1, Ordering::Relaxed);
     }
 }
 
