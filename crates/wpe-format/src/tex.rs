@@ -171,13 +171,25 @@ impl Mipmap {
 
 /// One frame of a sprite sheet animation.
 pub struct Frame {
+    /// Which of the texture's images this frame sits on. A sheet too large for
+    /// one image is spread over several.
     pub image: i32,
     /// Seconds this frame is held.
+    ///
+    /// The **first** frame of a `TEXS0002` sheet states something here that is
+    /// plainly not a duration -- 26 where every other frame of the same sheet
+    /// says a 25th of a second -- so a player should take the interval the
+    /// frames agree on rather than trusting any single one.
     pub duration: f32,
-    /// `x, y, width, m0, m1, height` — the frame's rectangle in the sheet,
-    /// with two terms whose meaning has not been pinned down and which are
-    /// zero in every wallpaper inspected so far.
-    pub rect: [f32; 7],
+    /// Where the frame sits on its image, in pixels.
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    /// Two words between the width and the height, zero in every frame of
+    /// every texture in the library. Carried rather than dropped, since a
+    /// reader that assumed them away would misread any file that used them.
+    pub unknown: [f32; 2],
 }
 
 pub struct Sprite {
@@ -435,14 +447,18 @@ fn read_sprite(r: &mut Reader<'_>) -> Result<Sprite> {
     let mut frames = Vec::with_capacity(count.min(1024));
     for _ in 0..count {
         let image = r.i32()?;
-        let mut rect = [0f32; 7];
-        for v in &mut rect {
+        let mut words = [0f32; 7];
+        for v in &mut words {
             *v = r.f32()?;
         }
         frames.push(Frame {
             image,
-            duration: rect[0],
-            rect,
+            duration: words[0],
+            x: words[1],
+            y: words[2],
+            width: words[3],
+            unknown: [words[4], words[5]],
+            height: words[6],
         });
     }
 
@@ -599,5 +615,35 @@ mod sidecar_tests {
             .and_then(|b| super::Texture::parse(&b).ok())
             .expect("no texture");
         assert_eq!(tex.sprite.map(|s| s.frame_size), Some(None));
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::Texture;
+
+    #[test]
+    fn a_frame_states_where_it_sits_and_how_long_it_is_held() {
+        let Some(assets) = crate::Assets::locate() else {
+            return;
+        };
+        let Some(bytes) = assets.get("materials/particle/fog/fog1.tex") else {
+            return;
+        };
+        let sprite = Texture::parse(&bytes).unwrap().sprite.unwrap();
+        // A 1024 square holding 64 frames of 128 pixels, a second in all.
+        assert_eq!(sprite.frames.len(), 64);
+        assert_eq!(
+            (sprite.frames[0].x, sprite.frames[0].y),
+            (0.0, 0.0),
+            "the first frame should start at the corner"
+        );
+        for frame in &sprite.frames {
+            assert_eq!((frame.width, frame.height), (128.0, 128.0));
+            assert_eq!(frame.unknown, [0.0, 0.0]);
+            assert!((frame.duration - 1.0 / 64.0).abs() < 1e-6);
+        }
+        let last = sprite.frames.last().unwrap();
+        assert_eq!((last.x, last.y), (896.0, 896.0), "the sheet is 8 by 8");
     }
 }
