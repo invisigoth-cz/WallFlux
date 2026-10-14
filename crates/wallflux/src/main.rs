@@ -19,6 +19,7 @@
 //! ```
 
 mod gpu;
+mod particles;
 mod render;
 mod texture;
 mod transform;
@@ -182,7 +183,7 @@ impl App {
                 }
             }
         }
-        let Some(scene) = self.scene.as_ref() else {
+        let Some(scene) = self.scene.as_mut() else {
             return;
         };
 

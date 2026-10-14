@@ -8,10 +8,12 @@
 use std::collections::BTreeMap;
 
 use glow::HasContext;
+use wpe_format::particle::Renderer as ParticleRenderer;
 use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, preprocess, uniforms};
-use wpe_format::{Assets, Material, Model, Package, Resolver, Scene as SceneFile};
+use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
 
+use crate::particles::{self, FLOATS_PER_VERTEX};
 use crate::texture::Texture;
 use crate::transform::{self, Matrix};
 
@@ -65,6 +67,42 @@ struct Pass {
     textures: Vec<Option<Texture>>,
     blending: Blending,
     constants: BTreeMap<String, serde_json::Value>,
+    /// Set when the first texture is a sprite sheet the particles animate.
+    sheet: Option<Sheet>,
+}
+
+/// A sprite sheet's layout, in the form the shaders' `ComputeSpriteFrame`
+/// reads it: sizes as a fraction of the whole texture, so the padding a
+/// power-of-two texture carries is already accounted for.
+#[derive(Debug, Clone, Copy)]
+struct Sheet {
+    frame_width: f32,
+    frame_height: f32,
+    frames: f32,
+    /// A frame's height over its width, which stops a tall frame being drawn
+    /// square.
+    ratio: f32,
+}
+
+/// What a pass is being built to draw.
+///
+/// The particle shaders are the same files as any other, compiled with
+/// different options: they take their geometry from vertex attributes instead
+/// of a quad, so they have to be told that no geometry shader is coming and
+/// that the attributes carry velocity and lifetime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Image,
+    Particles,
+}
+
+/// What an object draws with.
+enum Drawing {
+    /// One quad, placed by the object's own transform.
+    Image,
+    /// Boxed so an image object, which is most of a scene, does not carry a
+    /// whole particle system's worth of empty space.
+    Particles(Box<particles::System>),
 }
 
 struct Object {
@@ -77,6 +115,7 @@ struct Object {
     brightness: f32,
     color: [f32; 3],
     passes: Vec<Pass>,
+    drawing: Drawing,
 }
 
 pub struct Scene {
@@ -84,11 +123,24 @@ pub struct Scene {
     quad: glow::VertexArray,
     #[allow(dead_code)]
     buffer: glow::Buffer,
+    /// Allocated only if the scene has a particle system to draw.
+    particles: Option<Buffers>,
     /// Stands in for a texture slot a pass leaves empty.
     white: Texture,
+    /// How far the particle systems have been simulated.
+    simulated: f32,
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
+}
+
+/// The buffers every particle system in the scene is drawn through, sized for
+/// the largest of them and refilled per system per frame.
+struct Buffers {
+    vao: glow::VertexArray,
+    vertices: glow::Buffer,
+    #[allow(dead_code)]
+    indices: glow::Buffer,
 }
 
 impl Scene {
@@ -110,12 +162,23 @@ impl Scene {
         let mut objects = Vec::new();
         let mut skipped = Vec::new();
         for object in &file.objects {
-            let ObjectKind::Image(model_path) = object.kind() else {
-                continue;
-            };
             if !object.visible.value {
                 continue;
             }
+            match object.kind() {
+                ObjectKind::Particle(file) => {
+                    match load_particles(gl, &resolve, object, &file, &mut skipped) {
+                        Some(built) => objects.push(built),
+                        None => continue,
+                    }
+                    continue;
+                }
+                ObjectKind::Image(_) => {}
+                _ => continue,
+            }
+            let ObjectKind::Image(model_path) = object.kind() else {
+                continue;
+            };
             let Some(model_bytes) = resolve.get(&model_path) else {
                 continue;
             };
@@ -129,13 +192,7 @@ impl Scene {
                 continue;
             };
 
-            let mut passes = Vec::new();
-            for pass in &material.passes {
-                match build_pass(gl, &resolve, pass) {
-                    Ok(built) => passes.push(built),
-                    Err(e) => skipped.push(format!("{}: {}: {e}", object.name, pass.shader)),
-                }
-            }
+            let passes = build_passes(gl, &resolve, &material, Kind::Image, object, &mut skipped);
             if passes.is_empty() {
                 continue;
             }
@@ -163,19 +220,33 @@ impl Scene {
                 brightness: object.brightness,
                 color: object.color.value.0,
                 passes,
+                drawing: Drawing::Image,
             });
         }
 
         if objects.is_empty() {
-            return Err("no image object in this wallpaper could be drawn".into());
+            return Err("nothing in this wallpaper could be drawn".into());
         }
 
         let (quad, buffer) = unsafe { make_quad(gl)? };
+        let widest = objects
+            .iter()
+            .filter_map(|o| match &o.drawing {
+                Drawing::Particles(s) => Some(s.capacity()),
+                Drawing::Image => None,
+            })
+            .max();
+        let particles = match widest {
+            Some(capacity) => Some(unsafe { make_particle_buffers(gl, capacity)? }),
+            None => None,
+        };
         Ok(Self {
             objects,
             quad,
             buffer,
+            particles,
             white: Texture::white(gl)?,
+            simulated: 0.0,
             scene_size,
             skipped,
         })
@@ -189,8 +260,26 @@ impl Scene {
         self.objects.len()
     }
 
+    /// Live particles across every system, which is what says whether the
+    /// systems are running at the moment the scene was drawn.
+    #[allow(dead_code)]
+    pub fn particle_count(&self) -> usize {
+        self.objects
+            .iter()
+            .filter_map(|o| match &o.drawing {
+                Drawing::Particles(s) => Some(s.count()),
+                Drawing::Image => None,
+            })
+            .sum()
+    }
+
     /// Draws the scene onto an output of the given size.
-    pub fn draw(&self, gl: &glow::Context, output: (u32, u32), time: f32) {
+    ///
+    /// `time` is seconds since the wallpaper started, not a step, so a caller
+    /// may jump straight to a moment and the particle systems still arrive
+    /// there the same way they would have by running.
+    pub fn draw(&mut self, gl: &glow::Context, output: (u32, u32), time: f32) {
+        self.advance_to(time);
         let projection = transform::orthographic_cover(
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
@@ -198,19 +287,199 @@ impl Scene {
         unsafe {
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::CULL_FACE);
-            gl.bind_vertex_array(Some(self.quad));
         }
         for object in &self.objects {
             let model = transform::model(object.origin, object.size, object.scale, object.angles);
             let mvp = transform::multiply(&projection, &model);
-            for pass in &object.passes {
-                unsafe { draw_pass(gl, pass, object, &mvp, time, &self.white) };
+            match (&object.drawing, &self.particles) {
+                (Drawing::Image, _) => unsafe {
+                    gl.bind_vertex_array(Some(self.quad));
+                    for pass in &object.passes {
+                        draw_pass(gl, pass, object, &mvp, time, &self.white);
+                    }
+                },
+                (Drawing::Particles(system), Some(buffers)) => unsafe {
+                    draw_particles(gl, object, system, buffers, &mvp, time, &self.white);
+                },
+                // Unreachable: the buffers are allocated whenever a particle
+                // system survived loading.
+                (Drawing::Particles(_), None) => {}
             }
+        }
+    }
+
+    /// Steps every particle system up to `time`.
+    ///
+    /// Fixed slices rather than whatever the last frame took, so a system
+    /// looks the same whether the compositor asked for 60 frames or 144, and
+    /// so the screenshot tool can seek to a moment by stepping there.
+    fn advance_to(&mut self, time: f32) {
+        const STEP: f32 = 1.0 / 60.0;
+        // Half a minute of catching up is already more than any system needs
+        // to reach its steady state; beyond that the rest is skipped rather
+        // than stalling the frame that resumes.
+        const MOST: usize = 1800;
+
+        let mut steps = ((time - self.simulated).max(0.0) / STEP) as usize;
+        if steps > MOST {
+            self.simulated = time - MOST as f32 * STEP;
+            steps = MOST;
+        }
+        for _ in 0..steps {
+            for object in &mut self.objects {
+                if let Drawing::Particles(system) = &mut object.drawing {
+                    system.advance(STEP);
+                }
+            }
+        }
+        self.simulated += steps as f32 * STEP;
+    }
+}
+
+/// Builds the particle object a scene names, or nothing if this renderer
+/// cannot draw it yet.
+fn load_particles(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    object: &wpe_format::scene::Object,
+    path: &str,
+    skipped: &mut Vec<String>,
+) -> Option<Object> {
+    let bytes = resolve.get(path)?;
+    let definition = match ParticleSystem::parse(&bytes) {
+        Ok(d) => d,
+        Err(e) => {
+            skipped.push(format!("{}: {path}: {e}", object.name));
+            return None;
+        }
+    };
+    if definition.renderer != ParticleRenderer::Sprite {
+        skipped.push(format!(
+            "{}: {:?} particles are not drawn yet",
+            object.name, definition.renderer
+        ));
+        return None;
+    }
+    if definition.emitters.is_empty() || definition.maxcount == 0 {
+        return None;
+    }
+    for step in &definition.unsupported {
+        skipped.push(format!("{}: {step} is not applied yet", object.name));
+    }
+
+    let material_bytes = resolve.get(&definition.material)?;
+    let material = Material::parse(&material_bytes).ok()?;
+    let passes = build_passes(gl, resolve, &material, Kind::Particles, object, skipped);
+    if passes.is_empty() {
+        return None;
+    }
+
+    // Seeded from the object's own id so two systems in one scene do not
+    // emit in step, and so a screenshot of a wallpaper is reproducible.
+    let system = particles::System::new(&definition, object.id as u32);
+    Some(Object {
+        name: object.name.clone(),
+        origin: object.origin.value.0,
+        // Particles carry their own size in the buffer, so the object's
+        // transform must place and turn them without scaling a quad.
+        size: [1.0, 1.0],
+        scale: object.scale.value.0,
+        angles: object.angles.value.0,
+        alpha: object.alpha.value,
+        brightness: object.brightness,
+        color: object.color.value.0,
+        passes,
+        drawing: Drawing::Particles(Box::new(system)),
+    })
+}
+
+fn build_passes(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    material: &Material,
+    kind: Kind,
+    object: &wpe_format::scene::Object,
+    skipped: &mut Vec<String>,
+) -> Vec<Pass> {
+    let mut passes = Vec::new();
+    for pass in &material.passes {
+        match build_pass(gl, resolve, pass, kind) {
+            Ok(built) => passes.push(built),
+            Err(e) => skipped.push(format!("{}: {}: {e}", object.name, pass.shader)),
+        }
+    }
+    passes
+}
+
+unsafe fn draw_pass(
+    gl: &glow::Context,
+    pass: &Pass,
+    object: &Object,
+    mvp: &Matrix,
+    time: f32,
+    white: &Texture,
+) {
+    unsafe {
+        set_common(gl, pass, object, mvp, time, white);
+        gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+    }
+}
+
+/// Uploads a system's particles and draws them in one call.
+unsafe fn draw_particles(
+    gl: &glow::Context,
+    object: &Object,
+    system: &particles::System,
+    buffers: &Buffers,
+    mvp: &Matrix,
+    time: f32,
+    white: &Texture,
+) {
+    let vertices = system.vertices();
+    if vertices.is_empty() {
+        return;
+    }
+    unsafe {
+        gl.bind_vertex_array(Some(buffers.vao));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffers.vertices));
+        let bytes: &[u8] = std::slice::from_raw_parts(
+            vertices.as_ptr() as *const u8,
+            std::mem::size_of_val(vertices),
+        );
+        gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes);
+
+        for pass in &object.passes {
+            set_common(gl, pass, object, mvp, time, white);
+            // A flat wallpaper's particles face the screen, so the frame the
+            // shader turns a particle in is the scene's own axes.
+            set_vec3(gl, pass.program, "g_OrientationRight", [1.0, 0.0, 0.0]);
+            set_vec3(gl, pass.program, "g_OrientationUp", [0.0, 1.0, 0.0]);
+            set_vec3(gl, pass.program, "g_OrientationForward", [0.0, 0.0, 1.0]);
+            if let Some(sheet) = &pass.sheet {
+                set_vec4(
+                    gl,
+                    pass.program,
+                    "g_RenderVar1",
+                    [
+                        sheet.frame_width,
+                        sheet.frame_height,
+                        sheet.frames,
+                        sheet.ratio,
+                    ],
+                );
+            }
+            gl.draw_elements(
+                glow::TRIANGLES,
+                (system.count() * INDICES_PER_PARTICLE) as i32,
+                glow::UNSIGNED_INT,
+                0,
+            );
         }
     }
 }
 
-unsafe fn draw_pass(
+/// The uniforms every pass is given, whichever way it is drawn.
+unsafe fn set_common(
     gl: &glow::Context,
     pass: &Pass,
     object: &Object,
@@ -268,8 +537,6 @@ unsafe fn draw_pass(
         for (name, value) in &pass.constants {
             set_json(gl, pass.program, name, value);
         }
-
-        gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
 }
 
@@ -277,6 +544,7 @@ fn build_pass(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
     pass: &wpe_format::material::Pass,
+    kind: Kind,
 ) -> Result<Pass, String> {
     if pass.shader.is_empty() {
         return Err("pass names no shader".into());
@@ -292,9 +560,11 @@ fn build_pass(
         return Err(format!("needs the render target {name}"));
     }
 
-    // Textures are loaded before the shaders are compiled, because the format
-    // each one ended up in is one of the things the shaders are told.
+    // Textures are loaded before the shaders are compiled, because whether
+    // the first one is a sprite sheet decides how the shaders are built.
     let mut textures = Vec::new();
+    let mut sheet = None;
+    let mut padded = false;
     for (slot, name) in pass.textures.iter().enumerate() {
         let named = name.as_deref().filter(|name| !name.is_empty());
         let source = match named {
@@ -315,6 +585,10 @@ fn build_pass(
                 }
                 _ => {}
             }
+            sheet = source
+                .as_ref()
+                .and_then(|source| Sheet::of(source, named, resolve));
+            padded = source.as_ref().is_some_and(Sheet::padded);
         }
         textures.push(
             source
@@ -329,13 +603,30 @@ fn build_pass(
         .map(|(k, v)| (k, v.to_string().trim_matches('"').to_owned()))
         .collect();
     // What was actually uploaded wins over anything the material says, since
-    // this is the texture the shader will be sampling. Without it a
-    // two-channel texture reads as red and green rather than as grey with an
-    // alpha, because the shader never converts what it was not told about.
+    // this is the texture the shader will be sampling.
     for (slot, texture) in textures.iter().enumerate() {
         if let Some(texture) = texture {
             combos.insert(format!("TEX{slot}FORMAT"), texture.format.to_string());
         }
+    }
+    if kind == Kind::Particles {
+        let on = |yes: bool| if yes { "1" } else { "0" }.to_owned();
+        // No geometry shader, so the vertex shader builds the corner itself.
+        combos.insert("GS_ENABLED".into(), on(false));
+        // The wide vertex layout, which carries velocity and lifetime. The
+        // sprite sheet path reads the lifetime, so it is always sent.
+        combos.insert("THICKFORMAT".into(), on(true));
+        combos.insert("TRAILRENDERER".into(), on(false));
+        // Whether a system animates is the texture's business, not the
+        // particle file's: most sheets in the library are used by a system
+        // that names no animation mode at all, and walking the sheet is what
+        // they expect. The mode only picks how it is walked.
+        let sheeted = sheet.is_some();
+        combos.insert("SPRITESHEET".into(), on(sheeted));
+        combos.insert("SPRITESHEETBLENDNPOT".into(), on(sheeted && padded));
+    }
+    if kind == Kind::Image {
+        sheet = None;
     }
 
     let mut stages = Vec::new();
@@ -381,7 +672,60 @@ fn build_pass(
         textures,
         blending: Blending::parse(&pass.blending),
         constants,
+        sheet,
     })
+}
+
+impl Sheet {
+    /// The layout of a texture's sprite sheet, if it has one this renderer can
+    /// use.
+    ///
+    /// The layout comes from the texture's own sprite block where that states
+    /// a frame size, and otherwise from the `.tex-json` beside it. A texture
+    /// that says neither is drawn whole.
+    fn of(
+        texture: &wpe_format::Texture,
+        name: Option<&str>,
+        resolve: &Resolver<'_>,
+    ) -> Option<Self> {
+        let own = texture
+            .sprite
+            .as_ref()
+            .and_then(|sprite| Some((sprite.frame_size?, sprite.frames.len() as u32)));
+        // A built-in texture whose sprite block is the older version states
+        // its layout in the sidecar instead, and some state it only there.
+        let (frame_size, frames) = own.or_else(|| {
+            let sheet = resolve
+                .get(&format!("materials/{}.tex-json", name?))
+                .and_then(|bytes| wpe_format::tex::Sidecar::parse(&bytes).ok())?
+                .sheet()?;
+            Some(((sheet.width, sheet.height), sheet.frames))
+        })?;
+
+        let (frame_w, frame_h) = frame_size;
+        let (texture_w, texture_h) = texture.texture_size;
+        if frame_w == 0 || frame_h == 0 || texture_w == 0 || texture_h == 0 || frames == 0 {
+            return None;
+        }
+        Some(Self {
+            // Against the whole texture, padding included, because that is the
+            // space the shader steps a frame through.
+            frame_width: frame_w as f32 / texture_w as f32,
+            frame_height: frame_h as f32 / texture_h as f32,
+            frames: frames as f32,
+            ratio: frame_h as f32 / frame_w as f32,
+        })
+    }
+
+    /// Whether the sheet sits in a texture wider than its image.
+    ///
+    /// A sheet one frame wide in a texture padded to a power of two is the
+    /// usual case in the library, and stepping it as if the frames filled the
+    /// texture walks straight into the padding. The shaders have a separate
+    /// path for it.
+    fn padded(texture: &wpe_format::Texture) -> bool {
+        texture.image_size != texture.texture_size
+    }
 }
 
 unsafe fn link(gl: &glow::Context, stages: &[(Stage, String)]) -> Result<glow::Program, String> {
@@ -409,6 +753,12 @@ unsafe fn link(gl: &glow::Context, stages: &[(Stage, String)]) -> Result<glow::P
         // name before linking rather than looked up after.
         gl.bind_attrib_location(program, 0, "a_Position");
         gl.bind_attrib_location(program, 1, "a_TexCoord");
+        // The particle layout. Binding a name a program does not declare is
+        // ignored, so images are unaffected by these.
+        gl.bind_attrib_location(program, 2, "a_TexCoordVec4");
+        gl.bind_attrib_location(program, 3, "a_Color");
+        gl.bind_attrib_location(program, 4, "a_TexCoordC2");
+        gl.bind_attrib_location(program, 5, "a_TexCoordVec4C1");
         gl.link_program(program);
         let ok = gl.get_program_link_status(program);
         for shader in shaders {
@@ -464,6 +814,75 @@ unsafe fn make_quad(gl: &glow::Context) -> Result<(glow::VertexArray, glow::Buff
             3 * size_of::<f32>() as i32,
         );
         Ok((vao, vbo))
+    }
+}
+
+/// Two triangles per particle.
+const INDICES_PER_PARTICLE: usize = 6;
+
+/// The buffers a particle system is drawn through.
+///
+/// The vertex buffer is written every frame and the index buffer never, so the
+/// indices are built once for the largest system in the scene and the shorter
+/// ones simply use less of them.
+unsafe fn make_particle_buffers(gl: &glow::Context, capacity: usize) -> Result<Buffers, String> {
+    let mut indices: Vec<u32> = Vec::with_capacity(capacity * INDICES_PER_PARTICLE);
+    for particle in 0..capacity as u32 {
+        let corner = particle * 4;
+        indices.extend_from_slice(&[
+            corner,
+            corner + 1,
+            corner + 2,
+            corner + 2,
+            corner + 1,
+            corner + 3,
+        ]);
+    }
+
+    unsafe {
+        let vao = gl.create_vertex_array()?;
+        let vertices = gl.create_buffer()?;
+        let index_buffer = gl.create_buffer()?;
+        gl.bind_vertex_array(Some(vao));
+
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices));
+        let size = capacity * 4 * FLOATS_PER_VERTEX * size_of::<f32>();
+        gl.buffer_data_size(glow::ARRAY_BUFFER, size as i32, glow::DYNAMIC_DRAW);
+
+        // Position, then corner with rotation and size, then colour, then the
+        // other two rotation axes, then velocity with lifetime -- the layout
+        // `particles` writes and the particle shaders declare.
+        let stride = (FLOATS_PER_VERTEX * size_of::<f32>()) as i32;
+        for (location, components, offset) in [
+            (0u32, 3i32, 0usize),
+            (2, 4, 3),
+            (3, 4, 7),
+            (4, 2, 11),
+            (5, 4, 13),
+        ] {
+            gl.enable_vertex_attrib_array(location);
+            gl.vertex_attrib_pointer_f32(
+                location,
+                components,
+                glow::FLOAT,
+                false,
+                stride,
+                (offset * size_of::<f32>()) as i32,
+            );
+        }
+
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+        let bytes: &[u8] = std::slice::from_raw_parts(
+            indices.as_ptr() as *const u8,
+            std::mem::size_of_val(indices.as_slice()),
+        );
+        gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytes, glow::STATIC_DRAW);
+
+        Ok(Buffers {
+            vao,
+            vertices,
+            indices: index_buffer,
+        })
     }
 }
 

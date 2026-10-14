@@ -14,6 +14,8 @@ use std::path::PathBuf;
 use glow::HasContext;
 use khronos_egl as egl;
 
+#[path = "../src/particles.rs"]
+mod particles;
 #[path = "../src/render.rs"]
 mod render;
 #[path = "../src/texture.rs"]
@@ -38,7 +40,7 @@ fn main() {
         std::process::exit(1);
     });
 
-    let scene = Scene::load(&gl, &PathBuf::from(dir)).unwrap_or_else(|e| {
+    let mut scene = Scene::load(&gl, &PathBuf::from(dir)).unwrap_or_else(|e| {
         eprintln!("cannot load wallpaper: {e}");
         std::process::exit(1);
     });
@@ -53,10 +55,11 @@ fn main() {
         eprintln!("  skipped {skipped}");
     }
 
-    let pixels = unsafe { render_to_image(&gl, &scene, width, height, time) }.unwrap_or_else(|e| {
-        eprintln!("render failed: {e}");
-        std::process::exit(1);
-    });
+    let pixels =
+        unsafe { render_to_image(&gl, &mut scene, width, height, time) }.unwrap_or_else(|e| {
+            eprintln!("render failed: {e}");
+            std::process::exit(1);
+        });
 
     let file = std::fs::File::create(out).expect("cannot create output file");
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), width, height);
@@ -66,12 +69,15 @@ fn main() {
         .write_header()
         .and_then(|mut w| w.write_image_data(&pixels))
         .expect("cannot write PNG");
-    println!("wrote {out} ({width}x{height}) at t={time}s");
+    println!(
+        "wrote {out} ({width}x{height}) at t={time}s, {} particles alive",
+        scene.particle_count()
+    );
 }
 
 unsafe fn render_to_image(
     gl: &glow::Context,
-    scene: &Scene,
+    scene: &mut Scene,
     width: u32,
     height: u32,
     time: f32,
