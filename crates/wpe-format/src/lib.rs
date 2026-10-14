@@ -8,6 +8,7 @@
 pub mod assets;
 pub mod effect;
 pub mod material;
+pub mod particle;
 pub mod pkg;
 pub mod scene;
 pub mod shader;
@@ -16,6 +17,7 @@ pub mod tex;
 pub use assets::{Assets, Resolver};
 pub use effect::Effect;
 pub use material::{Material, Model};
+pub use particle::ParticleSystem;
 pub use pkg::Package;
 pub use scene::Scene;
 pub use tex::Texture;
