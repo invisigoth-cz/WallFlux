@@ -16,7 +16,7 @@
 //! instead would let rounding pile up over a particle's whole life.
 
 use wpe_format::particle::{
-    Animation, Emitter, Initializer, Operator, ParticleSystem, Range, Shape,
+    Animation, Emitter, Initializer, Operator, ParticleSystem, Range, Shape, Turbulent,
 };
 
 /// Floats per vertex: position, then corner and rotation and size, then
@@ -44,6 +44,12 @@ struct Particle {
     lifetime: f32,
     /// Where in a sprite sheet this particle starts, for `randomframe`.
     frame: f32,
+    /// This particle's own place in the turbulence field, as a fraction of
+    /// whatever each step allows, so two particles side by side are not
+    /// pushed identically.
+    phase: f32,
+    /// Its share of a turbulence operator's speed range.
+    drift: f32,
 }
 
 /// The ranges the initializers draw a new particle's values from.
@@ -54,6 +60,9 @@ struct Start {
     color: Range<[f32; 3]>,
     velocity: Range<[f32; 3]>,
     rotation: Range<[f32; 3]>,
+    /// Set when the system takes its starting direction from a noise field
+    /// rather than at random.
+    turbulent: Option<Turbulent>,
 }
 
 impl Default for Start {
@@ -70,6 +79,7 @@ impl Default for Start {
             },
             velocity: Range::default(),
             rotation: Range::default(),
+            turbulent: None,
         }
     }
 }
@@ -99,6 +109,7 @@ impl System {
                 Initializer::Color(r) => start.color = r,
                 Initializer::Velocity(r) => start.velocity = r,
                 Initializer::Rotation(r) => start.rotation = r,
+                Initializer::TurbulentVelocity(field) => start.turbulent = Some(field),
                 // Carried as a starting value but nothing turns it yet: the
                 // operator that spins a particle is `angularmovement`.
                 Initializer::AngularVelocity(_) => {}
@@ -147,18 +158,41 @@ impl System {
             self.emit(dt);
         }
 
+        let elapsed = self.elapsed;
         for particle in &mut self.live {
             particle.age += dt;
             for operator in &self.operators {
-                if let Operator::Movement { gravity, drag } = operator {
-                    for (axis, gravity) in gravity.iter().enumerate() {
-                        particle.velocity[axis] += gravity * dt;
-                        // Drag as a proportion shed per second, which stays
-                        // stable whatever the frame rate and never reverses
-                        // the velocity the way `1 - drag * dt` would.
-                        particle.velocity[axis] /= 1.0 + drag * dt;
-                        particle.position[axis] += particle.velocity[axis] * dt;
+                match operator {
+                    Operator::Movement { gravity, drag } => {
+                        for (axis, gravity) in gravity.iter().enumerate() {
+                            particle.velocity[axis] += gravity * dt;
+                            // Drag as a proportion shed per second, which stays
+                            // stable whatever the frame rate and never reverses
+                            // the velocity the way `1 - drag * dt` would.
+                            particle.velocity[axis] /= 1.0 + drag * dt;
+                            particle.position[axis] += particle.velocity[axis] * dt;
+                        }
                     }
+                    // ponytail: turbulence carries the particle through the
+                    // field rather than accelerating it into one, so its
+                    // speed is the speed the file states and a long-lived
+                    // particle cannot be flung off screen. If a wallpaper
+                    // turns out to want building momentum, this is the line
+                    // to change.
+                    Operator::Turbulence { field, mask } => {
+                        let along = field_direction(
+                            field,
+                            particle.position,
+                            particle.phase * field.phase_max,
+                            elapsed,
+                        );
+                        let speed =
+                            field.speed.min + (field.speed.max - field.speed.min) * particle.drift;
+                        for (axis, mask) in mask.iter().enumerate() {
+                            particle.position[axis] += along[axis] * mask * speed * dt;
+                        }
+                    }
+                    Operator::AlphaFade { .. } | Operator::SizeChange(_) => {}
                 }
             }
         }
@@ -204,11 +238,24 @@ impl System {
         let speed = self.rng.range(emitter.speed);
         let drawn = self.rng.range3(self.start.velocity);
         let lifetime = self.rng.range(self.start.lifetime).max(f32::EPSILON);
+        let phase = self.rng.next_f32();
+
+        // A turbulent start reads the field once, where the particle appears.
+        let turbulent = match self.start.turbulent {
+            Some(field) => {
+                let along =
+                    field_direction(&field, position, phase * field.phase_max, self.elapsed);
+                let speed = self.rng.range(field.speed);
+                along.map(|axis| axis * speed)
+            }
+            None => [0.0; 3],
+        };
+
         Particle {
             position,
             // Only six systems in the library set both, so which of the two
             // wins is nearly moot; adding them keeps either on its own right.
-            velocity: std::array::from_fn(|i| drawn[i] + direction[i] * speed),
+            velocity: std::array::from_fn(|i| drawn[i] + direction[i] * speed + turbulent[i]),
             rotation: self.rng.range3(self.start.rotation),
             size: self.rng.range(self.start.size),
             color: self.rng.range3(self.start.color),
@@ -216,6 +263,8 @@ impl System {
             age: 0.0,
             lifetime,
             frame: self.rng.next_f32(),
+            phase,
+            drift: self.rng.next_f32(),
         }
     }
 
@@ -291,6 +340,77 @@ fn size_factor(operators: &[Operator], progress: f32) -> f32 {
         }
     }
     out
+}
+
+/// Which way a noise field points at a place, ready to be scaled by a speed.
+///
+/// The field's own samples run from zero to one, which is what the `offset` of
+/// -0.5 that every system in the library states is there to centre. The result
+/// is normalised, so the speed a file states is the speed a particle gets.
+fn field_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32) -> [f32; 3] {
+    let at = position.map(|x| x * field.scale);
+    let sample = flow(at, phase + time * field.time_scale);
+    let centred = sample.map(|value| value + field.offset);
+    let length =
+        (centred[0] * centred[0] + centred[1] * centred[1] + centred[2] * centred[2]).sqrt();
+    if length < 1e-6 {
+        return [0.0; 3];
+    }
+    centred.map(|axis| axis / length)
+}
+
+/// Three smooth fields, each from zero to one, sampled far enough apart to be
+/// independent of one another.
+///
+/// Value noise rather than anything more elaborate. The format says nothing
+/// about which noise Wallpaper Engine uses, and what shows on screen is only
+/// that particles near each other drift together and that the drift turns over
+/// a distance the file's `scale` sets.
+fn flow(at: [f32; 3], phase: f32) -> [f32; 3] {
+    /// Far enough apart that the three samples share no corners.
+    const APART: f32 = 31.7;
+    std::array::from_fn(|axis| {
+        let shift = APART * (axis + 1) as f32;
+        noise([at[0] + phase + shift, at[1] + shift, at[2] + shift])
+    })
+}
+
+/// Smooth value noise from zero to one.
+fn noise(at: [f32; 3]) -> f32 {
+    let cell = at.map(f32::floor);
+    // Smoothstep, so the field has no creases where the cells meet.
+    let blend: [f32; 3] = std::array::from_fn(|i| {
+        let t = at[i] - cell[i];
+        t * t * (3.0 - 2.0 * t)
+    });
+    let corner = cell.map(|v| v as i32);
+
+    let mut value = 0.0;
+    for dz in 0..2 {
+        for dy in 0..2 {
+            for dx in 0..2 {
+                let weight = share(blend[0], dx) * share(blend[1], dy) * share(blend[2], dz);
+                value += weight * hash(corner[0] + dx, corner[1] + dy, corner[2] + dz);
+            }
+        }
+    }
+    value
+}
+
+/// How much a corner contributes, given which side of the cell it is on.
+fn share(blend: f32, side: i32) -> f32 {
+    if side == 0 { 1.0 - blend } else { blend }
+}
+
+/// A fixed value per cell corner, from zero to one.
+fn hash(x: i32, y: i32, z: i32) -> f32 {
+    let mut h = (x as u32).wrapping_mul(0x9E37_79B1)
+        ^ (y as u32).wrapping_mul(0x85EB_CA77)
+        ^ (z as u32).wrapping_mul(0xC2B2_AE3D);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x2C1B_3C6D);
+    h ^= h >> 12;
+    (h >> 8) as f32 / (1u32 << 24) as f32
 }
 
 /// Xorshift, which is all a particle needs and keeps the crate dependency-free.
@@ -502,6 +622,126 @@ mod tests {
         assert!((size(&s) - 100.0).abs() < 5.0, "started at {}", size(&s));
         run(&mut s, 0.5, 1.0 / 60.0);
         assert!((size(&s) - 200.0).abs() < 10.0, "halfway at {}", size(&s));
+    }
+
+    #[test]
+    fn the_field_stays_between_zero_and_one_and_never_jumps() {
+        let mut last = None;
+        for step in 0..200 {
+            let at = [step as f32 * 0.05, 1.0, -2.0];
+            let here = flow(at, 0.0);
+            for axis in 0..3 {
+                assert!(
+                    (0.0..=1.0).contains(&here[axis]),
+                    "field left its range at {at:?}: {here:?}"
+                );
+                // Each step is a twentieth of a cell, so a smooth field cannot
+                // have moved far. A crease would show up here as a jump.
+                if let Some(last) = last {
+                    let last: [f32; 3] = last;
+                    assert!(
+                        (here[axis] - last[axis]).abs() < 0.25,
+                        "field jumped at {at:?}: {last:?} to {here:?}"
+                    );
+                }
+            }
+            last = Some(here);
+        }
+    }
+
+    #[test]
+    fn the_field_points_different_ways_in_different_places() {
+        let field = Turbulent {
+            speed: Range { min: 1.0, max: 1.0 },
+            scale: 0.002,
+            time_scale: 0.0,
+            phase_max: 0.0,
+            offset: -0.5,
+        };
+        let here = field_direction(&field, [0.0; 3], 0.0, 0.0);
+        let far = field_direction(&field, [4000.0, 0.0, 0.0], 0.0, 0.0);
+        assert!(
+            here != far,
+            "the same direction eight cells apart is not a field"
+        );
+        let length = (here[0] * here[0] + here[1] * here[1] + here[2] * here[2]).sqrt();
+        assert!(
+            (length - 1.0).abs() < 1e-3,
+            "direction was not a unit: {length}"
+        );
+    }
+
+    #[test]
+    fn turbulence_carries_a_particle_no_faster_than_it_says() {
+        let mut s = system(
+            r#"{"maxcount":20,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                             "speedmax":150,"phasemax":5}]}"#,
+        );
+        run(&mut s, 2.0, 1.0 / 60.0);
+        let mut moved = 0;
+        for p in &s.live {
+            let travelled = (p.position[0].powi(2) + p.position[1].powi(2)).sqrt();
+            // Two seconds at 150 a second, and it started at the origin.
+            assert!(travelled <= 300.0, "drifted {travelled} in two seconds");
+            if travelled > 1.0 {
+                moved += 1;
+            }
+        }
+        assert!(moved > 0, "turbulence moved nothing at all");
+    }
+
+    #[test]
+    fn turbulence_leaves_the_axes_its_mask_omits_alone() {
+        let mut s = system(
+            r#"{"maxcount":20,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                             "speedmax":150,"mask":"1 0 0","phasemax":5}]}"#,
+        );
+        run(&mut s, 2.0, 1.0 / 60.0);
+        assert!(s.live.iter().any(|p| p.position[0].abs() > 1.0));
+        for p in &s.live {
+            assert_eq!(p.position[1], 0.0, "masked axis moved");
+            assert_eq!(p.position[2], 0.0, "masked axis moved");
+        }
+    }
+
+    #[test]
+    fn two_particles_in_one_place_are_not_pushed_as_one() {
+        let mut s = system(
+            r#"{"maxcount":30,"emitter":[{"name":"boxrandom","rate":200,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                             "speedmax":150,"phasemax":5}]}"#,
+        );
+        run(&mut s, 1.0, 1.0 / 60.0);
+        let first = s.live[0].position;
+        assert!(
+            s.live.iter().any(|p| p.position != first),
+            "every particle went the same way; the phase is not reaching the field"
+        );
+    }
+
+    #[test]
+    fn a_turbulent_start_sets_off_at_the_speed_it_asks_for() {
+        let mut s = system(
+            r#"{"maxcount":20,"emitter":[{"name":"sphererandom","rate":100,"distancemax":500}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"turbulentvelocityrandom","scale":0.1,
+                                "speedmin":250,"speedmax":260,"offset":-0.5}]}"#,
+        );
+        s.advance(1.0 / 60.0);
+        assert!(s.count() > 0);
+        for p in &s.live {
+            let speed =
+                (p.velocity[0].powi(2) + p.velocity[1].powi(2) + p.velocity[2].powi(2)).sqrt();
+            assert!(
+                (250.0..=260.0).contains(&speed),
+                "set off at {speed}, not the speed the file states"
+            );
+        }
     }
 
     #[test]

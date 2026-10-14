@@ -69,6 +69,30 @@ pub enum Initializer {
     Rotation(Range<[f32; 3]>),
     /// Radians per second about each axis.
     AngularVelocity(Range<[f32; 3]>),
+    /// A direction taken from a noise field rather than drawn at random, so
+    /// particles that start near each other set off together.
+    TurbulentVelocity(Turbulent),
+}
+
+/// A noise field a step reads a direction out of.
+///
+/// `offset` is -0.5 in every system in the library that states one, which is
+/// what says the field itself runs 0 to 1 and wants centring.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Turbulent {
+    /// Speed given along the direction the field points.
+    pub speed: Range<f32>,
+    /// How tightly the field varies with position. The library's values are
+    /// around 0.1 for an initializer and 0.002 for the operator, so a feature
+    /// spans roughly ten and five hundred scene pixels.
+    pub scale: f32,
+    /// How fast the field itself moves. Left out by most systems, which means
+    /// a field that stays put while particles drift through it.
+    pub time_scale: f32,
+    /// A particle's own place in the field, drawn from zero to this.
+    pub phase_max: f32,
+    /// Added to the field before it is used.
+    pub offset: f32,
 }
 
 /// A value driven from one number to another over a slice of the lifetime.
@@ -93,6 +117,13 @@ pub enum Operator {
         fade_out: f32,
     },
     SizeChange(Ramp),
+    /// Drifts a particle through a noise field.
+    Turbulence {
+        field: Turbulent,
+        /// Which axes the drift applies to. Most of the library pushes along
+        /// x alone, which is what makes smoke sway rather than scatter.
+        mask: [f32; 3],
+    },
 }
 
 /// How the particles are turned into geometry.
@@ -174,6 +205,7 @@ impl ParticleSystem {
                     })
                 }
                 "velocityrandom" => Initializer::Velocity(triple()),
+                "turbulentvelocityrandom" => Initializer::TurbulentVelocity(turbulent(step, 0.1)),
                 "rotationrandom" => Initializer::Rotation(triple()),
                 "angularvelocityrandom" => Initializer::AngularVelocity(triple()),
                 other => {
@@ -201,6 +233,10 @@ impl ParticleSystem {
                     from: num(step, "startvalue", 1.0),
                     to: num(step, "endvalue", 1.0),
                 }),
+                "turbulence" => Operator::Turbulence {
+                    field: turbulent(step, 0.002),
+                    mask: vector(step, "mask", [1.0; 3]),
+                },
                 other => {
                     unsupported.push(format!("operator {other}"));
                     continue;
@@ -273,6 +309,22 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             min: num(step, "speedmin", 0.0),
             max: num(step, "speedmax", 0.0),
         },
+    }
+}
+
+/// `default_scale` is what the library's systems state, used for the rare one
+/// that leaves it out: a field with no scale at all would push every particle
+/// the same way and stop being turbulence.
+fn turbulent(step: &Value, default_scale: f32) -> Turbulent {
+    Turbulent {
+        speed: Range {
+            min: num(step, "speedmin", 0.0),
+            max: num(step, "speedmax", 0.0),
+        },
+        scale: num(step, "scale", default_scale),
+        time_scale: num(step, "timescale", 0.0),
+        phase_max: num(step, "phasemax", 0.0),
+        offset: num(step, "offset", -0.5),
     }
 }
 
@@ -419,7 +471,7 @@ mod tests {
         let json = br#"{
             "material": "m.json", "maxcount": 10,
             "emitter": [{"name":"newfangled"}],
-            "initializer": [{"name":"turbulentvelocityrandom","scale":1}],
+            "initializer": [{"name":"mapsequencearoundcontrolpoint"}],
             "operator": [{"name":"vortex"},{"name":"alphafade","fadeouttime":1}]
         }"#;
         let p = ParticleSystem::parse(json).unwrap();
@@ -430,7 +482,7 @@ mod tests {
             p.unsupported,
             [
                 "emitter newfangled",
-                "initializer turbulentvelocityrandom",
+                "initializer mapsequencearoundcontrolpoint",
                 "operator vortex"
             ]
         );
@@ -441,5 +493,60 @@ mod tests {
         let json = br#"{"material":"m.json","maxcount":1e12}"#;
         let p = ParticleSystem::parse(json).unwrap();
         assert_eq!(p.maxcount, MAX_PARTICLES);
+    }
+}
+
+#[cfg(test)]
+mod turbulence_tests {
+    use super::*;
+
+    #[test]
+    fn reads_a_turbulent_velocity_with_the_fields_own_range() {
+        let json = br#"{"material":"m.json","maxcount":1,
+            "initializer":[{"name":"turbulentvelocityrandom","scale":0.1,
+                            "speedmin":250,"speedmax":260,"offset":-0.5,
+                            "timescale":0.2,"phasemax":2}]}"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(
+            p.initializers,
+            vec![Initializer::TurbulentVelocity(Turbulent {
+                speed: Range {
+                    min: 250.0,
+                    max: 260.0
+                },
+                scale: 0.1,
+                time_scale: 0.2,
+                phase_max: 2.0,
+                offset: -0.5,
+            })]
+        );
+        assert!(p.unsupported.is_empty());
+    }
+
+    #[test]
+    fn reads_the_axes_turbulence_pushes_along() {
+        let json = br#"{"material":"m.json","maxcount":1,
+            "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                         "speedmax":150,"mask":"1 0 0","phasemax":5}]}"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        let [Operator::Turbulence { field, mask }] = p.operators.as_slice() else {
+            panic!("not a turbulence operator: {:?}", p.operators);
+        };
+        assert_eq!(*mask, [1.0, 0.0, 0.0]);
+        assert_eq!(field.scale, 0.002);
+        assert_eq!(field.phase_max, 5.0);
+        // Left out by this system, and by most of the library.
+        assert_eq!(field.time_scale, 0.0);
+    }
+
+    #[test]
+    fn a_field_that_states_no_scale_still_varies() {
+        let json = br#"{"material":"m.json","maxcount":1,
+            "operator":[{"name":"turbulence","speedmax":100}]}"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        let [Operator::Turbulence { field, .. }] = p.operators.as_slice() else {
+            panic!("not a turbulence operator");
+        };
+        assert!(field.scale > 0.0);
     }
 }
