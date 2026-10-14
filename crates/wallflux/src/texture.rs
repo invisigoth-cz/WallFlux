@@ -43,10 +43,22 @@ pub struct Texture {
 
 impl Texture {
     pub fn upload(gl: &glow::Context, source: &wpe_format::Texture) -> Result<Self, String> {
+        Self::upload_page(gl, source, 0)
+    }
+
+    /// Uploads one of a texture's images.
+    ///
+    /// A sprite sheet too big for one image is stored as several, and a frame
+    /// says which of them it sits on, so they cannot all be the same texture.
+    pub fn upload_page(
+        gl: &glow::Context,
+        source: &wpe_format::Texture,
+        page: usize,
+    ) -> Result<Self, String> {
         if source.is_video() {
             return Err("this texture holds a video, not an image".into());
         }
-        let mips = source.images.first().ok_or("texture has no images")?;
+        let mips = source.images.get(page).ok_or("texture has no such image")?;
         if mips.is_empty() {
             return Err("texture has no mipmaps".into());
         }
@@ -115,7 +127,12 @@ impl Texture {
             id,
             width: mips[0].width,
             height: mips[0].height,
-            image_size: source.image_size,
+            // For a sheet the header's size is one frame rather than the whole
+            // image, so the page's own size is the one to report.
+            image_size: match source.sprite {
+                Some(_) => (mips[0].width, mips[0].height),
+                None => source.image_size,
+            },
             format: match source.free_image {
                 FreeImage::None => source.format.id(),
                 _ => PixelFormat::Argb8888.id(),

@@ -69,13 +69,97 @@ struct Pass {
     constants: BTreeMap<String, serde_json::Value>,
     /// Set when the first texture is a sprite sheet the particles animate.
     sheet: Option<Sheet>,
+    /// Set when the first texture is a sprite sheet an image object plays.
+    film: Option<Film>,
     /// How much of the first texture the image fills.
     ///
-    /// Of the 384 textures in the library, 98 are stored at the next power of
-    /// two with the image in a corner and the rest left empty. Reading one of
-    /// those from corner to corner samples the empty part, which clamping then
-    /// smears across the whole object.
+    /// Of the 384 textures in the library, 98 are stored at the power-of-two
+    /// size with the image in a corner and the rest empty. Reading those from
+    /// corner to corner samples the empty part, which clamping then smears
+    /// across the object.
     covered: [f32; 2],
+}
+
+/// A sprite sheet played by an image object, frame by frame.
+///
+/// An image object does not step through a sheet the way a particle does. Its
+/// shader is handed the rectangle of the current frame instead, so the frame
+/// has to be chosen here, and the sheet may be spread over several images with
+/// a frame naming the one it sits on.
+struct Film {
+    /// One texture per image the sheet is spread over.
+    pages: Vec<Texture>,
+    frames: Vec<Still>,
+    /// Seconds a frame is held. Sheets in the library hold every frame for the
+    /// same time, and the first frame of the older sprite version states
+    /// something that is plainly not a duration -- 26 seconds where every
+    /// other frame says a 25th of one -- so the frames are polled for the
+    /// interval they agree on rather than trusting any single one.
+    interval: f32,
+}
+
+/// Which frame of a looping sheet is showing, kept apart from the textures so
+/// it can be checked without a graphics context.
+fn showing(frames: usize, interval: f32, time: f32) -> usize {
+    if frames == 0 || !interval.is_finite() || interval <= 0.0 {
+        return 0;
+    }
+    let length = interval * frames as f32;
+    let along = (time % length + length) % length;
+    ((along / interval) as usize).min(frames - 1)
+}
+
+/// Where one frame sits, as the texture matrix the image shaders want.
+#[derive(Debug, Clone, Copy)]
+struct Still {
+    page: usize,
+    offset: [f32; 2],
+    size: [f32; 2],
+}
+
+impl Film {
+    /// Builds the sheet an image object plays, if its texture holds one.
+    fn of(gl: &glow::Context, source: &wpe_format::Texture) -> Option<Self> {
+        let sprite = source.sprite.as_ref()?;
+        if sprite.frames.is_empty() || source.images.len() < 2 && sprite.frames.len() < 2 {
+            return None;
+        }
+
+        let mut pages = Vec::new();
+        for page in 0..source.images.len() {
+            pages.push(Texture::upload_page(gl, source, page).ok()?);
+        }
+
+        let mut frames = Vec::new();
+        for frame in &sprite.frames {
+            let page = usize::try_from(frame.image).ok()?;
+            let size = pages.get(page)?;
+            let (width, height) = (size.width as f32, size.height as f32);
+            frames.push(Still {
+                page,
+                offset: [frame.x / width, frame.y / height],
+                size: [frame.width / width, frame.height / height],
+            });
+        }
+
+        let mut held: Vec<f32> = sprite.frames.iter().map(|f| f.duration).collect();
+        held.sort_by(f32::total_cmp);
+        let interval = held[held.len() / 2];
+        if !interval.is_finite() || interval <= 0.0 {
+            return None;
+        }
+        Some(Self {
+            pages,
+            frames,
+            interval,
+        })
+    }
+
+    /// The frame showing at a moment, the sheet looping for as long as the
+    /// wallpaper runs.
+    fn at(&self, time: f32) -> Still {
+        self.frames[showing(self.frames.len(), self.interval, time)]
+    }
 }
 
 /// A sprite sheet's layout, in the form the shaders' `ComputeSpriteFrame`
@@ -498,10 +582,14 @@ unsafe fn set_common(
         gl.use_program(Some(pass.program));
         pass.blending.apply(gl);
 
+        let still = pass.film.as_ref().map(|film| (film, film.at(time)));
         for (unit, slot) in pass.textures.iter().enumerate() {
             // An empty slot still has to be given something, or the pass reads
             // whatever texture was last left on that unit -- another object's.
-            let texture = slot.as_ref().unwrap_or(white);
+            let texture = match (unit, &still) {
+                (0, Some((film, still))) => &film.pages[still.page],
+                _ => slot.as_ref().unwrap_or(white),
+            };
             texture.bind(gl, unit as u32);
             set_int(gl, pass.program, &format!("g_Texture{unit}"), unit as i32);
             // .xy is the texture, .zw the image inside it; shaders divide one
@@ -541,6 +629,16 @@ unsafe fn set_common(
         );
         set_vec3(gl, pass.program, "g_Color", object.color);
 
+        if let Some((_, still)) = still {
+            set_vec4(
+                gl,
+                pass.program,
+                "g_Texture0Rotation",
+                [still.size[0], 0.0, 0.0, still.size[1]],
+            );
+            set_vec2(gl, pass.program, "g_Texture0Translation", still.offset);
+        }
+
         for (name, value) in &pass.constants {
             set_json(gl, pass.program, name, value);
         }
@@ -571,6 +669,7 @@ fn build_pass(
     // the first one is a sprite sheet decides how the shaders are built.
     let mut textures = Vec::new();
     let mut sheet = None;
+    let mut film = None;
     let mut padded = false;
     let mut covered = [1.0, 1.0];
     for (slot, name) in pass.textures.iter().enumerate() {
@@ -593,14 +692,20 @@ fn build_pass(
                 }
                 _ => {}
             }
-            sheet = source
-                .as_ref()
-                .and_then(|source| Sheet::of(source, named, resolve));
-            padded = source.as_ref().is_some_and(Sheet::padded);
+            // How much of the texture is image rather than padding.
             if let Some(texture) = &source
                 && let Some(page) = texture.images.first().and_then(|mips| mips.first())
             {
                 covered = coverage(texture.image_size, (page.width, page.height));
+            }
+            match kind {
+                Kind::Particles => {
+                    sheet = source
+                        .as_ref()
+                        .and_then(|source| Sheet::of(source, named, resolve));
+                    padded = source.as_ref().is_some_and(Sheet::padded);
+                }
+                Kind::Image => film = source.as_ref().and_then(|source| Film::of(gl, source)),
             }
         }
         textures.push(
@@ -638,8 +743,13 @@ fn build_pass(
         combos.insert("SPRITESHEET".into(), on(sheeted));
         combos.insert("SPRITESHEETBLENDNPOT".into(), on(sheeted && padded));
     }
-    if kind == Kind::Image {
-        sheet = None;
+    if film.is_some() {
+        // The image shaders put their texture matrix behind this, and without
+        // it they stretch the whole sheet across the object. A frame states
+        // its own rectangle, so the quad is read whole and the padding of the
+        // page is already accounted for.
+        combos.insert("SPRITESHEET".into(), "1".into());
+        covered = [1.0, 1.0];
     }
 
     let mut stages = Vec::new();
@@ -686,6 +796,7 @@ fn build_pass(
         blending: Blending::parse(&pass.blending),
         constants,
         sheet,
+        film,
         covered,
     })
 }
@@ -810,7 +921,10 @@ fn coverage(image: (u32, u32), stored: (u32, u32)) -> [f32; 2] {
     ]
 }
 
-/// Writes the quad a pass draws, reading `covered` of its texture.
+/// Writes the quad for a pass, reading `covered` of its texture.
+///
+/// Texture coordinates run from the top left, which is the corner an image
+/// starts at and the corner it keeps when the rest of the texture is padding.
 unsafe fn write_quad(gl: &glow::Context, buffer: glow::Buffer, covered: [f32; 2]) {
     let (u, v) = (covered[0], covered[1]);
     #[rustfmt::skip]
@@ -951,6 +1065,14 @@ fn set_float(gl: &glow::Context, p: glow::Program, name: &str, v: f32) {
     }
 }
 
+fn set_vec2(gl: &glow::Context, p: glow::Program, name: &str, v: [f32; 2]) {
+    unsafe {
+        if let Some(l) = gl.get_uniform_location(p, name) {
+            gl.uniform_2_f32(Some(&l), v[0], v[1]);
+        }
+    }
+}
+
 fn set_vec3(gl: &glow::Context, p: glow::Program, name: &str, v: [f32; 3]) {
     unsafe {
         if let Some(l) = gl.get_uniform_location(p, name) {
@@ -1014,7 +1136,7 @@ fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::coverage;
+    use super::{coverage, showing};
 
     #[test]
     fn a_texture_stored_at_its_own_size_is_read_whole() {
@@ -1023,7 +1145,7 @@ mod tests {
 
     #[test]
     fn a_padded_texture_is_read_only_as_far_as_its_image() {
-        // The background of one wallpaper in the library: 3840 by 2160 stored
+        // The background of one wallpaper in the library, 3840 by 2160 stored
         // in a 4096 square. Reading it whole samples the empty part.
         assert_eq!(coverage((3840, 2160), (4096, 4096)), [0.9375, 0.52734375]);
     }
@@ -1034,5 +1156,29 @@ mod tests {
         assert_eq!(coverage((512, 512), (0, 0)), [1.0, 1.0]);
         // An image larger than what holds it cannot be read past the edge.
         assert_eq!(coverage((600, 600), (512, 512)), [1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_sheet_steps_a_frame_at_a_time_and_then_starts_over() {
+        // Fifty-one frames held a 14th of a second each, as one wallpaper's
+        // glitter states.
+        let (frames, interval) = (51, 0.07);
+        assert_eq!(showing(frames, interval, 0.0), 0);
+        assert_eq!(showing(frames, interval, 0.06), 0);
+        assert_eq!(showing(frames, interval, 0.08), 1);
+        assert_eq!(showing(frames, interval, 0.07 * 50.5), 50);
+        // Round the loop and back to the start.
+        assert_eq!(showing(frames, interval, 0.07 * 51.0), 0);
+        assert_eq!(showing(frames, interval, 0.07 * 52.5), 1);
+    }
+
+    #[test]
+    fn a_sheet_never_asks_for_a_frame_it_does_not_have() {
+        for time in [0.0, 1.0, 1e6, -1.0, f32::NAN] {
+            assert!(showing(2, 0.12, time) < 2, "picked a frame past the end");
+        }
+        // Nothing to show and no interval to show it for.
+        assert_eq!(showing(0, 0.04, 1.0), 0);
+        assert_eq!(showing(10, 0.0, 1.0), 0);
     }
 }
