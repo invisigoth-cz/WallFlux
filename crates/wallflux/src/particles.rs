@@ -168,6 +168,12 @@ impl System {
         self.maxcount
     }
 
+    /// Lowers that cap, for a scene asking for more than it can afford.
+    pub fn thin_to(&mut self, capacity: usize) {
+        self.maxcount = capacity;
+        self.live.truncate(capacity);
+    }
+
     /// The buffer to draw: four vertices per live particle, or four per rope
     /// segment where the system is a ribbon.
     pub fn vertices(&self) -> &[f32] {

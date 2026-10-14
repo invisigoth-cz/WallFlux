@@ -252,7 +252,16 @@ struct Buffers {
 }
 
 impl Scene {
-    pub fn load(gl: &glow::Context, dir: &std::path::Path) -> Result<Self, String> {
+    /// Loads a wallpaper, keeping its particles within `budget`.
+    ///
+    /// A viewer who knows what their machine can take should be able to say
+    /// so, which is why the budget is an argument and not a constant buried
+    /// in here. [`DEFAULT_BUDGET`] is what to pass when nobody has said.
+    pub fn load_within(
+        gl: &glow::Context,
+        dir: &std::path::Path,
+        budget: usize,
+    ) -> Result<Self, String> {
         let path = find_package(dir)?;
         let package = Package::read(&path).map_err(|e| format!("reading package: {e}"))?;
         let assets = Assets::locate();
@@ -337,6 +346,7 @@ impl Scene {
         if objects.is_empty() {
             return Err("nothing in this wallpaper could be drawn".into());
         }
+        thin_particles(&mut objects, budget, &mut skipped);
 
         let (quad, buffer) = unsafe { make_quad(gl)? };
         let widest = objects
@@ -538,6 +548,47 @@ fn load_particles(
         drawing: Drawing::Particles(Box::new(system)),
         trail,
     })
+}
+
+/// How many particles a scene may keep alive at once before it is thinned.
+///
+/// Measured here: a frame costs about four tenths of a millisecond plus a
+/// fifth of a microsecond for every particle, so this is a few milliseconds of
+/// one. It is also where the library divides -- four wallpapers ask for
+/// between 51 000 and 183 000 particles and every other one asks for under
+/// 24 000, half of them for under 600 -- so nothing but those four is touched.
+pub const DEFAULT_BUDGET: usize = 24_000;
+
+/// Scales every system in a scene down together until the scene fits.
+///
+/// Every system keeps its share, so a scene thins out evenly rather than
+/// losing whichever systems happen to come last.
+fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<String>) {
+    let wanted: usize = objects
+        .iter()
+        .filter_map(|o| match &o.drawing {
+            Drawing::Particles(system) => Some(system.capacity()),
+            Drawing::Image => None,
+        })
+        .sum();
+    if wanted <= budget || wanted == 0 {
+        return;
+    }
+
+    let share = budget as f64 / wanted as f64;
+    for object in objects {
+        if let Drawing::Particles(system) = &mut object.drawing {
+            // A system that keeps nothing draws nothing, so the smallest
+            // share is still one particle -- or two for a ribbon, which needs
+            // a pair to have anything between them.
+            let least = if system.is_rope() { 2 } else { 1 };
+            let kept = ((system.capacity() as f64 * share) as usize).max(least);
+            system.thin_to(kept);
+        }
+    }
+    skipped.push(format!(
+        "this scene asks for {wanted} particles at once and is thinned to {budget}"
+    ));
 }
 
 /// Names the effects an object carries but does not get.

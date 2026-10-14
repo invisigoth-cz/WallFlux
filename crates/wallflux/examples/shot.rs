@@ -6,7 +6,7 @@
 //! wallpaper looks different at different moments.
 //!
 //! ```text
-//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds]
+//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget]
 //! ```
 
 use std::path::PathBuf;
@@ -28,7 +28,9 @@ use render::Scene;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [dir, out, rest @ ..] = args.as_slice() else {
-        eprintln!("usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds]");
+        eprintln!(
+            "usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget]"
+        );
         std::process::exit(2);
     };
     let width: u32 = rest.first().and_then(|s| s.parse().ok()).unwrap_or(1280);
@@ -40,7 +42,11 @@ fn main() {
         std::process::exit(1);
     });
 
-    let mut scene = Scene::load(&gl, &PathBuf::from(dir)).unwrap_or_else(|e| {
+    let budget = rest
+        .get(3)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(render::DEFAULT_BUDGET);
+    let mut scene = Scene::load_within(&gl, &PathBuf::from(dir), budget).unwrap_or_else(|e| {
         eprintln!("cannot load wallpaper: {e}");
         std::process::exit(1);
     });

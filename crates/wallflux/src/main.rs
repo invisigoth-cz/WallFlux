@@ -162,7 +162,7 @@ impl App {
         gpu.resize(w, h);
 
         if self.scene.is_none() {
-            match Scene::load(&gpu.gl, &self.dir) {
+            match Scene::load_within(&gpu.gl, &self.dir, render::DEFAULT_BUDGET) {
                 Ok(loaded) => {
                     println!(
                         "scene {}x{}, {} objects: {}",
