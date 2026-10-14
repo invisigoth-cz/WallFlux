@@ -12,7 +12,7 @@
 /// A 4x4 matrix in column-major order.
 pub type Matrix = [f32; 16];
 
-#[cfg(test)]
+/// The matrix that changes nothing.
 pub const IDENTITY: Matrix = [
     1.0, 0.0, 0.0, 0.0, //
     0.0, 1.0, 0.0, 0.0, //

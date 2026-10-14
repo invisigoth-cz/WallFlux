@@ -131,9 +131,11 @@ pub enum Operator {
 pub enum Renderer {
     /// A quad facing the viewer.
     Sprite,
-    /// A quad stretched along the particle's velocity.
+    /// A quad stretched along the particle's velocity. The trail runs
+    /// `length` times the particle's speed, kept between the two bounds.
     Trail {
         length: f32,
+        min_length: f32,
         max_length: f32,
     },
     Other(String),
@@ -251,6 +253,10 @@ impl ParticleSystem {
                 "sprite" => Renderer::Sprite,
                 "spritetrail" => Renderer::Trail {
                     length: num(r, "length", 0.0),
+                    min_length: num(r, "minlength", 0.0),
+                    // Left out by half the systems that trail, and the shader
+                    // caps the length against it, so absent has to mean
+                    // uncapped rather than nothing.
                     max_length: num(r, "maxlength", f32::MAX),
                 },
                 other => Renderer::Other(other.to_owned()),
@@ -460,6 +466,7 @@ mod tests {
             p.renderer,
             Renderer::Trail {
                 length: 0.02,
+                min_length: 0.0,
                 max_length: f32::MAX
             }
         );

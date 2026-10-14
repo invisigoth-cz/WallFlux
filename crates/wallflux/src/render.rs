@@ -184,7 +184,11 @@ struct Sheet {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Image,
-    Particles,
+    /// `trail` stretches each particle along its own velocity instead of
+    /// standing it square to the screen.
+    Particles {
+        trail: bool,
+    },
 }
 
 /// What an object draws with.
@@ -207,6 +211,9 @@ struct Object {
     color: [f32; 3],
     passes: Vec<Pass>,
     drawing: Drawing,
+    /// For a trailing particle system, the `length`, `max` and `min` its
+    /// shader stretches each particle between.
+    trail: Option<[f32; 3]>,
 }
 
 pub struct Scene {
@@ -311,6 +318,7 @@ impl Scene {
                 color: object.color.value.0,
                 passes,
                 drawing: Drawing::Image,
+                trail: None,
             });
             report_effects(object, &mut skipped);
         }
@@ -445,13 +453,21 @@ fn load_particles(
             return None;
         }
     };
-    if definition.renderer != ParticleRenderer::Sprite {
-        skipped.push(format!(
-            "{}: {:?} particles are not drawn yet",
-            object.name, definition.renderer
-        ));
-        return None;
-    }
+    let trail = match definition.renderer {
+        ParticleRenderer::Sprite => None,
+        ParticleRenderer::Trail {
+            length,
+            min_length,
+            max_length,
+        } => Some([length, max_length, min_length]),
+        ref other => {
+            skipped.push(format!(
+                "{}: {other:?} particles are not drawn yet",
+                object.name
+            ));
+            return None;
+        }
+    };
     if definition.emitters.is_empty() || definition.maxcount == 0 {
         return None;
     }
@@ -461,7 +477,10 @@ fn load_particles(
 
     let material_bytes = resolve.get(&definition.material)?;
     let material = Material::parse(&material_bytes).ok()?;
-    let passes = build_passes(gl, resolve, &material, Kind::Particles, object, skipped);
+    let kind = Kind::Particles {
+        trail: trail.is_some(),
+    };
+    let passes = build_passes(gl, resolve, &material, kind, object, skipped);
     if passes.is_empty() {
         return None;
     }
@@ -484,6 +503,7 @@ fn load_particles(
         color: object.color.value.0,
         passes,
         drawing: Drawing::Particles(Box::new(system)),
+        trail,
     })
 }
 
@@ -575,6 +595,28 @@ unsafe fn draw_particles(
             set_vec3(gl, pass.program, "g_OrientationRight", [1.0, 0.0, 0.0]);
             set_vec3(gl, pass.program, "g_OrientationUp", [0.0, 1.0, 0.0]);
             set_vec3(gl, pass.program, "g_OrientationForward", [0.0, 0.0, 1.0]);
+            if let Some(trail) = object.trail {
+                // How long a trail runs: its speed times the first, held
+                // between the other two.
+                set_vec4(
+                    gl,
+                    pass.program,
+                    "g_RenderVar0",
+                    [trail[0], trail[1], trail[2], 0.0],
+                );
+                // The trail shader turns each quad to face the viewer, which
+                // on a flat wallpaper means looking straight down z. Giving
+                // the eye in the object's own frame keeps that true however
+                // the object is placed, so the matrix between them is left
+                // alone.
+                set_matrix(
+                    gl,
+                    pass.program,
+                    "g_ModelMatrixInverse",
+                    &transform::IDENTITY,
+                );
+                set_vec3(gl, pass.program, "g_EyePosition", [0.0, 0.0, -FAR_AWAY]);
+            }
             if let Some(sheet) = &pass.sheet {
                 set_vec4(
                     gl,
@@ -728,7 +770,7 @@ fn build_pass(
                 covered = coverage(texture.image_size, (page.width, page.height));
             }
             match kind {
-                Kind::Particles => {
+                Kind::Particles { .. } => {
                     sheet = source
                         .as_ref()
                         .and_then(|source| Sheet::of(source, named, resolve));
@@ -756,14 +798,14 @@ fn build_pass(
             combos.insert(format!("TEX{slot}FORMAT"), texture.format.to_string());
         }
     }
-    if kind == Kind::Particles {
+    if let Kind::Particles { trail } = kind {
         let on = |yes: bool| if yes { "1" } else { "0" }.to_owned();
         // No geometry shader, so the vertex shader builds the corner itself.
         combos.insert("GS_ENABLED".into(), on(false));
         // The wide vertex layout, which carries velocity and lifetime. The
         // sprite sheet path reads the lifetime, so it is always sent.
         combos.insert("THICKFORMAT".into(), on(true));
-        combos.insert("TRAILRENDERER".into(), on(false));
+        combos.insert("TRAILRENDERER".into(), on(trail));
         // Whether a system animates is the texture's business, not the
         // particle file's: most sheets in the library are used by a system
         // that names no animation mode at all, and walking the sheet is what
@@ -1009,6 +1051,10 @@ unsafe fn make_quad(gl: &glow::Context) -> Result<(glow::VertexArray, glow::Buff
     }
 }
 
+/// Far enough that the direction to it is the z axis for every particle in a
+/// scene, whose own coordinates run to a few thousand.
+const FAR_AWAY: f32 = 1.0e6;
+
 /// Two triangles per particle.
 const INDICES_PER_PARTICLE: usize = 6;
 
@@ -1090,6 +1136,15 @@ fn set_float(gl: &glow::Context, p: glow::Program, name: &str, v: f32) {
     unsafe {
         if let Some(l) = gl.get_uniform_location(p, name) {
             gl.uniform_1_f32(Some(&l), v);
+        }
+    }
+}
+
+fn set_matrix(gl: &glow::Context, p: glow::Program, name: &str, m: &Matrix) {
+    unsafe {
+        if let Some(l) = gl.get_uniform_location(p, name) {
+            // Transposed, for the same reason the model-view-projection is.
+            gl.uniform_matrix_4_f32_slice(Some(&l), true, m);
         }
     }
 }
