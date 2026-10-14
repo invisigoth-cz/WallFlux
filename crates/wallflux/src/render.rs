@@ -69,6 +69,13 @@ struct Pass {
     constants: BTreeMap<String, serde_json::Value>,
     /// Set when the first texture is a sprite sheet the particles animate.
     sheet: Option<Sheet>,
+    /// How much of the first texture the image fills.
+    ///
+    /// Of the 384 textures in the library, 98 are stored at the next power of
+    /// two with the image in a corner and the rest left empty. Reading one of
+    /// those from corner to corner samples the empty part, which clamping then
+    /// smears across the whole object.
+    covered: [f32; 2],
 }
 
 /// A sprite sheet's layout, in the form the shaders' `ComputeSpriteFrame`
@@ -121,7 +128,6 @@ struct Object {
 pub struct Scene {
     objects: Vec<Object>,
     quad: glow::VertexArray,
-    #[allow(dead_code)]
     buffer: glow::Buffer,
     /// Allocated only if the scene has a particle system to draw.
     particles: Option<Buffers>,
@@ -295,6 +301,7 @@ impl Scene {
                 (Drawing::Image, _) => unsafe {
                     gl.bind_vertex_array(Some(self.quad));
                     for pass in &object.passes {
+                        write_quad(gl, self.buffer, pass.covered);
                         draw_pass(gl, pass, object, &mvp, time, &self.white);
                     }
                 },
@@ -565,6 +572,7 @@ fn build_pass(
     let mut textures = Vec::new();
     let mut sheet = None;
     let mut padded = false;
+    let mut covered = [1.0, 1.0];
     for (slot, name) in pass.textures.iter().enumerate() {
         let named = name.as_deref().filter(|name| !name.is_empty());
         let source = match named {
@@ -589,6 +597,11 @@ fn build_pass(
                 .as_ref()
                 .and_then(|source| Sheet::of(source, named, resolve));
             padded = source.as_ref().is_some_and(Sheet::padded);
+            if let Some(texture) = &source
+                && let Some(page) = texture.images.first().and_then(|mips| mips.first())
+            {
+                covered = coverage(texture.image_size, (page.width, page.height));
+            }
         }
         textures.push(
             source
@@ -673,6 +686,7 @@ fn build_pass(
         blending: Blending::parse(&pass.blending),
         constants,
         sheet,
+        covered,
     })
 }
 
@@ -779,6 +793,41 @@ fn first_line(log: &str) -> String {
         .find(|l| !l.trim().is_empty())
         .unwrap_or("unknown error")
         .to_owned()
+}
+
+/// How much of a stored texture its image actually fills.
+///
+/// Textures are often stored at the next power of two with the image in a
+/// corner and the rest left empty, and nothing in the shaders corrects for it:
+/// the texture coordinates a pass is given have to stop where the image does.
+fn coverage(image: (u32, u32), stored: (u32, u32)) -> [f32; 2] {
+    if stored.0 == 0 || stored.1 == 0 || image.0 == 0 || image.1 == 0 {
+        return [1.0, 1.0];
+    }
+    [
+        (image.0 as f32 / stored.0 as f32).min(1.0),
+        (image.1 as f32 / stored.1 as f32).min(1.0),
+    ]
+}
+
+/// Writes the quad a pass draws, reading `covered` of its texture.
+unsafe fn write_quad(gl: &glow::Context, buffer: glow::Buffer, covered: [f32; 2]) {
+    let (u, v) = (covered[0], covered[1]);
+    #[rustfmt::skip]
+    let vertices: [f32; 20] = [
+        -0.5, -0.5, 0.0,   0.0, 0.0,
+         0.5, -0.5, 0.0,     u, 0.0,
+        -0.5,  0.5, 0.0,   0.0,   v,
+         0.5,  0.5, 0.0,     u,   v,
+    ];
+    unsafe {
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
+        let bytes: &[u8] = std::slice::from_raw_parts(
+            vertices.as_ptr() as *const u8,
+            std::mem::size_of_val(&vertices),
+        );
+        gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes);
+    }
 }
 
 /// A unit quad centred on the origin, with texture coordinates from the top
@@ -961,4 +1010,29 @@ fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
         .into_iter()
         .next()
         .ok_or_else(|| format!("no .pkg in {}", dir.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::coverage;
+
+    #[test]
+    fn a_texture_stored_at_its_own_size_is_read_whole() {
+        assert_eq!(coverage((1920, 1080), (1920, 1080)), [1.0, 1.0]);
+    }
+
+    #[test]
+    fn a_padded_texture_is_read_only_as_far_as_its_image() {
+        // The background of one wallpaper in the library: 3840 by 2160 stored
+        // in a 4096 square. Reading it whole samples the empty part.
+        assert_eq!(coverage((3840, 2160), (4096, 4096)), [0.9375, 0.52734375]);
+    }
+
+    #[test]
+    fn a_texture_that_states_nothing_sensible_is_read_whole() {
+        assert_eq!(coverage((0, 0), (512, 512)), [1.0, 1.0]);
+        assert_eq!(coverage((512, 512), (0, 0)), [1.0, 1.0]);
+        // An image larger than what holds it cannot be read past the edge.
+        assert_eq!(coverage((600, 600), (512, 512)), [1.0, 1.0]);
+    }
 }
