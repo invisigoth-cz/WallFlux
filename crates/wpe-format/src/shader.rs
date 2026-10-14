@@ -182,6 +182,62 @@ pub fn combo_defaults(source: &str) -> BTreeMap<String, String> {
     out
 }
 
+/// A uniform a shader declares, with whatever rides in the comment beside it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Uniform {
+    pub name: String,
+    /// What to use when nothing sets it. A uniform nobody sets reads as zero
+    /// on the GPU, so a shader that multiplies by one of these draws black
+    /// until its declared default is fed back in.
+    pub default: Option<serde_json::Value>,
+    /// The name a *material* sets it by, which is not the uniform's own name.
+    /// Materials write `ui_editor_properties_overbright`, never `g_Overbright`
+    /// -- of the 210 constants in the library, 201 are written this way.
+    pub label: Option<String>,
+}
+
+/// The uniforms a shader declares, read from the comments beside them:
+///
+/// ```text
+/// uniform float g_Overbright; // {"material":"ui_editor_properties_overbright","default":1.0}
+/// ```
+///
+/// Samplers are left out: their annotation names a texture, not a value.
+pub fn uniforms(source: &str) -> Vec<Uniform> {
+    let mut out = Vec::new();
+    for line in source.lines() {
+        let line = line.trim_start();
+        let Some(rest) = line.strip_prefix("uniform") else {
+            continue;
+        };
+        let Some((declaration, comment)) = rest.split_once("//") else {
+            continue;
+        };
+        let mut words = declaration.split_whitespace();
+        let (Some(kind), Some(name)) = (words.next(), words.next()) else {
+            continue;
+        };
+        if kind.starts_with("sampler") {
+            continue;
+        }
+        let Some(start) = comment.find('{') else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&comment[start..]) else {
+            continue;
+        };
+        out.push(Uniform {
+            name: name.trim_end_matches([';', '[']).trim().to_owned(),
+            default: value.get("default").cloned(),
+            label: value
+                .get("material")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+        });
+    }
+    out
+}
+
 /// Whether the source defines `name` itself.
 fn defines(source: &str, name: &str) -> bool {
     source.lines().any(|line| {
@@ -384,5 +440,58 @@ void main() {}",
         assert_eq!(include_name("// #include is mentioned here"), None);
         assert_eq!(include_name("#define x 1"), None);
         assert_eq!(include_name("#include <angle.h>"), None);
+    }
+}
+
+#[cfg(test)]
+mod uniform_tests {
+    use super::uniforms;
+
+    #[test]
+    fn reads_the_name_the_default_and_the_label() {
+        let source = r#"
+uniform float g_Overbright; // {"material":"ui_editor_properties_overbright","default":1.0,"range":[0,5]}
+uniform vec3 g_Tint; // {"default":"1 0.5 0"}
+uniform float g_Plain;
+uniform float g_Undocumented; // not json
+"#;
+        let u = uniforms(source);
+        assert_eq!(u.len(), 2);
+        assert_eq!(u[0].name, "g_Overbright");
+        assert_eq!(u[0].default, Some(serde_json::json!(1.0)));
+        assert_eq!(
+            u[0].label.as_deref(),
+            Some("ui_editor_properties_overbright")
+        );
+        assert_eq!(u[1].name, "g_Tint");
+        assert_eq!(u[1].label, None);
+    }
+
+    #[test]
+    fn a_samplers_annotation_names_a_texture_and_not_a_value() {
+        let source = r#"uniform sampler2D g_Texture0; // {"default":"util/white"}"#;
+        assert!(uniforms(source).is_empty());
+    }
+
+    #[test]
+    fn finds_what_the_particle_shaders_rely_on() {
+        let Some(assets) = crate::Assets::locate() else {
+            return;
+        };
+        let Some(source) = assets.get("shaders/genericparticle.frag") else {
+            return;
+        };
+        let u = uniforms(&String::from_utf8_lossy(&source));
+        let overbright = u
+            .iter()
+            .find(|u| u.name == "g_Overbright")
+            .expect("no g_Overbright");
+        // Without the default every particle in the library draws black, and
+        // without the label the materials that set it to 5 are ignored.
+        assert_eq!(overbright.default, Some(serde_json::json!(1.0)));
+        assert_eq!(
+            overbright.label.as_deref(),
+            Some("ui_editor_properties_overbright")
+        );
     }
 }
