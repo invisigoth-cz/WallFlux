@@ -219,6 +219,12 @@ pub struct Sprite {
 pub struct Sidecar {
     #[serde(rename = "spritesheetsequences")]
     pub sequences: Vec<Sequence>,
+    /// Whether the texture stops at its edges or starts over. Of the textures
+    /// that ship with Wallpaper Engine, 121 clamp and 61 repeat, and a cloud
+    /// layer that clamps when it meant to repeat smears its edge across the
+    /// sky in stripes.
+    #[serde(rename = "clampuvs")]
+    pub clamp: Option<bool>,
 }
 
 /// One sprite sheet animation described by a sidecar.
@@ -645,5 +651,31 @@ mod frame_tests {
         }
         let last = sprite.frames.last().unwrap();
         assert_eq!((last.x, last.y), (896.0, 896.0), "the sheet is 8 by 8");
+    }
+}
+
+#[cfg(test)]
+mod wrapping_tests {
+    use super::Sidecar;
+
+    #[test]
+    fn reads_whether_a_texture_repeats() {
+        let repeats = br#"{"clampuvs":false,"format":"rgba8888"}"#;
+        let clamps = br#"{"clampuvs":true}"#;
+        assert_eq!(Sidecar::parse(repeats).unwrap().clamp, Some(false));
+        assert_eq!(Sidecar::parse(clamps).unwrap().clamp, Some(true));
+        // Said by neither, which is the wallpapers' own textures to a one.
+        assert_eq!(Sidecar::parse(b"{}").unwrap().clamp, None);
+    }
+
+    #[test]
+    fn the_cloud_layer_wallpapers_use_says_it_repeats() {
+        let Some(assets) = crate::Assets::locate() else {
+            return;
+        };
+        let Some(bytes) = assets.get("materials/util/clouds_256.tex-json") else {
+            return;
+        };
+        assert_eq!(Sidecar::parse(&bytes).unwrap().clamp, Some(false));
     }
 }

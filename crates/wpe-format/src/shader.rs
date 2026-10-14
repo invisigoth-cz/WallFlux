@@ -194,6 +194,9 @@ pub struct Uniform {
     /// Materials write `ui_editor_properties_overbright`, never `g_Overbright`
     /// -- of the 210 constants in the library, 201 are written this way.
     pub label: Option<String>,
+    /// Whether this is a texture rather than a value. A sampler's default
+    /// names a texture to load, not a number to set.
+    pub sampler: bool,
 }
 
 /// The uniforms a shader declares, read from the comments beside them:
@@ -202,7 +205,9 @@ pub struct Uniform {
 /// uniform float g_Overbright; // {"material":"ui_editor_properties_overbright","default":1.0}
 /// ```
 ///
-/// Samplers are left out: their annotation names a texture, not a value.
+/// Samplers are included, flagged, because their default names a texture the
+/// pass still needs: a shader that samples clouds and is given none draws a
+/// sky of flat white.
 pub fn uniforms(source: &str) -> Vec<Uniform> {
     let mut out = Vec::new();
     for line in source.lines() {
@@ -217,9 +222,6 @@ pub fn uniforms(source: &str) -> Vec<Uniform> {
         let (Some(kind), Some(name)) = (words.next(), words.next()) else {
             continue;
         };
-        if kind.starts_with("sampler") {
-            continue;
-        }
         let Some(start) = comment.find('{') else {
             continue;
         };
@@ -233,6 +235,7 @@ pub fn uniforms(source: &str) -> Vec<Uniform> {
                 .get("material")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned),
+            sampler: kind.starts_with("sampler"),
         });
     }
     out
@@ -468,9 +471,14 @@ uniform float g_Undocumented; // not json
     }
 
     #[test]
-    fn a_samplers_annotation_names_a_texture_and_not_a_value() {
-        let source = r#"uniform sampler2D g_Texture0; // {"default":"util/white"}"#;
-        assert!(uniforms(source).is_empty());
+    fn a_samplers_annotation_names_a_texture_and_is_flagged_as_one() {
+        let source = r#"uniform sampler2D g_Texture1; // {"default":"util/clouds_256"}"#;
+        let found = uniforms(source);
+        let [found] = found.as_slice() else {
+            panic!("expected one uniform, got {found:?}");
+        };
+        assert!(found.sampler);
+        assert_eq!(found.default, Some(serde_json::json!("util/clouds_256")));
     }
 
     #[test]
