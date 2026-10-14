@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use glow::HasContext;
 use wpe_format::scene::ObjectKind;
-use wpe_format::shader::{Stage, preprocess};
+use wpe_format::shader::{Stage, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, Resolver, Scene as SceneFile};
 
 use crate::texture::Texture;
@@ -84,6 +84,8 @@ pub struct Scene {
     quad: glow::VertexArray,
     #[allow(dead_code)]
     buffer: glow::Buffer,
+    /// Stands in for a texture slot a pass leaves empty.
+    white: Texture,
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
@@ -173,6 +175,7 @@ impl Scene {
             objects,
             quad,
             buffer,
+            white: Texture::white(gl)?,
             scene_size,
             skipped,
         })
@@ -201,19 +204,28 @@ impl Scene {
             let model = transform::model(object.origin, object.size, object.scale, object.angles);
             let mvp = transform::multiply(&projection, &model);
             for pass in &object.passes {
-                unsafe { draw_pass(gl, pass, object, &mvp, time) };
+                unsafe { draw_pass(gl, pass, object, &mvp, time, &self.white) };
             }
         }
     }
 }
 
-unsafe fn draw_pass(gl: &glow::Context, pass: &Pass, object: &Object, mvp: &Matrix, time: f32) {
+unsafe fn draw_pass(
+    gl: &glow::Context,
+    pass: &Pass,
+    object: &Object,
+    mvp: &Matrix,
+    time: f32,
+    white: &Texture,
+) {
     unsafe {
         gl.use_program(Some(pass.program));
         pass.blending.apply(gl);
 
         for (unit, slot) in pass.textures.iter().enumerate() {
-            let Some(texture) = slot else { continue };
+            // An empty slot still has to be given something, or the pass reads
+            // whatever texture was last left on that unit -- another object's.
+            let texture = slot.as_ref().unwrap_or(white);
             texture.bind(gl, unit as u32);
             set_int(gl, pass.program, &format!("g_Texture{unit}"), unit as i32);
             // .xy is the texture, .zw the image inside it; shaders divide one
@@ -269,10 +281,62 @@ fn build_pass(
     if pass.shader.is_empty() {
         return Err("pass names no shader".into());
     }
-    let combos: BTreeMap<String, String> = pass
+
+    // A pass draws the texture in its first slot, so one that wants a render
+    // target there is compositing something this renderer has not produced.
+    // Drawing it anyway would put a full-screen rectangle of nothing over the
+    // scene; the later slots only modulate, and white leaves those alone.
+    if let Some(Some(name)) = pass.textures.first()
+        && wpe_format::effect::is_render_target(name)
+    {
+        return Err(format!("needs the render target {name}"));
+    }
+
+    // Textures are loaded before the shaders are compiled, because the format
+    // each one ended up in is one of the things the shaders are told.
+    let mut textures = Vec::new();
+    for (slot, name) in pass.textures.iter().enumerate() {
+        let named = name.as_deref().filter(|name| !name.is_empty());
+        let source = match named {
+            Some(name) if !wpe_format::effect::is_render_target(name) => resolve
+                .get(&format!("materials/{name}.tex"))
+                .and_then(|bytes| wpe_format::Texture::parse(&bytes).ok()),
+            _ => None,
+        };
+        // A pass whose own image is a video is a video wallpaper wearing a
+        // scene's clothes, and there is nothing to draw for it yet.
+        if slot == 0 {
+            match &source {
+                Some(texture) if texture.is_video() => {
+                    return Err("its texture holds a video".into());
+                }
+                None if named.is_some() => {
+                    return Err(format!("texture {} could not be read", named.unwrap()));
+                }
+                _ => {}
+            }
+        }
+        textures.push(
+            source
+                .as_ref()
+                .filter(|texture| !texture.is_video())
+                .and_then(|source| Texture::upload(gl, source).ok()),
+        );
+    }
+
+    let mut combos: BTreeMap<String, String> = pass
         .defines()
         .map(|(k, v)| (k, v.to_string().trim_matches('"').to_owned()))
         .collect();
+    // What was actually uploaded wins over anything the material says, since
+    // this is the texture the shader will be sampling. Without it a
+    // two-channel texture reads as red and green rather than as grey with an
+    // alpha, because the shader never converts what it was not told about.
+    for (slot, texture) in textures.iter().enumerate() {
+        if let Some(texture) = texture {
+            combos.insert(format!("TEX{slot}FORMAT"), texture.format.to_string());
+        }
+    }
 
     let mut stages = Vec::new();
     for (stage, ext) in [(Stage::Vertex, "vert"), (Stage::Fragment, "frag")] {
@@ -291,29 +355,32 @@ fn build_pass(
     }
     let program = unsafe { link(gl, &stages)? };
 
-    let mut textures = Vec::new();
-    for name in &pass.textures {
-        textures.push(match name {
-            Some(name) if !name.is_empty() && !wpe_format::effect::is_render_target(name) => {
-                resolve
-                    .get(&format!("materials/{name}.tex"))
-                    .and_then(|bytes| wpe_format::Texture::parse(&bytes).ok())
-                    .filter(|t| !t.is_video())
-                    .and_then(|source| Texture::upload(gl, &source).ok())
+    // A uniform nobody sets reads as zero, so the defaults a shader declares
+    // for itself go in first and the material's own values over them.
+    let mut constants = BTreeMap::new();
+    let mut named_by = BTreeMap::new();
+    for (_, source) in &stages {
+        for uniform in uniforms(source) {
+            if let Some(default) = uniform.default {
+                constants.insert(uniform.name.clone(), default);
             }
-            _ => None,
-        });
+            if let Some(label) = uniform.label {
+                named_by.insert(label, uniform.name);
+            }
+        }
+    }
+    for (key, value) in &pass.constantshadervalues {
+        // Materials name a constant by the label the shader gave it, so the
+        // label is translated back before it can reach a uniform at all.
+        let name = named_by.get(key).unwrap_or(key);
+        constants.insert(name.clone(), value.value.clone());
     }
 
     Ok(Pass {
         program,
         textures,
         blending: Blending::parse(&pass.blending),
-        constants: pass
-            .constantshadervalues
-            .iter()
-            .map(|(k, v)| (k.clone(), v.value.clone()))
-            .collect(),
+        constants,
     })
 }
 

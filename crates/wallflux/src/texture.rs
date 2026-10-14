@@ -34,6 +34,11 @@ pub struct Texture {
     /// two. Anything sampling this has to scale by the ratio or it reads the
     /// empty margin.
     pub image_size: (u32, u32),
+    /// The format as it ended up on the GPU, for the shader to be told.
+    ///
+    /// Not always the format the file names: a mipmap holding an encoded JPEG
+    /// or PNG is decoded to RGBA here, whatever the header said.
+    pub format: i32,
 }
 
 impl Texture {
@@ -111,6 +116,55 @@ impl Texture {
             width: mips[0].width,
             height: mips[0].height,
             image_size: source.image_size,
+            format: match source.free_image {
+                FreeImage::None => source.format.id(),
+                _ => PixelFormat::Argb8888.id(),
+            },
+        })
+    }
+
+    /// A single opaque white pixel, for a slot a pass leaves empty.
+    ///
+    /// Sampling a unit nothing was bound to does not read white, it reads
+    /// whatever texture was last left there -- which is how one object ends up
+    /// drawing another's. The shaders name `util/white` as the default for an
+    /// unset texture, so white is also what the format expects.
+    pub fn white(gl: &glow::Context) -> Result<Self, String> {
+        let id = unsafe { gl.create_texture() }.map_err(|e| format!("create texture: {e}"))?;
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D, Some(id));
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_BASE_LEVEL, 0);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAX_LEVEL, 0);
+            gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                RGBA8.0 as i32,
+                1,
+                1,
+                0,
+                RGBA8.1,
+                RGBA8.2,
+                glow::PixelUnpackData::Slice(Some(&[255, 255, 255, 255])),
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MAG_FILTER,
+                glow::NEAREST as i32,
+            );
+            gl.bind_texture(glow::TEXTURE_2D, None);
+        }
+        Ok(Self {
+            id,
+            width: 1,
+            height: 1,
+            image_size: (1, 1),
+            format: PixelFormat::Argb8888.id(),
         })
     }
 
