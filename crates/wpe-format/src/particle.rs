@@ -178,6 +178,18 @@ pub enum Operator {
 pub enum Renderer {
     /// A quad facing the viewer.
     Sprite,
+    /// One ribbon threaded through all the system's particles, oldest first.
+    ///
+    /// The shader reads a segment's place as `position / length` along the
+    /// particle array and says in its own comment that new particles are at
+    /// the end of it, so the ribbon is the live particles in the order they
+    /// were born. Where they all start from one emitter and drift apart, that
+    /// order traces the path they drifted along, which is what makes a wisp.
+    Rope {
+        /// How finely the engine smooths each segment. Nothing is smoothed
+        /// yet, so this only says how smooth it was meant to be.
+        subdivision: u32,
+    },
     /// A quad stretched along the particle's velocity. The trail runs
     /// `length` times the particle's speed, kept between the two bounds.
     Trail {
@@ -326,6 +338,9 @@ impl ParticleSystem {
         let renderer = match array(&root, "renderer").first().copied() {
             Some(r) => match name_of(r) {
                 "sprite" => Renderer::Sprite,
+                "rope" => Renderer::Rope {
+                    subdivision: num(r, "subdivision", 1.0).clamp(1.0, 64.0) as u32,
+                },
                 "spritetrail" => Renderer::Trail {
                     length: num(r, "length", 0.0),
                     min_length: num(r, "minlength", 0.0),
@@ -697,6 +712,35 @@ mod turbulence_tests {
             panic!("not a turbulence operator");
         };
         assert!(field.scale > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod rope_tests {
+    use super::*;
+
+    #[test]
+    fn reads_a_rope_and_how_finely_it_was_meant_to_bend() {
+        let json = br#"{"material":"m.json","maxcount":32,
+            "renderer":[{"id":1,"name":"rope","subdivision":3}]}"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(p.renderer, Renderer::Rope { subdivision: 3 });
+        assert!(p.unsupported.is_empty());
+    }
+
+    #[test]
+    fn a_rope_that_states_no_subdivision_still_has_one() {
+        let json = br#"{"material":"m.json","renderer":[{"id":1,"name":"rope"}]}"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(p.renderer, Renderer::Rope { subdivision: 1 });
+    }
+
+    #[test]
+    fn a_rope_trail_is_still_something_else() {
+        let json =
+            br#"{"material":"m.json","renderer":[{"id":1,"name":"ropetrail","length":0.2}]}"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(p.renderer, Renderer::Other("ropetrail".into()));
     }
 }
 

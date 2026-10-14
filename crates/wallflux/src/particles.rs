@@ -20,9 +20,16 @@ use wpe_format::particle::{
     Turbulent, Vortex,
 };
 
-/// Floats per vertex: position, then corner and rotation and size, then
-/// colour, then the two remaining rotation axes, then velocity and lifetime.
+/// Floats per vertex of a particle drawn as a sprite: position, then corner
+/// and rotation and size, then colour, then the two remaining rotation axes,
+/// then velocity and lifetime.
 pub const FLOATS_PER_VERTEX: usize = 17;
+
+/// Floats per vertex of a rope segment: the start with its size, the end with
+/// the rope's length, a control point with the segment's place along the rope,
+/// a second control point with the end's size, the end's colour, the corner,
+/// and the start's colour.
+pub const FLOATS_PER_ROPE_VERTEX: usize = 26;
 const VERTICES_PER_PARTICLE: usize = 4;
 
 /// The four corners of a particle, as the shader's `ComputeParticlePosition`
@@ -95,6 +102,9 @@ impl Default for Start {
 }
 
 pub struct System {
+    /// Threads every particle onto one ribbon instead of drawing each as its
+    /// own quad.
+    rope: bool,
     /// Each emitter with the fraction of a particle it is owed.
     emitters: Vec<(Emitter, f32)>,
     start: Start,
@@ -126,6 +136,10 @@ impl System {
             }
         }
         Self {
+            rope: matches!(
+                definition.renderer,
+                wpe_format::particle::Renderer::Rope { .. }
+            ),
             emitters: definition
                 .emitters
                 .iter()
@@ -154,9 +168,24 @@ impl System {
         self.maxcount
     }
 
-    /// The buffer to draw, four vertices per live particle.
+    /// The buffer to draw: four vertices per live particle, or four per rope
+    /// segment where the system is a ribbon.
     pub fn vertices(&self) -> &[f32] {
         &self.vertices
+    }
+
+    /// Whether this system draws as one ribbon rather than loose quads.
+    pub fn is_rope(&self) -> bool {
+        self.rope
+    }
+
+    /// How many four-vertex pieces the buffer holds.
+    pub fn pieces(&self) -> usize {
+        if self.rope {
+            self.live.len().saturating_sub(1)
+        } else {
+            self.live.len()
+        }
     }
 
     /// Moves the system on by `dt` seconds and rewrites the buffer.
@@ -303,6 +332,10 @@ impl System {
     }
 
     fn write_vertices(&mut self) {
+        if self.rope {
+            self.write_rope();
+            return;
+        }
         self.vertices.clear();
         self.vertices
             .reserve(self.live.len() * VERTICES_PER_PARTICLE * FLOATS_PER_VERTEX);
@@ -354,6 +387,49 @@ impl System {
                     .extend_from_slice(&[particle.rotation[0], particle.rotation[1]]);
                 self.vertices.extend_from_slice(&particle.velocity);
                 self.vertices.push(frame);
+            }
+        }
+    }
+}
+
+impl System {
+    /// Writes the ribbon: one piece per pair of particles, each carrying the
+    /// whole segment so the shader can interpolate across it.
+    ///
+    /// The control points a spline would bend through are set to the segment's
+    /// own ends, which leaves every segment straight. Smoothing them is what
+    /// the file's `subdivision` is for and is not done yet.
+    fn write_rope(&mut self) {
+        self.vertices.clear();
+        let pieces = self.pieces();
+        self.vertices
+            .reserve(pieces * VERTICES_PER_PARTICLE * FLOATS_PER_ROPE_VERTEX);
+        let length = self.live.len() as f32;
+
+        for piece in 0..pieces {
+            let (start, end) = (&self.live[piece], &self.live[piece + 1]);
+            let shown = |p: &Particle| {
+                let alpha = p.alpha * fade(&self.operators, p.age, p.lifetime);
+                let size = p.size * size_factor(&self.operators, p.age / p.lifetime);
+                ([p.color[0], p.color[1], p.color[2], alpha], size)
+            };
+            let (start_color, start_size) = shown(start);
+            let (end_color, end_size) = shown(end);
+
+            for corner in CORNERS {
+                self.vertices.extend_from_slice(&start.position);
+                self.vertices.push(start_size);
+                self.vertices.extend_from_slice(&end.position);
+                self.vertices.push(length);
+                // The control points: the segment's own ends, so it stays
+                // straight.
+                self.vertices.extend_from_slice(&start.position);
+                self.vertices.push(piece as f32);
+                self.vertices.extend_from_slice(&end.position);
+                self.vertices.push(end_size);
+                self.vertices.extend_from_slice(&end_color);
+                self.vertices.extend_from_slice(&corner);
+                self.vertices.extend_from_slice(&start_color);
             }
         }
     }
@@ -987,6 +1063,63 @@ mod tests {
             "turned to {}",
             turning.live[0].rotation[2]
         );
+    }
+
+    #[test]
+    fn a_rope_joins_its_particles_into_one_ribbon_oldest_first() {
+        let mut s = system(
+            r#"{"maxcount":8,"renderer":[{"name":"rope","subdivision":3}],
+                "emitter":[{"name":"boxrandom","rate":60,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"sizerandom","min":10,"max":10},
+                               {"name":"velocityrandom","min":"100 0 0","max":"100 0 0"}],
+                "operator":[{"name":"movement"}]}"#,
+        );
+        assert!(s.is_rope());
+        run(&mut s, 0.2, 1.0 / 60.0);
+        assert!(s.count() >= 3, "only {} particles", s.count());
+
+        // One piece per pair, and nothing left over.
+        assert_eq!(s.pieces(), s.count() - 1);
+        assert_eq!(
+            s.vertices().len(),
+            s.pieces() * 4 * FLOATS_PER_ROPE_VERTEX,
+            "the buffer does not match the pieces"
+        );
+
+        // The first piece runs from the oldest particle to the next, which is
+        // what makes the ribbon trace the path they drifted along.
+        let oldest = s.live[0].position;
+        let next = s.live[1].position;
+        assert_eq!(&s.vertices()[0..3], &oldest);
+        assert_eq!(&s.vertices()[4..7], &next);
+        // Every vertex of a piece carries the whole segment, so the shader can
+        // read across it; only the corner differs.
+        let stride = FLOATS_PER_ROPE_VERTEX;
+        assert_eq!(&s.vertices()[0..3], &s.vertices()[stride..stride + 3]);
+        assert_eq!(
+            &s.vertices()[20..22],
+            &[0.0, 0.0],
+            "the first corner should be the near one"
+        );
+        assert_eq!(&s.vertices()[stride + 20..stride + 22], &[1.0, 0.0]);
+        // The rope states its own length and where each piece sits along it.
+        assert_eq!(s.vertices()[7], s.count() as f32);
+        assert_eq!(s.vertices()[11], 0.0);
+        assert_eq!(s.vertices()[stride * 4 + 11], 1.0, "second piece");
+    }
+
+    #[test]
+    fn a_rope_with_one_particle_has_nothing_to_join() {
+        let mut s = system(
+            r#"{"maxcount":1,"renderer":[{"name":"rope"}],
+                "emitter":[{"name":"boxrandom","rate":60,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
+        );
+        run(&mut s, 0.1, 1.0 / 60.0);
+        assert_eq!(s.count(), 1);
+        assert_eq!(s.pieces(), 0);
+        assert!(s.vertices().is_empty());
     }
 
     #[test]

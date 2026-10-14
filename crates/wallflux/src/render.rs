@@ -13,7 +13,7 @@ use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
 
-use crate::particles::{self, FLOATS_PER_VERTEX};
+use crate::particles::{self, FLOATS_PER_ROPE_VERTEX, FLOATS_PER_VERTEX};
 use crate::texture::Texture;
 use crate::transform::{self, Matrix};
 
@@ -184,11 +184,18 @@ struct Sheet {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     Image,
-    /// `trail` stretches each particle along its own velocity instead of
-    /// standing it square to the screen.
-    Particles {
-        trail: bool,
-    },
+    Particles(Form),
+}
+
+/// How a particle system turns into geometry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Form {
+    /// A quad per particle, square to the screen.
+    Sprite,
+    /// A quad per particle, stretched along its own velocity.
+    Trail,
+    /// One ribbon threaded through every particle, a quad per pair.
+    Rope,
 }
 
 /// What an object draws with.
@@ -236,6 +243,10 @@ pub struct Scene {
 struct Buffers {
     vao: glow::VertexArray,
     vertices: glow::Buffer,
+    /// A ribbon's vertices carry a whole segment each, so they need a layout
+    /// and a buffer of their own.
+    rope: glow::VertexArray,
+    rope_vertices: glow::Buffer,
     #[allow(dead_code)]
     indices: glow::Buffer,
 }
@@ -453,13 +464,18 @@ fn load_particles(
             return None;
         }
     };
-    let trail = match definition.renderer {
-        ParticleRenderer::Sprite => None,
+    let mut trail = None;
+    let form = match definition.renderer {
+        ParticleRenderer::Sprite => Form::Sprite,
+        ParticleRenderer::Rope { .. } => Form::Rope,
         ParticleRenderer::Trail {
             length,
             min_length,
             max_length,
-        } => Some([length, max_length, min_length]),
+        } => {
+            trail = Some([length, max_length, min_length]);
+            Form::Trail
+        }
         ref other => {
             skipped.push(format!(
                 "{}: {other:?} particles are not drawn yet",
@@ -477,10 +493,14 @@ fn load_particles(
 
     let material_bytes = resolve.get(&definition.material)?;
     let material = Material::parse(&material_bytes).ok()?;
-    let kind = Kind::Particles {
-        trail: trail.is_some(),
-    };
-    let passes = build_passes(gl, resolve, &material, kind, object, skipped);
+    let passes = build_passes(
+        gl,
+        resolve,
+        &material,
+        Kind::Particles(form),
+        object,
+        skipped,
+    );
     if passes.is_empty() {
         return None;
     }
@@ -579,9 +599,13 @@ unsafe fn draw_particles(
     if vertices.is_empty() {
         return;
     }
+    let (vao, buffer) = match system.is_rope() {
+        true => (buffers.rope, buffers.rope_vertices),
+        false => (buffers.vao, buffers.vertices),
+    };
     unsafe {
-        gl.bind_vertex_array(Some(buffers.vao));
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffers.vertices));
+        gl.bind_vertex_array(Some(vao));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
         let bytes: &[u8] = std::slice::from_raw_parts(
             vertices.as_ptr() as *const u8,
             std::mem::size_of_val(vertices),
@@ -595,6 +619,19 @@ unsafe fn draw_particles(
             set_vec3(gl, pass.program, "g_OrientationRight", [1.0, 0.0, 0.0]);
             set_vec3(gl, pass.program, "g_OrientationUp", [0.0, 1.0, 0.0]);
             set_vec3(gl, pass.program, "g_OrientationForward", [0.0, 0.0, 1.0]);
+            // A trail and a ribbon both turn to face the viewer, and both
+            // work out which way that is from the eye. On a flat wallpaper it
+            // is straight down z, so the eye is given in the object's own
+            // frame and the matrix between them left alone. Leaving the matrix
+            // unset reads as all zeros, which collapses that direction to
+            // nothing and takes the geometry with it.
+            set_matrix(
+                gl,
+                pass.program,
+                "g_ModelMatrixInverse",
+                &transform::IDENTITY,
+            );
+            set_vec3(gl, pass.program, "g_EyePosition", [0.0, 0.0, -FAR_AWAY]);
             if let Some(trail) = object.trail {
                 // How long a trail runs: its speed times the first, held
                 // between the other two.
@@ -604,18 +641,6 @@ unsafe fn draw_particles(
                     "g_RenderVar0",
                     [trail[0], trail[1], trail[2], 0.0],
                 );
-                // The trail shader turns each quad to face the viewer, which
-                // on a flat wallpaper means looking straight down z. Giving
-                // the eye in the object's own frame keeps that true however
-                // the object is placed, so the matrix between them is left
-                // alone.
-                set_matrix(
-                    gl,
-                    pass.program,
-                    "g_ModelMatrixInverse",
-                    &transform::IDENTITY,
-                );
-                set_vec3(gl, pass.program, "g_EyePosition", [0.0, 0.0, -FAR_AWAY]);
             }
             if let Some(sheet) = &pass.sheet {
                 set_vec4(
@@ -632,7 +657,7 @@ unsafe fn draw_particles(
             }
             gl.draw_elements(
                 glow::TRIANGLES,
-                (system.count() * INDICES_PER_PARTICLE) as i32,
+                (system.pieces() * INDICES_PER_PARTICLE) as i32,
                 glow::UNSIGNED_INT,
                 0,
             );
@@ -770,7 +795,7 @@ fn build_pass(
                 covered = coverage(texture.image_size, (page.width, page.height));
             }
             match kind {
-                Kind::Particles { .. } => {
+                Kind::Particles(_) => {
                     sheet = source
                         .as_ref()
                         .and_then(|source| Sheet::of(source, named, resolve));
@@ -798,14 +823,19 @@ fn build_pass(
             combos.insert(format!("TEX{slot}FORMAT"), texture.format.to_string());
         }
     }
-    if let Kind::Particles { trail } = kind {
+    if let Kind::Particles(form) = kind {
         let on = |yes: bool| if yes { "1" } else { "0" }.to_owned();
         // No geometry shader, so the vertex shader builds the corner itself.
         combos.insert("GS_ENABLED".into(), on(false));
         // The wide vertex layout, which carries velocity and lifetime. The
         // sprite sheet path reads the lifetime, so it is always sent.
         combos.insert("THICKFORMAT".into(), on(true));
-        combos.insert("TRAILRENDERER".into(), on(trail));
+        combos.insert("TRAILRENDERER".into(), on(form == Form::Trail));
+        // A ribbon's own shader has no sprite sheet path at all, and its
+        // texture coordinate is a plain pair.
+        if form == Form::Rope {
+            sheet = None;
+        }
         // Whether a system animates is the texture's business, not the
         // particle file's: most sheets in the library are used by a system
         // that names no animation mode at all, and walking the sheet is what
@@ -823,10 +853,21 @@ fn build_pass(
         covered = [1.0, 1.0];
     }
 
+    // Every particle material in the library names `genericparticle`, whatever
+    // its system is drawn as, so the shader is chosen by the renderer and not
+    // by the material. A ribbon's geometry has nothing in common with a quad's
+    // and reads an entirely different set of attributes. A material that names
+    // something else is left alone, since then it is not the stock shader
+    // being stood in for.
+    let shader = match (kind, pass.shader.as_str()) {
+        (Kind::Particles(Form::Rope), "genericparticle") => "genericropeparticle",
+        _ => pass.shader.as_str(),
+    };
+
     let mut stages = Vec::new();
     for (stage, ext) in [(Stage::Vertex, "vert"), (Stage::Fragment, "frag")] {
         let source = resolve
-            .shader(&pass.shader, ext)
+            .shader(shader, ext)
             .ok_or_else(|| format!("no {ext} shader"))?;
         let (full, missing) = preprocess(&String::from_utf8_lossy(&source), stage, &combos, |i| {
             resolve
@@ -955,6 +996,11 @@ unsafe fn link(gl: &glow::Context, stages: &[(Stage, String)]) -> Result<glow::P
         gl.bind_attrib_location(program, 3, "a_Color");
         gl.bind_attrib_location(program, 4, "a_TexCoordC2");
         gl.bind_attrib_location(program, 5, "a_TexCoordVec4C1");
+        // The ribbon layout, whose vertices carry a whole segment.
+        gl.bind_attrib_location(program, 6, "a_PositionVec4");
+        gl.bind_attrib_location(program, 7, "a_TexCoordVec4C2");
+        gl.bind_attrib_location(program, 8, "a_TexCoordVec4C3");
+        gl.bind_attrib_location(program, 9, "a_TexCoordC4");
         gl.link_program(program);
         let ok = gl.get_program_link_status(program);
         for shader in shaders {
@@ -1109,6 +1155,45 @@ unsafe fn make_particle_buffers(gl: &glow::Context, capacity: usize) -> Result<B
             );
         }
 
+        // The ribbon shares the indices: both draw four vertices a piece.
+        let rope = gl.create_vertex_array()?;
+        let rope_vertices = gl.create_buffer()?;
+        gl.bind_vertex_array(Some(rope));
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(rope_vertices));
+        let rope_size = capacity * 4 * FLOATS_PER_ROPE_VERTEX * size_of::<f32>();
+        gl.buffer_data_size(glow::ARRAY_BUFFER, rope_size as i32, glow::DYNAMIC_DRAW);
+        // The start with its size, the end with the rope's length, a control
+        // point with the segment's place, a second control point with the
+        // end's size, the end's colour, the corner, and the start's colour --
+        // the layout `particles` writes for a ribbon.
+        let rope_stride = (FLOATS_PER_ROPE_VERTEX * size_of::<f32>()) as i32;
+        for (location, components, offset) in [
+            (6u32, 4i32, 0usize),
+            (2, 4, 4),
+            (5, 4, 8),
+            (7, 4, 12),
+            (8, 4, 16),
+            (9, 2, 20),
+            (3, 4, 22),
+        ] {
+            gl.enable_vertex_attrib_array(location);
+            gl.vertex_attrib_pointer_f32(
+                location,
+                components,
+                glow::FLOAT,
+                false,
+                rope_stride,
+                (offset * size_of::<f32>()) as i32,
+            );
+        }
+        gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
+        let bytes: &[u8] = std::slice::from_raw_parts(
+            indices.as_ptr() as *const u8,
+            std::mem::size_of_val(indices.as_slice()),
+        );
+        gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytes, glow::STATIC_DRAW);
+
+        gl.bind_vertex_array(Some(vao));
         gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(index_buffer));
         let bytes: &[u8] = std::slice::from_raw_parts(
             indices.as_ptr() as *const u8,
@@ -1119,6 +1204,8 @@ unsafe fn make_particle_buffers(gl: &glow::Context, capacity: usize) -> Result<B
         Ok(Buffers {
             vao,
             vertices,
+            rope,
+            rope_vertices,
             indices: index_buffer,
         })
     }
