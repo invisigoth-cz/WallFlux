@@ -28,7 +28,9 @@ enum Blending {
 impl Blending {
     fn parse(name: &str) -> Self {
         match name {
-            "translucent" => Self::Translucent,
+            // What every effect material in the library asks for, and six
+            // others besides: ordinary alpha blending.
+            "translucent" | "normal" => Self::Translucent,
             "additive" => Self::Additive,
             // An unnamed or unknown mode draws over what is there, which is
             // what a background layer wants and the safest thing to guess.
@@ -50,6 +52,32 @@ impl Blending {
                 }
             }
         }
+    }
+}
+
+impl Object {
+    /// How many pixels of the output this object covers, which is as much of
+    /// the canvas as it needs. The projection carries the scale from the
+    /// scene's own units to the output's.
+    fn on_screen(&self, projection: &Matrix, output: (u32, u32), most: (u32, u32)) -> (u32, u32) {
+        let across = |scale: f32, size: f32, pixels: u32, most: u32| {
+            let width = (scale.abs() * pixels as f32 / 2.0) * size.abs();
+            (width.ceil() as u32).clamp(1, most)
+        };
+        (
+            across(
+                projection[0],
+                self.size[0] * self.scale[0],
+                output.0,
+                most.0,
+            ),
+            across(
+                projection[5],
+                self.size[1] * self.scale[1],
+                output.1,
+                most.1,
+            ),
+        )
     }
 }
 
@@ -127,7 +155,7 @@ impl Film {
 
         let mut pages = Vec::new();
         for page in 0..source.images.len() {
-            pages.push(Texture::upload_page(gl, source, page).ok()?);
+            pages.push(Texture::upload_page(gl, source, page, false).ok()?);
         }
 
         let mut frames = Vec::new();
@@ -185,6 +213,9 @@ struct Sheet {
 enum Kind {
     Image,
     Particles(Form),
+    /// A pass of an effect hung on an object: it draws the object's own
+    /// picture again, having been handed it as a texture.
+    Effect,
 }
 
 /// How a particle system turns into geometry.
@@ -221,6 +252,10 @@ struct Object {
     /// For a trailing particle system, the `length`, `max` and `min` its
     /// shader stretches each particle between.
     trail: Option<[f32; 3]>,
+    /// The effects hung on this object, in the order they apply. Empty unless
+    /// every one of them is a single pass, since half an effect chain is
+    /// worse than none.
+    effects: Vec<Pass>,
 }
 
 pub struct Scene {
@@ -231,11 +266,91 @@ pub struct Scene {
     particles: Option<Buffers>,
     /// Stands in for a texture slot a pass leaves empty.
     white: Texture,
+    /// Made when a scene has an object with effects, and remade if the output
+    /// changes shape.
+    canvas: Option<Canvas>,
     /// How far the particle systems have been simulated.
     simulated: f32,
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
+}
+
+/// The pair of offscreen pictures an object with effects is drawn through.
+///
+/// One holds what the object looks like, the next holds what an effect made of
+/// it, and they take turns. Both are the size of the output and an object uses
+/// only the corner of them it needs, which is why the quad's texture
+/// coordinates stop where the object does -- the same trick a texture stored
+/// with padding needs.
+struct Canvas {
+    size: (u32, u32),
+    targets: [Target; 2],
+}
+
+struct Target {
+    frame: glow::Framebuffer,
+    texture: Texture,
+}
+
+/// Maps an object's own quad onto the whole of whatever it is drawn into,
+/// which is how it gets into the canvas without its place in the scene.
+#[rustfmt::skip]
+const FILL: Matrix = [
+    2.0, 0.0, 0.0, 0.0,
+    0.0, 2.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+];
+
+unsafe fn make_canvas(gl: &glow::Context, size: (u32, u32)) -> Result<Canvas, String> {
+    let mut targets = Vec::new();
+    for _ in 0..2 {
+        unsafe {
+            let texture = gl.create_texture()?;
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA8 as i32,
+                size.0 as i32,
+                size.1 as i32,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(None),
+            );
+            for (name, value) in [
+                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
+                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
+                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
+                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
+            ] {
+                gl.tex_parameter_i32(glow::TEXTURE_2D, name, value as i32);
+            }
+            let frame = gl.create_framebuffer()?;
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(frame));
+            gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(texture),
+                0,
+            );
+            if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+                return Err("an offscreen picture is not complete".into());
+            }
+            targets.push(Target {
+                frame,
+                texture: Texture::borrowed(texture, size.0, size.1),
+            });
+        }
+    }
+    let [first, second] = targets.try_into().ok().ok_or("two pictures expected")?;
+    Ok(Canvas {
+        size,
+        targets: [first, second],
+    })
 }
 
 /// The buffers every particle system in the scene is drawn through, sized for
@@ -339,8 +454,8 @@ impl Scene {
                 passes,
                 drawing: Drawing::Image,
                 trail: None,
+                effects: build_effects(gl, &resolve, object, &mut skipped),
             });
-            report_effects(object, &mut skipped);
         }
 
         if objects.is_empty() {
@@ -366,6 +481,7 @@ impl Scene {
             buffer,
             particles,
             white: Texture::white(gl)?,
+            canvas: None,
             simulated: 0.0,
             scene_size,
             skipped,
@@ -416,6 +532,18 @@ impl Scene {
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
         );
+        // Whatever the caller was drawing into, which an effect leaves for a
+        // moment and has to put back.
+        let screen = unsafe {
+            std::num::NonZeroU32::new(gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING) as u32)
+                .map(glow::NativeFramebuffer)
+        };
+        if self.objects.iter().any(|o| !o.effects.is_empty())
+            && self.canvas.as_ref().is_none_or(|c| c.size != output)
+        {
+            self.canvas = unsafe { make_canvas(gl, output) }.ok();
+        }
+
         unsafe {
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::CULL_FACE);
@@ -426,9 +554,34 @@ impl Scene {
             match (&object.drawing, &self.particles) {
                 (Drawing::Image, _) => unsafe {
                     gl.bind_vertex_array(Some(self.quad));
-                    for pass in &object.passes {
-                        write_quad(gl, self.buffer, pass.covered);
-                        draw_pass(gl, pass, object, &mvp, time, &self.white);
+                    match (&self.canvas, object.effects.is_empty()) {
+                        (Some(canvas), false) => draw_through_effects(
+                            gl,
+                            object,
+                            canvas,
+                            self.buffer,
+                            &self.white,
+                            &mvp,
+                            time,
+                            output,
+                            screen,
+                            &projection,
+                        ),
+                        _ => {
+                            for pass in &object.passes {
+                                write_quad(gl, self.buffer, pass.covered);
+                                draw_pass(
+                                    gl,
+                                    pass,
+                                    object,
+                                    &mvp,
+                                    time,
+                                    &self.white,
+                                    None,
+                                    pass.blending,
+                                );
+                            }
+                        }
                     }
                 },
                 (Drawing::Particles(system), Some(buffers)) => unsafe {
@@ -528,7 +681,15 @@ fn load_particles(
         return None;
     }
 
-    report_effects(object, skipped);
+    for effect in &object.effects {
+        if effect.visible.value {
+            skipped.push(format!(
+                "{}: effect {} is not applied yet",
+                object.name,
+                effect_name(effect)
+            ));
+        }
+    }
 
     // Seeded from the object's own id so two systems in one scene do not
     // emit in step, and so a screenshot of a wallpaper is reproducible.
@@ -547,6 +708,8 @@ fn load_particles(
         passes,
         drawing: Drawing::Particles(Box::new(system)),
         trail,
+        // No particle system in the library carries one.
+        effects: Vec::new(),
     })
 }
 
@@ -591,29 +754,174 @@ fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<Strin
     ));
 }
 
-/// Names the effects an object carries but does not get.
+/// Whether a texture tiles rather than stopping at its edges, which only the
+/// `.tex-json` beside it says. Wallpapers ship none of those, so their own
+/// textures clamp.
+fn repeats(resolve: &Resolver<'_>, name: Option<&str>) -> bool {
+    let Some(name) = name else {
+        return false;
+    };
+    resolve
+        .get(&format!("materials/{name}.tex-json"))
+        .and_then(|bytes| wpe_format::tex::Sidecar::parse(&bytes).ok())
+        .and_then(|sidecar| sidecar.clamp)
+        .is_some_and(|clamp| !clamp)
+}
+
+/// Which texture unit a sampler's name stands for: `g_Texture2` is unit two.
+fn texture_slot(name: &str) -> Option<usize> {
+    name.strip_prefix("g_Texture")?
+        .trim_end_matches(|c: char| !c.is_ascii_digit())
+        .parse()
+        .ok()
+}
+
+/// Draws an object into the canvas and its effects back out of it.
 ///
-/// Post-processing is not built yet, so an object with a blur or a glow on it
-/// still draws, just flat. Saying so is the difference between a wallpaper
-/// that is missing something and one that looks subtly wrong for no stated
-/// reason: the library hangs 364 visible effects on its objects.
-fn report_effects(object: &wpe_format::scene::Object, skipped: &mut Vec<String>) {
+/// The object goes in without its place in the scene, so the picture holds
+/// just the object; each effect then draws that picture again through its own
+/// material, and the last one lands wherever the scene is being drawn, placed
+/// as the object always would have been.
+#[allow(clippy::too_many_arguments)]
+unsafe fn draw_through_effects(
+    gl: &glow::Context,
+    object: &Object,
+    canvas: &Canvas,
+    buffer: glow::Buffer,
+    white: &Texture,
+    mvp: &Matrix,
+    time: f32,
+    output: (u32, u32),
+    screen: Option<glow::Framebuffer>,
+    projection: &Matrix,
+) {
+    let used = object.on_screen(projection, output, canvas.size);
+    let covered = [
+        used.0 as f32 / canvas.size.0 as f32,
+        used.1 as f32 / canvas.size.1 as f32,
+    ];
+
+    unsafe {
+        let into = |target: &Target| {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.frame));
+            gl.viewport(0, 0, used.0 as i32, used.1 as i32);
+            gl.clear_color(0.0, 0.0, 0.0, 0.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+        };
+
+        into(&canvas.targets[0]);
+        for pass in &object.passes {
+            write_quad(gl, buffer, pass.covered);
+            // Straight onto an empty picture. Blending here would fold the
+            // object's own alpha into its colour, and the effect that comes
+            // after would fold it in a second time, which darkens everything
+            // that is not fully opaque.
+            draw_pass(gl, pass, object, &FILL, time, white, None, Blending::Opaque);
+        }
+
+        let last = object.effects.len() - 1;
+        for (step, pass) in object.effects.iter().enumerate() {
+            let from = &canvas.targets[step % 2].texture;
+            if step == last {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
+                gl.viewport(0, 0, output.0 as i32, output.1 as i32);
+                write_quad(gl, buffer, covered);
+                draw_pass(
+                    gl,
+                    pass,
+                    object,
+                    mvp,
+                    time,
+                    white,
+                    Some(from),
+                    pass.blending,
+                );
+            } else {
+                into(&canvas.targets[(step + 1) % 2]);
+                write_quad(gl, buffer, covered);
+                draw_pass(
+                    gl,
+                    pass,
+                    object,
+                    &FILL,
+                    time,
+                    white,
+                    Some(from),
+                    Blending::Opaque,
+                );
+            }
+        }
+    }
+}
+
+/// Builds the effects hung on an object, or none of them.
+///
+/// An effect is an ordinary material drawn over the object's own picture,
+/// which the shader is handed as its first texture -- it says so itself, in
+/// the annotation that calls that texture the framebuffer. What this does not
+/// do yet is the chains: an effect of several passes wants named buffers at
+/// half and quarter size to work through, and those are the blurs, the god
+/// rays and the shine. An object with one of those gets no effects at all
+/// rather than some of them, since half a chain looks worse than none.
+fn build_effects(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    object: &wpe_format::scene::Object,
+    skipped: &mut Vec<String>,
+) -> Vec<Pass> {
+    let mut built = Vec::new();
     for effect in &object.effects {
         if !effect.visible.value {
             continue;
         }
-        // Only 33 of them fill in a name, so the file is what identifies one.
-        let from_file = effect
-            .file
-            .trim_start_matches("effects/")
-            .trim_end_matches("effect.json")
-            .trim_end_matches('/');
-        let name = match (from_file, effect.name.as_str()) {
-            ("", "") => "an unnamed effect",
-            ("", named) => named,
-            (file, _) => file,
+        let name = effect_name(effect);
+        let Some(parsed) = resolve
+            .get(&effect.file)
+            .and_then(|bytes| wpe_format::Effect::parse(&bytes).ok())
+        else {
+            skipped.push(format!("{}: effect {name} could not be read", object.name));
+            return Vec::new();
         };
-        skipped.push(format!("{}: effect {name} is not applied yet", object.name));
+        let [pass] = parsed.passes.as_slice() else {
+            skipped.push(format!(
+                "{}: effect {name} takes {} passes and only one is done yet",
+                object.name,
+                parsed.passes.len()
+            ));
+            return Vec::new();
+        };
+        let built_pass = resolve
+            .get(&pass.material)
+            .and_then(|bytes| Material::parse(&bytes).ok())
+            .and_then(|material| {
+                let first = material.passes.first()?;
+                // The scene's overrides line up with the effect's passes in
+                // order, and this is the first of a single-pass effect.
+                build_pass(gl, resolve, first, Kind::Effect, effect.passes.first()).ok()
+            });
+        match built_pass {
+            Some(p) => built.push(p),
+            None => {
+                skipped.push(format!("{}: effect {name} would not build", object.name));
+                return Vec::new();
+            }
+        }
+    }
+    built
+}
+
+/// What to call an effect. Only 33 of the 390 in the library fill in a name,
+/// so the file is what identifies one.
+fn effect_name(effect: &wpe_format::scene::EffectRef) -> &str {
+    let from_file = effect
+        .file
+        .trim_start_matches("effects/")
+        .trim_end_matches("effect.json")
+        .trim_end_matches('/');
+    match (from_file, effect.name.as_str()) {
+        ("", "") => "an unnamed effect",
+        ("", named) => named,
+        (file, _) => file,
     }
 }
 
@@ -627,7 +935,7 @@ fn build_passes(
 ) -> Vec<Pass> {
     let mut passes = Vec::new();
     for pass in &material.passes {
-        match build_pass(gl, resolve, pass, kind) {
+        match build_pass(gl, resolve, pass, kind, None) {
             Ok(built) => passes.push(built),
             Err(e) => skipped.push(format!("{}: {}: {e}", object.name, pass.shader)),
         }
@@ -635,6 +943,7 @@ fn build_passes(
     passes
 }
 
+#[allow(clippy::too_many_arguments)]
 unsafe fn draw_pass(
     gl: &glow::Context,
     pass: &Pass,
@@ -642,9 +951,12 @@ unsafe fn draw_pass(
     mvp: &Matrix,
     time: f32,
     white: &Texture,
+    handed: Option<&Texture>,
+    blending: Blending,
 ) {
     unsafe {
-        set_common(gl, pass, object, mvp, time, white);
+        set_common(gl, pass, object, mvp, time, white, handed);
+        blending.apply(gl);
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
 }
@@ -677,7 +989,8 @@ unsafe fn draw_particles(
         gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes);
 
         for pass in &object.passes {
-            set_common(gl, pass, object, mvp, time, white);
+            set_common(gl, pass, object, mvp, time, white, None);
+            pass.blending.apply(gl);
             // A flat wallpaper's particles face the screen, so the frame the
             // shader turns a particle in is the scene's own axes.
             set_vec3(gl, pass.program, "g_OrientationRight", [1.0, 0.0, 0.0]);
@@ -737,17 +1050,19 @@ unsafe fn set_common(
     mvp: &Matrix,
     time: f32,
     white: &Texture,
+    handed: Option<&Texture>,
 ) {
     unsafe {
         gl.use_program(Some(pass.program));
-        pass.blending.apply(gl);
 
         let still = pass.film.as_ref().map(|film| (film, film.at(time)));
         for (unit, slot) in pass.textures.iter().enumerate() {
             // An empty slot still has to be given something, or the pass reads
             // whatever texture was last left on that unit -- another object's.
-            let texture = match (unit, &still) {
-                (0, Some((film, still))) => &film.pages[still.page],
+            let texture = match (unit, &still, handed) {
+                // An effect is handed the picture it works on.
+                (0, _, Some(handed)) => handed,
+                (0, Some((film, still)), _) => &film.pages[still.page],
                 _ => slot.as_ref().unwrap_or(white),
             };
             texture.bind(gl, unit as u32);
@@ -810,6 +1125,7 @@ fn build_pass(
     resolve: &Resolver<'_>,
     pass: &wpe_format::material::Pass,
     kind: Kind,
+    over: Option<&wpe_format::scene::PassOverride>,
 ) -> Result<Pass, String> {
     if pass.shader.is_empty() {
         return Err("pass names no shader".into());
@@ -819,7 +1135,11 @@ fn build_pass(
     // target there is compositing something this renderer has not produced.
     // Drawing it anyway would put a full-screen rectangle of nothing over the
     // scene; the later slots only modulate, and white leaves those alone.
-    if let Some(Some(name)) = pass.textures.first()
+    if let Some(Some(name)) = over
+        .map(|o| &o.textures)
+        .filter(|t| !t.is_empty())
+        .unwrap_or(&pass.textures)
+        .first()
         && wpe_format::effect::is_render_target(name)
     {
         return Err(format!("needs the render target {name}"));
@@ -832,7 +1152,12 @@ fn build_pass(
     let mut film = None;
     let mut padded = false;
     let mut covered = [1.0, 1.0];
-    for (slot, name) in pass.textures.iter().enumerate() {
+    // What the scene says about this pass stands over what the material says.
+    let named_textures = match over.map(|o| &o.textures) {
+        Some(theirs) if !theirs.is_empty() => theirs,
+        _ => &pass.textures,
+    };
+    for (slot, name) in named_textures.iter().enumerate() {
         let named = name.as_deref().filter(|name| !name.is_empty());
         let source = match named {
             Some(name) if !wpe_format::effect::is_render_target(name) => resolve
@@ -866,20 +1191,45 @@ fn build_pass(
                     padded = source.as_ref().is_some_and(Sheet::padded);
                 }
                 Kind::Image => film = source.as_ref().and_then(|source| Film::of(gl, source)),
+                // An effect's first texture is the object's own picture,
+                // handed over at drawing time rather than loaded from a file.
+                Kind::Effect => {}
             }
         }
         textures.push(
             source
                 .as_ref()
                 .filter(|texture| !texture.is_video())
-                .and_then(|source| Texture::upload(gl, source).ok()),
+                .and_then(|source| {
+                    Texture::upload_page(gl, source, 0, repeats(resolve, named)).ok()
+                }),
         );
+    }
+
+    // Effect materials name no textures at all -- 45 of the 47 in the library
+    // leave the list out -- but their shaders still sample a noise and a mask
+    // beside the picture. Leaving those unbound reads whatever was last on the
+    // unit, so they get the white stand-in.
+    if kind == Kind::Effect {
+        while textures.len() < 3 {
+            textures.push(None);
+        }
     }
 
     let mut combos: BTreeMap<String, String> = pass
         .defines()
         .map(|(k, v)| (k, v.to_string().trim_matches('"').to_owned()))
         .collect();
+    // An effect read only from its own file looks nothing like the one the
+    // wallpaper set up: this is where its options are actually turned on.
+    if let Some(over) = over {
+        for (name, value) in &over.combos {
+            combos.insert(
+                name.to_ascii_uppercase(),
+                value.to_string().trim_matches('"').to_owned(),
+            );
+        }
+    }
     // What was actually uploaded wins over anything the material says, since
     // this is the texture the shader will be sampling.
     for (slot, texture) in textures.iter().enumerate() {
@@ -949,8 +1299,20 @@ fn build_pass(
     // for itself go in first and the material's own values over them.
     let mut constants = BTreeMap::new();
     let mut named_by = BTreeMap::new();
+    let mut wanted_textures = Vec::new();
     for (_, source) in &stages {
         for uniform in uniforms(source) {
+            if uniform.sampler {
+                // A sampler's default names a texture to load rather than a
+                // value to set, and a shader given none of it draws with
+                // whatever stands in -- a cloud layer of flat white.
+                if let Some(path) = uniform.default.as_ref().and_then(|d| d.as_str())
+                    && let Some(slot) = texture_slot(&uniform.name)
+                {
+                    wanted_textures.push((slot, path.to_owned()));
+                }
+                continue;
+            }
             if let Some(default) = uniform.default {
                 constants.insert(uniform.name.clone(), default);
             }
@@ -959,11 +1321,40 @@ fn build_pass(
             }
         }
     }
-    for (key, value) in &pass.constantshadervalues {
+
+    // Only where the material named nothing: what it states always wins.
+    for (slot, path) in wanted_textures {
+        if wpe_format::effect::is_render_target(&path) || path.starts_with("_alias_") {
+            continue;
+        }
+        while textures.len() <= slot {
+            textures.push(None);
+        }
+        if textures[slot].is_some() {
+            continue;
+        }
+        textures[slot] = resolve
+            .get(&format!("materials/{path}.tex"))
+            .and_then(|bytes| wpe_format::Texture::parse(&bytes).ok())
+            .filter(|texture| !texture.is_video())
+            .and_then(|source| {
+                Texture::upload_page(gl, &source, 0, repeats(resolve, Some(path.as_str()))).ok()
+            });
+    }
+    let stated = pass
+        .constantshadervalues
+        .iter()
+        .map(|(k, v)| (k, v.value.clone()))
+        .chain(over.into_iter().flat_map(|o| {
+            o.constantshadervalues
+                .iter()
+                .map(|(k, v)| (k, v.value.clone()))
+        }));
+    for (key, value) in stated {
         // Materials name a constant by the label the shader gave it, so the
         // label is translated back before it can reach a uniform at all.
         let name = named_by.get(key).unwrap_or(key);
-        constants.insert(name.clone(), value.value.clone());
+        constants.insert(name.clone(), value);
     }
 
     Ok(Pass {

@@ -42,10 +42,6 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn upload(gl: &glow::Context, source: &wpe_format::Texture) -> Result<Self, String> {
-        Self::upload_page(gl, source, 0)
-    }
-
     /// Uploads one of a texture's images.
     ///
     /// A sprite sheet too big for one image is stored as several, and a frame
@@ -54,6 +50,7 @@ impl Texture {
         gl: &glow::Context,
         source: &wpe_format::Texture,
         page: usize,
+        repeat: bool,
     ) -> Result<Self, String> {
         if source.is_video() {
             return Err("this texture holds a video, not an image".into());
@@ -107,19 +104,17 @@ impl Texture {
                 glow::TEXTURE_MAG_FILTER,
                 glow::LINEAR as i32,
             );
-            // ponytail: wrapping is per-material in the format and not plumbed
-            // through yet; clamping is the safe default for a backdrop, where
-            // repeating would mirror an edge across the screen.
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_WRAP_S,
-                glow::CLAMP_TO_EDGE as i32,
-            );
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_WRAP_T,
-                glow::CLAMP_TO_EDGE as i32,
-            );
+            // Said by the `.tex-json` beside a texture, where there is one.
+            // Clamping is the safe default for a backdrop; a texture meant to
+            // tile and clamped instead smears its edge across whatever samples
+            // past it.
+            let wrap = if repeat {
+                glow::REPEAT
+            } else {
+                glow::CLAMP_TO_EDGE
+            };
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, wrap as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, wrap as i32);
             gl.bind_texture(glow::TEXTURE_2D, None);
         }
 
@@ -138,6 +133,20 @@ impl Texture {
                 _ => PixelFormat::Argb8888.id(),
             },
         })
+    }
+
+    /// Wraps a texture someone else made, so it can be bound like any other.
+    ///
+    /// Nothing here owns a texture -- none are ever deleted -- so this hands
+    /// out a handle rather than taking charge of one.
+    pub fn borrowed(id: glow::Texture, width: u32, height: u32) -> Self {
+        Self {
+            id,
+            width,
+            height,
+            image_size: (width, height),
+            format: PixelFormat::Argb8888.id(),
+        }
     }
 
     /// A single opaque white pixel, for a slot a pass leaves empty.
