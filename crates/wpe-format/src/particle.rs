@@ -104,6 +104,28 @@ pub struct Ramp {
     pub to: f32,
 }
 
+/// A swirl about an axis through the system's origin.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Vortex {
+    pub axis: [f32; 3],
+    /// Where the inner and outer speeds apply.
+    pub distance: Range<f32>,
+    /// Degrees a second at the inner and outer distances, straight-lined
+    /// between them. Negative turns the other way.
+    pub speed: Range<f32>,
+}
+
+/// A wave a particle is carried by.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Oscillation {
+    /// Cycles a second.
+    pub frequency: Range<f32>,
+    /// How far the wave reaches.
+    pub scale: Range<f32>,
+    /// Where in the wave a particle starts, in cycles.
+    pub phase: Range<f32>,
+}
+
 /// A change applied to every live particle each frame.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
@@ -117,6 +139,31 @@ pub enum Operator {
         fade_out: f32,
     },
     SizeChange(Ramp),
+    /// Drives a particle's colour from one to another over its life.
+    ///
+    /// **These colours are 0 to 1**, unlike the 0 to 255 that `colorrandom`
+    /// states. Both appear in the same file.
+    ColorChange {
+        /// Start and end as a fraction of the particle's lifetime.
+        time: Range<f32>,
+        from: [f32; 3],
+        to: [f32; 3],
+    },
+    /// Swirls a particle about the system's origin.
+    Vortex(Vortex),
+    /// Beats a particle's alpha down and back up again.
+    OscillateAlpha(Oscillation),
+    /// Sways a particle to and fro without moving where it came from.
+    OscillatePosition {
+        wave: Oscillation,
+        /// Which axes the sway applies to.
+        mask: [f32; 3],
+    },
+    /// Spins a particle, and turns the spin itself over time.
+    AngularMovement {
+        /// Radians a second, per second.
+        force: [f32; 3],
+    },
     /// Drifts a particle through a noise field.
     Turbulence {
         field: Turbulent,
@@ -235,6 +282,33 @@ impl ParticleSystem {
                     from: num(step, "startvalue", 1.0),
                     to: num(step, "endvalue", 1.0),
                 }),
+                "colorchange" => Operator::ColorChange {
+                    time: Range {
+                        min: num(step, "starttime", 0.0),
+                        max: num(step, "endtime", 1.0),
+                    },
+                    from: vector(step, "startvalue", [1.0; 3]),
+                    to: vector(step, "endvalue", [1.0; 3]),
+                },
+                "vortex" => Operator::Vortex(Vortex {
+                    axis: vector(step, "axis", [0.0, 0.0, 1.0]),
+                    distance: Range {
+                        min: num(step, "distanceinner", 0.0),
+                        max: num(step, "distanceouter", 0.0),
+                    },
+                    speed: Range {
+                        min: num(step, "speedinner", 0.0),
+                        max: num(step, "speedouter", 0.0),
+                    },
+                }),
+                "oscillatealpha" => Operator::OscillateAlpha(oscillation(step)),
+                "oscillateposition" => Operator::OscillatePosition {
+                    wave: oscillation(step),
+                    mask: vector(step, "mask", [1.0; 3]),
+                },
+                "angularmovement" => Operator::AngularMovement {
+                    force: vector(step, "force", [0.0; 3]),
+                },
                 "turbulence" => Operator::Turbulence {
                     field: turbulent(step, 0.002),
                     mask: vector(step, "mask", [1.0; 3]),
@@ -315,6 +389,48 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             min: num(step, "speedmin", 0.0),
             max: num(step, "speedmax", 0.0),
         },
+    }
+}
+
+/// A pair of bounds where a system may state only one of them.
+///
+/// Half the oscillating systems in the library give a `scalemin` and no
+/// `scalemax`, or the other way about. A missing end means the stated one
+/// again, which is a steady value rather than a range down to nothing.
+fn bounds(step: &Value, low: &str, high: &str, default: f32) -> Range<f32> {
+    let min = step.get(low).filter(|v| !v.is_null());
+    let max = step.get(high).filter(|v| !v.is_null());
+    match (min.is_some(), max.is_some()) {
+        (true, true) => Range {
+            min: num(step, low, default),
+            max: num(step, high, default),
+        },
+        (true, false) => {
+            let only = num(step, low, default);
+            Range {
+                min: only,
+                max: only,
+            }
+        }
+        (false, true) => {
+            let only = num(step, high, default);
+            Range {
+                min: only,
+                max: only,
+            }
+        }
+        (false, false) => Range {
+            min: default,
+            max: default,
+        },
+    }
+}
+
+fn oscillation(step: &Value) -> Oscillation {
+    Oscillation {
+        frequency: bounds(step, "frequencymin", "frequencymax", 0.0),
+        scale: bounds(step, "scalemin", "scalemax", 0.0),
+        phase: bounds(step, "phasemin", "phasemax", 0.0),
     }
 }
 
@@ -479,7 +595,7 @@ mod tests {
             "material": "m.json", "maxcount": 10,
             "emitter": [{"name":"newfangled"}],
             "initializer": [{"name":"mapsequencearoundcontrolpoint"}],
-            "operator": [{"name":"vortex"},{"name":"alphafade","fadeouttime":1}]
+            "operator": [{"name":"controlpointattract"},{"name":"alphafade","fadeouttime":1}]
         }"#;
         let p = ParticleSystem::parse(json).unwrap();
         assert!(p.emitters.is_empty());
@@ -490,7 +606,7 @@ mod tests {
             [
                 "emitter newfangled",
                 "initializer mapsequencearoundcontrolpoint",
-                "operator vortex"
+                "operator controlpointattract"
             ]
         );
     }

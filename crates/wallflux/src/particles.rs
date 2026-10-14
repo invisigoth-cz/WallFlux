@@ -16,7 +16,8 @@
 //! instead would let rounding pile up over a particle's whole life.
 
 use wpe_format::particle::{
-    Animation, Emitter, Initializer, Operator, ParticleSystem, Range, Shape, Turbulent,
+    Animation, Emitter, Initializer, Operator, Oscillation, ParticleSystem, Range, Shape,
+    Turbulent, Vortex,
 };
 
 /// Floats per vertex: position, then corner and rotation and size, then
@@ -50,6 +51,11 @@ struct Particle {
     phase: f32,
     /// Its share of a turbulence operator's speed range.
     drift: f32,
+    /// Radians a second about each axis.
+    spin: [f32; 3],
+    /// Where this particle sits in an oscillation: its frequency, how far it
+    /// swings, and where in the wave it starts.
+    wobble: [f32; 3],
 }
 
 /// The ranges the initializers draw a new particle's values from.
@@ -60,6 +66,9 @@ struct Start {
     color: Range<[f32; 3]>,
     velocity: Range<[f32; 3]>,
     rotation: Range<[f32; 3]>,
+    /// Radians a second about each axis, which only `angularmovement` turns
+    /// into an actual spin.
+    angular: Range<[f32; 3]>,
     /// Set when the system takes its starting direction from a noise field
     /// rather than at random.
     turbulent: Option<Turbulent>,
@@ -79,6 +88,7 @@ impl Default for Start {
             },
             velocity: Range::default(),
             rotation: Range::default(),
+            angular: Range::default(),
             turbulent: None,
         }
     }
@@ -112,7 +122,7 @@ impl System {
                 Initializer::TurbulentVelocity(field) => start.turbulent = Some(field),
                 // Carried as a starting value but nothing turns it yet: the
                 // operator that spins a particle is `angularmovement`.
-                Initializer::AngularVelocity(_) => {}
+                Initializer::AngularVelocity(r) => start.angular = r,
             }
         }
         Self {
@@ -192,7 +202,29 @@ impl System {
                             particle.position[axis] += along[axis] * mask * speed * dt;
                         }
                     }
-                    Operator::AlphaFade { .. } | Operator::SizeChange(_) => {}
+                    // A spin only turns once something drives it, which is
+                    // what this operator is: the initializer alone sets the
+                    // rate and leaves the particle still.
+                    Operator::AngularMovement { force } => {
+                        for (axis, force) in force.iter().enumerate() {
+                            particle.spin[axis] += force * dt;
+                            particle.rotation[axis] += particle.spin[axis] * dt;
+                        }
+                    }
+                    // ponytail: a vortex carries the particle round rather
+                    // than pulling it in, for the same reason turbulence
+                    // does -- a speed the file states stays the speed.
+                    Operator::Vortex(vortex) => {
+                        let turn = vortex_turn(vortex, particle.position) * dt;
+                        particle.position = turned(particle.position, vortex.axis, turn);
+                    }
+                    // These change nothing that carries over to the next step,
+                    // so they are applied as the buffer is written.
+                    Operator::AlphaFade { .. }
+                    | Operator::SizeChange(_)
+                    | Operator::ColorChange { .. }
+                    | Operator::OscillateAlpha(_)
+                    | Operator::OscillatePosition { .. } => {}
                 }
             }
         }
@@ -265,6 +297,8 @@ impl System {
             frame: self.rng.next_f32(),
             phase,
             drift: self.rng.next_f32(),
+            spin: self.rng.range3(self.start.angular),
+            wobble: std::array::from_fn(|_| self.rng.next_f32()),
         }
     }
 
@@ -272,10 +306,33 @@ impl System {
         self.vertices.clear();
         self.vertices
             .reserve(self.live.len() * VERTICES_PER_PARTICLE * FLOATS_PER_VERTEX);
+        let elapsed = self.elapsed;
         for particle in &self.live {
             let progress = particle.age / particle.lifetime;
-            let alpha = particle.alpha * fade(&self.operators, particle.age, particle.lifetime);
+            let mut alpha = particle.alpha * fade(&self.operators, particle.age, particle.lifetime);
             let size = particle.size * size_factor(&self.operators, progress);
+            let mut color = particle.color;
+            let mut position = particle.position;
+            for operator in &self.operators {
+                match operator {
+                    Operator::ColorChange { time, from, to } => {
+                        let t = along(*time, progress);
+                        color = std::array::from_fn(|i| from[i] + (to[i] - from[i]) * t);
+                    }
+                    Operator::OscillateAlpha(wave) => {
+                        let (amount, swing) = wave_at(wave, particle.wobble, elapsed);
+                        // Down from full and back, never past invisible.
+                        alpha *= 1.0 - amount * (0.5 - 0.5 * swing);
+                    }
+                    Operator::OscillatePosition { wave, mask } => {
+                        let (amount, swing) = wave_at(wave, particle.wobble, elapsed);
+                        for (axis, mask) in mask.iter().enumerate() {
+                            position[axis] += mask * amount * swing;
+                        }
+                    }
+                    _ => {}
+                }
+            }
             // The shader takes the fraction of this, so a multiplier above one
             // walks the sheet more than once over a particle's life.
             let frame = match self.animation {
@@ -284,19 +341,15 @@ impl System {
                 None => progress,
             };
             for corner in CORNERS {
-                self.vertices.extend_from_slice(&particle.position);
+                self.vertices.extend_from_slice(&position);
                 self.vertices.extend_from_slice(&[
                     corner[0],
                     corner[1],
                     particle.rotation[2],
                     size,
                 ]);
-                self.vertices.extend_from_slice(&[
-                    particle.color[0],
-                    particle.color[1],
-                    particle.color[2],
-                    alpha,
-                ]);
+                self.vertices
+                    .extend_from_slice(&[color[0], color[1], color[2], alpha]);
                 self.vertices
                     .extend_from_slice(&[particle.rotation[0], particle.rotation[1]]);
                 self.vertices.extend_from_slice(&particle.velocity);
@@ -304,6 +357,62 @@ impl System {
             }
         }
     }
+}
+
+/// How far through a ramp a particle is, as a fraction.
+fn along(time: Range<f32>, progress: f32) -> f32 {
+    let span = time.max - time.min;
+    if span > 0.0 {
+        ((progress - time.min) / span).clamp(0.0, 1.0)
+    } else {
+        // A ramp with no span is a step at its start time.
+        (progress >= time.min) as u8 as f32
+    }
+}
+
+/// How far a particle's wave reaches and where it stands in it.
+///
+/// `wobble` is the particle's own three draws: how fast its wave runs, how far
+/// it reaches, and where in the wave it began. Two particles side by side
+/// therefore sway apart rather than together.
+fn wave_at(wave: &Oscillation, wobble: [f32; 3], time: f32) -> (f32, f32) {
+    let pick = |r: Range<f32>, at: f32| r.min + (r.max - r.min) * at;
+    let frequency = pick(wave.frequency, wobble[0]);
+    let amount = pick(wave.scale, wobble[1]);
+    let phase = pick(wave.phase, wobble[2]);
+    let turns = time * frequency + phase;
+    (amount, (turns * std::f32::consts::TAU).sin())
+}
+
+/// Degrees a second a vortex turns a particle at its distance from the centre.
+fn vortex_turn(vortex: &Vortex, position: [f32; 3]) -> f32 {
+    let distance =
+        (position[0] * position[0] + position[1] * position[1] + position[2] * position[2]).sqrt();
+    let span = vortex.distance.max - vortex.distance.min;
+    let at = if span > 0.0 {
+        ((distance - vortex.distance.min) / span).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    vortex.speed.min + (vortex.speed.max - vortex.speed.min) * at
+}
+
+/// A point turned about an axis through the origin, by degrees.
+fn turned(point: [f32; 3], axis: [f32; 3], degrees: f32) -> [f32; 3] {
+    let length = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+    if length < 1e-6 || degrees == 0.0 {
+        return point;
+    }
+    let axis = axis.map(|a| a / length);
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let cross = [
+        axis[1] * point[2] - axis[2] * point[1],
+        axis[2] * point[0] - axis[0] * point[2],
+        axis[0] * point[1] - axis[1] * point[0],
+    ];
+    let dot = axis[0] * point[0] + axis[1] * point[1] + axis[2] * point[2];
+    // Rodrigues: the part along the axis stays, the rest turns.
+    std::array::from_fn(|i| point[i] * cos + cross[i] * sin + axis[i] * dot * (1.0 - cos))
 }
 
 /// What `alphafade` leaves of a particle's alpha: in over its first seconds,
@@ -329,13 +438,7 @@ fn size_factor(operators: &[Operator], progress: f32) -> f32 {
     let mut out = 1.0;
     for operator in operators {
         if let Operator::SizeChange(ramp) = operator {
-            let span = ramp.time.max - ramp.time.min;
-            let t = if span > 0.0 {
-                ((progress - ramp.time.min) / span).clamp(0.0, 1.0)
-            } else {
-                // A ramp with no span is a step at its start time.
-                (progress >= ramp.time.min) as u8 as f32
-            };
+            let t = along(ramp.time, progress);
             out *= ramp.from + (ramp.to - ramp.from) * t;
         }
     }
@@ -742,6 +845,148 @@ mod tests {
                 "set off at {speed}, not the speed the file states"
             );
         }
+    }
+
+    #[test]
+    fn a_vortex_carries_a_particle_round_without_pulling_it_in() {
+        let mut s = system(
+            r#"{"maxcount":20,"emitter":[{"name":"sphererandom","rate":200,
+                 "directions":"1 1 0","distancemin":200,"distancemax":200}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"vortex","axis":"0 0 1","distanceinner":0,
+                             "distanceouter":500,"speedinner":90,"speedouter":90}]}"#,
+        );
+        let start: Vec<[f32; 3]> = {
+            s.advance(1.0 / 60.0);
+            s.live.iter().map(|p| p.position).collect()
+        };
+        run(&mut s, 1.0, 1.0 / 60.0);
+        let mut turned_by = Vec::new();
+        for (before, particle) in start.iter().zip(&s.live) {
+            let after = particle.position;
+            let radius = |p: &[f32; 3]| (p[0] * p[0] + p[1] * p[1]).sqrt();
+            // A swirl keeps the distance it found the particle at.
+            assert!(
+                (radius(before) - radius(&after)).abs() < 1.0,
+                "the vortex moved a particle from {} to {}",
+                radius(before),
+                radius(&after)
+            );
+            let angle = |p: &[f32; 3]| p[1].atan2(p[0]).to_degrees();
+            let mut moved = angle(&after) - angle(before);
+            if moved < -180.0 {
+                moved += 360.0;
+            }
+            turned_by.push(moved);
+        }
+        assert!(!turned_by.is_empty());
+        for moved in turned_by {
+            // Ninety degrees a second, for about a second.
+            assert!((80.0..=95.0).contains(&moved), "turned {moved} degrees");
+        }
+    }
+
+    #[test]
+    fn a_vortex_turns_the_other_way_when_its_speed_is_negative() {
+        let positive = r#"{"maxcount":1,"emitter":[{"name":"sphererandom","rate":100,
+                 "directions":"1 1 0","distancemin":100,"distancemax":100}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"vortex","axis":"0 0 1","distanceouter":500,
+                             "speedinner":SPEED,"speedouter":SPEED}]}"#;
+        let turn = |speed: &str| {
+            let mut s = system(&positive.replace("SPEED", speed));
+            s.advance(1.0 / 60.0);
+            let before = s.live[0].position;
+            run(&mut s, 0.5, 1.0 / 60.0);
+            let after = s.live[0].position;
+            after[1].atan2(after[0]) - before[1].atan2(before[0])
+        };
+        assert!(turn("90") > 0.0);
+        assert!(turn("-90") < 0.0);
+    }
+
+    #[test]
+    fn oscillatealpha_dims_a_particle_and_brings_it_back() {
+        let mut s = system(
+            r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":100,"max":100},
+                               {"name":"alpharandom","min":1,"max":1}],
+                "operator":[{"name":"oscillatealpha","frequencymin":1,"frequencymax":1,
+                             "scalemin":0.8,"scalemax":0.8}]}"#,
+        );
+        let mut seen: Vec<f32> = Vec::new();
+        for _ in 0..90 {
+            s.advance(1.0 / 60.0);
+            seen.push(written_alpha(&s));
+        }
+        let low = seen.iter().cloned().fold(f32::MAX, f32::min);
+        let high = seen.iter().cloned().fold(f32::MIN, f32::max);
+        assert!(high > 0.95, "never came back up: {high}");
+        // Dimmed by at most the scale it states, and never to nothing.
+        assert!((0.15..0.35).contains(&low), "dimmed to {low}");
+    }
+
+    #[test]
+    fn oscillateposition_sways_a_particle_about_where_it_sits() {
+        let mut s = system(
+            r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":100,"max":100}],
+                "operator":[{"name":"oscillateposition","frequencymin":1,"frequencymax":1,
+                             "scalemin":30,"scalemax":30,"mask":"1 0 0"}]}"#,
+        );
+        let mut xs: Vec<f32> = Vec::new();
+        for _ in 0..90 {
+            s.advance(1.0 / 60.0);
+            xs.push(s.vertices()[0]);
+        }
+        let low = xs.iter().cloned().fold(f32::MAX, f32::min);
+        let high = xs.iter().cloned().fold(f32::MIN, f32::max);
+        assert!(high > 20.0 && low < -20.0, "swayed {low} to {high}");
+        assert!(high <= 30.1 && low >= -30.1, "swayed past its scale");
+        // The particle itself never left the origin; only its drawing sways.
+        assert_eq!(s.live[0].position, [0.0; 3]);
+    }
+
+    #[test]
+    fn colorchange_drives_the_colour_the_buffer_carries() {
+        let mut s = system(
+            r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":1,"max":1},
+                               {"name":"colorrandom","min":"255 255 255","max":"255 255 255"}],
+                "operator":[{"name":"colorchange","starttime":0,"endtime":1,
+                             "startvalue":"1 0 0","endvalue":"0 0 1"}]}"#,
+        );
+        s.advance(1.0 / 60.0);
+        let red = &s.vertices()[7..10];
+        assert!(red[0] > 0.9 && red[2] < 0.1, "started at {red:?}");
+        run(&mut s, 0.5, 1.0 / 60.0);
+        let middle = &s.vertices()[7..10];
+        assert!(
+            (0.3..0.7).contains(&middle[0]) && (0.3..0.7).contains(&middle[2]),
+            "halfway at {middle:?}"
+        );
+    }
+
+    #[test]
+    fn angularmovement_is_what_turns_a_particle() {
+        let spinning = r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"angularvelocityrandom","min":"0 0 2","max":"0 0 2"}]
+                OPERATOR}"#;
+        // Without the operator the starting rate is carried but nothing turns.
+        let mut still = system(&spinning.replace("OPERATOR", ""));
+        run(&mut still, 1.0, 1.0 / 60.0);
+        assert_eq!(still.live[0].rotation, [0.0; 3]);
+
+        let mut turning =
+            system(&spinning.replace("OPERATOR", r#","operator":[{"name":"angularmovement"}]"#));
+        run(&mut turning, 1.0, 1.0 / 60.0);
+        // Two radians a second, for about a second.
+        assert!(
+            (1.9..2.1).contains(&turning.live[0].rotation[2]),
+            "turned to {}",
+            turning.live[0].rotation[2]
+        );
     }
 
     #[test]
