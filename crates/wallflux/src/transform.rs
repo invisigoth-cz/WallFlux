@@ -43,6 +43,13 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
     };
     let (left, top) = ((sw - visible_w) / 2.0, (sh - visible_h) / 2.0);
 
+    // Clip space only runs from -1 to 1, so depth has to be scaled into it or
+    // anything that leaves that span is thrown away. A scene is flat but the
+    // things in it are not: particles drift hundreds of units in z, and at a
+    // scale of one they vanish the moment they do. Nothing is depth tested, so
+    // the span only has to be wide enough to hold a scene.
+    let depth = sw.max(sh);
+
     [
         2.0 / visible_w,
         0.0,
@@ -54,7 +61,7 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
         0.0,
         0.0,
         0.0,
-        -1.0,
+        -1.0 / depth,
         0.0,
         -1.0 - 2.0 * left / visible_w,
         1.0 + 2.0 * top / visible_h,
