@@ -9,7 +9,7 @@
 //!   `free_image` field and `TEXB0004` carries one extra word after it** —
 //!   reading the wrong number of words here desynchronises the whole file.
 //! - `TEXS000{2,3}` is optional and carries sprite sheet animation.
-//!   **`TEXS0002` has no grid size**; `TEXS0003` added it. Frames are 32 bytes
+//!   **`TEXS0002` has no frame size**; `TEXS0003` added it. Frames are 32 bytes
 //!   in both.
 //!
 //! Pixels are RGBA, not BGRA. `free_image` is FreeImage's `FREE_IMAGE_FORMAT`
@@ -53,6 +53,25 @@ impl PixelFormat {
             8 => Self::Rg88,
             9 => Self::R8,
             other => Self::Unknown(other),
+        }
+    }
+
+    /// The number the format is written as, which is also the number the
+    /// shaders compare against: `common_fragment.h` declares the same list as
+    /// `FORMAT_RGBA8888`, `FORMAT_RG88` and so on. A shader not told which of
+    /// them it is given reads a two-channel texture as red and green instead
+    /// of as grey with an alpha.
+    pub fn id(self) -> i32 {
+        match self {
+            Self::Argb8888 => 0,
+            Self::Rgb888 => 1,
+            Self::Rgb565 => 2,
+            Self::Dxt5 => 4,
+            Self::Dxt3 => 6,
+            Self::Dxt1 => 7,
+            Self::Rg88 => 8,
+            Self::R8 => 9,
+            Self::Unknown(other) => other,
         }
     }
 
@@ -163,9 +182,58 @@ pub struct Frame {
 
 pub struct Sprite {
     pub version: String,
-    /// Present only from `TEXS0003` onwards.
-    pub grid: Option<(u32, u32)>,
+    /// One frame's size in pixels, present only from `TEXS0003` onwards.
+    ///
+    /// Not a count of rows and columns, which is the obvious reading and the
+    /// wrong one: a sheet 38 by 7600 with 200 frames states `38, 38`, and
+    /// 200 frames of 38 pixels is exactly its height. Read as a grid it would
+    /// claim 1444 frames. The same holds for the 53 and 100 pixel sheets in
+    /// the library.
+    pub frame_size: Option<(u32, u32)>,
     pub frames: Vec<Frame>,
+}
+
+/// What the `.tex-json` beside a texture says about it.
+///
+/// A texture that ships with Wallpaper Engine states its sprite sheet layout
+/// here. It matters for the ones whose own `TEXS` block is the older version
+/// that gives no frame size: without the sidecar there is nothing to lay the
+/// sheet out from, and the whole sheet gets drawn at once on every particle.
+///
+/// Wallpapers' own textures are the other way round: all 384 in the library
+/// carry a `TEXS` block and not one ships a sidecar.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct Sidecar {
+    #[serde(rename = "spritesheetsequences")]
+    pub sequences: Vec<Sequence>,
+}
+
+/// One sprite sheet animation described by a sidecar.
+#[derive(Debug, Clone, Copy, Default, serde::Deserialize)]
+#[serde(default)]
+pub struct Sequence {
+    pub frames: u32,
+    /// One frame's width in pixels.
+    pub width: u32,
+    /// One frame's height in pixels.
+    pub height: u32,
+    /// Seconds the whole sequence runs for.
+    pub duration: f32,
+}
+
+impl Sidecar {
+    pub fn parse(bytes: &[u8]) -> serde_json::Result<Self> {
+        serde_json::from_slice(bytes)
+    }
+
+    /// The sheet this texture animates through, if it says it has one.
+    pub fn sheet(&self) -> Option<Sequence> {
+        self.sequences
+            .iter()
+            .copied()
+            .find(|s| s.frames > 0 && s.width > 0 && s.height > 0)
+    }
 }
 
 pub struct Texture {
@@ -351,14 +419,14 @@ fn read_mipmap(r: &mut Reader<'_>, format: PixelFormat, free: FreeImage) -> Resu
 fn read_sprite(r: &mut Reader<'_>) -> Result<Sprite> {
     let at = r.pos();
     let version = r.tag()?.to_owned();
-    let has_grid = match version.as_str() {
+    let has_frame_size = match version.as_str() {
         "TEXS0002" => false,
         "TEXS0003" => true,
         _ => return Err(Error::UnknownTag { tag: version, at }),
     };
 
     let count = r.count("frame count", MAX_FRAMES)?;
-    let grid = if has_grid {
+    let frame_size = if has_frame_size {
         Some((dim(r)?, dim(r)?))
     } else {
         None
@@ -380,7 +448,7 @@ fn read_sprite(r: &mut Reader<'_>) -> Result<Sprite> {
 
     Ok(Sprite {
         version,
-        grid,
+        frame_size,
         frames,
     })
 }
@@ -437,7 +505,7 @@ mod tests {
     }
 
     #[test]
-    fn sprite_versions_differ_by_the_grid_field() {
+    fn sprite_versions_differ_by_the_frame_size_field() {
         for (version, extra) in [("TEXS0002", &[][..]), ("TEXS0003", &[16, 16][..])] {
             let mut v = texture("TEXB0003", &[0u8; 64]);
             v.extend_from_slice(version.as_bytes());
@@ -449,7 +517,7 @@ mod tests {
             let t = Texture::parse(&v).expect(version);
             let s = t.sprite.unwrap();
             assert_eq!(s.frames.len(), 1);
-            assert_eq!(s.grid.is_some(), version == "TEXS0003");
+            assert_eq!(s.frame_size, (version == "TEXS0003").then_some((16, 16)));
         }
     }
 
@@ -491,5 +559,45 @@ mod tests {
         // A 5x5 DXT1 surface still occupies two full rows of blocks.
         assert_eq!(PixelFormat::Dxt1.surface_size(5, 5), Some(32));
         assert_eq!(PixelFormat::Unknown(42).surface_size(4, 4), None);
+    }
+}
+
+#[cfg(test)]
+mod sidecar_tests {
+    use super::Sidecar;
+
+    #[test]
+    fn reads_the_sheet_a_sidecar_describes() {
+        let json = br#"{"clampuvs":false,"format":"r8","nonpoweroftwo":true,
+            "spritesheetsequences":[{"duration":1,"frames":64,"height":64,"width":128}]}"#;
+        let sheet = Sidecar::parse(json).unwrap().sheet().expect("no sheet");
+        assert_eq!((sheet.frames, sheet.width, sheet.height), (64, 128, 64));
+    }
+
+    #[test]
+    fn a_sidecar_without_a_sequence_describes_no_sheet() {
+        let json = br#"{"format":"dxt5","spritesheetsequences":[]}"#;
+        assert!(Sidecar::parse(json).unwrap().sheet().is_none());
+        assert!(Sidecar::parse(b"{}").unwrap().sheet().is_none());
+    }
+
+    #[test]
+    fn finds_the_sheet_a_built_in_lightning_texture_hides_in_its_sidecar() {
+        let Some(assets) = crate::Assets::locate() else {
+            return;
+        };
+        let Some(bytes) = assets.get("materials/particle/lightning/lightning1.tex-json") else {
+            return;
+        };
+        let sheet = Sidecar::parse(&bytes).unwrap().sheet().expect("no sheet");
+        assert_eq!(sheet.frames, 64);
+        // The point of the sidecar: the texture's own sprite block is the
+        // older version, which states no frame size, so the sheet cannot be
+        // laid out from the `.tex` alone.
+        let tex = assets
+            .get("materials/particle/lightning/lightning1.tex")
+            .and_then(|b| super::Texture::parse(&b).ok())
+            .expect("no texture");
+        assert_eq!(tex.sprite.map(|s| s.frame_size), Some(None));
     }
 }
