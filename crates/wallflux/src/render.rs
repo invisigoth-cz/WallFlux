@@ -1278,6 +1278,33 @@ fn build_pass(
         _ => pass.shader.as_str(),
     };
 
+    // A sampler may declare a switch that turns on when something is bound to
+    // it -- a mask, a normal map -- and the shader keeps the code that reads
+    // it behind that switch. Without this an effect that was given a mask
+    // applies everywhere instead of where the mask allows. The annotations are
+    // read from the files as they are, since the switch has to be settled
+    // before the shaders can be built with it.
+    let declared: Vec<_> = [(Stage::Vertex, "vert"), (Stage::Fragment, "frag")]
+        .iter()
+        .filter_map(|(_, ext)| resolve.shader(shader, ext))
+        .flat_map(|source| uniforms(&String::from_utf8_lossy(&source)))
+        .filter(|uniform| uniform.sampler)
+        .collect();
+    for uniform in &declared {
+        let Some(slot) = texture_slot(&uniform.name) else {
+            continue;
+        };
+        // Only where the wallpaper itself bound something. A sampler's own
+        // default is the blank that stands for nothing being bound.
+        let bound = named_textures
+            .get(slot)
+            .and_then(|name| name.as_deref())
+            .is_some_and(|name| !name.is_empty());
+        if bound && let Some(switch) = &uniform.combo {
+            combos.insert(switch.to_ascii_uppercase(), "1".into());
+        }
+    }
+
     let mut stages = Vec::new();
     for (stage, ext) in [(Stage::Vertex, "vert"), (Stage::Fragment, "frag")] {
         let source = resolve

@@ -197,6 +197,10 @@ pub struct Uniform {
     /// Whether this is a texture rather than a value. A sampler's default
     /// names a texture to load, not a number to set.
     pub sampler: bool,
+    /// A switch the shader keeps the use of this uniform behind, which turns
+    /// on when something is bound to it. Masks and normal maps are written
+    /// this way, and the code that reads them is compiled out until then.
+    pub combo: Option<String>,
 }
 
 /// The uniforms a shader declares, read from the comments beside them:
@@ -236,6 +240,10 @@ pub fn uniforms(source: &str) -> Vec<Uniform> {
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned),
             sampler: kind.starts_with("sampler"),
+            combo: value
+                .get("combo")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
         });
     }
     out
@@ -479,6 +487,7 @@ uniform float g_Undocumented; // not json
         };
         assert!(found.sampler);
         assert_eq!(found.default, Some(serde_json::json!("util/clouds_256")));
+        assert_eq!(found.combo, None);
     }
 
     #[test]
@@ -501,5 +510,21 @@ uniform float g_Undocumented; // not json
             overbright.label.as_deref(),
             Some("ui_editor_properties_overbright")
         );
+    }
+}
+
+#[cfg(test)]
+mod sampler_switch_tests {
+    use super::uniforms;
+
+    #[test]
+    fn reads_the_switch_a_sampler_hides_behind() {
+        let source = r#"uniform sampler2D g_Texture2; // {"mode":"opacitymask","combo":"MASK","default":"util/white"}"#;
+        let found = uniforms(source);
+        let [mask] = found.as_slice() else {
+            panic!("expected one uniform, got {found:?}");
+        };
+        assert_eq!(mask.combo.as_deref(), Some("MASK"));
+        assert_eq!(mask.default, Some(serde_json::json!("util/white")));
     }
 }
