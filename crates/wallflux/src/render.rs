@@ -312,6 +312,7 @@ impl Scene {
                 passes,
                 drawing: Drawing::Image,
             });
+            report_effects(object, &mut skipped);
         }
 
         if objects.is_empty() {
@@ -465,6 +466,8 @@ fn load_particles(
         return None;
     }
 
+    report_effects(object, skipped);
+
     // Seeded from the object's own id so two systems in one scene do not
     // emit in step, and so a screenshot of a wallpaper is reproducible.
     let system = particles::System::new(&definition, object.id as u32);
@@ -482,6 +485,32 @@ fn load_particles(
         passes,
         drawing: Drawing::Particles(Box::new(system)),
     })
+}
+
+/// Names the effects an object carries but does not get.
+///
+/// Post-processing is not built yet, so an object with a blur or a glow on it
+/// still draws, just flat. Saying so is the difference between a wallpaper
+/// that is missing something and one that looks subtly wrong for no stated
+/// reason: the library hangs 364 visible effects on its objects.
+fn report_effects(object: &wpe_format::scene::Object, skipped: &mut Vec<String>) {
+    for effect in &object.effects {
+        if !effect.visible.value {
+            continue;
+        }
+        // Only 33 of them fill in a name, so the file is what identifies one.
+        let from_file = effect
+            .file
+            .trim_start_matches("effects/")
+            .trim_end_matches("effect.json")
+            .trim_end_matches('/');
+        let name = match (from_file, effect.name.as_str()) {
+            ("", "") => "an unnamed effect",
+            ("", named) => named,
+            (file, _) => file,
+        };
+        skipped.push(format!("{}: effect {name} is not applied yet", object.name));
+    }
 }
 
 fn build_passes(
