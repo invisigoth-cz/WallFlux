@@ -112,6 +112,9 @@ unsafe fn render_to_image(
         gl.viewport(0, 0, width as i32, height as i32);
         gl.clear_color(0.0, 0.0, 0.0, 1.0);
         gl.clear(glow::COLOR_BUFFER_BIT);
+        // The scene as it would be at that moment, not as a frame could
+        // catch up to it.
+        scene.settle(time);
         scene.draw(gl, (width, height), time);
         gl.finish();
 

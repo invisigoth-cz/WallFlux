@@ -370,6 +370,18 @@ impl Scene {
         self.objects.len()
     }
 
+    /// Runs the particle systems up to `time` however long it takes.
+    ///
+    /// For looking at a wallpaper at a chosen moment rather than watching it:
+    /// drawing caps how much it will catch up in one frame, and a tool that
+    /// wants a scene as it would be after a minute has to ask for it.
+    #[allow(dead_code)]
+    pub fn settle(&mut self, time: f32) {
+        // A minute of a scene is already more than any system needs to reach
+        // its steady state.
+        self.advance_to(time, (60.0 / STEP) as usize);
+    }
+
     /// Live particles across every system, which is what says whether the
     /// systems are running at the moment the scene was drawn.
     #[allow(dead_code)]
@@ -389,7 +401,7 @@ impl Scene {
     /// may jump straight to a moment and the particle systems still arrive
     /// there the same way they would have by running.
     pub fn draw(&mut self, gl: &glow::Context, output: (u32, u32), time: f32) {
-        self.advance_to(time);
+        self.advance_to(time, STEPS_PER_FRAME);
         let projection = transform::orthographic_cover(
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
@@ -419,22 +431,23 @@ impl Scene {
         }
     }
 
-    /// Steps every particle system up to `time`.
+    /// Steps every particle system up to `time`, taking at most `most` of
+    /// them and dropping whatever time is left over.
     ///
     /// Fixed slices rather than whatever the last frame took, so a system
-    /// looks the same whether the compositor asked for 60 frames or 144, and
-    /// so the screenshot tool can seek to a moment by stepping there.
-    fn advance_to(&mut self, time: f32) {
-        const STEP: f32 = 1.0 / 60.0;
-        // Half a minute of catching up is already more than any system needs
-        // to reach its steady state; beyond that the rest is skipped rather
-        // than stalling the frame that resumes.
-        const MOST: usize = 1800;
-
+    /// looks the same whether the compositor asked for 60 frames or 144.
+    ///
+    /// The cap is what keeps a heavy scene from running away. A frame has to
+    /// simulate the time the frame before it took; if the simulation cannot
+    /// keep up, that debt compounds, and it compounds fast -- one wallpaper
+    /// here went from 14 ms a frame to 1.6 seconds within twelve frames, which
+    /// is a slideshow and then a standstill. Capping the steps turns that into
+    /// something that merely runs slow.
+    fn advance_to(&mut self, time: f32, most: usize) {
         let mut steps = ((time - self.simulated).max(0.0) / STEP) as usize;
-        if steps > MOST {
-            self.simulated = time - MOST as f32 * STEP;
-            steps = MOST;
+        if steps > most {
+            self.simulated = time - most as f32 * STEP;
+            steps = most;
         }
         for _ in 0..steps {
             for object in &mut self.objects {
@@ -1096,6 +1109,14 @@ unsafe fn make_quad(gl: &glow::Context) -> Result<(glow::VertexArray, glow::Buff
         Ok((vao, vbo))
     }
 }
+
+/// How long a slice of a scene one simulation step covers.
+const STEP: f32 = 1.0 / 60.0;
+
+/// The most steps one frame will simulate before it gives up and lets the
+/// scene run slow. Four is a fifteenth of a second, which no light scene ever
+/// reaches and which keeps a heavy one moving instead of seizing.
+const STEPS_PER_FRAME: usize = 4;
 
 /// Far enough that the direction to it is the z axis for every particle in a
 /// scene, whose own coordinates run to a few thousand.
