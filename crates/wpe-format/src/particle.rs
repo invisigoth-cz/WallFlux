@@ -233,30 +233,31 @@ impl ParticleSystem {
 
         for step in array(&root, "initializer") {
             // Every initializer in the library is a range the starting value is
-            // drawn from, so they differ only in which value they fill.
-            let scalar = || Range {
-                min: num(step, "min", 0.0),
-                max: num(step, "max", 0.0),
-            };
-            let triple = || Range {
-                min: vector(step, "min", [0.0; 3]),
-                max: vector(step, "max", [0.0; 3]),
-            };
+            // drawn from, so they differ only in which value they fill. A
+            // system may state one end and not the other -- a quarter of the
+            // colours in the library do -- and the stated end then stands for
+            // both. Reading the missing one as zero fades those colours to
+            // black, and where neither end is stated it makes the particles
+            // invisible.
+            let scalar = |default| bounds(step, "min", "max", default);
+            let triple = |default| bounds3(step, "min", "max", default);
             initializers.push(match name_of(step) {
-                "lifetimerandom" => Initializer::Lifetime(scalar()),
-                "sizerandom" => Initializer::Size(scalar()),
-                "alpharandom" => Initializer::Alpha(scalar()),
+                "lifetimerandom" => Initializer::Lifetime(scalar(1.0)),
+                "sizerandom" => Initializer::Size(scalar(0.0)),
+                "alpharandom" => Initializer::Alpha(scalar(1.0)),
                 "colorrandom" => {
-                    let raw = triple();
+                    // White on the scale the file states, so a colour nobody
+                    // gave stays out of the way.
+                    let raw = triple(255.0);
                     Initializer::Color(Range {
                         min: scale_color(raw.min),
                         max: scale_color(raw.max),
                     })
                 }
-                "velocityrandom" => Initializer::Velocity(triple()),
+                "velocityrandom" => Initializer::Velocity(triple(0.0)),
                 "turbulentvelocityrandom" => Initializer::TurbulentVelocity(turbulent(step, 0.1)),
-                "rotationrandom" => Initializer::Rotation(triple()),
-                "angularvelocityrandom" => Initializer::AngularVelocity(triple()),
+                "rotationrandom" => Initializer::Rotation(triple(0.0)),
+                "angularvelocityrandom" => Initializer::AngularVelocity(triple(0.0)),
                 other => {
                     unsupported.push(format!("initializer {other}"));
                     continue;
@@ -426,6 +427,29 @@ fn bounds(step: &Value, low: &str, high: &str, default: f32) -> Range<f32> {
     }
 }
 
+/// The same as [`bounds`], for the fields written as vectors.
+fn bounds3(step: &Value, low: &str, high: &str, default: f32) -> Range<[f32; 3]> {
+    let stated = |key: &str| step.get(key).filter(|v| !v.is_null()).is_some();
+    let read = |key: &str| vector(step, key, [default; 3]);
+    match (stated(low), stated(high)) {
+        (true, true) => Range {
+            min: read(low),
+            max: read(high),
+        },
+        (true, false) | (false, true) => {
+            let only = read(if stated(low) { low } else { high });
+            Range {
+                min: only,
+                max: only,
+            }
+        }
+        (false, false) => Range {
+            min: [default; 3],
+            max: [default; 3],
+        },
+    }
+}
+
 fn oscillation(step: &Value) -> Oscillation {
     Oscillation {
         frequency: bounds(step, "frequencymin", "frequencymax", 0.0),
@@ -567,9 +591,11 @@ mod tests {
         assert_eq!(p.maxcount, 0);
         assert_eq!(p.emitters[0].rate, 0.0);
         assert_eq!(p.emitters[0].distance.max, 100.0);
+        // A null end is a missing end, and the stated one stands for both
+        // rather than the range running down to nothing.
         assert_eq!(
             p.initializers[0],
-            Initializer::Size(Range { min: 1.0, max: 0.0 })
+            Initializer::Size(Range { min: 1.0, max: 1.0 })
         );
         assert_eq!(
             p.operators[0],
@@ -671,5 +697,53 @@ mod turbulence_tests {
             panic!("not a turbulence operator");
         };
         assert!(field.scale > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod one_sided_tests {
+    use super::*;
+
+    fn only(json: &str) -> Vec<Initializer> {
+        ParticleSystem::parse(json.as_bytes()).unwrap().initializers
+    }
+
+    #[test]
+    fn a_colour_stated_at_one_end_only_is_that_colour() {
+        // 27 of the 111 colour initializers in the library are written this
+        // way. Reading the missing end as zero fades half the particles to
+        // black.
+        let p = only(r#"{"initializer":[{"name":"colorrandom","min":"0 53 255"}]}"#);
+        let Initializer::Color(range) = p[0] else {
+            panic!("not a colour: {p:?}");
+        };
+        assert_eq!(range.min, range.max);
+        assert_eq!(range.min, [0.0, 53.0 / 255.0, 1.0]);
+    }
+
+    #[test]
+    fn a_rotation_stated_at_the_far_end_only_is_still_a_range_of_one() {
+        let p = only(r#"{"initializer":[{"name":"rotationrandom","max":"0 0 2"}]}"#);
+        assert_eq!(
+            p[0],
+            Initializer::Rotation(Range {
+                min: [0.0, 0.0, 2.0],
+                max: [0.0, 0.0, 2.0]
+            })
+        );
+    }
+
+    #[test]
+    fn values_nobody_stated_fall_back_to_something_that_shows() {
+        let p = only(r#"{"initializer":[{"name":"alpharandom"},{"name":"colorrandom"}]}"#);
+        // Not zero, which would make every particle of the system invisible.
+        assert_eq!(p[0], Initializer::Alpha(Range { min: 1.0, max: 1.0 }));
+        assert_eq!(
+            p[1],
+            Initializer::Color(Range {
+                min: [1.0; 3],
+                max: [1.0; 3]
+            })
+        );
     }
 }
