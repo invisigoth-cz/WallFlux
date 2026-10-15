@@ -9,8 +9,13 @@
 //! middle one's time, which is the only honest way to answer what a change to
 //! the renderer costs.
 //!
+//! The last argument stands in for sound, nought to one across every band, so
+//! a wallpaper that answers to music can be looked at as if some were playing.
+//! Left out, the scene is drawn in silence, which is what makes the same
+//! wallpaper give the same picture twice.
+//!
 //! ```text
-//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames]
+//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames] [loudness]
 //! ```
 
 use std::path::PathBuf;
@@ -33,7 +38,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [dir, out, rest @ ..] = args.as_slice() else {
         eprintln!(
-            "usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames]"
+            "usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames] [loudness]"
         );
         std::process::exit(2);
     };
@@ -66,6 +71,8 @@ fn main() {
     }
 
     let frames: usize = rest.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let loudness: f32 = rest.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    scene.hear([loudness.clamp(0.0, 1.0); wpe_format::particle::AUDIO_BANDS]);
     let pixels = unsafe { render_to_image(&gl, &mut scene, width, height, time, frames) }
         .unwrap_or_else(|e| {
             eprintln!("render failed: {e}");

@@ -16,9 +16,35 @@
 //! instead would let rounding pile up over a particle's whole life.
 
 use wpe_format::particle::{
-    Animation, Emitter, Initializer, Operator, Oscillation, ParticleSystem, Range, Shape,
-    Turbulent, Vortex,
+    AUDIO_BANDS, Animation, AudioResponse, Emitter, Initializer, Operator, Oscillation,
+    ParticleSystem, Range, Shape, Turbulent, Vortex,
 };
+
+/// Silence, for a caller with nothing to listen to.
+pub const QUIET: [f32; AUDIO_BANDS] = [0.0; AUDIO_BANDS];
+
+/// What a step's own strength is multiplied by, given what is playing.
+///
+/// A step that does not follow the sound is left alone. One that does is
+/// never turned off: what it states is its loud end, and the quiet end is a
+/// fraction of that, which is why a wallpaper still moves in a silent room.
+///
+/// ponytail: the loudness of a range of bands is their average, and the
+/// exponent shapes it before it is mapped rather than after. The file states
+/// neither; these are the readings that leave both settings doing what their
+/// names say.
+fn loudness(audio: Option<AudioResponse>, sound: &[f32; AUDIO_BANDS]) -> f32 {
+    let Some(audio) = audio else {
+        return 1.0;
+    };
+    let (first, last) = audio.bands;
+    let heard = match sound.get(first..=last) {
+        Some(bands) if !bands.is_empty() => bands.iter().sum::<f32>() / bands.len() as f32,
+        _ => 0.0,
+    };
+    let heard = heard.clamp(0.0, 1.0).powf(audio.exponent);
+    audio.bounds.min + (audio.bounds.max - audio.bounds.min) * heard
+}
 
 /// Floats per vertex of a particle drawn as a sprite: position, then corner
 /// and rotation and size, then colour, then the two remaining rotation axes,
@@ -246,12 +272,15 @@ impl System {
     }
 
     /// Moves the system on by `dt` seconds and rewrites the buffer.
-    pub fn advance(&mut self, dt: f32) {
+    /// Runs the system on, with `sound` as what the speakers are playing.
+    /// All zeroes is silence, which is what a step that follows the sound
+    /// reads when there is nothing to listen to.
+    pub fn advance(&mut self, dt: f32, sound: &[f32; AUDIO_BANDS]) {
         let dt = dt.clamp(0.0, MAX_STEP);
         self.elapsed += dt;
 
         if self.elapsed >= self.starttime {
-            self.emit(dt);
+            self.emit(dt, sound);
         }
 
         let elapsed = self.elapsed;
@@ -282,8 +311,9 @@ impl System {
                             particle.phase * field.phase_max,
                             elapsed,
                         );
-                        let speed =
-                            field.speed.min + (field.speed.max - field.speed.min) * particle.drift;
+                        let speed = (field.speed.min
+                            + (field.speed.max - field.speed.min) * particle.drift)
+                            * loudness(field.audio, sound);
                         for (axis, mask) in mask.iter().enumerate() {
                             particle.position[axis] += along[axis] * mask * speed * dt;
                         }
@@ -322,7 +352,9 @@ impl System {
                     // than pulling it in, for the same reason turbulence
                     // does -- a speed the file states stays the speed.
                     Operator::Vortex(vortex) => {
-                        let turn = vortex_turn(vortex, particle.position) * dt;
+                        let turn = vortex_turn(vortex, particle.position)
+                            * loudness(vortex.audio, sound)
+                            * dt;
                         particle.position = turned(particle.position, vortex.axis, turn);
                     }
                     // These change nothing that carries over to the next step,
@@ -339,25 +371,25 @@ impl System {
         self.write_vertices();
     }
 
-    fn emit(&mut self, dt: f32) {
+    fn emit(&mut self, dt: f32, sound: &[f32; AUDIO_BANDS]) {
         // Taken apart so the borrow of the emitters does not hold the whole
         // system while a particle is being built.
         let mut emitters = std::mem::take(&mut self.emitters);
         for (emitter, owed) in &mut emitters {
-            *owed += emitter.rate * dt;
+            *owed += emitter.rate * loudness(emitter.audio, sound) * dt;
             while *owed >= 1.0 {
                 *owed -= 1.0;
                 if self.live.len() >= self.maxcount {
                     break;
                 }
-                let particle = self.spawn(emitter);
+                let particle = self.spawn(emitter, sound);
                 self.live.push(particle);
             }
         }
         self.emitters = emitters;
     }
 
-    fn spawn(&mut self, emitter: &Emitter) -> Particle {
+    fn spawn(&mut self, emitter: &Emitter, sound: &[f32; AUDIO_BANDS]) -> Particle {
         let direction = self.rng.direction(emitter.directions);
         let position = match emitter.shape {
             Shape::Sphere => {
@@ -396,7 +428,7 @@ impl System {
             Some(field) => {
                 let along =
                     field_direction(&field, position, phase * field.phase_max, self.elapsed);
-                let speed = self.rng.range(field.speed);
+                let speed = self.rng.range(field.speed) * loudness(field.audio, sound);
                 along.map(|axis| axis * speed)
             }
             None => [0.0; 3],
@@ -735,6 +767,52 @@ mod tests {
         System::new(&definition, 12345)
     }
 
+    /// Silence is the quiet end of what the step stated, never nothing: a
+    /// wallpaper in a silent room still moves, just less.
+    #[test]
+    fn a_step_that_follows_the_sound_runs_between_its_bounds() {
+        let step = Some(AudioResponse {
+            bands: (4, 7),
+            exponent: 1.0,
+            bounds: Range { min: 0.5, max: 1.0 },
+        });
+        let mut loud = QUIET;
+        loud[4..=7].fill(1.0);
+        let mut half = QUIET;
+        half[4..=7].fill(0.5);
+
+        assert_eq!(loudness(None, &QUIET), 1.0);
+        assert_eq!(loudness(step, &QUIET), 0.5);
+        assert_eq!(loudness(step, &loud), 1.0);
+        assert_eq!(loudness(step, &half), 0.75);
+
+        // Sound outside the bands it listens to is not its business.
+        let mut elsewhere = QUIET;
+        elsewhere[0..=3].fill(1.0);
+        assert_eq!(loudness(step, &elsewhere), 0.5);
+    }
+
+    /// The exponent shapes the loudness before it is mapped, so a step with a
+    /// high one stays near its quiet end until the sound is really loud.
+    #[test]
+    fn the_exponent_decides_how_soon_a_step_answers() {
+        let mut quarter = QUIET;
+        quarter[0..=15].fill(0.25);
+        let with = |exponent| {
+            loudness(
+                Some(AudioResponse {
+                    bands: (0, 15),
+                    exponent,
+                    bounds: Range { min: 0.0, max: 1.0 },
+                }),
+                &quarter,
+            )
+        };
+        assert!((with(1.0) - 0.25).abs() < 0.001);
+        assert!((with(2.0) - 0.0625).abs() < 0.001);
+        assert!((with(0.5) - 0.5).abs() < 0.001);
+    }
+
     /// Out to the far point and back the way it came. A walk that jumped back
     /// instead would draw a ribbon across the whole bolt on every lap.
     #[test]
@@ -767,7 +845,7 @@ mod tests {
                                {"name":"mapsequencebetweencontrolpoints","count":10,
                                 "limitbehavior":"mirror"}]}"#,
         );
-        s.advance(0.1);
+        s.advance(0.1, &QUIET);
         assert_eq!(s.live.len(), 10);
         // Nothing moves them after they are born, so each sits exactly the
         // emitter's own 64 away from the point on the line it was given.
@@ -783,7 +861,7 @@ mod tests {
     /// one long step is deliberately clamped.
     fn run(system: &mut System, seconds: f32, step: f32) {
         for _ in 0..(seconds / step).round() as usize {
-            system.advance(step);
+            system.advance(step, &QUIET);
         }
     }
 
@@ -900,7 +978,7 @@ mod tests {
                                {"name":"alpharandom","min":1,"max":1}],
                 "operator":[{"name":"alphafade","fadeintime":1}]}"#,
         );
-        s.advance(1.0 / 60.0);
+        s.advance(1.0 / 60.0, &QUIET);
         assert_eq!(s.count(), 1);
         let early = written_alpha(&s);
         assert!(early < 0.1, "born at {early} instead of nearly nothing");
@@ -930,7 +1008,7 @@ mod tests {
                 "operator":[{"name":"sizechange","starttime":0,"endtime":1,
                              "startvalue":1,"endvalue":3}]}"#,
         );
-        s.advance(1.0 / 60.0);
+        s.advance(1.0 / 60.0, &QUIET);
         let size = |s: &System| s.vertices()[3 + 3];
         assert!((size(&s) - 100.0).abs() < 5.0, "started at {}", size(&s));
         run(&mut s, 0.5, 1.0 / 60.0);
@@ -970,6 +1048,7 @@ mod tests {
             time_scale: 0.0,
             phase_max: 0.0,
             offset: -0.5,
+            audio: None,
         };
         let here = field_direction(&field, [0.0; 3], 0.0, 0.0);
         let far = field_direction(&field, [4000.0, 0.0, 0.0], 0.0, 0.0);
@@ -1045,7 +1124,7 @@ mod tests {
                                {"name":"turbulentvelocityrandom","scale":0.1,
                                 "speedmin":250,"speedmax":260,"offset":-0.5}]}"#,
         );
-        s.advance(1.0 / 60.0);
+        s.advance(1.0 / 60.0, &QUIET);
         assert!(s.count() > 0);
         for p in &s.live {
             let speed =
@@ -1067,7 +1146,7 @@ mod tests {
                              "distanceouter":500,"speedinner":90,"speedouter":90}]}"#,
         );
         let start: Vec<[f32; 3]> = {
-            s.advance(1.0 / 60.0);
+            s.advance(1.0 / 60.0, &QUIET);
             s.live.iter().map(|p| p.position).collect()
         };
         run(&mut s, 1.0, 1.0 / 60.0);
@@ -1105,7 +1184,7 @@ mod tests {
                              "speedinner":SPEED,"speedouter":SPEED}]}"#;
         let turn = |speed: &str| {
             let mut s = system(&positive.replace("SPEED", speed));
-            s.advance(1.0 / 60.0);
+            s.advance(1.0 / 60.0, &QUIET);
             let before = s.live[0].position;
             run(&mut s, 0.5, 1.0 / 60.0);
             let after = s.live[0].position;
@@ -1126,7 +1205,7 @@ mod tests {
         );
         let mut seen: Vec<f32> = Vec::new();
         for _ in 0..90 {
-            s.advance(1.0 / 60.0);
+            s.advance(1.0 / 60.0, &QUIET);
             seen.push(written_alpha(&s));
         }
         let low = seen.iter().cloned().fold(f32::MAX, f32::min);
@@ -1146,7 +1225,7 @@ mod tests {
         );
         let mut xs: Vec<f32> = Vec::new();
         for _ in 0..90 {
-            s.advance(1.0 / 60.0);
+            s.advance(1.0 / 60.0, &QUIET);
             xs.push(s.vertices()[0]);
         }
         let low = xs.iter().cloned().fold(f32::MAX, f32::min);
@@ -1166,7 +1245,7 @@ mod tests {
                 "operator":[{"name":"colorchange","starttime":0,"endtime":1,
                              "startvalue":"1 0 0","endvalue":"0 0 1"}]}"#,
         );
-        s.advance(1.0 / 60.0);
+        s.advance(1.0 / 60.0, &QUIET);
         let red = &s.vertices()[7..10];
         assert!(red[0] > 0.9 && red[2] < 0.1, "started at {red:?}");
         run(&mut s, 0.5, 1.0 / 60.0);
@@ -1263,7 +1342,7 @@ mod tests {
                 "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
         );
         // A stalled frame, as if the wallpaper had been paused for a minute.
-        s.advance(60.0);
+        s.advance(60.0, &QUIET);
         assert!(s.count() <= 100, "one frame emitted {}", s.count());
     }
 

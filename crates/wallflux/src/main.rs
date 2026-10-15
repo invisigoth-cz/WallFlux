@@ -18,6 +18,7 @@
 //! cargo run -p wallflux -- <wallpaper-dir> [seconds] [namespace]
 //! ```
 
+mod audio;
 mod gpu;
 mod particles;
 mod render;
@@ -93,7 +94,11 @@ fn main() {
         frames: Arc::new(AtomicU32::new(0)),
         run_for: Duration::from_secs(seconds),
         done: false,
+        ears: audio::Audio::start(),
     };
+    if app.ears.is_none() {
+        eprintln!("no sound to listen to; wallpapers that follow it will run quiet");
+    }
 
     println!("background layer, namespace {namespace:?}, for {seconds}s");
 
@@ -131,6 +136,9 @@ struct App {
     frames: Arc<AtomicU32>,
     run_for: Duration,
     done: bool,
+    /// What the speakers are playing. None where there is no sound server to
+    /// ask, and the scene then runs as it would in a silent room.
+    ears: Option<audio::Audio>,
 }
 
 impl App {
@@ -190,6 +198,9 @@ impl App {
         // Ask for the next frame before presenting: swapping buffers commits
         // the surface, and a callback requested afterwards would miss it.
         surface.frame(qh, FrameCallbackData(surface.clone()));
+        if let Some(ears) = &self.ears {
+            scene.hear(ears.bands());
+        }
         scene.draw(&gpu.gl, (w, h), self.started.elapsed().as_secs_f32());
         if let Err(e) = gpu.present() {
             eprintln!("frame failed: {e}");

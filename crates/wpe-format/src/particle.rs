@@ -51,6 +51,8 @@ pub struct Emitter {
     /// Speed given along the spawn direction, on top of any velocity an
     /// initializer sets.
     pub speed: Range<f32>,
+    /// Set where the rate follows the sound.
+    pub audio: Option<AudioResponse>,
 }
 
 /// A starting value handed to each new particle.
@@ -84,6 +86,25 @@ pub enum Initializer {
     },
 }
 
+/// How many bands the engine splits the sound it hears into. Wallpapers name
+/// the ones they listen to by index, and the highest any of them names is 15.
+pub const AUDIO_BANDS: usize = 16;
+
+/// How a step follows the sound.
+///
+/// What the step states is its loud end; the quiet end is `bounds.min` of it,
+/// never nothing, which is why a wallpaper still moves in silence.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AudioResponse {
+    /// The bands to listen to, as the first and last index into the sixteen.
+    pub bands: (usize, usize),
+    /// What the loudness is raised to before it is mapped, which is how a
+    /// wallpaper says whether it answers to quiet sounds or only to loud ones.
+    pub exponent: f32,
+    /// What the step's own strength is multiplied by, from silence to loud.
+    pub bounds: Range<f32>,
+}
+
 /// A noise field a step reads a direction out of.
 ///
 /// `offset` is -0.5 in every system in the library that states one, which is
@@ -103,6 +124,8 @@ pub struct Turbulent {
     pub phase_max: f32,
     /// Added to the field before it is used.
     pub offset: f32,
+    /// Set where the field's speed follows the sound.
+    pub audio: Option<AudioResponse>,
 }
 
 /// A value driven from one number to another over a slice of the lifetime.
@@ -117,6 +140,8 @@ pub struct Ramp {
 /// A swirl about an axis through the system's origin.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vortex {
+    /// Set where the speed of the swirl follows the sound.
+    pub audio: Option<AudioResponse>,
     pub axis: [f32; 3],
     /// Where the inner and outer speeds apply.
     pub distance: Range<f32>,
@@ -384,6 +409,7 @@ impl ParticleSystem {
                     }
                 }
                 "vortex" => Operator::Vortex(Vortex {
+                    audio: audio_response(step),
                     axis: vector(step, "axis", [0.0, 0.0, 1.0]),
                     distance: Range {
                         min: num(step, "distanceinner", 0.0),
@@ -489,7 +515,30 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             min: num(step, "speedmin", 0.0),
             max: num(step, "speedmax", 0.0),
         },
+        audio: audio_response(step),
     }
+}
+
+/// What a step says about following the sound, if it follows it at all.
+///
+/// The mode is the switch: the editor hides every other audio field while it
+/// is zero, and a third of the steps in the library carry settings behind a
+/// zero that were never meant to be used. Which of the modes above zero a step
+/// picks is not understood -- only 1 and 3 appear, and they are treated alike.
+fn audio_response(step: &Value) -> Option<AudioResponse> {
+    if num(step, "audioprocessingmode", 0.0) <= 0.0 {
+        return None;
+    }
+    let last = AUDIO_BANDS - 1;
+    let first = (num(step, "audioprocessingfrequencystart", 0.0) as usize).min(last);
+    Some(AudioResponse {
+        bands: (
+            first,
+            (num(step, "audioprocessingfrequencyend", last as f32) as usize).clamp(first, last),
+        ),
+        exponent: num(step, "audioprocessingexponent", 1.0).max(f32::EPSILON),
+        bounds: pair(step, "audioprocessingbounds", Range { min: 0.0, max: 1.0 }),
+    })
 }
 
 /// A pair of bounds where a system may state only one of them.
@@ -570,7 +619,21 @@ fn turbulent(step: &Value, default_scale: f32) -> Turbulent {
         time_scale: num(step, "timescale", 0.0),
         phase_max: num(step, "phasemax", 0.0),
         offset: num(step, "offset", -0.5),
+        audio: audio_response(step),
     }
+}
+
+/// A pair written as one space-separated string, which is how the audio bounds
+/// arrive: `"0.5 1"` is half the stated strength in silence and all of it when
+/// the sound is loud.
+fn pair(v: &Value, key: &str, default: Range<f32>) -> Range<f32> {
+    v.get(key)
+        .filter(|v| !v.is_null())
+        .and_then(|v| serde_json::from_value::<Vector<2>>(v.clone()).ok())
+        .map_or(default, |v| Range {
+            min: v.0[0],
+            max: v.0[1],
+        })
 }
 
 fn array<'a>(v: &'a Value, key: &str) -> Vec<&'a Value> {
@@ -646,6 +709,7 @@ mod tests {
                 },
                 rate: 20.0,
                 speed: Range { min: 0.0, max: 0.0 },
+                audio: None,
             }]
         );
         assert_eq!(
@@ -734,6 +798,48 @@ mod tests {
                 "operator controlpointattract has no such control point"
             ]
         );
+    }
+
+    /// The editor hides every other audio field while the mode is zero, and a
+    /// third of the steps in the library carry settings behind a zero.
+    #[test]
+    fn a_step_follows_the_sound_only_once_its_mode_is_set() {
+        let quiet = br#"{"material":"m.json","maxcount":10,
+            "emitter":[{"name":"sphererandom","rate":100,"audioprocessingmode":0,
+                        "audioprocessingbounds":"0.5 1"}]}"#;
+        assert_eq!(
+            ParticleSystem::parse(quiet).unwrap().emitters[0].audio,
+            None
+        );
+
+        let loud = br#"{"material":"m.json","maxcount":10,
+            "emitter":[{"name":"sphererandom","rate":100,"audioprocessingmode":3,
+                        "audioprocessingbounds":"0.5 1","audioprocessingexponent":0.6,
+                        "audioprocessingfrequencystart":4,"audioprocessingfrequencyend":10}]}"#;
+        assert_eq!(
+            ParticleSystem::parse(loud).unwrap().emitters[0].audio,
+            Some(AudioResponse {
+                bands: (4, 10),
+                exponent: 0.6,
+                bounds: Range { min: 0.5, max: 1.0 },
+            })
+        );
+    }
+
+    /// Bounds arrive as one string, and reading them as two missing numbers
+    /// would leave the step at nothing however loud the sound got.
+    #[test]
+    fn audio_bounds_are_one_string_of_two_numbers() {
+        let json = br#"{"material":"m.json","maxcount":10,
+            "emitter":[{"name":"sphererandom","rate":100,"audioprocessingmode":1,
+                        "audioprocessingbounds":"0.9 1"}]}"#;
+        let audio = ParticleSystem::parse(json).unwrap().emitters[0]
+            .audio
+            .unwrap();
+        assert_eq!(audio.bounds, Range { min: 0.9, max: 1.0 });
+        // Nothing stated means the whole spectrum rather than one band.
+        assert_eq!(audio.bands, (0, 15));
+        assert_eq!(audio.exponent, 1.0);
     }
 
     #[test]
@@ -863,6 +969,7 @@ mod turbulence_tests {
                 time_scale: 0.2,
                 phase_max: 2.0,
                 offset: -0.5,
+                audio: None,
             })]
         );
         assert!(p.unsupported.is_empty());

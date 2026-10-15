@@ -274,6 +274,10 @@ pub struct Scene {
     buffers: BTreeMap<String, u32>,
     /// How far the particle systems have been simulated.
     simulated: f32,
+    /// What the speakers are playing, as the bands a wallpaper asks for.
+    /// Silence until a caller says otherwise, which is what a tool drawing
+    /// to a file wants: the same wallpaper twice gives the same picture.
+    sound: [f32; wpe_format::particle::AUDIO_BANDS],
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
@@ -539,9 +543,17 @@ impl Scene {
             canvas: None,
             buffers,
             simulated: 0.0,
+            sound: particles::QUIET,
             scene_size,
             skipped,
         })
+    }
+
+    /// Hands the scene what the speakers are playing, which the steps that
+    /// follow the sound read on the next frame. A caller that never says
+    /// anything leaves the scene running as it would in a silent room.
+    pub fn hear(&mut self, sound: [f32; wpe_format::particle::AUDIO_BANDS]) {
+        self.sound = sound;
     }
 
     pub fn object_names(&self) -> impl Iterator<Item = &str> {
@@ -663,6 +675,7 @@ impl Scene {
     /// is a slideshow and then a standstill. Capping the steps turns that into
     /// something that merely runs slow.
     fn advance_to(&mut self, time: f32, most: usize) {
+        let sound = self.sound;
         let mut steps = ((time - self.simulated).max(0.0) / STEP) as usize;
         if steps > most {
             self.simulated = time - most as f32 * STEP;
@@ -671,7 +684,7 @@ impl Scene {
         for _ in 0..steps {
             for object in &mut self.objects {
                 if let Drawing::Particles(system) = &mut object.drawing {
-                    system.advance(STEP);
+                    system.advance(STEP, &sound);
                 }
             }
         }
