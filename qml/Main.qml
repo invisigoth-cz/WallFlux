@@ -4,6 +4,7 @@
 import QtQuick
 import QtQuick.Window
 import QtWebEngine
+import WallFlux
 
 Window {
     id: root
@@ -21,8 +22,20 @@ Window {
         id: wallpaper
 
         anchors.fill: parent
-        // Nothing to show until a wallpaper is picked: finding those in the
-        // Steam workshop folder is the next step.
-        url: "about:blank"
+        visible: Wallpapers.current.kind === WallpaperKind.Web
+        url: visible ? Wallpapers.current.source : "about:blank"
+    }
+
+    // Stands in for the interface still to be built: without it there is no
+    // way to see that the scan found anything.
+    Text {
+        anchors.centerIn: parent
+        visible: !wallpaper.visible
+        horizontalAlignment: Text.AlignHCenter
+        color: "#808080"
+        font.pixelSize: 20
+        text: Wallpapers.wallpapers.length === 0
+              ? qsTr("No Wallpaper Engine wallpapers found.")
+              : qsTr("%1 wallpapers found, none playing.").arg(Wallpapers.wallpapers.length)
     }
 }

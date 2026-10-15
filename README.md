@@ -39,6 +39,13 @@ engine to maintain forever. That work is kept on the branch
     cmake --build build
     ./build/wallflux
 
+And the tests, which need Qt's Test module:
+
+    ctest --test-dir build --output-on-failure
+
+Qt here logs through systemd rather than to the terminal, so WallFlux's own
+messages are read with `journalctl --user -t wallflux`.
+
 ## Thanks
 
 WallFlux is inspired by [linux-wallpaperengine][lwe] by Almamu, which has been

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 invisigoth
 
+#include "wallpapercore.h"
+
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QtWebEngineQuick>
@@ -19,7 +21,12 @@ int main(int argc, char *argv[])
     // wallpaper that claims to be an ordinary application gets treated as one.
     app.setDesktopFileName(QStringLiteral("wallflux"));
 
+    // WallpaperCore declares itself a singleton of the WallFlux QML module,
+    // so there is nothing to register here: the engine builds it when the QML
+    // first asks for `Wallpapers`, and it scans the Steam folders as it is
+    // built.
     QQmlApplicationEngine engine;
+
     // Without this the program would sit there with no window and no reason
     // given when the QML fails to load.
     QObject::connect(
