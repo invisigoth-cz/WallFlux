@@ -25,14 +25,14 @@ use wpe_format::particle::AUDIO_BANDS;
 /// Samples read at a time. At 44 100 Hz this is 23 ms, so the bands are
 /// renewed about forty times a second, which is faster than the frames that
 /// read them.
-const READ: usize = 1024;
+pub const READ: usize = 1024;
 
 /// Samples each reading is measured over, which is the last two mouthfuls
 /// rather than only the newest. Twice the samples halves the width of a bin,
 /// and the bottom bands need that: a kick drum and a bass note are only forty
 /// hertz apart, and a window of a thousand samples cannot tell them apart.
 const WINDOW: usize = 2048;
-const RATE: u32 = 44_100;
+pub const RATE: u32 = 44_100;
 
 /// The lowest and highest frequency the bands are spread between. Below the
 /// first is rumble no music carries, and above the last is air.
@@ -108,19 +108,56 @@ fn connect() -> Option<Simple> {
     .ok()
 }
 
+/// Turns a stream of samples into the bands a wallpaper asks for.
+///
+/// Kept apart from the listening so that a tool rendering a clip from a sound
+/// file reads it exactly as the renderer reads the speakers: a clip that
+/// measured the sound its own way would be showing something nobody gets.
+pub struct Meter {
+    edges: [usize; AUDIO_BANDS + 1],
+    samples: [f32; WINDOW],
+    held: [f32; AUDIO_BANDS],
+}
+
+impl Meter {
+    pub fn new() -> Self {
+        Self {
+            edges: band_edges(),
+            samples: [0.0; WINDOW],
+            held: [0.0; AUDIO_BANDS],
+        }
+    }
+
+    /// Takes the next [`READ`] samples and gives the bands as they now stand.
+    ///
+    /// The newest mouthful goes at the end and what was there slides back, so
+    /// each reading is measured over a window twice as long as it waited.
+    pub fn feed(&mut self, fresh: &[f32; READ]) -> [f32; AUDIO_BANDS] {
+        self.samples.copy_within(READ.., 0);
+        self.samples[WINDOW - READ..].copy_from_slice(fresh);
+        let measured = spectrum(&self.samples, &self.edges);
+        for (held, measured) in self.held.iter_mut().zip(measured) {
+            *held = match measured > *held {
+                true => measured,
+                false => *held + (measured - *held) * FALL,
+            };
+        }
+        self.held
+    }
+}
+
+impl Default for Meter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn listen(stream: Simple, bands: &Mutex<[f32; AUDIO_BANDS]>, listening: &AtomicBool) {
-    let mut samples = [0f32; WINDOW];
-    let edges = band_edges();
-    let mut held = [0f32; AUDIO_BANDS];
+    let mut meter = Meter::new();
+    let mut fresh = [0f32; READ];
     loop {
-        // The newest mouthful goes at the end and what was there slides back,
-        // so each reading is measured over a window twice as long as it waited.
-        samples.copy_within(READ.., 0);
         let raw: &mut [u8] = unsafe {
-            std::slice::from_raw_parts_mut(
-                samples[WINDOW - READ..].as_mut_ptr() as *mut u8,
-                READ * size_of::<f32>(),
-            )
+            std::slice::from_raw_parts_mut(fresh.as_mut_ptr() as *mut u8, size_of_val(&fresh))
         };
         if stream.read(raw).is_err() {
             // The server went away or the device changed under us. Saying so
@@ -128,15 +165,9 @@ fn listen(stream: Simple, bands: &Mutex<[f32; AUDIO_BANDS]>, listening: &AtomicB
             listening.store(false, Ordering::Relaxed);
             return;
         }
-        let fresh = spectrum(&samples, &edges);
-        for (held, fresh) in held.iter_mut().zip(fresh) {
-            *held = match fresh > *held {
-                true => fresh,
-                false => *held + (fresh - *held) * FALL,
-            };
-        }
+        let measured = meter.feed(&fresh);
         if let Ok(mut out) = bands.lock() {
-            *out = held;
+            *out = measured;
         }
     }
 }
