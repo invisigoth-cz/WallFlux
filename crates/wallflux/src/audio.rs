@@ -48,10 +48,11 @@ const FALL: f32 = 0.12;
 /// to one. This is the knob: too small and every band sits at the top however
 /// quiet the room, too large and nothing ever reaches it.
 ///
-/// Settled against a test beat played through the monitor, where a kick
-/// reaches the top and the rest of the spectrum sits around a quarter. Real
-/// music on real speakers is what decides it, so this wants an ear on it.
-const LOUD: f32 = 0.02;
+/// Settled by ear against three pieces of music the wallpapers carry
+/// themselves. The first reading of 0.02 was judged a fifth too weak; because
+/// the magnitude is square-rooted, turning the answer up by a fifth means
+/// dividing this by 1.2 squared.
+const LOUD: f32 = 0.02 / (1.2 * 1.2);
 
 /// The sound the speakers are playing, split into bands.
 pub struct Audio {
