@@ -724,7 +724,10 @@ fn load_particles(
     let mut trail = None;
     let form = match definition.renderer {
         ParticleRenderer::Sprite => Form::Sprite,
-        ParticleRenderer::Rope { .. } => Form::Rope,
+        // Both kinds of ribbon are drawn by the same shader, which takes its
+        // geometry as it is given: what differs is only what the system
+        // threads the ribbon through.
+        ParticleRenderer::Rope { .. } | ParticleRenderer::RopeTrail { .. } => Form::Rope,
         ParticleRenderer::Trail {
             length,
             min_length,

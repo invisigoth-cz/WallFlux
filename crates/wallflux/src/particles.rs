@@ -64,6 +64,12 @@ const MAX_STEP: f32 = 0.1;
 
 struct Particle {
     position: [f32; 3],
+    /// Where this particle has been, oldest first, for a system whose
+    /// ribbons follow a path. Empty for every other system, which costs
+    /// nothing but the handle.
+    trail: Vec<[f32; 3]>,
+    /// Seconds since the last place was kept.
+    since: f32,
     velocity: [f32; 3],
     rotation: [f32; 3],
     size: f32,
@@ -144,10 +150,25 @@ impl Line {
     }
 }
 
+/// How a system's particles are strung onto ribbons, if they are.
+#[derive(Clone, Copy)]
+enum Ribbon {
+    /// Not a ribbon: every particle is its own quad.
+    None,
+    /// One ribbon threaded through every living particle, oldest first.
+    Chain,
+    /// A ribbon for each particle, through where that one has been.
+    Trail {
+        /// Seconds between the places kept along the path.
+        spacing: f32,
+        /// How many places are kept.
+        points: usize,
+    },
+}
+
 pub struct System {
-    /// Threads every particle onto one ribbon instead of drawing each as its
-    /// own quad.
-    rope: bool,
+    /// Whether the particles are strung onto ribbons, and how.
+    ribbon: Ribbon,
     /// Each emitter with the fraction of a particle it is owed.
     emitters: Vec<(Emitter, f32)>,
     start: Start,
@@ -206,10 +227,16 @@ impl System {
                 count,
             });
         Self {
-            rope: matches!(
-                definition.renderer,
-                wpe_format::particle::Renderer::Rope { .. }
-            ),
+            ribbon: match definition.renderer {
+                wpe_format::particle::Renderer::Rope { .. } => Ribbon::Chain,
+                wpe_format::particle::Renderer::RopeTrail { length, points } => Ribbon::Trail {
+                    // The places are spread evenly across the path, so the
+                    // first and the last of them are `length` apart.
+                    spacing: length / (points - 1).max(1) as f32,
+                    points: points as usize,
+                },
+                _ => Ribbon::None,
+            },
             emitters: definition
                 .emitters
                 .iter()
@@ -237,7 +264,12 @@ impl System {
     /// The most particles this system can have at once, which is how big a
     /// buffer it needs.
     pub fn capacity(&self) -> usize {
-        self.maxcount
+        match self.ribbon {
+            // Every particle brings a ribbon of its own, so the buffer has to
+            // hold a piece for each gap in each of them.
+            Ribbon::Trail { points, .. } => self.maxcount * points.saturating_sub(1),
+            _ => self.maxcount,
+        }
     }
 
     /// Lowers that cap, for a scene asking for more than it can afford.
@@ -252,17 +284,22 @@ impl System {
         &self.vertices
     }
 
-    /// Whether this system draws as one ribbon rather than loose quads.
+    /// Whether this system draws as ribbons rather than loose quads.
     pub fn is_rope(&self) -> bool {
-        self.rope
+        !matches!(self.ribbon, Ribbon::None)
     }
 
     /// How many four-vertex pieces the buffer holds.
     pub fn pieces(&self) -> usize {
-        if self.rope {
-            self.live.len().saturating_sub(1)
-        } else {
-            self.live.len()
+        match self.ribbon {
+            Ribbon::None => self.live.len(),
+            Ribbon::Chain => self.live.len().saturating_sub(1),
+            // A piece between each pair of places kept, for every particle.
+            Ribbon::Trail { .. } => self
+                .live
+                .iter()
+                .map(|p| p.trail.len().saturating_sub(1))
+                .sum(),
         }
     }
 
@@ -279,6 +316,7 @@ impl System {
         }
 
         let elapsed = self.elapsed;
+        let ribbon = self.ribbon;
         for particle in &mut self.live {
             particle.age += dt;
             for operator in &self.operators {
@@ -361,6 +399,23 @@ impl System {
                     | Operator::OscillatePosition { .. } => {}
                 }
             }
+            // Where it has been, kept after the operators have moved it so
+            // the path is the one that was actually walked.
+            if let Ribbon::Trail { spacing, points } = ribbon {
+                particle.since += dt;
+                if particle.since >= spacing {
+                    // A frame long enough to span several places can only
+                    // leave one: the ones in between were never walked.
+                    particle.since = match spacing > 0.0 {
+                        true => particle.since % spacing,
+                        false => 0.0,
+                    };
+                    if particle.trail.len() >= points {
+                        particle.trail.remove(0);
+                    }
+                    particle.trail.push(particle.position);
+                }
+            }
         }
         self.live.retain(|p| p.age < p.lifetime);
         self.write_vertices();
@@ -430,6 +485,15 @@ impl System {
         };
 
         Particle {
+            trail: match self.ribbon {
+                Ribbon::Trail { points, .. } => {
+                    let mut path = Vec::with_capacity(points);
+                    path.push(position);
+                    path
+                }
+                _ => Vec::new(),
+            },
+            since: 0.0,
             position,
             // Only six systems in the library set both, so which of the two
             // wins is nearly moot; adding them keeps either on its own right.
@@ -449,9 +513,10 @@ impl System {
     }
 
     fn write_vertices(&mut self) {
-        if self.rope {
-            self.write_rope();
-            return;
+        match self.ribbon {
+            Ribbon::Chain => return self.write_chain(),
+            Ribbon::Trail { .. } => return self.write_trails(),
+            Ribbon::None => {}
         }
         self.vertices.clear();
         self.vertices
@@ -510,13 +575,54 @@ impl System {
 }
 
 impl System {
+    /// A ribbon for each particle, threaded through where that one has been.
+    ///
+    /// Each piece carries the whole path's length and its own place in it, as
+    /// the chain's pieces carry theirs, so the shader lays the texture along
+    /// every trail the same way whatever else is alive.
+    fn write_trails(&mut self) {
+        self.vertices.clear();
+        self.vertices
+            .reserve(self.pieces() * VERTICES_PER_PARTICLE * FLOATS_PER_ROPE_VERTEX);
+        for particle in &self.live {
+            let alpha = particle.alpha * fade(&self.operators, particle.age, particle.lifetime);
+            let size =
+                particle.size * size_factor(&self.operators, particle.age / particle.lifetime);
+            let color = [
+                particle.color[0],
+                particle.color[1],
+                particle.color[2],
+                alpha,
+            ];
+            let length = particle.trail.len() as f32;
+            for (piece, pair) in particle.trail.windows(2).enumerate() {
+                let (start, end) = (pair[0], pair[1]);
+                for corner in CORNERS {
+                    self.vertices.extend_from_slice(&start);
+                    self.vertices.push(size);
+                    self.vertices.extend_from_slice(&end);
+                    self.vertices.push(length);
+                    // The control points: the piece's own ends, so it stays
+                    // straight, as the chain's pieces do.
+                    self.vertices.extend_from_slice(&start);
+                    self.vertices.push(piece as f32);
+                    self.vertices.extend_from_slice(&end);
+                    self.vertices.push(size);
+                    self.vertices.extend_from_slice(&color);
+                    self.vertices.extend_from_slice(&corner);
+                    self.vertices.extend_from_slice(&color);
+                }
+            }
+        }
+    }
+
     /// Writes the ribbon: one piece per pair of particles, each carrying the
     /// whole segment so the shader can interpolate across it.
     ///
     /// The control points a spline would bend through are set to the segment's
     /// own ends, which leaves every segment straight. Smoothing them is what
     /// the file's `subdivision` is for and is not done yet.
-    fn write_rope(&mut self) {
+    fn write_chain(&mut self) {
         self.vertices.clear();
         let pieces = self.pieces();
         self.vertices
@@ -1354,6 +1460,45 @@ mod tests {
         assert_eq!(s.count(), 1);
         assert_eq!(s.pieces(), 0);
         assert!(s.vertices().is_empty());
+    }
+
+    /// A rope trail keeps a path per particle: it stops growing at the count
+    /// the file states, and the buffer never outgrows what was reserved for it.
+    #[test]
+    fn a_rope_trail_keeps_a_bounded_path_per_particle() {
+        let mut s = system(
+            r#"{"maxcount":3,"renderer":[{"name":"ropetrail","length":0.2,"segments":5}],
+                "emitter":[{"name":"boxrandom","rate":60,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"velocityrandom","min":"0 100 0","max":"0 100 0"}],
+                "operator":[{"name":"movement"}]}"#,
+        );
+        // Four gaps across five places, for each of three particles.
+        assert_eq!(s.capacity(), 3 * 4);
+
+        run(&mut s, 2.0, 1.0 / 60.0);
+        assert_eq!(s.count(), 3);
+        for particle in &s.live {
+            assert_eq!(
+                particle.trail.len(),
+                5,
+                "the path should be full but capped"
+            );
+        }
+        assert_eq!(s.pieces(), s.capacity());
+        assert_eq!(
+            s.vertices().len(),
+            s.pieces() * VERTICES_PER_PARTICLE * FLOATS_PER_ROPE_VERTEX
+        );
+
+        // The path is where the particle has been, not where it is: rising at
+        // a hundred a second, its places stand apart along the way it came.
+        let oldest = s.live[0].trail[0];
+        let newest = *s.live[0].trail.last().unwrap();
+        assert!(
+            newest[1] > oldest[1],
+            "{newest:?} should be above {oldest:?}"
+        );
     }
 
     #[test]

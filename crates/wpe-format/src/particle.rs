@@ -280,6 +280,19 @@ pub enum Renderer {
         /// yet, so this only says how smooth it was meant to be.
         subdivision: u32,
     },
+    /// A ribbon per particle, threaded through where that particle has been
+    /// over the last `length` seconds.
+    ///
+    /// Not the same as [`Self::Rope`], which threads one ribbon through the
+    /// whole system, and not the same as [`Self::Trail`], which stretches a
+    /// quad along the velocity and so cannot bend: a falling star curves, and
+    /// only a path kept as it was walked curves with it.
+    RopeTrail {
+        /// Seconds of path the ribbon covers.
+        length: f32,
+        /// How many places along that path are kept.
+        points: u32,
+    },
     /// A quad stretched along the particle's velocity. The trail runs
     /// `length` times the particle's speed, kept between the two bounds.
     Trail {
@@ -494,6 +507,14 @@ impl ParticleSystem {
                 "sprite" => Renderer::Sprite,
                 "rope" => Renderer::Rope {
                     subdivision: num(r, "subdivision", 1.0).clamp(1.0, 64.0) as u32,
+                },
+                "ropetrail" => Renderer::RopeTrail {
+                    length: num(r, "length", 0.2).clamp(0.0, 10.0),
+                    // Four of the five systems in the library leave this out
+                    // and the fifth says sixteen. Eight points across a fifth
+                    // of a second is a smooth enough streak for a falling star
+                    // and cheap enough for a system of five hundred.
+                    points: num(r, "segments", 8.0).clamp(2.0, 48.0) as u32,
                 },
                 "spritetrail" => Renderer::Trail {
                     length: num(r, "length", 0.0),
@@ -1115,12 +1136,30 @@ mod rope_tests {
         assert_eq!(p.renderer, Renderer::Rope { subdivision: 1 });
     }
 
+    /// Four of the five in the library state no count, and the ribbon has to
+    /// have places to go through whatever they state.
     #[test]
-    fn a_rope_trail_is_still_something_else() {
+    fn a_rope_trail_keeps_places_along_its_path() {
         let json =
             br#"{"material":"m.json","renderer":[{"id":1,"name":"ropetrail","length":0.2}]}"#;
         let p = ParticleSystem::parse(json).unwrap();
-        assert_eq!(p.renderer, Renderer::Other("ropetrail".into()));
+        assert_eq!(
+            p.renderer,
+            Renderer::RopeTrail {
+                length: 0.2,
+                points: 8
+            }
+        );
+
+        let stated = br#"{"material":"m.json","renderer":[{"id":1,"name":"ropetrail",
+            "length":0.5,"segments":16,"subdivision":16}]}"#;
+        assert_eq!(
+            ParticleSystem::parse(stated).unwrap().renderer,
+            Renderer::RopeTrail {
+                length: 0.5,
+                points: 16
+            }
+        );
     }
 }
 
