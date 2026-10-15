@@ -7,6 +7,7 @@
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QLoggingCategory>
 #include <QQuickWindow>
 #include <QtWebEngineQuick>
 
@@ -16,6 +17,14 @@ int main(int argc, char *argv[])
     // does. Called after QGuiApplication is built, this aborts at startup
     // instead of failing quietly, so it stays the first line of the program.
     QtWebEngineQuick::initialize();
+
+    // A wallpaper is somebody else's JavaScript, and its console is its own
+    // business: one of the three here reports a WebGL complaint several
+    // hundred times a minute and would otherwise bury everything we say.
+    // Set before the application is built, so QT_LOGGING_RULES still wins
+    // and `QT_LOGGING_RULES=js=true` brings the messages back for anyone
+    // debugging a wallpaper.
+    QLoggingCategory::setFilterRules(QStringLiteral("js=false"));
 
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wallflux"));

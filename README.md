@@ -46,8 +46,10 @@ And the tests, which need Qt's Test module:
 
     ctest --test-dir build --output-on-failure
 
-Qt here logs through systemd rather than to the terminal, so WallFlux's own
-messages are read with `journalctl --user -t wallflux`.
+Qt prints its messages to the terminal when there is one and sends them to
+the journal when there is not, so a run started from a desktop file is read
+with `journalctl --user -t wallflux`. A wallpaper's own JavaScript console is
+silenced by default; `QT_LOGGING_RULES=js=true` brings it back.
 
 ## Thanks
 

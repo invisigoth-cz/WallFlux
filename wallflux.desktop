@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=WallFlux
+GenericName=Live Wallpaper
+Comment=Plays the Wallpaper Engine wallpapers you already own
+Exec=wallflux
+Terminal=false
+Categories=Qt;Utility;
+Keywords=wallpaper;background;desktop;

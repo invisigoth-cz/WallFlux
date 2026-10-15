@@ -81,6 +81,14 @@ if(Qt6Test_FOUND)
     add_test(NAME wallpapercore COMMAND tst_wallpapercore)
 endif()
 
+include(GNUInstallDirs)
+
 install(TARGETS wallflux
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Without this on the system, the desktop portal refuses to register the
+# application and says so on every start.
+install(FILES wallflux.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
