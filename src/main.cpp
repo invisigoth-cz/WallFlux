@@ -3,8 +3,11 @@
 
 #include "wallpapercore.h"
 
+#include <LayerShellQt/Window>
+
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQuickWindow>
 #include <QtWebEngineQuick>
 
 int main(int argc, char *argv[])
@@ -36,6 +39,35 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(1); },
         Qt::QueuedConnection);
     engine.loadFromModule("WallFlux", "Main");
+
+    const QList<QObject *> roots = engine.rootObjects();
+    auto *window = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.first());
+    if (!window) {
+        qWarning("wallflux: the QML did not give us a window to show");
+        return 1;
+    }
+
+    // Asked for while the window is still only a QWindow: once it has reached
+    // the compositor it is an ordinary surface and cannot be made into a
+    // layer-shell one. This is why Main.qml leaves the window hidden.
+    if (LayerShellQt::Window *layer = LayerShellQt::Window::get(window)) {
+        using Layer = LayerShellQt::Window;
+        layer->setLayer(Layer::LayerBackground);
+        // Anchored to all four edges, which is what makes the compositor give
+        // it the whole screen.
+        layer->setAnchors(Layer::Anchors(Layer::AnchorTop | Layer::AnchorBottom
+                                        | Layer::AnchorLeft | Layer::AnchorRight));
+        // A wallpaper reserves no space of its own and never takes the
+        // keyboard, so panels keep their room and focus never lands here.
+        layer->setExclusiveZone(-1);
+        layer->setKeyboardInteractivity(Layer::KeyboardInteractivityNone);
+        layer->setActivateOnShow(false);
+        // The compositor reads the scope as the surface's role; KWin sees
+        // this one as a desktop rather than as a panel.
+        layer->setScope(QStringLiteral("desktop"));
+    }
+
+    window->show();
 
     return app.exec();
 }

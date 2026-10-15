@@ -17,6 +17,10 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick WebEngineQuick)
 # should not have to have it.
 find_package(Qt6 6.5 QUIET COMPONENTS Test)
 
+# Qt speaks no layer-shell of its own, so this is what puts the window in the
+# compositor's background layer. KDE ships it; so do the wlroots distributions.
+find_package(LayerShellQt REQUIRED)
+
 find_package(ZLIB REQUIRED)
 
 # lz4 ships no CMake config on Arch, only a pkg-config file, so it comes in
@@ -54,6 +58,7 @@ qt_add_qml_module(wallflux
 target_include_directories(wallflux PRIVATE src)
 
 target_link_libraries(wallflux PRIVATE
+    LayerShellQt::Interface
     Qt6::Core
     Qt6::Gui
     Qt6::Qml

@@ -30,6 +30,9 @@ engine to maintain forever. That work is kept on the branch
 
 - KDE Plasma 6 on Wayland — developed on Arch (CachyOS)
 - Qt 6.5 or newer, including QtWebEngine
+- layer-shell-qt, for its `org.kde.layershell` QML module. Needed at run
+  time, not at build time: without it the window still opens, but as an
+  ordinary one rather than as a wallpaper.
 - zlib and lz4
 - CMake 3.21 or newer, and a C++17 compiler
 
