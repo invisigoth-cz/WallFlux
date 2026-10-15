@@ -43,8 +43,8 @@ engine to maintain forever. That work is kept on the branch
 
 WallFlux is inspired by [linux-wallpaperengine][lwe] by Almamu, which has been
 playing Wallpaper Engine wallpapers on Linux for years and is the reason this
-seemed worth attempting at all. It is a separate project under the GPL-3.0;
-WallFlux is MIT and takes no code from it.
+seemed worth attempting at all. It is a separate project, under the same
+licence as this one, and nothing here is taken from it so far.
 
 Wallpaper Engine is a product of Wallpaper Engine Team and is not affiliated
 with this project.
@@ -53,4 +53,5 @@ with this project.
 
 ## License
 
-MIT
+GPL-3.0-or-later. WallFlux is free software: use it, change it and pass it on,
+as long as what you pass on stays free on the same terms. See [LICENSE](LICENSE).
