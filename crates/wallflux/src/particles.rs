@@ -101,6 +101,28 @@ impl Default for Start {
     }
 }
 
+/// The line new particles are strung along, and how many of them cross it.
+#[derive(Clone, Copy)]
+struct Line {
+    from: [f32; 3],
+    to: [f32; 3],
+    count: u32,
+}
+
+impl Line {
+    /// How far along the line the particle born `nth` belongs.
+    ///
+    /// The walk turns round at each end rather than jumping back, so a ribbon
+    /// threaded through these runs out to the far point and back along itself.
+    fn at(&self, nth: u32) -> [f32; 3] {
+        let last = self.count - 1;
+        let step = nth % (2 * last);
+        let step = if step <= last { step } else { 2 * last - step };
+        let t = step as f32 / last as f32;
+        std::array::from_fn(|i| self.from[i] + (self.to[i] - self.from[i]) * t)
+    }
+}
+
 pub struct System {
     /// Threads every particle onto one ribbon instead of drawing each as its
     /// own quad.
@@ -116,6 +138,11 @@ pub struct System {
     elapsed: f32,
     rng: Rng,
     vertices: Vec<f32>,
+    /// Set where an initializer strings particles along a line.
+    line: Option<Line>,
+    /// Particles born since the system started, which is the only thing that
+    /// says where the next one goes on that line.
+    born: u32,
 }
 
 impl System {
@@ -133,8 +160,30 @@ impl System {
                 // Carried as a starting value but nothing turns it yet: the
                 // operator that spins a particle is `angularmovement`.
                 Initializer::AngularVelocity(r) => start.angular = r,
+                // Handled below, where the control points it needs are.
+                Initializer::AlongControlPoints { .. } => {}
             }
         }
+        // The line runs between the first two control points. A system naming
+        // the step without having them keeps the emitter's own placing.
+        let line = definition
+            .initializers
+            .iter()
+            .find_map(|i| match i {
+                Initializer::AlongControlPoints { count } => Some(*count),
+                _ => None,
+            })
+            .zip(
+                definition
+                    .control_points
+                    .first()
+                    .zip(definition.control_points.get(1)),
+            )
+            .map(|(count, (from, to))| Line {
+                from: *from,
+                to: *to,
+                count,
+            });
         Self {
             rope: matches!(
                 definition.renderer,
@@ -155,6 +204,8 @@ impl System {
             elapsed: 0.0,
             rng: Rng::seeded(seed),
             vertices: Vec::new(),
+            line,
+            born: 0,
         }
     }
 
@@ -246,6 +297,27 @@ impl System {
                             particle.rotation[axis] += particle.spin[axis] * dt;
                         }
                     }
+                    // ponytail: the pull falls off in a straight line to
+                    // nothing at the reach the file states, and a particle
+                    // outside that reach is left alone. The file says nothing
+                    // about the shape of it; this is the shape that keeps the
+                    // push local, which is what the wallpapers using it want.
+                    Operator::Attract {
+                        toward,
+                        strength,
+                        reach,
+                    } => {
+                        let away: [f32; 3] =
+                            std::array::from_fn(|i| particle.position[i] - toward[i]);
+                        let distance =
+                            (away[0] * away[0] + away[1] * away[1] + away[2] * away[2]).sqrt();
+                        if distance > f32::EPSILON && distance < *reach {
+                            let force = strength * (1.0 - distance / reach) * dt;
+                            for (axis, away) in away.iter().enumerate() {
+                                particle.velocity[axis] -= away / distance * force;
+                            }
+                        }
+                    }
                     // ponytail: a vortex carries the particle round rather
                     // than pulling it in, for the same reason turbulence
                     // does -- a speed the file states stays the speed.
@@ -300,6 +372,18 @@ impl System {
                         * emitter.distance.max
                         * emitter.directions[i].signum().abs()
             }),
+        };
+
+        // The emitter's own spread stays, as the crackle along the bolt: the
+        // discharge preset asks for a sphere of 64 across a line of 724, which
+        // would be a setting doing nothing if the line replaced it outright.
+        let position = match self.line {
+            Some(line) => {
+                let along = line.at(self.born);
+                self.born = self.born.wrapping_add(1);
+                std::array::from_fn(|i| position[i] + along[i])
+            }
+            None => position,
         };
 
         let speed = self.rng.range(emitter.speed);
@@ -649,6 +733,50 @@ mod tests {
     fn system(json: &str) -> System {
         let definition = ParticleSystem::parse(json.as_bytes()).unwrap();
         System::new(&definition, 12345)
+    }
+
+    /// Out to the far point and back the way it came. A walk that jumped back
+    /// instead would draw a ribbon across the whole bolt on every lap.
+    #[test]
+    fn the_walk_along_a_line_turns_round_at_each_end() {
+        let line = Line {
+            from: [0.0; 3],
+            to: [9.0, 0.0, 0.0],
+            count: 10,
+        };
+        let walk: Vec<f32> = (0..20).map(|n| line.at(n)[0]).collect();
+        assert_eq!(
+            walk,
+            [
+                0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0,
+                2.0, 1.0, 0.0, 1.0,
+            ]
+        );
+    }
+
+    /// The emitter's own spread is the crackle along the bolt, so the line
+    /// moves a particle rather than replacing where it was put.
+    #[test]
+    fn a_line_moves_the_particle_the_emitter_placed() {
+        let mut s = system(
+            r#"{"material":"m.json","maxcount":64,
+                "controlpoint":[{"id":0},{"id":1,"offset":"512 512 0"}],
+                "emitter":[{"name":"sphererandom","rate":100,"distancemin":64,
+                            "distancemax":64}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"mapsequencebetweencontrolpoints","count":10,
+                                "limitbehavior":"mirror"}]}"#,
+        );
+        s.advance(0.1);
+        assert_eq!(s.live.len(), 10);
+        // Nothing moves them after they are born, so each sits exactly the
+        // emitter's own 64 away from the point on the line it was given.
+        let far = |p: &Particle, from: [f32; 3]| {
+            let d: [f32; 3] = std::array::from_fn(|i| p.position[i] - from[i]);
+            (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+        };
+        assert!((far(&s.live[0], [0.0; 3]) - 64.0).abs() < 0.01);
+        assert!((far(&s.live[9], [512.0, 512.0, 0.0]) - 64.0).abs() < 0.01);
     }
 
     /// Steps a system the way a renderer would rather than in one jump, since

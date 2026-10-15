@@ -72,6 +72,16 @@ pub enum Initializer {
     /// A direction taken from a noise field rather than drawn at random, so
     /// particles that start near each other set off together.
     TurbulentVelocity(Turbulent),
+    /// Strings each new particle onto the line between the system's first two
+    /// control points instead of leaving it where the emitter put it.
+    ///
+    /// Particles are placed in the order they are born, `count` of them to
+    /// cross the line, and then back the way they came. Threaded onto a ribbon
+    /// in age order, that is a bolt of lightning: every system in the library
+    /// using this is the same discharge preset.
+    AlongControlPoints {
+        count: u32,
+    },
 }
 
 /// A noise field a step reads a direction out of.
@@ -151,6 +161,13 @@ pub enum Operator {
     },
     /// Swirls a particle about the system's origin.
     Vortex(Vortex),
+    /// Pulls a particle towards a fixed point, or pushes it away where the
+    /// strength is negative. Nothing past `reach` feels it.
+    Attract {
+        toward: [f32; 3],
+        strength: f32,
+        reach: f32,
+    },
     /// Beats a particle's alpha down and back up again.
     OscillateAlpha(Oscillation),
     /// Sways a particle to and fro without moving where it came from.
@@ -222,6 +239,10 @@ pub struct ParticleSystem {
     pub operators: Vec<Operator>,
     pub renderer: Renderer,
     pub animation: Option<Animation>,
+    /// Points a step may aim at, in the system's own space, in the order the
+    /// file lists them. Every system carries eight whether it uses them or
+    /// not, so most of these are the origin.
+    pub control_points: Vec<[f32; 3]>,
     /// Named steps this reader does not handle yet.
     pub unsupported: Vec<String>,
 }
@@ -270,12 +291,44 @@ impl ParticleSystem {
                 "turbulentvelocityrandom" => Initializer::TurbulentVelocity(turbulent(step, 0.1)),
                 "rotationrandom" => Initializer::Rotation(triple(0.0)),
                 "angularvelocityrandom" => Initializer::AngularVelocity(triple(0.0)),
+                // Mirroring is the only way back from the far end that the
+                // library asks for, and the others would run the wrong way
+                // rather than not at all, so they are reported instead.
+                "mapsequencebetweencontrolpoints"
+                    if step.get("limitbehavior").and_then(Value::as_str) == Some("mirror") =>
+                {
+                    Initializer::AlongControlPoints {
+                        count: num(step, "count", 2.0).clamp(2.0, 4096.0) as u32,
+                    }
+                }
                 other => {
                     unsupported.push(format!("initializer {other}"));
                     continue;
                 }
             });
         }
+
+        // Read before the operators, because one of them aims at a control
+        // point and whether that point follows the mouse decides whether it
+        // can be applied at all.
+        //
+        // Two ways of saying the same thing: older files set `locktopointer`,
+        // newer ones set the bottom bit of `flags`, and most of the files that
+        // set the bit leave the older field out. Reading only the field misses
+        // forty of the forty-two in the library -- including the system called
+        // "Mouse interactive wildfire" -- and a mouse's push applied where the
+        // mouse is not flattens whatever it lands on.
+        let points: Vec<([f32; 3], bool)> = array(&root, "controlpoint")
+            .iter()
+            .map(|point| {
+                let flagged = num(point, "flags", 0.0) as u32 & FOLLOWS_POINTER != 0;
+                let said = point
+                    .get("locktopointer")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                (vector(point, "offset", [0.0; 3]), flagged || said)
+            })
+            .collect();
 
         for step in array(&root, "operator") {
             operators.push(match name_of(step) {
@@ -303,6 +356,33 @@ impl ParticleSystem {
                     from: vector(step, "startvalue", [1.0; 3]),
                     to: vector(step, "endvalue", [1.0; 3]),
                 },
+                "controlpointattract" => {
+                    let which = num(step, "controlpoint", 0.0).max(0.0) as usize;
+                    let Some(&(at, pointer)) = points.get(which) else {
+                        unsupported
+                            .push("operator controlpointattract has no such control point".into());
+                        continue;
+                    };
+                    // The wallpaper hangs this point on the mouse, and there is
+                    // no mouse here yet. Pulling towards where it rests instead
+                    // would carve a hole through the middle of the object that
+                    // the wallpaper never asked for.
+                    if pointer {
+                        unsupported.push("operator controlpointattract follows the pointer".into());
+                        continue;
+                    }
+                    let reach = num(step, "threshold", 0.0);
+                    if reach <= 0.0 {
+                        unsupported.push("operator controlpointattract states no reach".into());
+                        continue;
+                    }
+                    let origin = vector(step, "origin", [0.0; 3]);
+                    Operator::Attract {
+                        toward: std::array::from_fn(|i| at[i] + origin[i]),
+                        strength: num(step, "scale", 0.0),
+                        reach,
+                    }
+                }
                 "vortex" => Operator::Vortex(Vortex {
                     axis: vector(step, "axis", [0.0, 0.0, 1.0]),
                     distance: Range {
@@ -372,6 +452,7 @@ impl ParticleSystem {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned(),
+            control_points: points.iter().map(|(at, _)| *at).collect(),
             maxcount: num(&root, "maxcount", 0.0).clamp(0.0, MAX_PARTICLES as f32) as usize,
             starttime: num(&root, "starttime", 0.0),
             emitters,
@@ -383,6 +464,9 @@ impl ParticleSystem {
         })
     }
 }
+
+/// The bit of a control point's `flags` that hangs it on the mouse.
+const FOLLOWS_POINTER: u32 = 1;
 
 /// Cap on what a file may ask to be allocated for. The largest system in the
 /// library asks for 30 000; this leaves room above that without letting a
@@ -647,9 +731,106 @@ mod tests {
             [
                 "emitter newfangled",
                 "initializer mapsequencearoundcontrolpoint",
-                "operator controlpointattract"
+                "operator controlpointattract has no such control point"
             ]
         );
+    }
+
+    #[test]
+    fn a_sequence_between_control_points_reads_its_line() {
+        let json = br#"{
+            "material": "m.json", "maxcount": 10,
+            "controlpoint": [{"id":0},{"id":1,"offset":"512 512 0"}],
+            "initializer": [{"name":"mapsequencebetweencontrolpoints","count":10,
+                             "limitbehavior":"mirror"}]
+        }"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(
+            p.initializers,
+            [Initializer::AlongControlPoints { count: 10 }]
+        );
+        assert_eq!(p.control_points, [[0.0; 3], [512.0, 512.0, 0.0]]);
+        assert!(p.unsupported.is_empty());
+    }
+
+    /// Any other way back from the far end would run the sequence wrongly
+    /// rather than not at all, so it is reported instead of guessed at.
+    #[test]
+    fn a_sequence_that_does_not_mirror_is_reported() {
+        let json = br#"{
+            "material": "m.json", "maxcount": 10,
+            "controlpoint": [{"id":0},{"id":1,"offset":"512 512 0"}],
+            "initializer": [{"name":"mapsequencebetweencontrolpoints","count":10,
+                             "limitbehavior":"repeat"}]
+        }"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert!(p.initializers.is_empty());
+        assert_eq!(
+            p.unsupported,
+            ["initializer mapsequencebetweencontrolpoints"]
+        );
+    }
+
+    /// All but two of the forty-two uses in the library hang their point on
+    /// the mouse, and most say so only in the flags. Pushing from where the
+    /// mouse is not flattens whatever the push lands on.
+    #[test]
+    fn attracting_to_a_point_the_mouse_carries_is_reported() {
+        for point in [
+            r#"{"id":1,"offset":"0 0 0","locktopointer":true}"#,
+            r#"{"id":1,"offset":"0 0 0","flags":1}"#,
+            r#"{"id":1,"offset":"0 0 0","flags":3}"#,
+        ] {
+            let json = format!(
+                r#"{{
+                    "material": "m.json", "maxcount": 10,
+                    "controlpoint": [{{"id":0,"offset":"0 0 0"}}, {point}],
+                    "operator": [{{"name":"controlpointattract","controlpoint":1,
+                                  "scale":-10000,"threshold":128}}]
+                }}"#
+            );
+            let p = ParticleSystem::parse(json.as_bytes()).unwrap();
+            assert!(p.operators.is_empty(), "{point} was applied");
+            assert_eq!(
+                p.unsupported,
+                ["operator controlpointattract follows the pointer"]
+            );
+        }
+    }
+
+    /// Bit two says the author moved the point, which is not the mouse.
+    #[test]
+    fn a_point_the_author_placed_is_not_the_mouse() {
+        let json = br#"{
+            "material": "m.json", "maxcount": 10,
+            "controlpoint": [{"id":0},{"id":1,"flags":2,"offset":"512 512 0"}],
+            "operator": [{"name":"controlpointattract","controlpoint":1,
+                          "scale":100,"threshold":128}]
+        }"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(p.operators.len(), 1);
+        assert!(p.unsupported.is_empty());
+    }
+
+    #[test]
+    fn attracting_to_a_point_that_stays_put_reads_it() {
+        let json = br#"{
+            "material": "m.json", "maxcount": 10,
+            "controlpoint": [{"id":0,"offset":"0 0 0"},
+                             {"id":1,"offset":"100 200 0"}],
+            "operator": [{"name":"controlpointattract","controlpoint":1,
+                          "origin":"0 50 0","scale":-10000,"threshold":128}]
+        }"#;
+        let p = ParticleSystem::parse(json).unwrap();
+        assert_eq!(
+            p.operators,
+            [Operator::Attract {
+                toward: [100.0, 250.0, 0.0],
+                strength: -10000.0,
+                reach: 128.0
+            }]
+        );
+        assert!(p.unsupported.is_empty());
     }
 
     #[test]
