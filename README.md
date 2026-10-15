@@ -1,20 +1,55 @@
 # WallFlux
 
-Live wallpapers for Linux. Plays Wallpaper Engine wallpapers on Wayland
-compositors that support `wlr-layer-shell` (KWin, Hyprland, sway, niri, labwc).
+Live wallpapers for Linux. Plays the Wallpaper Engine wallpapers you already
+own, on KDE Plasma 6 under Wayland.
 
 A copy of Wallpaper Engine on Steam is required: WallFlux reads the wallpapers
-you already own and ships no assets of its own.
+from your Steam workshop folder and ships no assets of its own.
 
 ## Status
 
-Early, and not yet a usable program. Reads Wallpaper Engine's package and
-texture containers, translates each wallpaper's own GLSL shaders and draws its
-scene. Particle systems and video wallpapers come next.
+Early, and not yet a usable program. It builds and opens an empty full-screen
+window. Finding the wallpapers in the Steam workshop folder is the next step,
+and nothing plays yet.
+
+## How it works
+
+A Wallpaper Engine wallpaper of the web kind is HTML, CSS and JavaScript, and
+one of the video kind is an ordinary video file. A desktop already knows how
+to draw both, so WallFlux does not draw them itself: it hands web wallpapers
+to QtWebEngine, which is Chromium, and will hand video wallpapers to
+QtMultimedia. Web wallpapers come first, video after.
+
+That is a deliberate change of direction. WallFlux began as a renderer of its
+own, written against OpenGL ES, that read Wallpaper Engine's packages and
+translated each wallpaper's shaders. It worked, but it meant owning a graphics
+engine to maintain forever. That work is kept on the branch
+`zaloha-puvodniho-pokusu-o-vlastni-engine` rather than thrown away.
+
+## Requirements
+
+- KDE Plasma 6 on Wayland — developed on Arch (CachyOS)
+- Qt 6.5 or newer, including QtWebEngine
+- zlib and lz4
+- CMake 3.21 or newer, and a C++17 compiler
 
 ## Build
 
-    cargo build --release
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
+    ./build/wallflux
+
+## Thanks
+
+WallFlux is inspired by [linux-wallpaperengine][lwe] by Almamu, which has been
+playing Wallpaper Engine wallpapers on Linux for years and is the reason this
+seemed worth attempting at all. It is a separate project under the GPL-3.0;
+WallFlux is MIT and takes no code from it.
+
+Wallpaper Engine is a product of Wallpaper Engine Team and is not affiliated
+with this project.
+
+[lwe]: https://github.com/Almamu/linux-wallpaperengine
 
 ## License
 
