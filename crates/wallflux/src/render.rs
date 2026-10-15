@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use glow::HasContext;
 use wpe_format::particle::Renderer as ParticleRenderer;
+use wpe_format::particle::Spectrum;
 use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
@@ -277,7 +278,7 @@ pub struct Scene {
     /// What the speakers are playing, as the bands a wallpaper asks for.
     /// Silence until a caller says otherwise, which is what a tool drawing
     /// to a file wants: the same wallpaper twice gives the same picture.
-    sound: [f32; wpe_format::particle::AUDIO_BANDS],
+    sound: Spectrum,
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
@@ -543,7 +544,7 @@ impl Scene {
             canvas: None,
             buffers,
             simulated: 0.0,
-            sound: particles::QUIET,
+            sound: Spectrum::SILENT,
             scene_size,
             skipped,
         })
@@ -552,7 +553,7 @@ impl Scene {
     /// Hands the scene what the speakers are playing, which the steps that
     /// follow the sound read on the next frame. A caller that never says
     /// anything leaves the scene running as it would in a silent room.
-    pub fn hear(&mut self, sound: [f32; wpe_format::particle::AUDIO_BANDS]) {
+    pub fn hear(&mut self, sound: Spectrum) {
         self.sound = sound;
     }
 
@@ -634,6 +635,7 @@ impl Scene {
                             output,
                             screen,
                             &projection,
+                            &self.sound,
                         ),
                         _ => {
                             for pass in &object.passes {
@@ -646,6 +648,7 @@ impl Scene {
                                     time,
                                     &self.white,
                                     &[],
+                                    &self.sound,
                                     pass.blending,
                                 );
                             }
@@ -653,7 +656,16 @@ impl Scene {
                     }
                 },
                 (Drawing::Particles(system), Some(buffers)) => unsafe {
-                    draw_particles(gl, object, system, buffers, &mvp, time, &self.white);
+                    draw_particles(
+                        gl,
+                        object,
+                        system,
+                        buffers,
+                        &mvp,
+                        time,
+                        &self.white,
+                        &self.sound,
+                    );
                 },
                 // Unreachable: the buffers are allocated whenever a particle
                 // system survived loading.
@@ -864,6 +876,7 @@ unsafe fn draw_through_effects(
     output: (u32, u32),
     screen: Option<glow::Framebuffer>,
     projection: &Matrix,
+    sound: &Spectrum,
 ) {
     let used = object.on_screen(projection, output, canvas.size);
     // The object fills the same fraction of every buffer, whatever that
@@ -906,7 +919,17 @@ unsafe fn draw_through_effects(
             // object's own alpha into its colour, and the effect that comes
             // after would fold it in a second time, which darkens everything
             // that is not fully opaque.
-            draw_pass(gl, pass, object, &FILL, time, white, &[], Blending::Opaque);
+            draw_pass(
+                gl,
+                pass,
+                object,
+                &FILL,
+                time,
+                white,
+                &[],
+                sound,
+                Blending::Opaque,
+            );
         }
 
         for step in &object.effects {
@@ -958,7 +981,17 @@ unsafe fn draw_through_effects(
                     gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
                     gl.viewport(0, 0, output.0 as i32, output.1 as i32);
                     write_quad(gl, buffer, covered(read), 0.5);
-                    draw_pass(gl, pass, object, mvp, time, white, &bound, pass.blending);
+                    draw_pass(
+                        gl,
+                        pass,
+                        object,
+                        mvp,
+                        time,
+                        white,
+                        &bound,
+                        sound,
+                        pass.blending,
+                    );
                 }
                 // A pass in the middle of a chain covers its whole buffer and
                 // most of them ignore the matrix entirely, so the quad is
@@ -974,6 +1007,7 @@ unsafe fn draw_through_effects(
                         time,
                         white,
                         &bound,
+                        sound,
                         Blending::Opaque,
                     );
                 }
@@ -1162,16 +1196,18 @@ unsafe fn draw_pass(
     time: f32,
     white: &Texture,
     bound: &[(usize, &Texture)],
+    sound: &Spectrum,
     blending: Blending,
 ) {
     unsafe {
-        set_common(gl, pass, object, mvp, time, white, bound);
+        set_common(gl, pass, object, mvp, time, white, bound, sound);
         blending.apply(gl);
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
 }
 
 /// Uploads a system's particles and draws them in one call.
+#[allow(clippy::too_many_arguments)]
 unsafe fn draw_particles(
     gl: &glow::Context,
     object: &Object,
@@ -1180,6 +1216,7 @@ unsafe fn draw_particles(
     mvp: &Matrix,
     time: f32,
     white: &Texture,
+    sound: &Spectrum,
 ) {
     let vertices = system.vertices();
     if vertices.is_empty() {
@@ -1199,7 +1236,7 @@ unsafe fn draw_particles(
         gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes);
 
         for pass in &object.passes {
-            set_common(gl, pass, object, mvp, time, white, &[]);
+            set_common(gl, pass, object, mvp, time, white, &[], sound);
             pass.blending.apply(gl);
             // A flat wallpaper's particles face the screen, so the frame the
             // shader turns a particle in is the scene's own axes.
@@ -1253,6 +1290,7 @@ unsafe fn draw_particles(
 }
 
 /// The uniforms every pass is given, whichever way it is drawn.
+#[allow(clippy::too_many_arguments)]
 unsafe fn set_common(
     gl: &glow::Context,
     pass: &Pass,
@@ -1261,9 +1299,16 @@ unsafe fn set_common(
     time: f32,
     white: &Texture,
     bound: &[(usize, &Texture)],
+    sound: &Spectrum,
 ) {
     unsafe {
         gl.use_program(Some(pass.program));
+
+        // A shader that answers to music declares the spectrum itself, behind
+        // the same switch that turns its audio response on, so a pass that
+        // wants none of this has no such uniform and is passed over.
+        set_floats(gl, pass.program, "g_AudioSpectrum16Left", &sound.left);
+        set_floats(gl, pass.program, "g_AudioSpectrum16Right", &sound.right);
 
         let still = pass.film.as_ref().map(|film| (film, film.at(time)));
         // A pass of an effect is handed buffers at units its own material never
@@ -1987,6 +2032,21 @@ fn set_vec4(gl: &glow::Context, p: glow::Program, name: &str, v: [f32; 4]) {
     unsafe {
         if let Some(l) = gl.get_uniform_location(p, name) {
             gl.uniform_4_f32(Some(&l), v[0], v[1], v[2], v[3]);
+        }
+    }
+}
+
+/// Fills an array uniform, such as the spectrum a shader listens to.
+///
+/// A driver may name the array by its first element rather than by the array,
+/// so both spellings are tried before giving up on it.
+fn set_floats(gl: &glow::Context, p: glow::Program, name: &str, values: &[f32]) {
+    unsafe {
+        let found = gl
+            .get_uniform_location(p, name)
+            .or_else(|| gl.get_uniform_location(p, &format!("{name}[0]")));
+        if let Some(l) = found {
+            gl.uniform_1_f32_slice(Some(&l), values);
         }
     }
 }

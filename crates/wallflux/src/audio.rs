@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use libpulse_binding::sample::{Format, Spec};
 use libpulse_binding::stream::Direction;
 use libpulse_simple_binding::Simple;
-use wpe_format::particle::AUDIO_BANDS;
+use wpe_format::particle::{AUDIO_BANDS, Spectrum};
 
 /// Samples read at a time. At 44 100 Hz this is 23 ms, so the bands are
 /// renewed about forty times a second, which is faster than the frames that
@@ -56,7 +56,7 @@ const LOUD: f32 = 0.02 / (1.2 * 1.2);
 
 /// The sound the speakers are playing, split into bands.
 pub struct Audio {
-    bands: &'static Mutex<[f32; AUDIO_BANDS]>,
+    bands: &'static Mutex<Spectrum>,
     listening: &'static AtomicBool,
 }
 
@@ -66,8 +66,7 @@ impl Audio {
     pub fn start() -> Option<Self> {
         // Leaked rather than shared through an Arc: there is one of these for
         // the life of the process, and the thread outlives any handle to it.
-        let bands: &'static Mutex<[f32; AUDIO_BANDS]> =
-            Box::leak(Box::new(Mutex::new([0.0; AUDIO_BANDS])));
+        let bands: &'static Mutex<Spectrum> = Box::leak(Box::new(Mutex::new(Spectrum::SILENT)));
         let listening: &'static AtomicBool = Box::leak(Box::new(AtomicBool::new(true)));
 
         let stream = connect()?;
@@ -78,20 +77,23 @@ impl Audio {
         Some(Self { bands, listening })
     }
 
-    /// The loudness of each band, zero to one. All zeroes where the sound
-    /// stopped being readable, which is silence as far as a wallpaper cares.
-    pub fn bands(&self) -> [f32; AUDIO_BANDS] {
+    /// The loudness of each band in each ear, zero to one. Silence where the
+    /// sound stopped being readable, which is what a wallpaper reads as a
+    /// quiet room.
+    pub fn bands(&self) -> Spectrum {
         match self.listening.load(Ordering::Relaxed) {
-            true => self.bands.lock().map(|b| *b).unwrap_or([0.0; AUDIO_BANDS]),
-            false => [0.0; AUDIO_BANDS],
+            true => self.bands.lock().map(|b| *b).unwrap_or(Spectrum::SILENT),
+            false => Spectrum::SILENT,
         }
     }
 }
 
 fn connect() -> Option<Simple> {
+    // Both ears: the stock shaders ask for one channel or the other, and a
+    // wallpaper that pans a sound from side to side means it.
     let spec = Spec {
         format: Format::F32le,
-        channels: 1,
+        channels: 2,
         rate: RATE,
     };
     Simple::new(
@@ -153,12 +155,48 @@ impl Default for Meter {
     }
 }
 
-fn listen(stream: Simple, bands: &Mutex<[f32; AUDIO_BANDS]>, listening: &AtomicBool) {
-    let mut meter = Meter::new();
-    let mut fresh = [0f32; READ];
+/// A meter for each ear, fed from the woven pair of channels a stream carries.
+pub struct Ears {
+    left: Meter,
+    right: Meter,
+}
+
+impl Ears {
+    pub fn new() -> Self {
+        Self {
+            left: Meter::new(),
+            right: Meter::new(),
+        }
+    }
+
+    /// Takes `READ` frames of two woven channels and gives both sets of bands.
+    pub fn feed(&mut self, woven: &[f32; READ * 2]) -> Spectrum {
+        let mut left = [0f32; READ];
+        let mut right = [0f32; READ];
+        for (at, frame) in woven.as_chunks::<2>().0.iter().enumerate() {
+            left[at] = frame[0];
+            right[at] = frame[1];
+        }
+        Spectrum {
+            left: self.left.feed(&left),
+            right: self.right.feed(&right),
+        }
+    }
+}
+
+impl Default for Ears {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn listen(stream: Simple, bands: &Mutex<Spectrum>, listening: &AtomicBool) {
+    let mut ears = Ears::new();
+    // The two channels arrive woven together, a sample of each in turn.
+    let mut woven = [0f32; READ * 2];
     loop {
         let raw: &mut [u8] = unsafe {
-            std::slice::from_raw_parts_mut(fresh.as_mut_ptr() as *mut u8, size_of_val(&fresh))
+            std::slice::from_raw_parts_mut(woven.as_mut_ptr() as *mut u8, size_of_val(&woven))
         };
         if stream.read(raw).is_err() {
             // The server went away or the device changed under us. Saying so
@@ -166,7 +204,7 @@ fn listen(stream: Simple, bands: &Mutex<[f32; AUDIO_BANDS]>, listening: &AtomicB
             listening.store(false, Ordering::Relaxed);
             return;
         }
-        let measured = meter.feed(&fresh);
+        let measured = ears.feed(&woven);
         if let Ok(mut out) = bands.lock() {
             *out = measured;
         }

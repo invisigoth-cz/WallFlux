@@ -16,12 +16,9 @@
 //! instead would let rounding pile up over a particle's whole life.
 
 use wpe_format::particle::{
-    AUDIO_BANDS, Animation, AudioResponse, Emitter, Initializer, Operator, Oscillation,
-    ParticleSystem, Range, Shape, Turbulent, Vortex,
+    Animation, AudioResponse, Emitter, Initializer, Operator, Oscillation, ParticleSystem, Range,
+    Shape, Spectrum, Turbulent, Vortex,
 };
-
-/// Silence, for a caller with nothing to listen to.
-pub const QUIET: [f32; AUDIO_BANDS] = [0.0; AUDIO_BANDS];
 
 /// What a step's own strength is multiplied by, given what is playing.
 ///
@@ -33,16 +30,14 @@ pub const QUIET: [f32; AUDIO_BANDS] = [0.0; AUDIO_BANDS];
 /// exponent shapes it before it is mapped rather than after. The file states
 /// neither; these are the readings that leave both settings doing what their
 /// names say.
-fn loudness(audio: Option<AudioResponse>, sound: &[f32; AUDIO_BANDS]) -> f32 {
+fn loudness(audio: Option<AudioResponse>, sound: &Spectrum) -> f32 {
     let Some(audio) = audio else {
         return 1.0;
     };
-    let (first, last) = audio.bands;
-    let heard = match sound.get(first..=last) {
-        Some(bands) if !bands.is_empty() => bands.iter().sum::<f32>() / bands.len() as f32,
-        _ => 0.0,
-    };
-    let heard = heard.clamp(0.0, 1.0).powf(audio.exponent);
+    let heard = sound
+        .across(audio.bands, audio.ears)
+        .clamp(0.0, 1.0)
+        .powf(audio.exponent);
     audio.bounds.min + (audio.bounds.max - audio.bounds.min) * heard
 }
 
@@ -275,7 +270,7 @@ impl System {
     /// Runs the system on, with `sound` as what the speakers are playing.
     /// All zeroes is silence, which is what a step that follows the sound
     /// reads when there is nothing to listen to.
-    pub fn advance(&mut self, dt: f32, sound: &[f32; AUDIO_BANDS]) {
+    pub fn advance(&mut self, dt: f32, sound: &Spectrum) {
         let dt = dt.clamp(0.0, MAX_STEP);
         self.elapsed += dt;
 
@@ -371,7 +366,7 @@ impl System {
         self.write_vertices();
     }
 
-    fn emit(&mut self, dt: f32, sound: &[f32; AUDIO_BANDS]) {
+    fn emit(&mut self, dt: f32, sound: &Spectrum) {
         // Taken apart so the borrow of the emitters does not hold the whole
         // system while a particle is being built.
         let mut emitters = std::mem::take(&mut self.emitters);
@@ -389,7 +384,7 @@ impl System {
         self.emitters = emitters;
     }
 
-    fn spawn(&mut self, emitter: &Emitter, sound: &[f32; AUDIO_BANDS]) -> Particle {
+    fn spawn(&mut self, emitter: &Emitter, sound: &Spectrum) -> Particle {
         let direction = self.rng.direction(emitter.directions);
         let position = match emitter.shape {
             Shape::Sphere => {
@@ -761,6 +756,7 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wpe_format::particle::Channels;
 
     fn system(json: &str) -> System {
         let definition = ParticleSystem::parse(json.as_bytes()).unwrap();
@@ -773,35 +769,60 @@ mod tests {
     fn a_step_that_follows_the_sound_runs_between_its_bounds() {
         let step = Some(AudioResponse {
             bands: (4, 7),
+            ears: Channels::Both,
             exponent: 1.0,
             bounds: Range { min: 0.5, max: 1.0 },
         });
-        let mut loud = QUIET;
-        loud[4..=7].fill(1.0);
-        let mut half = QUIET;
-        half[4..=7].fill(0.5);
+        let fill = |level: f32| {
+            let mut sound = Spectrum::SILENT;
+            sound.left[4..=7].fill(level);
+            sound.right[4..=7].fill(level);
+            sound
+        };
 
-        assert_eq!(loudness(None, &QUIET), 1.0);
-        assert_eq!(loudness(step, &QUIET), 0.5);
-        assert_eq!(loudness(step, &loud), 1.0);
-        assert_eq!(loudness(step, &half), 0.75);
+        assert_eq!(loudness(None, &Spectrum::SILENT), 1.0);
+        assert_eq!(loudness(step, &Spectrum::SILENT), 0.5);
+        assert_eq!(loudness(step, &fill(1.0)), 1.0);
+        assert_eq!(loudness(step, &fill(0.5)), 0.75);
 
         // Sound outside the bands it listens to is not its business.
-        let mut elsewhere = QUIET;
-        elsewhere[0..=3].fill(1.0);
+        let mut elsewhere = Spectrum::SILENT;
+        elsewhere.left[0..=3].fill(1.0);
+        elsewhere.right[0..=3].fill(1.0);
         assert_eq!(loudness(step, &elsewhere), 0.5);
+    }
+
+    /// A step that names one ear gets that ear. The stock effect shaders
+    /// carry the same numbers and spell them out.
+    #[test]
+    fn a_step_hears_only_the_ear_it_asked_for() {
+        let mut sound = Spectrum::SILENT;
+        sound.left.fill(1.0);
+        let step = |ears| {
+            Some(AudioResponse {
+                bands: (0, 15),
+                ears,
+                exponent: 1.0,
+                bounds: Range { min: 0.0, max: 1.0 },
+            })
+        };
+        assert_eq!(loudness(step(Channels::Left), &sound), 1.0);
+        assert_eq!(loudness(step(Channels::Right), &sound), 0.0);
+        assert_eq!(loudness(step(Channels::Both), &sound), 0.5);
     }
 
     /// The exponent shapes the loudness before it is mapped, so a step with a
     /// high one stays near its quiet end until the sound is really loud.
     #[test]
     fn the_exponent_decides_how_soon_a_step_answers() {
-        let mut quarter = QUIET;
-        quarter[0..=15].fill(0.25);
+        let mut quarter = Spectrum::SILENT;
+        quarter.left.fill(0.25);
+        quarter.right.fill(0.25);
         let with = |exponent| {
             loudness(
                 Some(AudioResponse {
                     bands: (0, 15),
+                    ears: Channels::Both,
                     exponent,
                     bounds: Range { min: 0.0, max: 1.0 },
                 }),
@@ -845,7 +866,7 @@ mod tests {
                                {"name":"mapsequencebetweencontrolpoints","count":10,
                                 "limitbehavior":"mirror"}]}"#,
         );
-        s.advance(0.1, &QUIET);
+        s.advance(0.1, &Spectrum::SILENT);
         assert_eq!(s.live.len(), 10);
         // Nothing moves them after they are born, so each sits exactly the
         // emitter's own 64 away from the point on the line it was given.
@@ -861,7 +882,7 @@ mod tests {
     /// one long step is deliberately clamped.
     fn run(system: &mut System, seconds: f32, step: f32) {
         for _ in 0..(seconds / step).round() as usize {
-            system.advance(step, &QUIET);
+            system.advance(step, &Spectrum::SILENT);
         }
     }
 
@@ -978,7 +999,7 @@ mod tests {
                                {"name":"alpharandom","min":1,"max":1}],
                 "operator":[{"name":"alphafade","fadeintime":1}]}"#,
         );
-        s.advance(1.0 / 60.0, &QUIET);
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
         assert_eq!(s.count(), 1);
         let early = written_alpha(&s);
         assert!(early < 0.1, "born at {early} instead of nearly nothing");
@@ -1008,7 +1029,7 @@ mod tests {
                 "operator":[{"name":"sizechange","starttime":0,"endtime":1,
                              "startvalue":1,"endvalue":3}]}"#,
         );
-        s.advance(1.0 / 60.0, &QUIET);
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
         let size = |s: &System| s.vertices()[3 + 3];
         assert!((size(&s) - 100.0).abs() < 5.0, "started at {}", size(&s));
         run(&mut s, 0.5, 1.0 / 60.0);
@@ -1124,7 +1145,7 @@ mod tests {
                                {"name":"turbulentvelocityrandom","scale":0.1,
                                 "speedmin":250,"speedmax":260,"offset":-0.5}]}"#,
         );
-        s.advance(1.0 / 60.0, &QUIET);
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
         assert!(s.count() > 0);
         for p in &s.live {
             let speed =
@@ -1146,7 +1167,7 @@ mod tests {
                              "distanceouter":500,"speedinner":90,"speedouter":90}]}"#,
         );
         let start: Vec<[f32; 3]> = {
-            s.advance(1.0 / 60.0, &QUIET);
+            s.advance(1.0 / 60.0, &Spectrum::SILENT);
             s.live.iter().map(|p| p.position).collect()
         };
         run(&mut s, 1.0, 1.0 / 60.0);
@@ -1184,7 +1205,7 @@ mod tests {
                              "speedinner":SPEED,"speedouter":SPEED}]}"#;
         let turn = |speed: &str| {
             let mut s = system(&positive.replace("SPEED", speed));
-            s.advance(1.0 / 60.0, &QUIET);
+            s.advance(1.0 / 60.0, &Spectrum::SILENT);
             let before = s.live[0].position;
             run(&mut s, 0.5, 1.0 / 60.0);
             let after = s.live[0].position;
@@ -1205,7 +1226,7 @@ mod tests {
         );
         let mut seen: Vec<f32> = Vec::new();
         for _ in 0..90 {
-            s.advance(1.0 / 60.0, &QUIET);
+            s.advance(1.0 / 60.0, &Spectrum::SILENT);
             seen.push(written_alpha(&s));
         }
         let low = seen.iter().cloned().fold(f32::MAX, f32::min);
@@ -1225,7 +1246,7 @@ mod tests {
         );
         let mut xs: Vec<f32> = Vec::new();
         for _ in 0..90 {
-            s.advance(1.0 / 60.0, &QUIET);
+            s.advance(1.0 / 60.0, &Spectrum::SILENT);
             xs.push(s.vertices()[0]);
         }
         let low = xs.iter().cloned().fold(f32::MAX, f32::min);
@@ -1245,7 +1266,7 @@ mod tests {
                 "operator":[{"name":"colorchange","starttime":0,"endtime":1,
                              "startvalue":"1 0 0","endvalue":"0 0 1"}]}"#,
         );
-        s.advance(1.0 / 60.0, &QUIET);
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
         let red = &s.vertices()[7..10];
         assert!(red[0] > 0.9 && red[2] < 0.1, "started at {red:?}");
         run(&mut s, 0.5, 1.0 / 60.0);
@@ -1342,7 +1363,7 @@ mod tests {
                 "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
         );
         // A stalled frame, as if the wallpaper had been paused for a minute.
-        s.advance(60.0, &QUIET);
+        s.advance(60.0, &Spectrum::SILENT);
         assert!(s.count() <= 100, "one frame emitted {}", s.count());
     }
 

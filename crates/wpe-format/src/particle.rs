@@ -90,6 +90,52 @@ pub enum Initializer {
 /// the ones they listen to by index, and the highest any of them names is 15.
 pub const AUDIO_BANDS: usize = 16;
 
+/// The sound as the bands a wallpaper asks for, one set of them per ear.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Spectrum {
+    pub left: [f32; AUDIO_BANDS],
+    pub right: [f32; AUDIO_BANDS],
+}
+
+impl Spectrum {
+    /// A silent room, which is what a renderer with nothing to listen to
+    /// hands out.
+    pub const SILENT: Self = Self {
+        left: [0.0; AUDIO_BANDS],
+        right: [0.0; AUDIO_BANDS],
+    };
+
+    /// The loudness across a range of bands, which is their average.
+    ///
+    /// The stock effect shaders spell this out for themselves: they walk the
+    /// range adding bands up and divide by how many they added, one ear or
+    /// both. A step of a particle system is read the same way.
+    pub fn across(&self, bands: (usize, usize), ears: Channels) -> f32 {
+        let (first, last) = bands;
+        let reach = |of: &[f32; AUDIO_BANDS]| match of.get(first..=last) {
+            Some(heard) if !heard.is_empty() => heard.iter().sum::<f32>() / heard.len() as f32,
+            _ => 0.0,
+        };
+        match ears {
+            Channels::Left => reach(&self.left),
+            Channels::Right => reach(&self.right),
+            Channels::Both => (reach(&self.left) + reach(&self.right)) / 2.0,
+        }
+    }
+}
+
+/// Which ear a step listens to.
+///
+/// The stock shaders spell the numbers out: one is the left channel, two the
+/// right, three both together. A particle system's `audioprocessingmode`
+/// carries the same numbers, and zero means it does not listen at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Channels {
+    Left,
+    Right,
+    Both,
+}
+
 /// How a step follows the sound.
 ///
 /// What the step states is its loud end; the quiet end is `bounds.min` of it,
@@ -98,6 +144,8 @@ pub const AUDIO_BANDS: usize = 16;
 pub struct AudioResponse {
     /// The bands to listen to, as the first and last index into the sixteen.
     pub bands: (usize, usize),
+    /// Which ear they are taken from.
+    pub ears: Channels,
     /// What the loudness is raised to before it is mapped, which is how a
     /// wallpaper says whether it answers to quiet sounds or only to loud ones.
     pub exponent: f32,
@@ -523,12 +571,19 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
 ///
 /// The mode is the switch: the editor hides every other audio field while it
 /// is zero, and a third of the steps in the library carry settings behind a
-/// zero that were never meant to be used. Which of the modes above zero a step
-/// picks is not understood -- only 1 and 3 appear, and they are treated alike.
+/// zero that were never meant to be used. Which ear a mode above zero means is
+/// taken from the stock effect shaders, which carry the same numbers and spell
+/// them out: one left, two right, three both.
 fn audio_response(step: &Value) -> Option<AudioResponse> {
-    if num(step, "audioprocessingmode", 0.0) <= 0.0 {
-        return None;
-    }
+    let ears = match num(step, "audioprocessingmode", 0.0) as i32 {
+        1 => Channels::Left,
+        2 => Channels::Right,
+        // Zero is the switch being off. Three is both, and so is anything
+        // else above zero: no other mode appears in the library, and both
+        // ears is the least surprising reading of one that did.
+        ..=0 => return None,
+        _ => Channels::Both,
+    };
     let last = AUDIO_BANDS - 1;
     let first = (num(step, "audioprocessingfrequencystart", 0.0) as usize).min(last);
     Some(AudioResponse {
@@ -536,6 +591,7 @@ fn audio_response(step: &Value) -> Option<AudioResponse> {
             first,
             (num(step, "audioprocessingfrequencyend", last as f32) as usize).clamp(first, last),
         ),
+        ears,
         exponent: num(step, "audioprocessingexponent", 1.0).max(f32::EPSILON),
         bounds: pair(step, "audioprocessingbounds", Range { min: 0.0, max: 1.0 }),
     })
@@ -820,6 +876,7 @@ mod tests {
             ParticleSystem::parse(loud).unwrap().emitters[0].audio,
             Some(AudioResponse {
                 bands: (4, 10),
+                ears: Channels::Both,
                 exponent: 0.6,
                 bounds: Range { min: 0.5, max: 1.0 },
             })
@@ -828,6 +885,41 @@ mod tests {
 
     /// Bounds arrive as one string, and reading them as two missing numbers
     /// would leave the step at nothing however loud the sound got.
+    /// The stock effect shaders carry the same numbers and spell them out,
+    /// so a step asking for one ear gets that ear and not the pair.
+    #[test]
+    fn a_mode_says_which_ear_a_step_listens_to() {
+        let with = |mode| {
+            let json = format!(
+                r#"{{"material":"m.json","maxcount":10,
+                    "emitter":[{{"name":"sphererandom","rate":100,
+                                "audioprocessingmode":{mode}}}]}}"#
+            );
+            ParticleSystem::parse(json.as_bytes()).unwrap().emitters[0]
+                .audio
+                .map(|a| a.ears)
+        };
+        assert_eq!(with(0), None);
+        assert_eq!(with(1), Some(Channels::Left));
+        assert_eq!(with(2), Some(Channels::Right));
+        assert_eq!(with(3), Some(Channels::Both));
+    }
+
+    /// One ear, the other, or the pair averaged -- and only across the bands
+    /// the step asked for.
+    #[test]
+    fn a_spectrum_averages_the_bands_it_is_asked_for() {
+        let mut sound = Spectrum::SILENT;
+        sound.left[4..=7].fill(1.0);
+        sound.right[4..=7].fill(0.5);
+        assert_eq!(sound.across((4, 7), Channels::Left), 1.0);
+        assert_eq!(sound.across((4, 7), Channels::Right), 0.5);
+        assert_eq!(sound.across((4, 7), Channels::Both), 0.75);
+        // Half the range is loud and half is not.
+        assert_eq!(sound.across((4, 11), Channels::Left), 0.5);
+        assert_eq!(sound.across((0, 3), Channels::Both), 0.0);
+    }
+
     #[test]
     fn audio_bounds_are_one_string_of_two_numbers() {
         let json = br#"{"material":"m.json","maxcount":10,

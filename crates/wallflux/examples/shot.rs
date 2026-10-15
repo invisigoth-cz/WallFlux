@@ -73,7 +73,11 @@ fn main() {
 
     let frames: usize = rest.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
     let loudness: f32 = rest.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
-    scene.hear([loudness.clamp(0.0, 1.0); wpe_format::particle::AUDIO_BANDS]);
+    let loudness = loudness.clamp(0.0, 1.0);
+    scene.hear(wpe_format::particle::Spectrum {
+        left: [loudness; wpe_format::particle::AUDIO_BANDS],
+        right: [loudness; wpe_format::particle::AUDIO_BANDS],
+    });
     let pixels = unsafe { render_to_image(&gl, &mut scene, width, height, time, frames) }
         .unwrap_or_else(|e| {
             eprintln!("render failed: {e}");

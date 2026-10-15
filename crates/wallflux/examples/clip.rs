@@ -83,7 +83,7 @@ fn main() {
     let frames = std::env::temp_dir().join(format!("wallflux-clip-{}", std::process::id()));
     std::fs::create_dir_all(&frames).expect("cannot make a place for the frames");
 
-    let mut meter = audio::Meter::new();
+    let mut ears = audio::Ears::new();
     let mut fed = 0usize;
     // How the bands sat over the whole piece, which is the only way to tell a
     // response that follows the music from one pinned at the top of its range.
@@ -96,17 +96,20 @@ fn main() {
         let at = frame as f32 / FPS as f32;
         // Feed the meter up to this moment, so the bands a frame is drawn
         // with are the sound a viewer has heard by then and no more.
-        let wanted = (at * audio::RATE as f32) as usize;
-        while fed + audio::READ <= wanted.min(samples.len()) {
-            let mut mouthful = [0f32; audio::READ];
-            mouthful.copy_from_slice(&samples[fed..fed + audio::READ]);
-            let bands = meter.feed(&mouthful);
-            loudest = loudest.max(bands.iter().cloned().fold(0.0, f32::max));
-            total += bands.iter().map(|b| *b as f64).sum::<f64>();
-            pegged += bands.iter().filter(|b| **b > 0.95).count();
-            readings += bands.len();
-            scene.hear(bands);
-            fed += audio::READ;
+        // Two samples a frame, one for each ear, woven together.
+        let wanted = (at * audio::RATE as f32) as usize * 2;
+        while fed + audio::READ * 2 <= wanted.min(samples.len()) {
+            let mut mouthful = [0f32; audio::READ * 2];
+            mouthful.copy_from_slice(&samples[fed..fed + audio::READ * 2]);
+            let sound = ears.feed(&mouthful);
+            for heard in [&sound.left, &sound.right] {
+                loudest = loudest.max(heard.iter().cloned().fold(0.0, f32::max));
+                total += heard.iter().map(|b| *b as f64).sum::<f64>();
+                pegged += heard.iter().filter(|b| **b > 0.95).count();
+                readings += heard.len();
+            }
+            scene.hear(sound);
+            fed += audio::READ * 2;
         }
         let pixels = unsafe { render_frame(&gl, &mut scene, width, height, at) }
             .expect("drawing a frame failed");
@@ -163,8 +166,8 @@ fn find_sound(dir: &Path, name: &str) -> Option<PathBuf> {
     Some(out)
 }
 
-/// The track as mono samples at the rate the meter expects, which is what
-/// ffmpeg is for: it reads whatever the wallpaper happened to ship.
+/// The track as woven stereo samples at the rate the meter expects, which is
+/// what ffmpeg is for: it reads whatever the wallpaper happened to ship.
 fn decode(track: &Path, seconds: f32) -> Result<Vec<f32>, String> {
     let out = Command::new("ffmpeg")
         .args(["-v", "error", "-i"])
@@ -175,7 +178,7 @@ fn decode(track: &Path, seconds: f32) -> Result<Vec<f32>, String> {
             "-f",
             "f32le",
             "-ac",
-            "1",
+            "2",
             "-ar",
             &audio::RATE.to_string(),
             "-",
