@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use glow::HasContext;
 use wpe_format::particle::Renderer as ParticleRenderer;
 use wpe_format::scene::ObjectKind;
-use wpe_format::shader::{Stage, preprocess, uniforms};
+use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
 
 use crate::particles::{self, FLOATS_PER_ROPE_VERTEX, FLOATS_PER_VERTEX};
@@ -252,10 +252,10 @@ struct Object {
     /// For a trailing particle system, the `length`, `max` and `min` its
     /// shader stretches each particle between.
     trail: Option<[f32; 3]>,
-    /// The effects hung on this object, in the order they apply. Empty unless
-    /// every one of them is a single pass, since half an effect chain is
-    /// worse than none.
-    effects: Vec<Pass>,
+    /// Every pass of every effect hung on this object, flattened into the
+    /// order they are drawn. Empty unless all of them built, since half a
+    /// chain looks worse than none.
+    effects: Vec<Step>,
 }
 
 pub struct Scene {
@@ -269,6 +269,9 @@ pub struct Scene {
     /// Made when a scene has an object with effects, and remade if the output
     /// changes shape.
     canvas: Option<Canvas>,
+    /// The buffers this scene's effects ask for by name, and what to divide
+    /// the output by for each.
+    buffers: BTreeMap<String, u32>,
     /// How far the particle systems have been simulated.
     simulated: f32,
     pub scene_size: (u32, u32),
@@ -283,14 +286,49 @@ pub struct Scene {
 /// only the corner of them it needs, which is why the quad's texture
 /// coordinates stop where the object does -- the same trick a texture stored
 /// with padding needs.
+///
+/// Beside the pair are the buffers the effects asked for by name, which is
+/// where a chain of passes does its working out: a blur reads a quarter-sized
+/// one so that one gaussian reaches four times as far across the picture.
 struct Canvas {
     size: (u32, u32),
     targets: [Target; 2],
+    named: BTreeMap<String, Target>,
 }
 
 struct Target {
     frame: glow::Framebuffer,
     texture: Texture,
+}
+
+impl Target {
+    /// The whole picture, which is more than the part of it an object uses.
+    fn size(&self) -> (u32, u32) {
+        (self.texture.width, self.texture.height)
+    }
+}
+
+/// Where one pass of an effect reads from, or writes to.
+#[derive(Clone)]
+enum Buffer {
+    /// One of the two pictures an object's effects take turns in. The first of
+    /// them is where the object itself is drawn.
+    Canvas(usize),
+    /// A buffer an effect asked for by name, at whatever size it asked for.
+    Named(String),
+    /// Wherever the scene itself is being drawn, which only the last pass of
+    /// the last effect writes to.
+    Screen,
+}
+
+/// One pass of one effect: what it draws, what it reads, where it writes.
+struct Step {
+    /// None when the pass is a `copy` command rather than something drawn.
+    pass: Option<Pass>,
+    into: Buffer,
+    /// Texture unit to buffer, as the effect asked. Always covers unit zero,
+    /// because a pass that names nothing there still draws what came in.
+    reads: Vec<(usize, Buffer)>,
 }
 
 /// Maps an object's own quad onto the whole of whatever it is drawn into,
@@ -303,54 +341,70 @@ const FILL: Matrix = [
     0.0, 0.0, 0.0, 1.0,
 ];
 
-unsafe fn make_canvas(gl: &glow::Context, size: (u32, u32)) -> Result<Canvas, String> {
-    let mut targets = Vec::new();
-    for _ in 0..2 {
-        unsafe {
-            let texture = gl.create_texture()?;
-            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA8 as i32,
-                size.0 as i32,
-                size.1 as i32,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelUnpackData::Slice(None),
-            );
-            for (name, value) in [
-                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
-                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
-                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
-                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
-            ] {
-                gl.tex_parameter_i32(glow::TEXTURE_2D, name, value as i32);
-            }
-            let frame = gl.create_framebuffer()?;
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(frame));
-            gl.framebuffer_texture_2d(
-                glow::FRAMEBUFFER,
-                glow::COLOR_ATTACHMENT0,
-                glow::TEXTURE_2D,
-                Some(texture),
-                0,
-            );
-            if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
-                return Err("an offscreen picture is not complete".into());
-            }
-            targets.push(Target {
-                frame,
-                texture: Texture::borrowed(texture, size.0, size.1),
-            });
+unsafe fn make_target(gl: &glow::Context, size: (u32, u32)) -> Result<Target, String> {
+    unsafe {
+        let texture = gl.create_texture()?;
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA8 as i32,
+            size.0 as i32,
+            size.1 as i32,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            glow::PixelUnpackData::Slice(None),
+        );
+        for (name, value) in [
+            (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
+            (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
+            (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
+            (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
+        ] {
+            gl.tex_parameter_i32(glow::TEXTURE_2D, name, value as i32);
         }
+        let frame = gl.create_framebuffer()?;
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(frame));
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(texture),
+            0,
+        );
+        if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+            return Err("an offscreen picture is not complete".into());
+        }
+        Ok(Target {
+            frame,
+            texture: Texture::borrowed(texture, size.0, size.1),
+        })
     }
-    let [first, second] = targets.try_into().ok().ok_or("two pictures expected")?;
-    Ok(Canvas {
-        size,
-        targets: [first, second],
-    })
+}
+
+/// The pictures a scene's effects are drawn through: the pair every object with
+/// an effect takes turns in, and one for each buffer the effects name.
+unsafe fn make_canvas(
+    gl: &glow::Context,
+    size: (u32, u32),
+    wanted: &BTreeMap<String, u32>,
+) -> Result<Canvas, String> {
+    unsafe {
+        let targets = [make_target(gl, size)?, make_target(gl, size)?];
+        let mut named = BTreeMap::new();
+        for (name, divisor) in wanted {
+            // A buffer at a quarter of the output is a quarter of it each way,
+            // and never smaller than a pixel.
+            let smaller = ((size.0 / divisor).max(1), (size.1 / divisor).max(1));
+            named.insert(name.clone(), make_target(gl, smaller)?);
+        }
+        Ok(Canvas {
+            size,
+            targets,
+            named,
+        })
+    }
 }
 
 /// The buffers every particle system in the scene is drawn through, sized for
@@ -393,6 +447,7 @@ impl Scene {
 
         let mut objects = Vec::new();
         let mut skipped = Vec::new();
+        let mut buffers = BTreeMap::new();
         for object in &file.objects {
             if !object.visible.value {
                 continue;
@@ -454,7 +509,7 @@ impl Scene {
                 passes,
                 drawing: Drawing::Image,
                 trail: None,
-                effects: build_effects(gl, &resolve, object, &mut skipped),
+                effects: build_effects(gl, &resolve, object, &mut buffers, &mut skipped),
             });
         }
 
@@ -482,6 +537,7 @@ impl Scene {
             particles,
             white: Texture::white(gl)?,
             canvas: None,
+            buffers,
             simulated: 0.0,
             scene_size,
             skipped,
@@ -541,7 +597,7 @@ impl Scene {
         if self.objects.iter().any(|o| !o.effects.is_empty())
             && self.canvas.as_ref().is_none_or(|c| c.size != output)
         {
-            self.canvas = unsafe { make_canvas(gl, output) }.ok();
+            self.canvas = unsafe { make_canvas(gl, output, &self.buffers) }.ok();
         }
 
         unsafe {
@@ -569,7 +625,7 @@ impl Scene {
                         ),
                         _ => {
                             for pass in &object.passes {
-                                write_quad(gl, self.buffer, pass.covered);
+                                write_quad(gl, self.buffer, pass.covered, 0.5);
                                 draw_pass(
                                     gl,
                                     pass,
@@ -577,7 +633,7 @@ impl Scene {
                                     &mvp,
                                     time,
                                     &self.white,
-                                    None,
+                                    &[],
                                     pass.blending,
                                 );
                             }
@@ -778,10 +834,11 @@ fn texture_slot(name: &str) -> Option<usize> {
 
 /// Draws an object into the canvas and its effects back out of it.
 ///
-/// The object goes in without its place in the scene, so the picture holds
-/// just the object; each effect then draws that picture again through its own
-/// material, and the last one lands wherever the scene is being drawn, placed
-/// as the object always would have been.
+/// The object goes in without its place in the scene, so the picture holds just
+/// the object; each pass of each effect then draws what came before it through
+/// its own material, into whichever buffer the chain named, and the last pass
+/// lands wherever the scene is being drawn, placed as the object always would
+/// have been.
 #[allow(clippy::too_many_arguments)]
 unsafe fn draw_through_effects(
     gl: &glow::Context,
@@ -796,84 +853,147 @@ unsafe fn draw_through_effects(
     projection: &Matrix,
 ) {
     let used = object.on_screen(projection, output, canvas.size);
-    let covered = [
-        used.0 as f32 / canvas.size.0 as f32,
-        used.1 as f32 / canvas.size.1 as f32,
-    ];
+    // The object fills the same fraction of every buffer, whatever that
+    // buffer's size: a quarter-sized buffer holds a quarter-sized object.
+    let part = |size: (u32, u32)| {
+        (
+            (used.0 * size.0).div_ceil(canvas.size.0).max(1),
+            (used.1 * size.1).div_ceil(canvas.size.1).max(1),
+        )
+    };
+    // Where the object's texture coordinates have to stop in a given buffer,
+    // which is the one thing a pass reading it needs to be told.
+    let covered = |target: &Target| {
+        let size = target.size();
+        let filled = part(size);
+        [
+            filled.0 as f32 / size.0 as f32,
+            filled.1 as f32 / size.1 as f32,
+        ]
+    };
+    let find = |which: &Buffer| match which {
+        Buffer::Canvas(index) => Some(&canvas.targets[*index]),
+        Buffer::Named(name) => canvas.named.get(name),
+        Buffer::Screen => None,
+    };
 
     unsafe {
         let into = |target: &Target| {
+            let filled = part(target.size());
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(target.frame));
-            gl.viewport(0, 0, used.0 as i32, used.1 as i32);
+            gl.viewport(0, 0, filled.0 as i32, filled.1 as i32);
             gl.clear_color(0.0, 0.0, 0.0, 0.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
         };
 
         into(&canvas.targets[0]);
         for pass in &object.passes {
-            write_quad(gl, buffer, pass.covered);
+            write_quad(gl, buffer, pass.covered, 0.5);
             // Straight onto an empty picture. Blending here would fold the
             // object's own alpha into its colour, and the effect that comes
             // after would fold it in a second time, which darkens everything
             // that is not fully opaque.
-            draw_pass(gl, pass, object, &FILL, time, white, None, Blending::Opaque);
+            draw_pass(gl, pass, object, &FILL, time, white, &[], Blending::Opaque);
         }
 
-        let last = object.effects.len() - 1;
-        for (step, pass) in object.effects.iter().enumerate() {
-            let from = &canvas.targets[step % 2].texture;
-            if step == last {
-                gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
-                gl.viewport(0, 0, output.0 as i32, output.1 as i32);
-                write_quad(gl, buffer, covered);
-                draw_pass(
-                    gl,
-                    pass,
-                    object,
-                    mvp,
-                    time,
-                    white,
-                    Some(from),
-                    pass.blending,
-                );
-            } else {
-                into(&canvas.targets[(step + 1) % 2]);
-                write_quad(gl, buffer, covered);
-                draw_pass(
-                    gl,
-                    pass,
-                    object,
-                    &FILL,
-                    time,
-                    white,
-                    Some(from),
-                    Blending::Opaque,
-                );
+        for step in &object.effects {
+            // Unreachable: a buffer a step names is one the canvas was built
+            // with, since the canvas is built from the same list.
+            let Some(sources) = step
+                .reads
+                .iter()
+                .map(|(unit, from)| find(from).map(|target| (*unit, target)))
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let Some(read) = sources.iter().find(|(unit, _)| *unit == 0) else {
+                continue;
+            };
+            let read = read.1;
+
+            let Some(pass) = &step.pass else {
+                // A copy command, which is how a chain keeps a picture of its
+                // own from one frame to the next. The whole buffer goes, since
+                // what reads it next frame may want a different corner.
+                if let Some(target) = find(&step.into) {
+                    let size = read.size();
+                    gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(read.frame));
+                    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(target.frame));
+                    gl.blit_framebuffer(
+                        0,
+                        0,
+                        size.0 as i32,
+                        size.1 as i32,
+                        0,
+                        0,
+                        size.0 as i32,
+                        size.1 as i32,
+                        glow::COLOR_BUFFER_BIT,
+                        glow::NEAREST,
+                    );
+                }
+                continue;
+            };
+            let bound: Vec<_> = sources
+                .iter()
+                .map(|(unit, target)| (*unit, &target.texture))
+                .collect();
+            match find(&step.into) {
+                // Back into the scene, placed where the object belongs.
+                None => {
+                    gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
+                    gl.viewport(0, 0, output.0 as i32, output.1 as i32);
+                    write_quad(gl, buffer, covered(read), 0.5);
+                    draw_pass(gl, pass, object, mvp, time, white, &bound, pass.blending);
+                }
+                // A pass in the middle of a chain covers its whole buffer and
+                // most of them ignore the matrix entirely, so the quad is
+                // written where it already belongs and left there.
+                Some(target) => {
+                    into(target);
+                    write_quad(gl, buffer, covered(read), 1.0);
+                    draw_pass(
+                        gl,
+                        pass,
+                        object,
+                        &transform::IDENTITY,
+                        time,
+                        white,
+                        &bound,
+                        Blending::Opaque,
+                    );
+                }
             }
         }
     }
 }
 
-/// Builds the effects hung on an object, or none of them.
+/// Builds every pass of every effect hung on an object, or none of them.
 ///
-/// An effect is an ordinary material drawn over the object's own picture,
-/// which the shader is handed as its first texture -- it says so itself, in
-/// the annotation that calls that texture the framebuffer. What this does not
-/// do yet is the chains: an effect of several passes wants named buffers at
-/// half and quarter size to work through, and those are the blurs, the god
-/// rays and the shine. An object with one of those gets no effects at all
-/// rather than some of them, since half a chain looks worse than none.
+/// An effect is a small chain: each pass draws the picture so far through a
+/// material of its own, into a buffer the effect names, and the last pass lands
+/// wherever the object was going to be drawn. The two pictures the object takes
+/// turns in carry the result from one effect to the next, so `previous` -- what
+/// every pass calls the picture it was handed -- is whichever of the pair holds
+/// what came in.
+///
+/// Anything that will not build takes the whole object's effects with it, since
+/// half a chain looks worse than none.
 fn build_effects(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
     object: &wpe_format::scene::Object,
+    buffers: &mut BTreeMap<String, u32>,
     skipped: &mut Vec<String>,
-) -> Vec<Pass> {
-    let mut built = Vec::new();
-    for effect in &object.effects {
-        if !effect.visible.value {
-            continue;
-        }
+) -> Vec<Step> {
+    let wanted: Vec<_> = object
+        .effects
+        .iter()
+        .filter(|effect| effect.visible.value)
+        .collect();
+    let mut steps = Vec::new();
+    for (index, effect) in wanted.iter().copied().enumerate() {
         let name = effect_name(effect);
         let Some(parsed) = resolve
             .get(&effect.file)
@@ -882,32 +1002,109 @@ fn build_effects(
             skipped.push(format!("{}: effect {name} could not be read", object.name));
             return Vec::new();
         };
-        let [pass] = parsed.passes.as_slice() else {
-            skipped.push(format!(
-                "{}: effect {name} takes {} passes and only one is done yet",
-                object.name,
-                parsed.passes.len()
-            ));
-            return Vec::new();
+        // Which of the pair this effect reads, and where it leaves its result:
+        // the other one, or the scene itself if nothing follows it.
+        let input = Buffer::Canvas(index % 2);
+        let output = match index + 1 == wanted.len() {
+            true => Buffer::Screen,
+            false => Buffer::Canvas((index + 1) % 2),
         };
-        let built_pass = resolve
-            .get(&pass.material)
-            .and_then(|bytes| Material::parse(&bytes).ok())
-            .and_then(|material| {
-                let first = material.passes.first()?;
-                // The scene's overrides line up with the effect's passes in
-                // order, and this is the first of a single-pass effect.
-                build_pass(gl, resolve, first, Kind::Effect, effect.passes.first()).ok()
-            });
-        match built_pass {
-            Some(p) => built.push(p),
-            None => {
-                skipped.push(format!("{}: effect {name} would not build", object.name));
+        for fbo in &parsed.fbos {
+            let divisor = match fbo.scale >= 1.0 {
+                true => fbo.scale.round() as u32,
+                // One effect in the library states no scale at all. The names
+                // are the engine's own, and they say what they mean.
+                false => divisor_of(&fbo.name),
+            };
+            buffers.insert(fbo.name.clone(), divisor);
+        }
+        for (at, pass) in parsed.passes.iter().enumerate() {
+            let into = match pass.target.is_empty() {
+                true => output.clone(),
+                false => Buffer::Named(pass.target.clone()),
+            };
+            if pass.command == "copy" {
+                steps.push(Step {
+                    pass: None,
+                    into,
+                    reads: vec![(0, which_buffer(&pass.source, &input))],
+                });
+                continue;
+            }
+            if !pass.command.is_empty() {
+                skipped.push(format!(
+                    "{}: effect {name} asks for {}, which is not done",
+                    object.name, pass.command
+                ));
                 return Vec::new();
+            }
+            let mut reads: Vec<_> = pass
+                .bind
+                .iter()
+                .map(|bind| (bind.index as usize, which_buffer(&bind.name, &input)))
+                .collect();
+            // A pass that binds nothing to its first unit still draws what came
+            // in: that is what the engine had left bound there.
+            if !reads.iter().any(|(unit, _)| *unit == 0) {
+                reads.push((0, input.clone()));
+            }
+            // The scene's overrides line up with the effect's passes in order,
+            // commands counted among them, and may stop short of the last.
+            let built = resolve
+                .get(&pass.material)
+                .ok_or_else(|| format!("{} is missing", pass.material))
+                .and_then(|bytes| Material::parse(&bytes).map_err(|e| e.to_string()))
+                .and_then(|material| {
+                    let first = material.passes.first().ok_or("it has no passes")?;
+                    build_pass(gl, resolve, first, Kind::Effect, effect.passes.get(at))
+                });
+            match built {
+                Ok(built) => steps.push(Step {
+                    pass: Some(built),
+                    into,
+                    reads,
+                }),
+                Err(e) => {
+                    skipped.push(format!("{}: effect {name}: {e}", object.name));
+                    return Vec::new();
+                }
             }
         }
     }
-    built
+    // A buffer an effect binds without ever declaring it still has to exist,
+    // or the pass reading it would read nothing at all.
+    for step in &steps {
+        let named = std::iter::once(&step.into).chain(step.reads.iter().map(|(_, from)| from));
+        for buffer in named {
+            if let Buffer::Named(name) = buffer {
+                buffers
+                    .entry(name.clone())
+                    .or_insert_with(|| divisor_of(name));
+            }
+        }
+    }
+    steps
+}
+
+/// What a pass means by the buffer it names. `previous` is the picture the
+/// effect was handed; anything else is a buffer in its own right.
+fn which_buffer(name: &str, input: &Buffer) -> Buffer {
+    match name {
+        "previous" => input.clone(),
+        other => Buffer::Named(other.to_owned()),
+    }
+}
+
+/// What to divide the output by for a buffer, read from its name because that
+/// is all an effect binding one without declaring it gives to go on.
+fn divisor_of(name: &str) -> u32 {
+    if name.contains("Quarter") {
+        4
+    } else if name.contains("Half") {
+        2
+    } else {
+        1
+    }
 }
 
 /// What to call an effect. Only 33 of the 390 in the library fill in a name,
@@ -951,11 +1148,11 @@ unsafe fn draw_pass(
     mvp: &Matrix,
     time: f32,
     white: &Texture,
-    handed: Option<&Texture>,
+    bound: &[(usize, &Texture)],
     blending: Blending,
 ) {
     unsafe {
-        set_common(gl, pass, object, mvp, time, white, handed);
+        set_common(gl, pass, object, mvp, time, white, bound);
         blending.apply(gl);
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
@@ -989,7 +1186,7 @@ unsafe fn draw_particles(
         gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes);
 
         for pass in &object.passes {
-            set_common(gl, pass, object, mvp, time, white, None);
+            set_common(gl, pass, object, mvp, time, white, &[]);
             pass.blending.apply(gl);
             // A flat wallpaper's particles face the screen, so the frame the
             // shader turns a particle in is the scene's own axes.
@@ -1050,20 +1247,28 @@ unsafe fn set_common(
     mvp: &Matrix,
     time: f32,
     white: &Texture,
-    handed: Option<&Texture>,
+    bound: &[(usize, &Texture)],
 ) {
     unsafe {
         gl.use_program(Some(pass.program));
 
         let still = pass.film.as_ref().map(|film| (film, film.at(time)));
-        for (unit, slot) in pass.textures.iter().enumerate() {
+        // A pass of an effect is handed buffers at units its own material never
+        // named, so the units run past the end of what the material listed.
+        let units = pass
+            .textures
+            .len()
+            .max(bound.iter().map(|(unit, _)| unit + 1).max().unwrap_or(0));
+        for unit in 0..units {
+            let slot = pass.textures.get(unit).and_then(|slot| slot.as_ref());
+            let handed = bound.iter().find(|(at, _)| *at == unit).map(|(_, t)| *t);
             // An empty slot still has to be given something, or the pass reads
             // whatever texture was last left on that unit -- another object's.
             let texture = match (unit, &still, handed) {
-                // An effect is handed the picture it works on.
-                (0, _, Some(handed)) => handed,
+                // An effect is handed the pictures it works on.
+                (_, _, Some(handed)) => handed,
                 (0, Some((film, still)), _) => &film.pages[still.page],
-                _ => slot.as_ref().unwrap_or(white),
+                _ => slot.unwrap_or(white),
             };
             texture.bind(gl, unit as u32);
             set_int(gl, pass.program, &format!("g_Texture{unit}"), unit as i32);
@@ -1134,12 +1339,15 @@ fn build_pass(
     // A pass draws the texture in its first slot, so one that wants a render
     // target there is compositing something this renderer has not produced.
     // Drawing it anyway would put a full-screen rectangle of nothing over the
-    // scene; the later slots only modulate, and white leaves those alone.
-    if let Some(Some(name)) = over
-        .map(|o| &o.textures)
-        .filter(|t| !t.is_empty())
-        .unwrap_or(&pass.textures)
-        .first()
+    // scene; the later slots only modulate, and white leaves those alone. A
+    // pass of an effect is the exception: a render target is exactly what it is
+    // handed, and the chain it belongs to says which one.
+    if kind != Kind::Effect
+        && let Some(Some(name)) = over
+            .map(|o| &o.textures)
+            .filter(|t| !t.is_empty())
+            .unwrap_or(&pass.textures)
+            .first()
         && wpe_format::effect::is_render_target(name)
     {
         return Err(format!("needs the render target {name}"));
@@ -1302,6 +1510,20 @@ fn build_pass(
             .is_some_and(|name| !name.is_empty());
         if bound && let Some(switch) = &uniform.combo {
             combos.insert(switch.to_ascii_uppercase(), "1".into());
+        }
+    }
+
+    // An option declared in only one of the two stages still has to be defined
+    // in both, or they disagree with each other: a blur whose vertex shader was
+    // told the kernel size and whose fragment shader was not writes a different
+    // number of texture coordinates than it reads, and the two will not link.
+    // What the material or the scene said always wins over a shader's default.
+    for (_, ext) in [(Stage::Vertex, "vert"), (Stage::Fragment, "frag")] {
+        let Some(source) = resolve.shader(shader, ext) else {
+            continue;
+        };
+        for (name, value) in combo_defaults(&String::from_utf8_lossy(&source)) {
+            combos.entry(name).or_insert(value);
         }
     }
 
@@ -1524,14 +1746,20 @@ fn coverage(image: (u32, u32), stored: (u32, u32)) -> [f32; 2] {
 ///
 /// Texture coordinates run from the top left, which is the corner an image
 /// starts at and the corner it keeps when the rest of the texture is padding.
-unsafe fn write_quad(gl: &glow::Context, buffer: glow::Buffer, covered: [f32; 2]) {
+///
+/// `reach` is how far the corners sit from the middle: half a unit for a quad
+/// that a matrix is going to place, and a whole one for a pass that fills what
+/// it is drawn into without a matrix at all. The blur and god ray shaders are
+/// the second kind -- they use the vertex position exactly as it is given.
+unsafe fn write_quad(gl: &glow::Context, buffer: glow::Buffer, covered: [f32; 2], reach: f32) {
     let (u, v) = (covered[0], covered[1]);
+    let r = reach;
     #[rustfmt::skip]
     let vertices: [f32; 20] = [
-        -0.5, -0.5, 0.0,   0.0, 0.0,
-         0.5, -0.5, 0.0,     u, 0.0,
-        -0.5,  0.5, 0.0,   0.0,   v,
-         0.5,  0.5, 0.0,     u,   v,
+        -r, -r, 0.0,   0.0, 0.0,
+         r, -r, 0.0,     u, 0.0,
+        -r,  r, 0.0,   0.0,   v,
+         r,  r, 0.0,     u,   v,
     ];
     unsafe {
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
@@ -1797,7 +2025,17 @@ fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{coverage, showing};
+    use super::{coverage, divisor_of, showing};
+
+    /// Getting one of these wrong blurs at the wrong size: a half-sized buffer
+    /// taken for a full-sized one reaches half as far across the picture.
+    #[test]
+    fn the_engines_buffer_names_say_how_big_they_are() {
+        assert_eq!(divisor_of("_rt_FullCompoBuffer1"), 1);
+        assert_eq!(divisor_of("_rt_HalfCompoBuffer2"), 2);
+        assert_eq!(divisor_of("_rt_QuarterCompoBuffer1"), 4);
+        assert_eq!(divisor_of("_rt_imageLayerComposite_12_a"), 1);
+    }
 
     #[test]
     fn a_texture_stored_at_its_own_size_is_read_whole() {

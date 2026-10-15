@@ -5,8 +5,12 @@
 //! wallpaper's own preview. Takes a time in seconds, because an animated
 //! wallpaper looks different at different moments.
 //!
+//! With a frame count it also draws the scene that many times and reports the
+//! middle one's time, which is the only honest way to answer what a change to
+//! the renderer costs.
+//!
 //! ```text
-//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget]
+//! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames]
 //! ```
 
 use std::path::PathBuf;
@@ -29,7 +33,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [dir, out, rest @ ..] = args.as_slice() else {
         eprintln!(
-            "usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget]"
+            "usage: shot <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames]"
         );
         std::process::exit(2);
     };
@@ -61,8 +65,9 @@ fn main() {
         eprintln!("  skipped {skipped}");
     }
 
-    let pixels =
-        unsafe { render_to_image(&gl, &mut scene, width, height, time) }.unwrap_or_else(|e| {
+    let frames: usize = rest.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
+    let pixels = unsafe { render_to_image(&gl, &mut scene, width, height, time, frames) }
+        .unwrap_or_else(|e| {
             eprintln!("render failed: {e}");
             std::process::exit(1);
         });
@@ -87,6 +92,7 @@ unsafe fn render_to_image(
     width: u32,
     height: u32,
     time: f32,
+    frames: usize,
 ) -> Result<Vec<u8>, String> {
     unsafe {
         let colour = gl.create_texture()?;
@@ -121,8 +127,23 @@ unsafe fn render_to_image(
         // The scene as it would be at that moment, not as a frame could
         // catch up to it.
         scene.settle(time);
-        scene.draw(gl, (width, height), time);
-        gl.finish();
+        // Each frame is a step further on, so the particle systems are running
+        // as they would be rather than being asked for the same moment twice.
+        let mut taken = Vec::new();
+        for frame in 0..frames.max(1) {
+            let at = time + frame as f32 / 60.0;
+            let started = std::time::Instant::now();
+            scene.draw(gl, (width, height), at);
+            gl.finish();
+            taken.push(started.elapsed());
+        }
+        if frames > 1 {
+            taken.sort();
+            println!(
+                "{frames} frames, middle one {:.1} ms",
+                taken[taken.len() / 2].as_secs_f32() * 1000.0
+            );
+        }
 
         let mut pixels = vec![0u8; (width * height * 4) as usize];
         gl.read_pixels(
