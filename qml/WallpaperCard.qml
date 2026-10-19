@@ -44,20 +44,9 @@ Item {
     /// Whether the panel over the preview is showing.
     readonly property bool telling: card.usable && hover.containsMouse
 
-    /// What the backend knows about this file on disk: its size, and the
-    /// picture size of a video. Asked for when somebody looks at this card
-    /// and not before -- fifty-one of these at startup would be fifty-one
-    /// walks of the disk nobody asked for.
-    property var facts: ({})
-
     // The whole card dims, not just the preview: a scene wallpaper is here
     // to say it exists, not to be chosen.
     opacity: card.usable ? 1 : 0.4
-
-    onTellingChanged: {
-        if (card.telling)
-            card.facts = Wallpapers.details(card.wallpaper.id);
-    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -152,14 +141,16 @@ Item {
                     }
                     Label {
                         // project.json carries no resolution -- checked
-                        // across every one of them -- so this is read off the
-                        // file itself, and says so plainly when it could not
-                        // be.
-                        text: card.facts.resolution ? card.facts.resolution : qsTr("Native")
+                        // across every one of them -- so a video's is read
+                        // off the file by ffprobe shortly after the scan,
+                        // and this says so plainly until it arrives or where
+                        // there is no one answer to give.
+                        text: card.wallpaper.resolution ? card.wallpaper.resolution
+                                                        : qsTr("Native")
                         opacity: 0.75
                     }
                     Label {
-                        text: card.facts.size ? card.facts.size : qsTr("…")
+                        text: card.wallpaper.sizeOnDisk
                         opacity: 0.75
                     }
 

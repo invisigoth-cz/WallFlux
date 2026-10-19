@@ -4,13 +4,13 @@
 #pragma once
 
 #include <QDateTime>
-#include <QHash>
 #include <QList>
+#include <QProcess>
 #include <QObject>
 #include <QQmlEngine>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
-#include <QVariantMap>
 
 namespace WallpaperKind {
 Q_NAMESPACE
@@ -27,6 +27,11 @@ enum Kind {
     Web,     ///< HTML, CSS and JavaScript. QtWebEngine draws these.
     Video,   ///< A plain video file. QtMultimedia draws these.
     Scene,   ///< Wallpaper Engine's own packed format. Nothing here draws it.
+    Application, ///< A program of its own, shipped as a wallpaper. Nothing
+                 ///< here runs one, and none were installed on the machine
+                 ///< this was written on -- it is listed so the filter can
+                 ///< name every kind the library has rather than only the
+                 ///< kinds that happen to be here.
 };
 Q_ENUM_NS(Kind)
 }
@@ -45,6 +50,10 @@ class Wallpaper
     Q_PROPERTY(WallpaperKind::Kind kind MEMBER kind CONSTANT)
     Q_PROPERTY(QUrl source MEMBER source CONSTANT)
     Q_PROPERTY(QUrl preview MEMBER preview CONSTANT)
+    Q_PROPERTY(QStringList tags MEMBER tags CONSTANT)
+    Q_PROPERTY(QString rating MEMBER rating CONSTANT)
+    Q_PROPERTY(QString resolution MEMBER resolution CONSTANT)
+    Q_PROPERTY(QString sizeOnDisk MEMBER sizeOnDisk CONSTANT)
     Q_PROPERTY(QDateTime added MEMBER added CONSTANT)
     Q_PROPERTY(qint64 bytes MEMBER bytes CONSTANT)
     Q_PROPERTY(bool hasFile READ hasFile CONSTANT)
@@ -70,6 +79,29 @@ public:
     /// its own library. Every wallpaper here has one, but it is read from
     /// downloaded content like everything else, so it may be empty.
     QUrl preview;
+
+    /// What the workshop page filed it under: Game, Sci-Fi, Landscape and
+    /// the rest. Straight out of project.json, spelled as Wallpaper Engine
+    /// spells it.
+    QStringList tags;
+
+    /// How old somebody should be, as `G`, `PG13` or `R`, or empty where
+    /// project.json says nothing. Wallpaper Engine writes Everyone,
+    /// Questionable and Mature; these are the same three under the names
+    /// the interface shows. On the machine this was written on all 49 that
+    /// carry one say Everyone.
+    QString rating;
+
+    /// The picture size of a video, as `1920x1080`, or empty.
+    ///
+    /// Read with ffprobe during the scan: nothing in project.json carries it
+    /// -- checked across all 53 -- and the preview is a square thumbnail, so
+    /// there is nowhere cheaper to get it. A scene or web wallpaper has no
+    /// one answer and leaves this empty.
+    QString resolution;
+
+    /// What the folder takes up, written out for a person to read.
+    QString sizeOnDisk;
 
     /// When this wallpaper arrived on the disk, which is the folder's own
     /// creation time. Worth knowing that on the machine this was written on
@@ -122,6 +154,7 @@ public:
     /// Scans on construction: a freshly built one already knows what is
     /// installed.
     explicit WallpaperCore(QObject *parent = nullptr);
+    ~WallpaperCore() override;
 
     QList<Wallpaper> wallpapers() const { return m_wallpapers; }
     Wallpaper current() const { return m_current; }
@@ -148,17 +181,6 @@ public:
     /// Forgets the current wallpaper, leaving the screen blank.
     Q_INVOKABLE void clear();
 
-    /// What this wallpaper takes up on disk and, for a video, how big its
-    /// picture is: `{ "size": "87.4 MiB", "resolution": "1920x1080" }`.
-    ///
-    /// Asked for one wallpaper at a time, when the picker is showing the
-    /// details of one, because neither answer is free and neither is wanted
-    /// for the other fifty. Both are missing from project.json -- checked
-    /// across all 53 of them -- so they are read off the disk instead, and
-    /// the answer is kept once it has been worked out. An entry is empty
-    /// where it could not be had, which the picker shows as "Nativní".
-    Q_INVOKABLE QVariantMap details(const QString &id) const;
-
     /// Reads the wallpapers under each of these Steam installs.
     ///
     /// Separate from rescan() so a test can point it at a folder of its own
@@ -175,12 +197,22 @@ signals:
     void recentChanged();
 
 private:
-    /// Worked out the first time the picker asks and kept afterwards, since
-    /// nothing about a file on disk changes while the program runs. Cleared
-    /// by a rescan, which is when it might have.
-    mutable QHash<QString, QVariantMap> m_details;
-
     QStringList m_recent;
+
+    /// Asks ffprobe how big each video's picture is, without waiting.
+    ///
+    /// Started after every scan. Waiting for it would put a third of a
+    /// second on startup here and multiply by every scan a test does --
+    /// measured, it took the test suite from 0.03 to 3.2 seconds. Each
+    /// answer fills itself in and says so, so the picker shows what it has
+    /// and gains the rest a moment later.
+    void readResolutions();
+
+    /// Takes every outstanding question back.
+    void stopProbes();
+
+    /// One per video still being asked about.
+    QList<QProcess *> m_probes;
 
     QList<Wallpaper> m_wallpapers;
     Wallpaper m_current;

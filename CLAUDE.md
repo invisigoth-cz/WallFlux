@@ -50,6 +50,7 @@ src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
 qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band, its name and its hover panel
+qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
@@ -67,8 +68,8 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
   `details(id)` (`{ size, resolution }`, read off the disk when the picker
   shows one card and kept afterwards)
 - static: `scan(roots)`, `steamRoots()`
-- `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `added`, `bytes`,
-  `hasFile`, `playable`
+- `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `tags`, `rating`,
+  `resolution`, `sizeOnDisk`, `added`, `bytes`, `hasFile`, `playable`
 - also on the singleton: `recent` (ids chosen in this run, newest first)
 
 `OtherAudio` and `ScreenCover` are singletons of the same module, each with
@@ -160,6 +161,19 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   nothing, every card blank. A `Rectangle` is not a texture until it is a
   layer, and the effect quietly has nothing to work with. Looked at side by
   side, with and without, which is the only way this one shows itself.
+- **What project.json does and does not carry**, counted across all 53:
+  `tags` and `preview` in every one, `type` and `file` in 51, `contentrating`
+  in 49 and always "Everyone", and **no resolution anywhere**. So the tag,
+  rating and kind filters are free, and the resolution one is not.
+- **Asking ffprobe during the scan is a trap.** It is 53 milliseconds a
+  video, which sounds free until the constructor of WallpaperCore scans the
+  real machine on every test that builds one: the suite went from 0.03 to
+  3.2 seconds. It is asked in the background after each scan instead, and
+  each answer fills itself in and says so.
+- **Killing a QProcess inside `qDeleteAll` of the list it is in is a
+  segfault.** Destroying a running one waits for the program to go and
+  delivers `finished` on the way, and the handler for that edits the list
+  being deleted. Take them out of the list and disconnect them first.
 - **Every wallpaper here carries the same date.** All 53 folders were
   downloaded by Steam in one go, and their creation time and last change are
   the same minute -- so ordering by "date added" barely reorders anything on
@@ -167,7 +181,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **A checkable Controls item cannot both be told what to be and asked what
   it is.** Bind `checked` to a property and set that property from
   `onToggled`, and the click breaks the binding it was reading. The sort menu
-  holds its own state instead and the window reads it off the items.
+  holds its own state instead and the window reads it off the items; the
+  filter chips are a rectangle and a mouse area, which have no state of their
+  own to fight with.
+- **A default that lives on a control is a default that a restyle can
+  lose.** Rewriting the sort menu dropped `checked: true` from Ascending and
+  turned the whole grid back to front -- silently, since an order is still an
+  order. Found by looking at the picture, not by any test.
 - **`autoExclusive` takes in every checkable sibling.** The sort menu's
   direction shares a parent with its four keys and would have joined their
   group; a `ButtonGroup` naming its members is what keeps them apart.

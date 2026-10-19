@@ -37,6 +37,7 @@ qt_add_executable(wallflux
 set_source_files_properties(qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
 set_source_files_properties(qml/Picker.qml PROPERTIES QT_RESOURCE_ALIAS Picker.qml)
 set_source_files_properties(qml/WallpaperCard.qml PROPERTIES QT_RESOURCE_ALIAS WallpaperCard.qml)
+set_source_files_properties(qml/FilterPanel.qml PROPERTIES QT_RESOURCE_ALIAS FilterPanel.qml)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -51,6 +52,7 @@ qt_add_qml_module(wallflux
         qml/Main.qml
         qml/Picker.qml
         qml/WallpaperCard.qml
+        qml/FilterPanel.qml
     SOURCES
         src/otheraudio.h
         src/otheraudio.cpp

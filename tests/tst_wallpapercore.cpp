@@ -206,15 +206,14 @@ void TestWallpaperCore::tellsWhatIsOnDisk()
     // here: that would start ffprobe, and a test has no business needing it.
     makeWallpaper(steam.path(), QStringLiteral("111"),
                   R"({"title":"A web one","type":"web","file":"index.html",)"
-                  R"("preview":"preview.jpg"})",
+                  R"("preview":"preview.jpg","tags":["Game"],)"
+                  R"("contentrating":"Everyone"})",
                   {QStringLiteral("index.html"), QStringLiteral("preview.jpg")});
 
     WallpaperCore core;
     core.rescan({steam.path()});
 
-    const QString size = core.details(QStringLiteral("111"))
-                             .value(QStringLiteral("size"))
-                             .toString();
+    const QString size = core.wallpapers().constFirst().sizeOnDisk;
     QVERIFY2(!size.isEmpty(), "the picker was given no size to show");
 
     // Compared with what index.html alone would come to rather than with a
@@ -227,8 +226,11 @@ void TestWallpaperCore::tellsWhatIsOnDisk()
     QVERIFY2(size != entryOnly,
              qPrintable(QStringLiteral("the entry file's own size was reported: %1").arg(size)));
 
-    QVERIFY2(core.details(QStringLiteral("nobody")).isEmpty(),
-             "a wallpaper that is not installed was described anyway");
+    // The tags and the rating come out of project.json beside it, which is
+    // the same read, so they are checked here rather than in a test of their
+    // own.
+    QCOMPARE(core.wallpapers().constFirst().tags, QStringList({QStringLiteral("Game")}));
+    QCOMPARE(core.wallpapers().constFirst().rating, QStringLiteral("G"));
 }
 
 void TestWallpaperCore::remembersWhatWasPlayedInThisRun()

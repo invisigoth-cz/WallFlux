@@ -55,10 +55,6 @@ Window {
     readonly property var sortLabels: [qsTr("Name"), qsTr("Date added"),
                                        qsTr("Size"), qsTr("Recent")]
 
-    /// Whether the scene wallpapers are left out. This is what the filter
-    /// button does today; it is the only filter the backend can answer.
-    property bool playableOnly: false
-
     /// What each section across the top is called, and what it is for.
     ///
     /// Here rather than on the tabs themselves because the heading has to
@@ -111,9 +107,18 @@ Window {
         const kept = [];
         for (let i = 0; i < all.length; ++i) {
             const one = all[i];
-            if (picker.playableOnly && !one.playable)
-                continue;
             if (needle && !one.title.toLowerCase().includes(needle))
+                continue;
+            // Each section narrows, and inside a section any one of the
+            // chosen will do: three tags means "any of these three", not
+            // "all three at once", which is what nobody means by it.
+            if (filters.tags.length && !one.tags.some((tag) => filters.tags.indexOf(tag) >= 0))
+                continue;
+            if (filters.ratings.length && filters.ratings.indexOf(one.rating) < 0)
+                continue;
+            if (filters.resolutions.length && filters.resolutions.indexOf(one.resolution) < 0)
+                continue;
+            if (filters.kinds.length && filters.kinds.indexOf(one.kind) < 0)
                 continue;
             kept.push(one);
         }
@@ -355,16 +360,18 @@ Window {
                     }
 
                     Button {
-                        text: qsTr("Filters")
+                        id: filterButton
+
+                        text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
+                                                 : qsTr("Filters")
                         icon.name: "view-filter"
-                        checkable: true
-                        checked: picker.playableOnly
-                        // One filter, because one is all there is an answer
-                        // for: leaving out what cannot be played. A button
-                        // that opens a menu of nothing would be worse.
-                        ToolTip.visible: hovered
-                        ToolTip.text: qsTr("Show only wallpapers that can be played")
-                        onToggled: picker.playableOnly = checked
+                        onClicked: filters.open()
+
+                        FilterPanel {
+                            id: filters
+
+                            y: filterButton.height + 4
+                        }
                     }
 
                     Button {
@@ -378,7 +385,29 @@ Window {
                         Menu {
                             id: orderMenu
 
-                            y: order.height
+                            y: order.height + 4
+                            implicitWidth: 240
+                            padding: 6
+
+                            background: Rectangle {
+                                color: picker.palette.base
+                                border.color: picker.palette.mid
+                                border.width: 1
+                                radius: 8
+                            }
+
+                            // A heading rather than an item: it says what
+                            // the list is, and there is nothing to pick.
+                            Label {
+                                leftPadding: 10
+                                topPadding: 6
+                                bottomPadding: 6
+                                text: qsTr("SORT BY")
+                                font.pixelSize: 11
+                                font.letterSpacing: 1.2
+                                font.weight: Font.DemiBold
+                                opacity: 0.55
+                            }
 
                             // One of the four at a time. A ButtonGroup
                             // rather than autoExclusive, which would take
@@ -389,38 +418,90 @@ Window {
                                 exclusive: true
                             }
 
-                            MenuItem {
+                            component Key: MenuItem {
+                                id: key
+
+                                /// A glyph in front of the name, for the one
+                                /// item that is not one of the four keys.
+                                property string leading: ""
+
+                                checkable: true
+                                leftPadding: 10
+                                rightPadding: 10
+
+                                // The mark goes on the right, where the eye
+                                // lands after reading the name, so the tick
+                                // box on the left is taken away.
+                                indicator: null
+
+                                contentItem: RowLayout {
+                                    spacing: 8
+
+                                    Label {
+                                        text: key.leading
+                                        visible: key.leading !== ""
+                                        color: key.palette.windowText
+                                        opacity: 0.8
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: key.text
+                                        color: key.palette.windowText
+                                    }
+                                    Label {
+                                        text: "✓"
+                                        visible: key.checked
+                                        color: key.palette.windowText
+                                    }
+                                }
+
+                                background: Rectangle {
+                                    radius: 4
+                                    color: key.highlighted
+                                           ? Qt.alpha(key.palette.highlight, 0.28)
+                                           : "transparent"
+                                }
+                            }
+
+                            Key {
                                 id: byName
                                 text: picker.sortLabels[0]
-                                checkable: true
-                                checked: true
                                 ButtonGroup.group: keys
+                                checked: true
                             }
-                            MenuItem {
+                            Key {
                                 id: byAdded
                                 text: picker.sortLabels[1]
-                                checkable: true
                                 ButtonGroup.group: keys
                             }
-                            MenuItem {
+                            Key {
                                 id: bySize
                                 text: picker.sortLabels[2]
-                                checkable: true
                                 ButtonGroup.group: keys
                             }
-                            MenuItem {
+                            Key {
                                 id: byRecent
                                 text: picker.sortLabels[3]
-                                checkable: true
                                 ButtonGroup.group: keys
                             }
 
-                            MenuSeparator {}
+                            MenuSeparator {
+                                contentItem: Rectangle {
+                                    implicitHeight: 1
+                                    color: picker.palette.mid
+                                }
+                            }
 
-                            MenuItem {
+                            Key {
                                 id: upwards
+
                                 text: qsTr("Ascending")
-                                checkable: true
+                                leading: "⇅"
+                                // Ticked to begin with: the grid comes up in
+                                // name order from A down, and an unticked
+                                // Ascending would quietly mean the other way
+                                // round. Lost once in a restyle, which turned
+                                // the whole grid back to front.
                                 checked: true
                             }
                         }

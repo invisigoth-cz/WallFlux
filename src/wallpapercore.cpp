@@ -7,9 +7,12 @@
 #include <QFile>
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QLocale>
 #include <QProcess>
 #include <QRegularExpression>
+
+#include <utility>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -36,9 +39,36 @@ WallpaperKind::Kind kindFromType(const QString &type)
         return WallpaperKind::Web;
     if (lowered == QLatin1StringView("video"))
         return WallpaperKind::Video;
+    if (lowered == QLatin1StringView("application"))
+        return WallpaperKind::Application;
     if (lowered == QLatin1StringView("scene"))
         return WallpaperKind::Scene;
     return WallpaperKind::Unknown;
+}
+
+/// The picture size in what ffprobe printed, as `1920x1080`, or nothing.
+///
+/// ffprobe rather than a decoder of our own: it is already on any machine
+/// whose Qt plays video, since that backend is ffmpeg too, and it answers in
+/// 53 milliseconds against these files -- measured. Nothing in project.json
+/// carries a resolution (checked across all 53) and the preview is a square
+/// thumbnail, so there is nowhere cheaper to ask.
+QString resolutionIn(const QByteArray &printed)
+{
+    // "1920x1080\n", and nothing else on success.
+    const QString answer = QString::fromLatin1(printed).trimmed();
+    static const QRegularExpression shape(QStringLiteral("^\\d+x\\d+$"));
+    return shape.match(answer).hasMatch() ? answer : QString{};
+}
+
+/// What to ask ffprobe for.
+QStringList probeArguments(const QString &file)
+{
+    return {QStringLiteral("-v"),        QStringLiteral("error"),
+            QStringLiteral("-select_streams"), QStringLiteral("v:0"),
+            QStringLiteral("-show_entries"),   QStringLiteral("stream=width,height"),
+            QStringLiteral("-of"),       QStringLiteral("csv=p=0:s=x"),
+            file};
 }
 
 /// Everything under this folder, added up.
@@ -82,6 +112,23 @@ QUrl entryPoint(const QDir &folder, const QString &name)
     return QUrl::fromLocalFile(resolved);
 }
 
+/// What the interface calls the content rating in project.json.
+///
+/// Wallpaper Engine writes one of three words; these are the same three
+/// under the names shown in the filter. Anything else, including nothing at
+/// all, leaves it empty rather than guessing.
+QString ratingFrom(const QString &contentRating)
+{
+    const QString lowered = contentRating.toLower();
+    if (lowered == QLatin1StringView("everyone"))
+        return QStringLiteral("G");
+    if (lowered == QLatin1StringView("questionable"))
+        return QStringLiteral("PG13");
+    if (lowered == QLatin1StringView("mature"))
+        return QStringLiteral("R");
+    return {};
+}
+
 /// Reads one wallpaper folder, or nothing if it holds no readable
 /// project.json.
 std::optional<Wallpaper> readWallpaper(const QDir &folder)
@@ -119,12 +166,18 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     wallpaper.source = entryPoint(folder, root.value(QLatin1StringView("file")).toString());
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
 
+    for (const QJsonValue &tag : root.value(QLatin1StringView("tags")).toArray())
+        wallpaper.tags.append(tag.toString());
+    wallpaper.rating = ratingFrom(root.value(QLatin1StringView("contentrating")).toString());
+
     const QFileInfo here(folder.absolutePath());
     // birthTime where the filesystem keeps one -- btrfs does, measured --
     // and the last change where it does not, which is the nearest thing to
     // when it arrived.
     wallpaper.added = here.birthTime().isValid() ? here.birthTime() : here.lastModified();
     wallpaper.bytes = sizeUnder(folder.absolutePath());
+    if (wallpaper.bytes > 0)
+        wallpaper.sizeOnDisk = QLocale().formattedDataSize(wallpaper.bytes);
 
     return wallpaper;
 }
@@ -198,14 +251,13 @@ void WallpaperCore::rescan()
 void WallpaperCore::rescan(const QStringList &steamRoots)
 {
     m_wallpapers = scan(steamRoots);
-    // What was worked out about files on disk was worked out about the files
-    // that were there before this.
-    m_details.clear();
 
     const qsizetype withFile =
         std::ranges::count_if(m_wallpapers, [](const Wallpaper &w) { return w.hasFile(); });
     qCInfo(lcScan) << "found" << m_wallpapers.size() << "wallpapers," << withFile
                    << "with a file on disk";
+
+    readResolutions();
 
     // A wallpaper that was chosen before may be gone now.
     if (!m_current.id.isEmpty() && !select(m_current.id))
@@ -252,63 +304,57 @@ void WallpaperCore::clear()
     emit currentChanged();
 }
 
-namespace {
-
-/// The picture size of a video file, as `1920x1080`, or nothing.
-///
-/// ffprobe rather than a decoder of our own: it is already on any machine
-/// whose Qt plays video, since that backend is ffmpeg too, and it answers in
-/// 53 milliseconds against these files -- measured.
-///
-/// ponytail: waits for the answer rather than going off and coming back, so
-/// a stalled ffprobe would hold the interface still for up to two seconds.
-/// It is asked once per wallpaper and only when its details are on screen.
-/// Make it a signal if that stops being true.
-QString videoResolution(const QString &file)
+void WallpaperCore::stopProbes()
 {
-    QProcess probe;
-    probe.start(QStringLiteral("ffprobe"),
-                {QStringLiteral("-v"), QStringLiteral("error"),
-                 QStringLiteral("-select_streams"), QStringLiteral("v:0"),
-                 QStringLiteral("-show_entries"), QStringLiteral("stream=width,height"),
-                 QStringLiteral("-of"), QStringLiteral("csv=p=0:s=x"), file});
-    if (!probe.waitForFinished(2000) || probe.exitStatus() != QProcess::NormalExit
-        || probe.exitCode() != 0) {
-        qCInfo(lcScan) << "ffprobe said nothing about" << file
-                       << "-- its resolution will not be shown";
-        return {};
+    // Taken out of the list and disconnected before any of them is deleted.
+    // Destroying a running QProcess waits for its program to go and delivers
+    // the finished signal on the way, and the handler for that edits this
+    // very list -- which is a crash in the middle of deleting it. Measured,
+    // as a segfault in the test suite.
+    const QList<QProcess *> going = std::exchange(m_probes, {});
+    for (QProcess *probe : going) {
+        probe->disconnect(this);
+        probe->kill();
+        delete probe;
     }
-
-    // "1920x1080\n", and nothing else on success.
-    const QString answer = QString::fromLatin1(probe.readAllStandardOutput()).trimmed();
-    static const QRegularExpression shape(QStringLiteral("^\\d+x\\d+$"));
-    return shape.match(answer).hasMatch() ? answer : QString{};
 }
 
-} // namespace
-
-QVariantMap WallpaperCore::details(const QString &id) const
+void WallpaperCore::readResolutions()
 {
-    if (const auto known = m_details.constFind(id); known != m_details.cend())
-        return *known;
+    stopProbes();
 
-    const auto match = std::ranges::find(m_wallpapers, id, &Wallpaper::id);
-    if (match == m_wallpapers.cend())
-        return {};
+    for (const Wallpaper &wallpaper : std::as_const(m_wallpapers)) {
+        if (wallpaper.kind != WallpaperKind::Video || wallpaper.source.isEmpty())
+            continue;
 
-    const QString file = match->source.toLocalFile();
-    QVariantMap facts;
+        auto *probe = new QProcess(this);
+        m_probes.append(probe);
+        connect(probe, &QProcess::finished, this, [this, probe, id = wallpaper.id]() {
+            m_probes.removeAll(probe);
+            probe->deleteLater();
 
-    // Added up during the scan, since ordering the grid by size needs every
-    // one of them anyway.
-    if (match->bytes > 0)
-        facts.insert(QStringLiteral("size"), QLocale().formattedDataSize(match->bytes));
+            const QString shape = resolutionIn(probe->readAllStandardOutput());
+            if (shape.isEmpty()) {
+                qCInfo(lcScan) << "ffprobe said nothing about the size of" << id;
+                return;
+            }
 
-    if (match->kind == WallpaperKind::Video && !file.isEmpty()) {
-        if (const QString shape = videoResolution(file); !shape.isEmpty())
-            facts.insert(QStringLiteral("resolution"), shape);
+            const auto match = std::ranges::find(m_wallpapers, id, &Wallpaper::id);
+            if (match == m_wallpapers.end())
+                return;
+
+            match->resolution = shape;
+            // The one that is playing carries its own copy.
+            if (m_current.id == id)
+                m_current.resolution = shape;
+            emit wallpapersChanged();
+        });
+        probe->start(QStringLiteral("ffprobe"), probeArguments(wallpaper.source.toLocalFile()));
     }
+}
 
-    m_details.insert(id, facts);
-    return facts;
+WallpaperCore::~WallpaperCore()
+{
+    // Nobody is left who wanted the answers.
+    stopProbes();
 }
