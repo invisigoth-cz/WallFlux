@@ -8,6 +8,11 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Steam Workshop tab shows the workshop.** Where the Steamworks
+  library is on the machine, the Trending and New rows are asked of Steam
+  itself -- fifty at a time out of three and a quarter million -- and come
+  back with titles, previews, tags and sizes. No API key and no web page is
+  involved.
 - **WallFlux can tell whether the Steam Workshop is reachable.** The
   Steamworks library is looked for when the workshop is first wanted and
   opened by name; nothing of Valve's is shipped with WallFlux or linked at

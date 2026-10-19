@@ -198,6 +198,21 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `tags` and `preview` in every one, `type` and `file` in 51, `contentrating`
   in 49 and always "Everyone", and **no resolution anywhere**. So the tag,
   rating and kind filters are free, and the resolution one is not.
+- **Steam's answers have to be fetched, not waited for.** There is no thread
+  of Steam's in this process: a query is sent, and the result sits in a queue
+  until `SteamAPI_ManualDispatch_RunFrame` and `GetNextCallback` are called
+  -- here on a 100 ms timer while a question is outstanding. A finished call
+  arrives as callback 703, whose payload says which call and what the real
+  callback number is; 3401 is a finished UGC query, read with
+  `GetAPICallResult`. Every callback must be freed or the queue stops.
+- **The shape of Steam's structs is measured, not guessed.** Valve's headers
+  are not in this repository, so `steamworks.cpp` writes out what it needs --
+  and every offset in it came from compiling a throwaway program against
+  those headers once and printing `offsetof`. The `static_assert`s in that
+  file are that measurement: `SteamUGCDetails_t` is 9764 bytes with the title
+  at 24 and the tags at 8183, a callback envelope is 20 bytes with the
+  payload pointer at 8, and the structs are packed to 4. Get one wrong and
+  the build stops rather than reading somebody else's bytes.
 - **`SteamAPI_Init` is not an exported symbol** -- it is inline in Valve's
   header and calls `SteamInternal_SteamAPI_Init`. Through dlopen what there
   is to call is `SteamAPI_InitSafe`, with `SteamAPI_GetHSteamUser` and

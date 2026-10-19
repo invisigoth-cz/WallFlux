@@ -281,22 +281,22 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>Steamworks</name>
     <message>
-        <location filename="../src/steamworks.cpp" line="64" />
+        <location filename="../src/steamworks.cpp" line="173" />
         <source>The Steamworks library is not on this machine.</source>
         <translation>Knihovna Steamworks na tomhle počítači není.</translation>
     </message>
     <message>
-        <location filename="../src/steamworks.cpp" line="77" />
+        <location filename="../src/steamworks.cpp" line="215" />
         <source>The Steamworks library on this machine is not one this program knows how to talk to.</source>
         <translation>S knihovnou Steamworks, která je na tomhle počítači, si tenhle program nerozumí.</translation>
     </message>
     <message>
-        <location filename="../src/steamworks.cpp" line="90" />
+        <location filename="../src/steamworks.cpp" line="228" />
         <source>Steam did not answer. It has to be running, and signed in to the account that owns Wallpaper Engine.</source>
         <translation>Steam neodpověděl. Musí běžet a být přihlášený k účtu, který vlastní Wallpaper Engine.</translation>
     </message>
     <message>
-        <location filename="../src/steamworks.cpp" line="97" />
+        <location filename="../src/steamworks.cpp" line="235" />
         <source>Steam answered but offered no workshop to ask about.</source>
         <translation>Steam odpověděl, ale žádný workshop k dotazování nenabídl.</translation>
     </message>
@@ -326,12 +326,12 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>WorkshopView</name>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="54" />
+        <location filename="../qml/WorkshopView.qml" line="69" />
         <source>Unspecified</source>
         <translation>Neurčeno</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="59" />
+        <location filename="../qml/WorkshopView.qml" line="74" />
         <source>Native</source>
         <translation>Nativní</translation>
     </message>
@@ -340,53 +340,57 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Odebírat</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="67" />
+        <location filename="../qml/WorkshopView.qml" line="82" />
         <source>Download</source>
         <translation>Stáhnout</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="94" />
+        <location filename="../qml/WorkshopView.qml" line="109" />
         <source>See more</source>
         <translation>Zobrazit víc</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="109" />
+        <location filename="../qml/WorkshopView.qml" line="124" />
         <source>Keep this row at the top</source>
         <translation>Držet tuhle řadu nahoře</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="136" />
+        <location filename="../qml/WorkshopView.qml" line="151" />
         <source>Rows picked for you</source>
         <translation>Řady vybrané pro tebe</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="144" />
+        <location filename="../qml/WorkshopView.qml" line="159" />
         <source>Everything, in one grid</source>
         <translation>Všechno v jedné mřížce</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="149" />
+        <location filename="../qml/WorkshopView.qml" line="164" />
         <source>Search workshop…</source>
         <translation>Hledat ve Workshopu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="163" />
+        <location filename="../qml/WorkshopView.qml" line="178" />
         <source>Filters</source>
         <translation>Filtry</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="168" />
-        <location filename="../qml/WorkshopView.qml" line="208" />
+        <location filename="../qml/WorkshopView.qml" line="183" />
+        <location filename="../qml/WorkshopView.qml" line="223" />
         <source>Trending</source>
         <translation>Populární</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="182" />
-        <source>Steam is answering. The rows below are still the wallpapers already installed, standing in until the asking is written.</source>
-        <translation>Steam odpovídá. Řady níž jsou pořád už nainstalované tapety — zastupují workshop, dokud nebude napsané samotné dotazování.</translation>
+        <location filename="../qml/WorkshopView.qml" line="198" />
+        <source>Asking Steam…</source>
+        <translation>Ptám se Steamu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="184" />
+        <source>Steam is answering. The rows below are still the wallpapers already installed, standing in until the asking is written.</source>
+        <translation type="vanished">Steam odpovídá. Řady níž jsou pořád už nainstalované tapety — zastupují workshop, dokud nebude napsané samotné dotazování.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="199" />
         <source>%1 Until then the rows below are the wallpapers already installed, standing in so the layout can be judged.</source>
         <translation>%1 Zatím jsou řady níž už nainstalované tapety, zastupují workshop, aby šlo posoudit rozvržení.</translation>
     </message>
@@ -395,7 +399,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Workshop zatím není napojený — tohle jsou už nainstalované tapety, zastupují ho, aby šlo posoudit rozvržení.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="231" />
+        <location filename="../qml/WorkshopView.qml" line="246" />
         <source>New</source>
         <translation>Novinky</translation>
     </message>

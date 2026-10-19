@@ -29,9 +29,24 @@ Item {
     readonly property int cardWidth: 240
     readonly property int cardHeight: Math.round((workshop.cardWidth - 16) * 9 / 16) + 46
 
-    /// Stand-ins. Two different slices so the rows do not read as one list.
-    readonly property var trending: Wallpapers.wallpapers.slice(0, 12)
-    readonly property var fresh: Wallpapers.wallpapers.slice(12)
+    /// What the workshop said, where it could be asked; otherwise the
+    /// previews of what is already installed, standing in so the layout can
+    /// be judged against real pictures.
+    readonly property bool real: Steamworks.trending.length > 0
+    readonly property var trending: workshop.real ? Steamworks.trending
+                                                  : Wallpapers.wallpapers.slice(0, 12)
+    readonly property var fresh: Steamworks.newest.length > 0
+                                 ? Steamworks.newest
+                                 : (workshop.real ? [] : Wallpapers.wallpapers.slice(12))
+
+    // Asked once, when somebody first comes here, and both rows at once --
+    // they are asked one after another, which the backend sees to.
+    Component.onCompleted: {
+        if (Steamworks.available) {
+            Steamworks.browse(Steamworks.Trending);
+            Steamworks.browse(Steamworks.Newest);
+        }
+    }
 
     /// One wallpaper as the workshop shows it: the same tile the library
     /// uses, with something to do about not owning it.
@@ -178,9 +193,9 @@ Item {
             Layout.maximumWidth: parent.width - 48
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
+            visible: !workshop.real
             text: Steamworks.available
-                  ? qsTr("Steam is answering. The rows below are still the wallpapers "
-                         + "already installed, standing in until the asking is written.")
+                  ? qsTr("Asking Steam…")
                   : qsTr("%1 Until then the rows below are the wallpapers already "
                          + "installed, standing in so the layout can be judged.")
                     .arg(Steamworks.trouble)

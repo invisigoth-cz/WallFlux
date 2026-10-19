@@ -7,6 +7,10 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <QString>
+#include <QList>
+#include <QPair>
+#include <QTimer>
+#include <QVariantList>
 
 /// Whether this machine can be asked about the Steam Workshop, and the way in.
 ///
@@ -36,22 +40,88 @@ class Steamworks : public QObject
     /// Why not, in words an interface can show. Empty while all is well.
     Q_PROPERTY(QString trouble READ trouble CONSTANT)
 
+    /// What each question came back with: one map per wallpaper, with `id`,
+    /// `title`, `preview`, `tags`, `bytes` and `votesUp`.
+    ///
+    /// One list per order rather than one shared one, because the window
+    /// shows two rows at once and filling both from a single question would
+    /// mean the second row showing the tail of the first -- which is not
+    /// what "New" says.
+    Q_PROPERTY(QVariantList trending READ trending NOTIFY foundChanged)
+    Q_PROPERTY(QVariantList newest READ newest NOTIFY foundChanged)
+
+    /// Whether a question is outstanding.
+    Q_PROPERTY(bool busy READ isBusy NOTIFY busyChanged)
+
 public:
+    /// What to put at the top, in the order the picker's own menu has them.
+    enum Order {
+        Trending,     ///< What the workshop is making a fuss of now.
+        Newest,       ///< By the date it was published.
+        MostSubscribed, ///< By how many people took it.
+    };
+    Q_ENUM(Order)
+
     explicit Steamworks(QObject *parent = nullptr);
     ~Steamworks() override;
 
     bool isAvailable() const { return m_ugc != nullptr; }
     QString trouble() const { return m_trouble; }
+    QVariantList trending() const { return m_trending; }
+    QVariantList newest() const { return m_newest; }
+    bool isBusy() const { return m_call != 0; }
+
+    /// Asks the workshop for one page of wallpapers, fifty at a time, which
+    /// is what Steam gives. The answer arrives in the list for that order a
+    /// moment later. Asking again while one is outstanding is allowed: the
+    /// questions are asked one after another, since a query handle has to be
+    /// let go of before the next is made.
+    Q_INVOKABLE void browse(Steamworks::Order order, int page = 1);
+
+signals:
+    void foundChanged();
+    void busyChanged();
 
 private:
     /// Opens libsteam_api.so from wherever it is, or says where it looked.
     bool open();
+
+    /// Steam has no thread of its own here: its answers are collected by
+    /// asking, which is what this does while a question is outstanding.
+    void pump();
+
+    /// Reads one finished query out of Steam and into `found`.
+    void collect(quint64 call, int callbackId, int paramSize);
 
     void *m_library = nullptr;
     /// The ISteamUGC pointer, which is what everything about the workshop is
     /// asked through. Null until open() has worked.
     void *m_ugc = nullptr;
     QString m_trouble;
+    QVariantList m_trending;
+    QVariantList m_newest;
 
+    /// What was asked, so the answer lands in the right list, and what is
+    /// still waiting to be asked.
+    Order m_asking = Trending;
+    QList<QPair<Order, int>> m_queued;
+
+    /// The pipe callbacks come down, and what is outstanding on it.
+    qint32 m_pipe = 0;
+    quint64 m_query = 0;
+    quint64 m_call = 0;
+    QTimer m_pump;
+
+    // The library's own entry points, found by name. Spelled out rather
+    // than taken from Valve's headers, which are deliberately not here.
     void (*m_shutdown)() = nullptr;
+    void (*m_runFrame)(qint32) = nullptr;
+    bool (*m_nextCallback)(qint32, void *) = nullptr;
+    void (*m_freeCallback)(qint32) = nullptr;
+    bool (*m_callResult)(qint32, quint64, void *, int, int, bool *) = nullptr;
+    quint64 (*m_createQuery)(void *, int, int, quint32, quint32, quint32) = nullptr;
+    quint64 (*m_sendQuery)(void *, quint64) = nullptr;
+    bool (*m_queryResult)(void *, quint64, quint32, void *) = nullptr;
+    bool (*m_previewUrl)(void *, quint64, quint32, char *, quint32) = nullptr;
+    bool (*m_releaseQuery)(void *, quint64) = nullptr;
 };
