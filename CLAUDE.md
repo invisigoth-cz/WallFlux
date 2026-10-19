@@ -282,6 +282,27 @@ reasoned about:
   (again to undo), then `spectacle -b -n -f -o <file.png>`.
   `workspace.showingDesktop = true` from a script does **not** work.
 
+## How a release is made
+
+The number lives in two places and both have to say the same thing:
+`project(WallFlux VERSION ...)` in CMakeLists.txt and `pkgver` in
+packaging/PKGBUILD. Then, in this order:
+
+1. Write the entry in CHANGELOG.md under a heading for the new version,
+   moving anything from Unreleased, and fix the compare links at the bottom.
+2. Commit the number and the entry together.
+3. `git tag -a v<version>` with a message that says what the release is.
+   **With the `v`** -- v0.1.0 is tagged that way and two conventions in one
+   repository is one too many.
+4. `git push origin main && git push origin v<version>`.
+5. `gh release create v<version> --notes-file <the changelog entry>`, with
+   the built package attached if there is one.
+6. `cd packaging && makepkg -f`, which builds from the tag now that it is
+   committed, then `sudo pacman -U wallflux-<version>-1-x86_64.pkg.tar.zst`.
+
+0.2.0 was tagged before CHANGELOG.md existed, so its tag does not contain
+the file. Everything after it should.
+
 ## Open, in the order they are likely to be taken
 
 1. **A list of wallpapers that take turns.** The tab is already there and
