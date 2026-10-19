@@ -199,16 +199,31 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   no key and takes `browsesort` and `requiredtags[]`, so ids out of the page
   and details out of the keyless endpoint is a route that keeps no secret
   anywhere.
-- **Nothing outside Steam can make Steam download a workshop item.** The
-  client's URL handler knows 28 verbs -- read out of `steamui/sp.js` -- and
-  not one of them subscribes or downloads; `steam://url/` has 17 targets and
-  none of them either. `SubscribeItem` exists, but only as a symbol in
-  `linux64/steamclient.so`: it is the Steamworks call, reachable only by a
-  process the client accepts as the app itself, which would mean shipping
-  Valve's proprietary libsteam_api beside GPL code and telling Valve we are
-  Wallpaper Engine. So the flow is: open the item's page, somebody presses
-  Subscribe once, and Steam does the rest -- which is the part WallFlux can
-  make invisible, by watching the folder.
+- **Subscribing and downloading from outside Steam is possible, and the
+  only route to it is the Steamworks SDK.** Not through the URL handler: the
+  client knows 28 `steam://` verbs -- read out of `steamui/sp.js` -- and not
+  one subscribes or downloads, and `steam://url/` has 17 targets and none
+  either. Through `ISteamUGC`, which is what `SubscribeItem` in
+  `linux64/steamclient.so` is. A process has to declare itself as app 431960
+  to use it.
+
+  **It is done on this machine already.** `linux-wallpaper-engine-ux`
+  (jagrat7/linux-wallpaper-engine, MIT, Electron) ships `steamworks.js` with
+  Valve's `libsteam_api.so` inside its `app.asar` and calls
+  `workshop.subscribe`, `workshop.download`, `workshop.downloadInfo`,
+  `workshop.installInfo` and `workshop.getAllItems` -- the last with
+  `rankedByTrendDays`, so **browsing the whole workshop goes the same way**,
+  with no web API key and no page to scrape either.
+
+  **What stops WallFlux doing the same is the licence, not the mechanism.**
+  GPL-3.0 code cannot link a proprietary library without an exception written
+  for it. That
+  project is MIT and can; this one would need either a linking exception for
+  the Steamworks SDK, a different licence, or the Steam part in a separate
+  program of its own. Until one of those is decided: ids off the public
+  browse page, details off the keyless endpoint, and Download opens the
+  item's page for somebody to press Subscribe once -- after which the folder
+  watcher makes the rest invisible.
 - **Asking ffprobe during the scan is a trap.** It is 53 milliseconds a
   video, which sounds free until the constructor of WallpaperCore scans the
   real machine on every test that builds one: the suite went from 0.03 to
