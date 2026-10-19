@@ -5,6 +5,8 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QLocale>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -53,6 +55,10 @@ private slots:
     /// It is what a person does by clicking the tile that is already lit, and
     /// announcing it stops the video player for good.
     void staysQuietWhenTheChoiceIsTheSame();
+
+    /// What the picker shows when somebody looks at one card: the size of
+    /// what is on disk, and nothing at all for a wallpaper that is not here.
+    void tellsWhatIsOnDisk();
 };
 
 void TestWallpaperCore::readsWhatIsThere()
@@ -185,6 +191,41 @@ void TestWallpaperCore::staysQuietWhenTheChoiceIsTheSame()
     // A rescan goes through select() too, and must stay just as quiet.
     core.rescan({steam.path()});
     QCOMPARE(currentChanges.count(), 1);
+}
+
+void TestWallpaperCore::tellsWhatIsOnDisk()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+
+    // A web wallpaper, because its size is the whole folder rather than the
+    // entry file -- which is the part that could be got wrong. No video
+    // here: that would start ffprobe, and a test has no business needing it.
+    makeWallpaper(steam.path(), QStringLiteral("111"),
+                  R"({"title":"A web one","type":"web","file":"index.html",)"
+                  R"("preview":"preview.jpg"})",
+                  {QStringLiteral("index.html"), QStringLiteral("preview.jpg")});
+
+    WallpaperCore core;
+    core.rescan({steam.path()});
+
+    const QString size = core.details(QStringLiteral("111"))
+                             .value(QStringLiteral("size"))
+                             .toString();
+    QVERIFY2(!size.isEmpty(), "the picker was given no size to show");
+
+    // Compared with what index.html alone would come to rather than with a
+    // number written out here: the point is that a web wallpaper is measured
+    // as the folder it is, and that holds whatever else was put in it.
+    const QString entryOnly = QLocale().formattedDataSize(
+        QFileInfo(steam.path()
+                  + QStringLiteral("/steamapps/workshop/content/431960/111/index.html"))
+            .size());
+    QVERIFY2(size != entryOnly,
+             qPrintable(QStringLiteral("the entry file's own size was reported: %1").arg(size)));
+
+    QVERIFY2(core.details(QStringLiteral("nobody")).isEmpty(),
+             "a wallpaper that is not installed was described anyway");
 }
 
 QTEST_MAIN(TestWallpaperCore)

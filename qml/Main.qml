@@ -157,6 +157,8 @@ Window {
         visible: root.showingVideo
         source: root.showingVideo ? Wallpapers.current.source : ""
         muted: root.silent
+        // Set from the slider on the wallpaper's own card in the picker.
+        volume: picker.volume
         // A wallpaper fills the screen; the clip's own shape gives way rather
         // than leaving bars down the sides.
         fillMode: VideoOutput.PreserveAspectCrop

@@ -3,11 +3,13 @@
 
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QQmlEngine>
 #include <QString>
 #include <QUrl>
+#include <QVariantMap>
 
 namespace WallpaperKind {
 Q_NAMESPACE
@@ -123,6 +125,17 @@ public:
     /// Forgets the current wallpaper, leaving the screen blank.
     Q_INVOKABLE void clear();
 
+    /// What this wallpaper takes up on disk and, for a video, how big its
+    /// picture is: `{ "size": "87.4 MiB", "resolution": "1920x1080" }`.
+    ///
+    /// Asked for one wallpaper at a time, when the picker is showing the
+    /// details of one, because neither answer is free and neither is wanted
+    /// for the other fifty. Both are missing from project.json -- checked
+    /// across all 53 of them -- so they are read off the disk instead, and
+    /// the answer is kept once it has been worked out. An entry is empty
+    /// where it could not be had, which the picker shows as "Nativní".
+    Q_INVOKABLE QVariantMap details(const QString &id) const;
+
     /// Reads the wallpapers under each of these Steam installs.
     ///
     /// Separate from rescan() so a test can point it at a folder of its own
@@ -138,6 +151,11 @@ signals:
     void currentChanged();
 
 private:
+    /// Worked out the first time the picker asks and kept afterwards, since
+    /// nothing about a file on disk changes while the program runs. Cleared
+    /// by a rescan, which is when it might have.
+    mutable QHash<QString, QVariantMap> m_details;
+
     QList<Wallpaper> m_wallpapers;
     Wallpaper m_current;
 };

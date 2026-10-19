@@ -15,6 +15,12 @@ Plasma 6.7 on Wayland, and that is where everything below was measured.
   one switch there is turns the wallpaper's own sound off altogether.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
   the one that is clicked.
+- **A picker that looks like something**: dark and light themes switched
+  without a restart, a search that narrows the grid as it is typed, name
+  order either way round, a band around each preview saying whether it can
+  be played, and a panel over the preview with what the file is, how big its
+  picture is and what it takes up on disk -- with the volume for a video on
+  the card itself.
 - **An Arch package** (`packaging/PKGBUILD`), installed, with an autostart
   entry that has been verified through a real logout and login.
 
@@ -34,7 +40,8 @@ src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
 src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
-qml/Picker.qml        a window of preview thumbnails, click to play
+qml/Picker.qml        the picker window: header, search, grid, footer
+qml/WallpaperCard.qml one preview, its band, its name and its hover panel
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
@@ -47,7 +54,9 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 `qmlRegisterType`, which qmllint cannot see):
 
 - properties: `wallpapers` (QList<Wallpaper>), `current`
-- methods: `rescan()`, `rescan(roots)`, `select(id)`, `clear()`
+- methods: `rescan()`, `rescan(roots)`, `select(id)`, `clear()`,
+  `details(id)` (`{ size, resolution }`, read off the disk when the picker
+  shows one card and kept afterwards)
 - static: `scan(roots)`, `steamRoots()`
 - `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `hasFile`, `playable`
 
@@ -135,6 +144,21 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `onVisibleChanged` sets it.
 - **`qmllint` is not in `PATH`** on this machine; it is
   `/usr/lib/qt6/bin/qmllint`.
+- **A `MultiEffect` mask draws nothing unless the mask has
+  `layer.enabled: true`.** Not a dimmer picture or a square-cornered one:
+  nothing, every card blank. A `Rectangle` is not a texture until it is a
+  layer, and the effect quietly has nothing to work with. Looked at side by
+  side, with and without, which is the only way this one shows itself.
+- **Fusion leaves a `ToolButton`'s `icon.color` unset, so its icon is drawn
+  in nothing at all.** A `Button` sets it and shows up; a `ToolButton` does
+  not, with or without `flat`, `display` or an explicit `icon.width`. Set
+  `icon.color` on every one of them. Measured one variant per row.
+- **`weather-clear` and `weather-clear-night` are 48-pixel applet icons.**
+  At 16 all that survives is a white disc. `brightness-high` and
+  `brightness-low` are the action-sized pair and read properly.
+- **project.json carries no resolution.** Checked across all 53 of them: the
+  keys are `file`, `preview`, `title`, `type`, `tags` and housekeeping.
+  `ffprobe` reads it off the video instead, in 53 milliseconds.
 - **`qt6-wayland` does not exist on CachyOS**; the Wayland plugin lives in
   `qt6-base`.
 
@@ -173,6 +197,20 @@ reasoned about:
   and an uncovered one; `paplay` on anything in `/usr/share/sounds` is
   another program using the speakers. Both states can be read back from
   `QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="wallflux.*=true"`.
+- **A picture of the picker**, without touching the mouse and without the
+  window ending up behind something: open it with
+  `busctl --user call <name> /StatusNotifierItem org.kde.StatusNotifierItem
+  Activate ii 100 100` (the name is the one of this program's two bus names
+  whose `busctl --user tree` shows `/StatusNotifierItem`), bring it to the
+  front with a KWin script that sets `workspace.activeWindow` to the window
+  whose caption contains "choose a wallpaper" -- which also prints its
+  geometry, so the screenshot can be cropped to exactly the window --
+  then `spectacle -b -n -f -o <file.png>`.
+- **A picture of one piece of QML**, without the application at all:
+  `item.grabToImage(function (r) { r.saveToFile("<file.png>") })` in a file
+  run with `/usr/lib/qt6/bin/qml`. Several variants of the same thing side
+  by side in one window is how both of the Qt traps above were found; both
+  look like working code and neither says anything when it does not work.
 - **A picture of the desktop** with the windows out of the way:
   `qdbus6 org.kde.kglobalaccel /component/kwin invokeShortcut "Show Desktop"`
   (again to undo), then `spectacle -b -n -f -o <file.png>`.
