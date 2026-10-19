@@ -11,12 +11,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # WebEngineQuick pulls in Quick, Qml and Gui on its own, but naming them keeps
 # the error at configure time -- with a missing module named -- rather than at
 # link time.
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick WebEngineQuick)
-
-# Video wallpapers. 6.7 rather than 6.5 because that is when Video gained
-# autoPlay; asking for it here fails at configure time with the version named
-# instead of at runtime with an unknown property.
-find_package(Qt6 6.7 REQUIRED COMPONENTS Multimedia)
+find_package(Qt6 6.5 REQUIRED COMPONENTS
+    Core Gui Multimedia Qml Quick WebEngineQuick Widgets)
 
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
@@ -43,6 +39,7 @@ qt_add_executable(wallflux
 # Without this the file would land in a subdirectory of the module, which Qt
 # warns about and which needs a qmldir of its own.
 set_source_files_properties(qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
+set_source_files_properties(qml/Picker.qml PROPERTIES QT_RESOURCE_ALIAS Picker.qml)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -55,6 +52,7 @@ qt_add_qml_module(wallflux
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/Picker.qml
     SOURCES
         src/wallpapercore.h
         src/wallpapercore.cpp
@@ -70,6 +68,9 @@ target_link_libraries(wallflux PRIVATE
     Qt6::Qml
     Qt6::Quick
     Qt6::WebEngineQuick
+    # Only for the tray icon's fallback, which Qt.labs.platform needs linked
+    # whether or not this desktop ends up using it.
+    Qt6::Widgets
     ZLIB::ZLIB
     PkgConfig::LZ4
 )

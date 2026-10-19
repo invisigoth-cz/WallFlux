@@ -5,7 +5,7 @@
 
 #include <LayerShellQt/Window>
 
-#include <QGuiApplication>
+#include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QLoggingCategory>
 #include <QQuickWindow>
@@ -26,7 +26,10 @@ int main(int argc, char *argv[])
     // debugging a wallpaper.
     QLoggingCategory::setFilterRules(QStringLiteral("js=false"));
 
-    QGuiApplication app(argc, argv);
+    // QApplication rather than QGuiApplication: Qt.labs.platform, which the
+    // tray icon comes from, falls back to the Qt Widgets tray where the
+    // desktop has no native one of its own, and that fallback needs this.
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wallflux"));
     app.setOrganizationName(QStringLiteral("WallFlux"));
     // KWin reads the desktop file name to decide what the window is; a

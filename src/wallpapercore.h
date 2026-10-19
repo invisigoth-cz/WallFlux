@@ -41,7 +41,9 @@ class Wallpaper
     Q_PROPERTY(QString title MEMBER title CONSTANT)
     Q_PROPERTY(WallpaperKind::Kind kind MEMBER kind CONSTANT)
     Q_PROPERTY(QUrl source MEMBER source CONSTANT)
+    Q_PROPERTY(QUrl preview MEMBER preview CONSTANT)
     Q_PROPERTY(bool hasFile READ hasFile CONSTANT)
+    Q_PROPERTY(bool playable READ playable CONSTANT)
 
 public:
     /// The workshop id, which is the name of the folder it sits in. The
@@ -59,11 +61,26 @@ public:
     /// than on disk.
     QUrl source;
 
+    /// The still or animated image Wallpaper Engine shows for this one in
+    /// its own library. Every wallpaper here has one, but it is read from
+    /// downloaded content like everything else, so it may be empty.
+    QUrl preview;
+
     /// Whether the file this wallpaper is made of was found on disk.
     ///
     /// Not a promise that it can be drawn: a scene wallpaper keeps its own
     /// format even when the file is there.
     bool hasFile() const { return !source.isEmpty(); }
+
+    /// Whether this is one we can actually put on the screen today.
+    ///
+    /// Asked by the picker, to tell apart what a click can do something with
+    /// from the scene wallpapers that are only listed. Kept here rather than
+    /// repeated in QML so there is one answer, not two that can drift.
+    bool playable() const
+    {
+        return hasFile() && (kind == WallpaperKind::Web || kind == WallpaperKind::Video);
+    }
 };
 
 /// Finds the Wallpaper Engine wallpapers installed by Steam and keeps the

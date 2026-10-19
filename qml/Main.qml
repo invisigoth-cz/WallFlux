@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 invisigoth
 
+import QtCore
 import QtQuick
 import QtQuick.Window
 import QtMultimedia
 import QtWebEngine
+import Qt.labs.platform as Platform
 import WallFlux
 
 Window {
@@ -37,18 +39,86 @@ Window {
     color: "black"
     title: qsTr("WallFlux")
 
-    // Plays the first wallpaper we can draw. Choosing between them is the
-    // interface's job, once there is an interface; going through select()
-    // rather than reaching for the url directly means that interface will
-    // not have to undo anything here.
+    /// Plays this one and remembers it for next time. Everything that
+    /// chooses a wallpaper goes through here, so there is one place where a
+    /// choice is made and one place where it is written down.
+    function choose(id: string) {
+        if (Wallpapers.select(id))
+            saved.wallpaperId = id;
+    }
+
+    function showPicker() {
+        picker.show();
+        picker.raise();
+        picker.requestActivate();
+    }
+
+    // Written to ~/.config/WallFlux/wallflux.conf, under the names main()
+    // gives the application.
+    Settings {
+        id: saved
+
+        property string wallpaperId
+    }
+
+    // Last time's wallpaper, or -- on a first run, or if that one has since
+    // been uninstalled -- the first one we can draw, so that the screen is
+    // never left empty with wallpapers sitting right there.
     Component.onCompleted: {
+        if (Wallpapers.select(saved.wallpaperId))
+            return;
+
         const found = Wallpapers.wallpapers;
         for (let i = 0; i < found.length; ++i) {
-            if (found[i].hasFile
-                && (found[i].kind === WallpaperKind.Web
-                    || found[i].kind === WallpaperKind.Video)) {
-                Wallpapers.select(found[i].id);
+            if (found[i].playable) {
+                root.choose(found[i].id);
                 return;
+            }
+        }
+    }
+
+    Picker {
+        id: picker
+
+        // Not transient for the wallpaper. That one is a layer-shell surface
+        // the compositor keeps in the background and takes no input, and a
+        // window belonging to it would be dragged down there with it.
+        transientParent: null
+        onChose: (id) => root.choose(id)
+    }
+
+    // The only thing a person can click: the wallpaper itself is in the
+    // background layer and transparent to input, so without this there would
+    // be no way to reach the picker at all.
+    Platform.SystemTrayIcon {
+        visible: true
+        // From the icon theme rather than shipped with us; Breeze and every
+        // other freedesktop theme has this one.
+        icon.name: "preferences-desktop-wallpaper"
+        tooltip: Wallpapers.current.playable
+                 ? qsTr("WallFlux — %1").arg(Wallpapers.current.title)
+                 : qsTr("WallFlux")
+
+        // A plain left click is the shortest way to the grid; the menu is
+        // for everything else.
+        onActivated: (reason) => {
+            if (reason === Platform.SystemTrayIcon.Trigger)
+                root.showPicker();
+        }
+
+        menu: Platform.Menu {
+            Platform.MenuItem {
+                text: qsTr("Choose wallpaper…")
+                onTriggered: root.showPicker()
+            }
+            Platform.MenuItem {
+                text: qsTr("Look for new wallpapers")
+                onTriggered: Wallpapers.rescan()
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: qsTr("Quit")
+                onTriggered: Qt.quit()
             }
         }
     }
@@ -67,6 +137,8 @@ Window {
     // where they have any -- plays, which is what Wallpaper Engine does too;
     // the switch for it belongs to the interface, once there is one.
     Video {
+        id: video
+
         anchors.fill: parent
         visible: root.showingVideo
         source: root.showingVideo ? Wallpapers.current.source : ""
@@ -74,7 +146,16 @@ Window {
         // than leaving bars down the sides.
         fillMode: VideoOutput.PreserveAspectCrop
         loops: MediaPlayer.Infinite
-        autoPlay: true
+
+        // autoPlay starts the first file and no other: hand it a second one
+        // and it loads it, says nothing, reports no error and sits there
+        // stopped. Measured, not guessed -- twenty-four switches gave one
+        // start with autoPlay and twenty-five with this. Switching wallpaper
+        // is the whole point of the picker, so it cannot be left to that.
+        onSourceChanged: {
+            if (root.showingVideo)
+                video.play();
+        }
 
         // A codec the system has no decoder for is the likely failure here,
         // and it fails quietly otherwise: a black screen and no reason given.

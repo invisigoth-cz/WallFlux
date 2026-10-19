@@ -37,8 +37,8 @@ WallpaperKind::Kind kindFromType(const QString &type)
     return WallpaperKind::Unknown;
 }
 
-/// The file that project.json's `file` field names, resolved inside the
-/// wallpaper's own folder.
+/// A file that project.json names, resolved inside the wallpaper's own
+/// folder.
 ///
 /// That name comes out of content downloaded from the workshop, so it is
 /// checked rather than trusted: a `file` of "../../../.bashrc" must not be
@@ -99,6 +99,7 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     wallpaper.title = root.value(QLatin1StringView("title")).toString(wallpaper.id);
     wallpaper.kind = kind;
     wallpaper.source = entryPoint(folder, root.value(QLatin1StringView("file")).toString());
+    wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
     return wallpaper;
 }
 
@@ -190,8 +191,18 @@ bool WallpaperCore::select(const QString &id)
     if (match == m_wallpapers.cend())
         return false;
 
-    // Assigned even when the same wallpaper is chosen again, so that a
-    // rescan refreshes what we hold rather than keeping a stale copy.
+    // Saying nothing when nothing has changed is not an optimisation here,
+    // it is the difference between a wallpaper that plays and one that does
+    // not. Clicking the wallpaper that is already playing used to report a
+    // change; QML then handed the video player the same file again, which
+    // stops it and reports no change of its own, so nothing was left to
+    // start it. The screen went black until something else was chosen.
+    //
+    // A rescan still refreshes what we hold: the same wallpaper whose file
+    // has moved is a change, and is announced as one.
+    if (m_current.id == match->id && m_current.source == match->source)
+        return true;
+
     m_current = *match;
     emit currentChanged();
     return true;

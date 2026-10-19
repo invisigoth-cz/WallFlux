@@ -13,7 +13,7 @@ namespace {
 
 /// Writes one wallpaper folder into a pretend Steam install.
 void makeWallpaper(const QString &root, const QString &id, const QByteArray &projectJson,
-                   const QString &alsoWrite = {})
+                   const QStringList &alsoWrite = {})
 {
     const QString folder =
         root + QStringLiteral("/steamapps/workshop/content/431960/") + id;
@@ -24,8 +24,8 @@ void makeWallpaper(const QString &root, const QString &id, const QByteArray &pro
     QCOMPARE(project.write(projectJson), projectJson.size());
     project.close();
 
-    if (!alsoWrite.isEmpty()) {
-        QFile entry(folder + QLatin1Char('/') + alsoWrite);
+    for (const QString &name : alsoWrite) {
+        QFile entry(folder + QLatin1Char('/') + name);
         QVERIFY(entry.open(QIODevice::WriteOnly));
         entry.write("<html></html>");
     }
@@ -48,6 +48,11 @@ private slots:
 
     /// Selecting is by id, and an id nobody has changes nothing.
     void selectsByIdAndRefusesUnknownOnes();
+
+    /// Choosing the wallpaper that is already playing says nothing happened.
+    /// It is what a person does by clicking the tile that is already lit, and
+    /// announcing it stops the video player for good.
+    void staysQuietWhenTheChoiceIsTheSame();
 };
 
 void TestWallpaperCore::readsWhatIsThere()
@@ -56,14 +61,15 @@ void TestWallpaperCore::readsWhatIsThere()
     QVERIFY(steam.isValid());
 
     makeWallpaper(steam.path(), QStringLiteral("111"),
-                  R"({"title":"A web one","type":"web","file":"index.html"})",
-                  QStringLiteral("index.html"));
+                  R"({"title":"A web one","type":"web","file":"index.html",)"
+                  R"("preview":"preview.jpg"})",
+                  {QStringLiteral("index.html"), QStringLiteral("preview.jpg")});
     // The library spells the type both ways; both have to land as Scene.
     makeWallpaper(steam.path(), QStringLiteral("222"),
                   R"({"title":"B capital scene","type":"Scene","file":"scene.json"})");
     // No title: the id stands in rather than the entry being dropped.
     makeWallpaper(steam.path(), QStringLiteral("333"), R"({"type":"video","file":"a.mp4"})",
-                  QStringLiteral("a.mp4"));
+                  {QStringLiteral("a.mp4")});
     // Not JSON at all. Must be skipped without taking the scan down.
     makeWallpaper(steam.path(), QStringLiteral("444"), "{ this is not json");
     // A preset: no type of its own, only settings for somebody else's
@@ -73,7 +79,7 @@ void TestWallpaperCore::readsWhatIsThere()
     // A type we have never seen. Also not listed.
     makeWallpaper(steam.path(), QStringLiteral("666"),
                   R"({"title":"A something else","type":"hologram","file":"a.txt"})",
-                  QStringLiteral("a.txt"));
+                  {QStringLiteral("a.txt")});
 
     const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
     QCOMPARE(found.size(), 3);
@@ -90,12 +96,17 @@ void TestWallpaperCore::readsWhatIsThere()
     QVERIFY(found[1].source.isLocalFile());
     QVERIFY(found[1].source.toLocalFile().endsWith(QStringLiteral("/111/index.html")));
     QVERIFY(found[1].hasFile());
+    QVERIFY(found[1].playable());
+    // What the picker puts in its grid, found the same guarded way as the
+    // wallpaper's own file.
+    QVERIFY(found[1].preview.toLocalFile().endsWith(QStringLiteral("/111/preview.jpg")));
 
     QCOMPARE(found[2].title, QStringLiteral("B capital scene"));
     QCOMPARE(found[2].kind, WallpaperKind::Scene);
     // scene.json lives inside scene.pkg, so there is nothing to point at.
     QVERIFY(found[2].source.isEmpty());
     QVERIFY(!found[2].hasFile());
+    QVERIFY2(!found[2].playable(), "a scene wallpaper offered itself as playable");
 }
 
 void TestWallpaperCore::refusesAFileOutsideTheWallpaper()
@@ -127,7 +138,7 @@ void TestWallpaperCore::selectsByIdAndRefusesUnknownOnes()
     QVERIFY(steam.isValid());
     makeWallpaper(steam.path(), QStringLiteral("777"),
                   R"({"title":"Only one","type":"web","file":"index.html"})",
-                  QStringLiteral("index.html"));
+                  {QStringLiteral("index.html")});
 
     WallpaperCore core;
     QSignalSpy currentChanges(&core, &WallpaperCore::currentChanged);
@@ -148,6 +159,32 @@ void TestWallpaperCore::selectsByIdAndRefusesUnknownOnes()
     core.clear();
     QVERIFY(core.current().id.isEmpty());
     QCOMPARE(currentChanges.count(), 2);
+}
+
+void TestWallpaperCore::staysQuietWhenTheChoiceIsTheSame()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+    makeWallpaper(steam.path(), QStringLiteral("888"),
+                  R"({"title":"The one playing","type":"video","file":"a.mp4"})",
+                  {QStringLiteral("a.mp4")});
+
+    WallpaperCore core;
+    core.rescan({steam.path()});
+    QSignalSpy currentChanges(&core, &WallpaperCore::currentChanged);
+
+    QVERIFY(core.select(QStringLiteral("888")));
+    QCOMPARE(currentChanges.count(), 1);
+
+    // The same one again: it is chosen, so true, but nothing changed and
+    // nothing may be announced.
+    QVERIFY(core.select(QStringLiteral("888")));
+    QCOMPARE(core.current().id, QStringLiteral("888"));
+    QVERIFY2(currentChanges.count() == 1, "choosing the same wallpaper announced a change");
+
+    // A rescan goes through select() too, and must stay just as quiet.
+    core.rescan({steam.path()});
+    QCOMPARE(currentChanges.count(), 1);
 }
 
 QTEST_MAIN(TestWallpaperCore)

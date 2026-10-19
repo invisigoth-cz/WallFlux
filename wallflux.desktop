@@ -3,6 +3,7 @@ Type=Application
 Name=WallFlux
 GenericName=Live Wallpaper
 Comment=Plays the Wallpaper Engine wallpapers you already own
+Icon=preferences-desktop-wallpaper
 Exec=wallflux
 Terminal=false
 Categories=Qt;Utility;
