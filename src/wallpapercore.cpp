@@ -187,6 +187,16 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
 WallpaperCore::WallpaperCore(QObject *parent)
     : QObject(parent)
 {
+    m_settle.setSingleShot(true);
+    // Long enough that a download writing a file at a time does not start a
+    // scan per file, short enough that somebody watching the grid sees it
+    // happen. A 280 MB video takes minutes; the folder appears at the start
+    // of that, so there will be several of these before it settles.
+    m_settle.setInterval(2000);
+    connect(&m_settle, &QTimer::timeout, this, [this]() { rescan(m_roots); });
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this,
+            [this]() { m_settle.start(); });
+
     rescan();
 }
 
@@ -250,7 +260,9 @@ void WallpaperCore::rescan()
 
 void WallpaperCore::rescan(const QStringList &steamRoots)
 {
+    m_roots = steamRoots;
     m_wallpapers = scan(steamRoots);
+    watch(steamRoots);
 
     const qsizetype withFile =
         std::ranges::count_if(m_wallpapers, [](const Wallpaper &w) { return w.hasFile(); });
@@ -302,6 +314,22 @@ void WallpaperCore::clear()
         return;
     m_current = Wallpaper{};
     emit currentChanged();
+}
+
+void WallpaperCore::watch(const QStringList &steamRoots)
+{
+    const QStringList watched = m_watcher.directories();
+    if (!watched.isEmpty())
+        m_watcher.removePaths(watched);
+
+    for (const QString &root : steamRoots) {
+        const QString content = root + QLatin1StringView("/steamapps/workshop/content/")
+                                + WallpaperEngineAppId;
+        // Only one that is there: asked to watch a path that does not exist,
+        // QFileSystemWatcher warns and carries on watching nothing.
+        if (QFileInfo::exists(content))
+            m_watcher.addPath(content);
+    }
 }
 
 void WallpaperCore::stopProbes()

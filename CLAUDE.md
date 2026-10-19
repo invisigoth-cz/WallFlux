@@ -1,16 +1,17 @@
 # WallFlux
 
 Plays the Wallpaper Engine wallpapers somebody already owns, on Linux and
-Wayland, without Windows and without Wallpaper Engine running.
+Wayland, without Windows and without Wallpaper Engine running. C++20, Qt 6,
+GPL-3.0-or-later, eighteen files and about two thousand lines. Target
+machine is CachyOS with KDE Plasma 6.7 on Wayland, and that is where
+everything below was measured.
 
 **Steam is how the wallpapers get here.** Wallpaper Engine is bought and
-installed through it, the workshop is where wallpapers are fetched from, and
-Steam is the only thing that can fetch one: a workshop item for a paid app
-is downloadable only by an account that owns the app. So Steam is a
-dependency of getting wallpapers, not of playing them -- WallFlux reads the
-folder Steam has already filled and needs nothing running. C++20, Qt 6, GPL-3.0-or-later, fourteen
-files and about sixteen hundred lines. Target machine is CachyOS with KDE
-Plasma 6.7 on Wayland, and that is where everything below was measured.
+installed through it, the workshop is where wallpapers come from, and Steam
+is the only thing that can fetch one: a workshop item for a paid app is
+downloadable only by an account that owns the app. So Steam is a dependency
+of getting wallpapers, not of playing them -- what is read is the folder
+Steam has already filled, and nothing of Steam's has to be running for that.
 
 ## What works today
 
@@ -22,6 +23,9 @@ Plasma 6.7 on Wayland, and that is where everything below was measured.
   one switch there is turns the wallpaper's own sound off altogether.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
   the one that is clicked.
+- **Noticing what Steam downloads.** The workshop folders are watched, so a
+  wallpaper subscribed to in Steam turns up in the grid on its own, a couple
+  of seconds after the writing stops.
 - **English and Czech**, switched in the window without a restart.
 - **A picker with its sections across the top**: Installed, Steam Workshop,
   Playlists, Displays, Settings, centred. Only Installed is built; the four
@@ -185,6 +189,26 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `tags` and `preview` in every one, `type` and `file` in 51, `contentrating`
   in 49 and always "Everyone", and **no resolution anywhere**. So the tag,
   rating and kind filters are free, and the resolution one is not.
+- **The workshop answers without an API key, up to a point.** Measured:
+  `ISteamRemoteStorage/GetPublishedFileDetails/v1/` is a POST that takes
+  published file ids and needs no key at all -- it gives the title, the tags,
+  the file size, the subscriber count and a direct `preview_url`. What it
+  cannot do is *find* anything. `IPublishedFileService/QueryFiles`, which
+  can, answers 403 without a key. The public browse page at
+  `steamcommunity.com/workshop/browse/?appid=431960` gives 30 ids a page with
+  no key and takes `browsesort` and `requiredtags[]`, so ids out of the page
+  and details out of the keyless endpoint is a route that keeps no secret
+  anywhere.
+- **Nothing outside Steam can make Steam download a workshop item.** The
+  client's URL handler knows 28 verbs -- read out of `steamui/sp.js` -- and
+  not one of them subscribes or downloads; `steam://url/` has 17 targets and
+  none of them either. `SubscribeItem` exists, but only as a symbol in
+  `linux64/steamclient.so`: it is the Steamworks call, reachable only by a
+  process the client accepts as the app itself, which would mean shipping
+  Valve's proprietary libsteam_api beside GPL code and telling Valve we are
+  Wallpaper Engine. So the flow is: open the item's page, somebody presses
+  Subscribe once, and Steam does the rest -- which is the part WallFlux can
+  make invisible, by watching the folder.
 - **Asking ffprobe during the scan is a trap.** It is 53 milliseconds a
   video, which sounds free until the constructor of WallpaperCore scans the
   real machine on every test that builds one: the suite went from 0.03 to

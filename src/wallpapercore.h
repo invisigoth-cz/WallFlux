@@ -4,8 +4,10 @@
 #pragma once
 
 #include <QDateTime>
+#include <QFileSystemWatcher>
 #include <QList>
 #include <QProcess>
+#include <QTimer>
 #include <QObject>
 #include <QQmlEngine>
 #include <QString>
@@ -167,7 +169,8 @@ public:
     /// played.
     QStringList recent() const { return m_recent; }
 
-    /// Looks through the Steam folders again. Called once at startup.
+    /// Looks through the Steam folders again. Called once at startup, and
+    /// by itself whenever Steam puts something new in them.
     Q_INVOKABLE void rescan();
 
     /// Looks through these Steam installs rather than the ones found on this
@@ -211,8 +214,25 @@ private:
     /// Takes every outstanding question back.
     void stopProbes();
 
+    /// Watches the folders Steam downloads into, so that a wallpaper
+    /// fetched from the workshop turns up here without being asked for.
+    ///
+    /// Steam is the only thing that can fetch one -- a workshop item for a
+    /// paid app is downloadable only by an account that owns the app -- so
+    /// what WallFlux can do is notice. Somebody subscribes in Steam, Steam
+    /// downloads, and the grid gains a wallpaper on its own.
+    void watch(const QStringList &steamRoots);
+
     /// One per video still being asked about.
     QList<QProcess *> m_probes;
+
+    QFileSystemWatcher m_watcher;
+    /// A download is a folder appearing and then filling up over minutes, so
+    /// the scan waits for the writing to stop rather than running per file.
+    QTimer m_settle;
+    /// The roots the last scan used, so the one this triggers looks in the
+    /// same place -- which for a test is a folder of its own making.
+    QStringList m_roots;
 
     QList<Wallpaper> m_wallpapers;
     Wallpaper m_current;

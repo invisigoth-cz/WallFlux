@@ -62,6 +62,10 @@ private slots:
 
     /// What was played in this run, newest first and each one only once.
     void remembersWhatWasPlayedInThisRun();
+
+    /// A wallpaper that appears on disk is noticed without being asked for,
+    /// which is what makes a download in Steam turn up here by itself.
+    void noticesAWallpaperArriving();
 };
 
 void TestWallpaperCore::readsWhatIsThere()
@@ -256,6 +260,33 @@ void TestWallpaperCore::remembersWhatWasPlayedInThisRun()
     // Going back to the first one moves it to the front rather than putting
     // it in the list twice, which an order in a menu has to get right.
     QCOMPARE(core.recent(), QStringList({QStringLiteral("111"), QStringLiteral("222")}));
+}
+
+void TestWallpaperCore::noticesAWallpaperArriving()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+
+    makeWallpaper(steam.path(), QStringLiteral("111"),
+                  R"({"title":"Already here","type":"web","file":"index.html"})",
+                  {QStringLiteral("index.html")});
+
+    WallpaperCore core;
+    core.rescan({steam.path()});
+    QCOMPARE(core.wallpapers().size(), 1);
+
+    QSignalSpy arrivals(&core, &WallpaperCore::wallpapersChanged);
+
+    // What Steam does when somebody subscribes: a folder turns up in the one
+    // being watched.
+    makeWallpaper(steam.path(), QStringLiteral("222"),
+                  R"({"title":"Just downloaded","type":"web","file":"index.html"})",
+                  {QStringLiteral("index.html")});
+
+    // Longer than the two seconds the scan waits for the writing to stop,
+    // with room for a filesystem that takes its time telling anyone.
+    QVERIFY2(arrivals.wait(10000), "nothing noticed the wallpaper arriving");
+    QCOMPARE(core.wallpapers().size(), 2);
 }
 
 QTEST_MAIN(TestWallpaperCore)
