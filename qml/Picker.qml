@@ -48,6 +48,51 @@ Window {
     /// button does today; it is the only filter the backend can answer.
     property bool playableOnly: false
 
+    /// What each section across the top is called, and what it is for.
+    ///
+    /// Here rather than on the tabs themselves because the heading has to
+    /// read them too, and a tab is a QQuickItem as far as the tooling is
+    /// concerned -- it cannot see a property added to one.
+    readonly property var sections: [
+        { name: qsTr("Installed"),
+          blurb: qsTr("Wallpapers downloaded to your system") },
+        { name: qsTr("Steam Workshop"),
+          blurb: qsTr("Browse wallpapers from Steam Workshop") },
+        { name: qsTr("Playlists"),
+          blurb: qsTr("Wallpapers that take turns on a schedule") },
+        { name: qsTr("Displays"),
+          blurb: qsTr("Which wallpaper goes on which screen") },
+        { name: qsTr("Settings"),
+          blurb: qsTr("How WallFlux behaves") }
+    ]
+
+    /// One section across the top: an icon, what it is called, and the
+    /// accent underneath while it is the one showing.
+    component Section: TabButton {
+        required property var entry
+
+        display: AbstractButton.IconOnly
+        // Room to aim at, and an icon big enough to tell from the next one.
+        // Left to itself a tab with nothing but a 16-pixel icon in it comes
+        // out two dozen pixels wide.
+        implicitWidth: 54
+        implicitHeight: 40
+        icon.width: 22
+        icon.height: 22
+        ToolTip.visible: hovered
+        ToolTip.text: entry.name
+
+        // Fusion raises the current tab a little, which is not enough to
+        // find at a glance in a row of five icons.
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 2
+            color: picker.palette.highlight
+            visible: parent.checked
+        }
+    }
+
     /// The wallpapers the grid shows: what was typed, in the order asked for.
     readonly property var shown: {
         const needle = search.text.trim().toLowerCase();
@@ -102,160 +147,255 @@ Window {
         anchors.fill: parent
         spacing: 0
 
-        ColumnLayout {
+        // The sections, across the top. Only the first of them exists; the
+        // rest are named here because naming them is what decides where the
+        // next piece of work goes, and because a person can then see what
+        // this program is going to be.
+        //
+        // The strip runs the width of the window while the tabs in it keep
+        // the width they need: a TabBar asked to fill the window shares the
+        // room out between its tabs, which turns five icons into five wide
+        // slabs.
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: tabs.implicitHeight
+            color: picker.palette.base
+
+            // The same hairline the footer has, along the edge the header
+            // starts at.
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: picker.palette.mid
+            }
+
+            TabBar {
+                id: tabs
+
+                anchors.left: parent.left
+                anchors.leftMargin: 16
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+
+                Section {
+                    entry: picker.sections[0]
+                    icon.name: "download"
+                    icon.color: picker.palette.buttonText
+                }
+                Section {
+                    entry: picker.sections[1]
+                    // The one icon in this window with no colour set on
+                    // it. It is Steam's own logo and a picture rather than
+                    // a glyph, and tinting does not know the difference:
+                    // asked to follow the palette it comes out as a plain
+                    // white disc. Measured both ways round.
+                    icon.name: "steam"
+                }
+                Section {
+                    entry: picker.sections[2]
+                    icon.name: "view-media-playlist"
+                    icon.color: picker.palette.buttonText
+                }
+                Section {
+                    entry: picker.sections[3]
+                    icon.name: "preferences-desktop-display"
+                    icon.color: picker.palette.buttonText
+                }
+                Section {
+                    entry: picker.sections[4]
+                    icon.name: "settings-configure"
+                    icon.color: picker.palette.buttonText
+                }
+            }
+        }
+
+        RowLayout {
             Layout.fillWidth: true
             Layout.margins: 24
             Layout.bottomMargin: 12
-            spacing: 14
+            spacing: 12
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
+            ColumnLayout {
+                spacing: 0
 
-                ColumnLayout {
-                    spacing: 0
-
-                    Label {
-                        text: qsTr("Installed")
-                        font.pixelSize: 30
-                        font.weight: Font.DemiBold
-                    }
-                    Label {
-                        text: qsTr("Wallpapers downloaded to your system")
-                        opacity: 0.65
-                    }
+                Label {
+                    // The section that is showing, rather than a word written
+                    // in here: the heading is this window saying where you
+                    // are, and five tabs under one title would be a lie.
+                    text: picker.sections[tabs.currentIndex].name
+                    font.pixelSize: 30
+                    font.weight: Font.DemiBold
                 }
-
-                Item { Layout.fillWidth: true }
-
-                Button {
-                    text: qsTr("Refresh")
-                    icon.name: "view-refresh"
-                    onClicked: Wallpapers.rescan()
-                }
-
-                Button {
-                    // The icon is what the click will do, not what is on
-                    // screen now: turn the lights up, or down.
-                    //
-                    // These two rather than a sun and a moon out of the
-                    // weather icons: those are drawn for a 48-pixel applet
-                    // and all that survives at 16 is a white disc. Looked
-                    // at, not assumed. A Button rather than a ToolButton for
-                    // the same reason the one beside it is: an icon alone on
-                    // the window background says nothing about being a
-                    // control at all.
-                    icon.name: picker.dark ? "brightness-high" : "brightness-low"
-                    ToolTip.visible: hovered
-                    ToolTip.text: picker.dark ? qsTr("Light theme") : qsTr("Dark theme")
-                    onClicked: picker.dark = !picker.dark
+                Label {
+                    text: picker.sections[tabs.currentIndex].blurb
+                    opacity: 0.65
                 }
             }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
+            Item { Layout.fillWidth: true }
 
-                TextField {
-                    id: search
+            Button {
+                text: qsTr("Refresh")
+                icon.name: "view-refresh"
+                // There is nothing to look for again from any other section.
+                visible: tabs.currentIndex === 0
+                onClicked: Wallpapers.rescan()
+            }
 
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: 420
-                    placeholderText: qsTr("Search wallpapers…")
-                    // Room for the magnifier that sits in it.
-                    leftPadding: 34
-
-                    ToolButton {
-                        x: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        icon.name: "system-search"
-                        // Fusion leaves a ToolButton's icon colour unset and
-                        // the icon is then drawn in nothing at all. Measured
-                        // against a Button, which sets it and shows up.
-                        icon.color: search.palette.text
-                        flat: true
-                        focusPolicy: Qt.NoFocus
-                        // Not decoration for its own sake: it is where
-                        // somebody who clicks the magnifier expects to end up.
-                        onClicked: search.forceActiveFocus()
-                    }
-                }
-
-                Button {
-                    text: qsTr("Filters")
-                    icon.name: "view-filter"
-                    checkable: true
-                    checked: picker.playableOnly
-                    // One filter, because one is all there is an answer for:
-                    // leaving out what cannot be played. A button that opens
-                    // a menu of nothing would be worse than this.
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Show only wallpapers that can be played")
-                    onToggled: picker.playableOnly = checked
-                }
-
-                Button {
-                    text: qsTr("Name")
-                    icon.name: picker.byNameDescending ? "view-sort-descending"
-                                                       : "view-sort-ascending"
-                    onClicked: picker.byNameDescending = !picker.byNameDescending
-                }
+            Button {
+                // The icon is what the click will do, not what is on
+                // screen now: turn the lights up, or down.
+                //
+                // These two rather than a sun and a moon out of the
+                // weather icons: those are drawn for a 48-pixel applet
+                // and all that survives at 16 is a white disc. Looked
+                // at, not assumed. A Button rather than a ToolButton for
+                // the same reason the one beside it is: an icon alone on
+                // the window background says nothing about being a
+                // control at all.
+                icon.name: picker.dark ? "brightness-high" : "brightness-low"
+                ToolTip.visible: hovered
+                ToolTip.text: picker.dark ? qsTr("Light theme") : qsTr("Dark theme")
+                onClicked: picker.dark = !picker.dark
             }
         }
 
-        GridView {
-            id: grid
-
+        StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
-            clip: true
+            currentIndex: tabs.currentIndex
 
-            // As many columns of about 240 as fit, then share the width out
-            // between them: a fixed cell width leaves a ragged empty strip
-            // down the side of every window that is not an exact multiple
-            // of it.
-            readonly property int columns: Math.max(1, Math.floor(grid.width / 240))
+            // Installed: the only one there is anything behind.
+            ColumnLayout {
+                spacing: 14
 
-            cellWidth: Math.floor(grid.width / grid.columns)
-            // The preview is sixteen by nine, and the name sits under it.
-            cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    spacing: 10
 
-            model: picker.shown
+                    TextField {
+                        id: search
 
-            delegate: Item {
-                id: cell
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: 420
+                        placeholderText: qsTr("Search wallpapers…")
+                        // Room for the magnifier that sits in it.
+                        leftPadding: 34
 
-                required property var modelData
+                        ToolButton {
+                            x: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            icon.name: "system-search"
+                            // Fusion leaves a ToolButton's icon colour unset
+                            // and the icon is then drawn in nothing at all.
+                            // Measured against a Button, which sets it and
+                            // shows up.
+                            icon.color: search.palette.text
+                            flat: true
+                            focusPolicy: Qt.NoFocus
+                            // Not decoration for its own sake: it is where
+                            // somebody who clicks the magnifier expects to
+                            // end up.
+                            onClicked: search.forceActiveFocus()
+                        }
+                    }
 
-                width: grid.cellWidth
-                height: grid.cellHeight
+                    Button {
+                        text: qsTr("Filters")
+                        icon.name: "view-filter"
+                        checkable: true
+                        checked: picker.playableOnly
+                        // One filter, because one is all there is an answer
+                        // for: leaving out what cannot be played. A button
+                        // that opens a menu of nothing would be worse.
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("Show only wallpapers that can be played")
+                        onToggled: picker.playableOnly = checked
+                    }
 
-                WallpaperCard {
-                    anchors.fill: parent
-                    anchors.margins: 8
-                    wallpaper: cell.modelData
-                    volume: picker.volume
-                    muted: picker.muted
-                    onChose: (id) => picker.chose(id)
-                    onVolumeAsked: (volume) => picker.volume = volume
-                    onMuteAsked: picker.muted = !picker.muted
+                    Button {
+                        text: qsTr("Name")
+                        icon.name: picker.byNameDescending ? "view-sort-descending"
+                                                           : "view-sort-ascending"
+                        onClicked: picker.byNameDescending = !picker.byNameDescending
+                    }
+                }
+
+                GridView {
+                    id: grid
+
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    clip: true
+
+                    // As many columns of about 240 as fit, then share the
+                    // width out between them: a fixed cell width leaves a
+                    // ragged empty strip down the side of every window that
+                    // is not an exact multiple of it.
+                    readonly property int columns: Math.max(1, Math.floor(grid.width / 240))
+
+                    cellWidth: Math.floor(grid.width / grid.columns)
+                    // The preview is sixteen by nine, and the name sits
+                    // under it.
+                    cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+
+                    model: picker.shown
+
+                    delegate: Item {
+                        id: cell
+
+                        required property var modelData
+
+                        width: grid.cellWidth
+                        height: grid.cellHeight
+
+                        WallpaperCard {
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            wallpaper: cell.modelData
+                            volume: picker.volume
+                            muted: picker.muted
+                            onChose: (id) => picker.chose(id)
+                            onVolumeAsked: (volume) => picker.volume = volume
+                            onMuteAsked: picker.muted = !picker.muted
+                        }
+                    }
+
+                    ScrollBar.vertical: ScrollBar {}
+                }
+
+                Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.margins: 24
+                    visible: picker.shown.length === 0
+                    horizontalAlignment: Text.AlignHCenter
+                    opacity: 0.65
+                    text: Wallpapers.wallpapers.length === 0
+                          ? qsTr("Nothing installed.\nWallpaper Engine's workshop folder is empty or missing.")
+                          : qsTr("Nothing here by that name.")
                 }
             }
 
-            ScrollBar.vertical: ScrollBar {}
-        }
+            // The four that are not built yet. One component, four times,
+            // because four copies of the same label is four places to change
+            // it when one of them stops being a placeholder.
+            component Later: Label {
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                opacity: 0.5
+                font.pixelSize: 18
+                text: qsTr("Coming soon")
+            }
 
-        Label {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.margins: 24
-            visible: picker.shown.length === 0
-            horizontalAlignment: Text.AlignHCenter
-            opacity: 0.65
-            text: Wallpapers.wallpapers.length === 0
-                  ? qsTr("Nothing installed.\nWallpaper Engine's workshop folder is empty or missing.")
-                  : qsTr("Nothing here by that name.")
+            Later {}
+            Later {}
+            Later {}
+            Later {}
         }
 
         Rectangle {

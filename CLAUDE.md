@@ -15,6 +15,10 @@ Plasma 6.7 on Wayland, and that is where everything below was measured.
   one switch there is turns the wallpaper's own sound off altogether.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
   the one that is clicked.
+- **A picker with its sections across the top**: Installed, Steam Workshop,
+  Playlists, Displays, Settings. Only Installed is built; the other four say
+  "Coming soon" and are there because naming them is what decides where the
+  next piece of work goes.
 - **A picker that looks like something**: dark and light themes switched
   without a restart, a search that narrows the grid as it is typed, name
   order either way round, a band around each preview saying whether it can
@@ -149,6 +153,18 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   nothing, every card blank. A `Rectangle` is not a texture until it is a
   layer, and the effect quietly has nothing to work with. Looked at side by
   side, with and without, which is the only way this one shows itself.
+- **`icon.color` tints whatever it is given, glyph or picture.** The four
+  monochrome tab icons need it, or they stay whatever colour the system icon
+  theme drew them and go invisible in one of the two themes -- this machine's
+  theme draws them light, so the light theme is the one that loses them.
+  Steam's own logo must *not* have it: tinted, it comes out as a plain white
+  disc. It is also the one icon here that comes from hicolor rather than
+  Breeze, installed by Steam itself.
+- **A `TabBar` told to fill the width shares that width out between its
+  tabs**, which turns five icons into five wide slabs. Left to its own width
+  inside a rectangle that fills instead, the tabs stay the size they are --
+  and `implicitWidth` is worth setting on an icon-only tab, which otherwise
+  comes out two dozen pixels wide.
 - **Fusion leaves a `ToolButton`'s `icon.color` unset, so its icon is drawn
   in nothing at all.** A `Button` sets it and shows up; a `ToolButton` does
   not, with or without `flat`, `display` or an explicit `icon.width`. Set
@@ -218,7 +234,8 @@ reasoned about:
 
 ## Open, in the order they are likely to be taken
 
-1. **A list of wallpapers that take turns.** Asked for: a person's own
+1. **A list of wallpapers that take turns.** The tab is already there and
+   says "Coming soon". Asked for: a person's own
    selection out of the grid, each one on the desktop for a quarter of an
    hour, swapped on a schedule while the program sits in the panel. Nothing
    in the sound or cover behaviour stands in the way -- neither of them cares
