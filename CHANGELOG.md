@@ -6,6 +6,13 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **WallFlux can tell whether the Steam Workshop is reachable.** The
+  Steamworks library is looked for when the workshop is first wanted and
+  opened by name; nothing of Valve's is shipped with WallFlux or linked at
+  build time. Where it is absent the window says so and carries on.
+
 ### Changed
 
 - **The licence gained one added permission**, for the Steamworks SDK and

@@ -64,6 +64,8 @@ qt_add_qml_module(wallflux
         src/language.cpp
         src/screencover.h
         src/screencover.cpp
+        src/steamworks.h
+        src/steamworks.cpp
         src/wallpapercore.h
         src/wallpapercore.cpp
 )

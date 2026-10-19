@@ -171,11 +171,19 @@ Item {
         }
 
         // Said plainly rather than left to be worked out from the fact that
-        // the rows look familiar.
+        // the rows look familiar. Two different truths: whether Steam can be
+        // asked at all, and whether anything has asked it yet.
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("Not connected to the workshop yet — these are the wallpapers "
-                       + "already installed, standing in so the layout can be judged.")
+            Layout.maximumWidth: parent.width - 48
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: Steamworks.available
+                  ? qsTr("Steam is answering. The rows below are still the wallpapers "
+                         + "already installed, standing in until the asking is written.")
+                  : qsTr("%1 Until then the rows below are the wallpapers already "
+                         + "installed, standing in so the layout can be judged.")
+                    .arg(Steamworks.trouble)
             opacity: 0.5
             font.pixelSize: 11
         }

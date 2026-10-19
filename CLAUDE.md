@@ -56,6 +56,8 @@ src/language.h        Language: the EN/CZ switch, and what it has to call
 src/language.cpp      installs a QTranslator and retranslates the engine
 src/otheraudio.h      OtherAudio: is another program using the speakers
 src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
+src/steamworks.h      Steamworks: can the workshop be asked, and the way in
+src/steamworks.cpp    dlopen of libsteam_api.so, by name, nothing linked
 src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
@@ -196,6 +198,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `tags` and `preview` in every one, `type` and `file` in 51, `contentrating`
   in 49 and always "Everyone", and **no resolution anywhere**. So the tag,
   rating and kind filters are free, and the resolution one is not.
+- **`SteamAPI_Init` is not an exported symbol** -- it is inline in Valve's
+  header and calls `SteamInternal_SteamAPI_Init`. Through dlopen what there
+  is to call is `SteamAPI_InitSafe`, with `SteamAPI_GetHSteamUser` and
+  `SteamInternal_FindOrCreateUserInterface` to reach ISteamUGC, and
+  `SteamAppId` in the environment before any of it or the library asks Steam
+  to relaunch the program. Measured against a running Steam: the library
+  opens, init succeeds and the UGC interface answers.
 - **The workshop answers without an API key, up to a point.** Measured:
   `ISteamRemoteStorage/GetPublishedFileDetails/v1/` is a POST that takes
   published file ids and needs no key at all -- it gives the title, the tags,
