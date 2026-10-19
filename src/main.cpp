@@ -88,7 +88,13 @@ int main(int argc, char *argv[])
     // layer-shell one. This is why Main.qml leaves the window hidden.
     if (LayerShellQt::Window *layer = LayerShellQt::Window::get(window)) {
         using Layer = LayerShellQt::Window;
-        layer->setLayer(Layer::LayerBackground);
+        // Bottom rather than background. Plasma draws its own desktop --
+        // wallpaper, icons and widgets -- into a background-layer surface of
+        // its own, and clicking the desktop raises that surface above ours
+        // within the same layer, which took the wallpaper off the screen.
+        // Layers are a fixed order the compositor will not reshuffle, and
+        // bottom is still below every ordinary window.
+        layer->setLayer(Layer::LayerBottom);
         // Anchored to all four edges, which is what makes the compositor give
         // it the whole screen.
         layer->setAnchors(Layer::Anchors(Layer::AnchorTop | Layer::AnchorBottom
