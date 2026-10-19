@@ -6,5 +6,11 @@ Comment=Plays the Wallpaper Engine wallpapers you already own
 Icon=preferences-desktop-wallpaper
 Exec=wallflux
 Terminal=false
+# A wallpaper has no launch to announce: no bouncing cursor, no entry in the
+# task manager while it starts.
+StartupNotify=false
+# The tray icon has to find the panel's tray to sit in, and at login the
+# panel is not up yet when autostart runs.
+X-KDE-autostart-after=panel
 Categories=Qt;Utility;
 Keywords=wallpaper;background;desktop;

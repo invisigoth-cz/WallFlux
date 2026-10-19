@@ -90,3 +90,19 @@ install(TARGETS wallflux
 install(FILES wallflux.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
+
+# The same file again, where the session looks for what to start at login: a
+# wallpaper that waits to be started by hand is not doing its job. One file
+# rather than two because nothing about the way it is launched differs.
+#
+# GNUInstallDirs keeps sysconfdir under the prefix, so a /usr install would
+# file this under /usr/etc, which no session reads and which gives no sign
+# that anything is wrong -- the wallpaper simply never starts. Anyone who
+# wants it elsewhere can still say so with -DCMAKE_INSTALL_SYSCONFDIR.
+if(CMAKE_INSTALL_PREFIX STREQUAL "/usr" AND NOT IS_ABSOLUTE "${CMAKE_INSTALL_SYSCONFDIR}")
+    set(CMAKE_INSTALL_SYSCONFDIR "/etc")
+endif()
+
+install(FILES wallflux.desktop
+    DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart
+)
