@@ -13,8 +13,12 @@ license=('GPL-3.0-or-later')
 # dependency, so neither is named here. breeze-icons is: the tray icon is
 # the only way to reach the picker, and it is a name out of the icon theme
 # rather than a file we ship.
-depends=('breeze-icons' 'layer-shell-qt' 'qt6-base' 'qt6-declarative'
-         'qt6-multimedia' 'qt6-webengine')
+#
+# libpulse is here for the `pactl` program rather than for the library. It
+# is what tells us another program is using the speakers, and being a
+# program it is not something the linker would ever mention.
+depends=('breeze-icons' 'layer-shell-qt' 'libpulse' 'qt6-base'
+         'qt6-declarative' 'qt6-multimedia' 'qt6-webengine')
 makedepends=('cmake' 'git' 'ninja')
 
 # Built from this checkout rather than from the remote, so what is packaged

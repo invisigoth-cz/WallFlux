@@ -6,6 +6,11 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+// The Fusion style by name rather than through QQuickStyle: it is the one
+// that takes a palette, and asking for it here keeps the choice beside the
+// colours it is set with.
+import QtQuick.Controls.Fusion
+import QtQuick.Layouts
 import WallFlux
 
 /// The window for choosing a wallpaper: everything installed, in a grid of
@@ -22,9 +27,17 @@ Window {
     /// something to remember, and remembering is not this window's business.
     signal chose(string id)
 
+    /// Whether the sound is off. Read by the players in Main.qml: the tick
+    /// in this window is the setting itself, so there is one place it lives
+    /// and nothing to keep in step.
+    readonly property alias muted: mute.checked
+
     width: 960
     height: 640
-    minimumWidth: 480
+    // Wide enough for the whole of the bar along the bottom. Narrower than
+    // this and a layout starts squeezing what is in it, which for a Controls
+    // item means squeezing it down to nothing at all rather than clipping it.
+    minimumWidth: 720
     minimumHeight: 320
     color: "#1b1b1b"
     title: qsTr("WallFlux — choose a wallpaper")
@@ -39,8 +52,13 @@ Window {
     GridView {
         id: grid
 
-        anchors.fill: parent
-        anchors.margins: 12
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+            bottom: bar.top
+            margins: 12
+        }
         // As many columns of about 240 as fit, then share the width out
         // between them: a fixed cell width leaves a ragged empty strip down
         // the side of every window that is not an exact multiple of it.
@@ -122,6 +140,72 @@ Window {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: picker.chose(tile.modelData.id)
                 }
+            }
+        }
+    }
+
+    // Everything that is not choosing a wallpaper. It lives here rather than
+    // in the tray icon's menu: the menu is for reaching this window, and
+    // what the wallpaper does belongs with the wallpapers.
+    Pane {
+        id: bar
+
+        anchors {
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+        }
+        // Fusion draws itself from the palette, so the dark colours of this
+        // window are a few names rather than a style sheet. Set on the Pane
+        // because a palette passes down to what is inside it.
+        palette {
+            window: "#222222"
+            windowText: "#e0e0e0"
+            base: "#1b1b1b"
+            button: "#333333"
+            buttonText: "#e0e0e0"
+            text: "#e0e0e0"
+            highlight: "#4d9fd6"
+            mid: "#3a3a3a"
+        }
+
+        // A layout rather than anchors, and the only child: a Pane takes its
+        // height from one child that has a height of its own, and anchored
+        // children have none to give -- which left the row sliced in half.
+        RowLayout {
+            // Stretched across the pane, which is what gives the spacer
+            // below something to fill; the height stays its own, so the pane
+            // can still work out how tall it has to be.
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: 8
+
+            CheckBox {
+                id: mute
+
+                text: qsTr("Mute the sound")
+                // Without a floor of its own a layout may give this a width
+                // of zero, and a tick nobody can see is worse than one that
+                // is in the way.
+                Layout.minimumWidth: implicitWidth
+            }
+
+            // Pushes the buttons to the far end.
+            Item {
+                Layout.fillWidth: true
+            }
+
+            Button {
+                text: qsTr("Look for new wallpapers")
+                onClicked: Wallpapers.rescan()
+            }
+
+            Button {
+                text: qsTr("Turn the wallpaper off")
+                // Nothing to turn off until something plays, which is the
+                // state the program starts in.
+                enabled: Wallpapers.current.playable
+                onClicked: Wallpapers.clear()
             }
         }
     }

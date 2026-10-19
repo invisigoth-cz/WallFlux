@@ -21,6 +21,34 @@ Window {
     /// Whether what is chosen is of a kind this program can draw today.
     readonly property bool playing: showingWeb || showingVideo
 
+    /// Whether the wallpaper should be making no sound.
+    ///
+    /// Sound is on to begin with and goes off on its own for anything that
+    /// has better claim to the speakers or to the screen: another program
+    /// playing something, or a window pulled up to cover the wallpaper
+    /// nobody can then see anyway. Neither is a setting -- what is left to
+    /// choose is whether the wallpaper has sound at all.
+    readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover.covered
+
+    /// Whether a window is filling the screen in front of the wallpaper.
+    ///
+    /// Nothing of the wallpaper is on screen then, so it stops rather than
+    /// going on decoding frames and running JavaScript behind a game. Named
+    /// here rather than reached for twice below, because what follows reads
+    /// as what it is for and not as where the answer came from.
+    readonly property bool covered: ScreenCover.covered
+
+    onCoveredChanged: {
+        if (root.covered) {
+            video.pause();
+            return;
+        }
+        // Asked for only where there is a video to resume: play() with
+        // nothing loaded is how this player ends up stopped for good.
+        if (root.showingVideo)
+            video.play();
+    }
+
     // Layer-shell takes the size from its anchors, so no fullscreen state is
     // asked for. These two are what the window falls back to where there is
     // no layer-shell, such as under X11.
@@ -86,17 +114,6 @@ Window {
                 text: qsTr("Choose wallpaper…")
                 onTriggered: root.showPicker()
             }
-            Platform.MenuItem {
-                text: qsTr("Turn the wallpaper off")
-                // Nothing to turn off otherwise: this is the state the
-                // program starts in.
-                enabled: root.playing
-                onTriggered: Wallpapers.clear()
-            }
-            Platform.MenuItem {
-                text: qsTr("Look for new wallpapers")
-                onTriggered: Wallpapers.rescan()
-            }
             Platform.MenuSeparator {}
             Platform.MenuItem {
                 text: qsTr("Quit")
@@ -106,13 +123,28 @@ Window {
     }
 
     WebEngineView {
+        id: web
+
         anchors.fill: parent
-        visible: root.showingWeb
+        visible: root.showingWeb && !root.covered
+        // A web wallpaper is a page and can make noise of its own, so the
+        // switch has to reach this one too, not just the video.
+        audioMuted: root.silent
         // Already a file:// URL. The path was turned into one in C++, where
         // the spaces, brackets and Chinese characters these file names carry
         // get escaped properly; pasting "file://" onto the front of a plain
         // path here would break exactly those.
         url: root.showingWeb ? Wallpapers.current.source : "about:blank"
+
+        // Frozen, not merely hidden: a hidden page still runs its timers,
+        // and these wallpapers are animation loops that would go on burning
+        // a core behind a fullscreen window. Chromium will not freeze a page
+        // that is still on screen, which is why this follows the visibility
+        // rather than the cover itself -- by the time the view is hidden it
+        // can be frozen, and it is woken again before it is shown.
+        onVisibleChanged: web.lifecycleState = web.visible
+                              ? WebEngineView.LifecycleState.Active
+                              : WebEngineView.LifecycleState.Frozen
     }
 
     // Video wallpapers are short clips meant to run on end. Their sound --
@@ -124,6 +156,7 @@ Window {
         anchors.fill: parent
         visible: root.showingVideo
         source: root.showingVideo ? Wallpapers.current.source : ""
+        muted: root.silent
         // A wallpaper fills the screen; the clip's own shape gives way rather
         // than leaving bars down the sides.
         fillMode: VideoOutput.PreserveAspectCrop
@@ -135,7 +168,7 @@ Window {
         // start with autoPlay and twenty-five with this. Switching wallpaper
         // is the whole point of the picker, so it cannot be left to that.
         onSourceChanged: {
-            if (root.showingVideo)
+            if (root.showingVideo && !root.covered)
                 video.play();
         }
 

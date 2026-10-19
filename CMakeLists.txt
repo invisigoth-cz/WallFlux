@@ -11,8 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # WebEngineQuick pulls in Quick, Qml and Gui on its own, but naming them keeps
 # the error at configure time -- with a missing module named -- rather than at
 # link time.
+# DBus is how the compositor is asked what is covering the wallpaper: KWin
+# speaks no other language and Wayland tells a window nothing about the ones
+# in front of it.
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core Gui Multimedia Qml Quick WebEngineQuick Widgets)
+    Core DBus Gui Multimedia Qml Quick WebEngineQuick Widgets)
 
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
@@ -47,6 +50,10 @@ qt_add_qml_module(wallflux
         qml/Main.qml
         qml/Picker.qml
     SOURCES
+        src/otheraudio.h
+        src/otheraudio.cpp
+        src/screencover.h
+        src/screencover.cpp
         src/wallpapercore.h
         src/wallpapercore.cpp
 )
@@ -56,6 +63,7 @@ target_include_directories(wallflux PRIVATE src)
 target_link_libraries(wallflux PRIVATE
     LayerShellQt::Interface
     Qt6::Core
+    Qt6::DBus
     Qt6::Gui
     Qt6::Multimedia
     Qt6::Qml
@@ -77,6 +85,26 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_wallpapercore PRIVATE src)
     target_link_libraries(tst_wallpapercore PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME wallpapercore COMMAND tst_wallpapercore)
+
+    qt_add_executable(tst_otheraudio
+        tests/tst_otheraudio.cpp
+        src/otheraudio.cpp
+    )
+    target_include_directories(tst_otheraudio PRIVATE src)
+    target_link_libraries(tst_otheraudio PRIVATE Qt6::Qml Qt6::Test)
+    add_test(NAME otheraudio COMMAND tst_otheraudio)
+
+    qt_add_executable(tst_screencover
+        tests/tst_screencover.cpp
+        src/screencover.cpp
+    )
+    target_include_directories(tst_screencover PRIVATE src)
+    target_link_libraries(tst_screencover PRIVATE Qt6::DBus Qt6::Qml Qt6::Test)
+    add_test(NAME screencover COMMAND tst_screencover)
+    # Pointed at a bus that is not there, so building ScreenCover in a test
+    # cannot load a script into the compositor of whoever runs the tests.
+    set_tests_properties(screencover PROPERTIES
+        ENVIRONMENT "DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/wallflux-no-bus")
 endif()
 
 include(GNUInstallDirs)

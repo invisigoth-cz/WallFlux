@@ -1,14 +1,18 @@
 # WallFlux
 
 Plays the Wallpaper Engine wallpapers somebody already owns, on Linux and
-Wayland, without Steam or Windows. C++20, Qt 6, GPL-3.0-or-later, ten files
-and about eight hundred lines. Target machine is CachyOS with KDE Plasma 6.7
-on Wayland, and that is where everything below was measured.
+Wayland, without Steam or Windows. C++20, Qt 6, GPL-3.0-or-later, fourteen
+files and about sixteen hundred lines. Target machine is CachyOS with KDE
+Plasma 6.7 on Wayland, and that is where everything below was measured.
 
 ## What works today
 
 - **Web wallpapers** (`index.html` + JavaScript) drawn by QtWebEngine.
 - **Video wallpapers** drawn by QtMultimedia, looping, with their sound on.
+- **Sound that gets out of the way by itself.** The wallpaper is quiet while
+  another program is using the speakers, and quiet and stopped while a window
+  covers the screen; both come back on their own. Neither is a setting. The
+  one switch there is turns the wallpaper's own sound off altogether.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
   the one that is clicked.
 - **An Arch package** (`packaging/PKGBUILD`), installed, with an autostart
@@ -25,9 +29,15 @@ click does nothing.
 src/main.cpp          WebEngine init, the single-copy lock, layer-shell setup
 src/wallpapercore.h   WallpaperKind::Kind, Wallpaper (Q_GADGET), WallpaperCore
 src/wallpapercore.cpp scanning Steam's folders, reading project.json
+src/otheraudio.h      OtherAudio: is another program using the speakers
+src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
+src/screencover.h     ScreenCover: is a window covering the wallpaper
+src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
 qml/Picker.qml        a window of preview thumbnails, click to play
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
+tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
+tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
 packaging/PKGBUILD    builds from this checkout's git history
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 ```
@@ -40,6 +50,14 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 - methods: `rescan()`, `rescan(roots)`, `select(id)`, `clear()`
 - static: `scan(roots)`, `steamRoots()`
 - `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `hasFile`, `playable`
+
+`OtherAudio` and `ScreenCover` are singletons of the same module, each with
+one property -- `playing` and `covered` -- and no business of their own in
+what the answer is used for. `Main.qml` puts the three together in one line:
+
+```qml
+readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover.covered
+```
 
 ## Decisions that are settled — do not reopen without being asked
 
@@ -85,6 +103,38 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
   program in it: `makepkg -C` from the root would empty it.
 - **`makepkg` builds from git, not from the working tree.** Commit first,
   then `makepkg -f`, then `pacman -U`, or the package carries old code.
+- **The wallpaper's own sound stream carries no pid.** Qt plays a video as a
+  native PipeWire client, and the stream has no `application.process.id` at
+  all -- only `client.id` and a `node.name` of `wallflux`. `othersPlaying()`
+  counts a stream it cannot place as somebody else's, so the wallpaper heard
+  itself, quietened itself a fraction of a second after starting, and stayed
+  that way: software muting leaves the stream open and uncorked, so the
+  reason never goes away. Matching on the application name is why the sound
+  works at all. A web wallpaper is the other case and does carry a pid -- of
+  a QtWebEngine child process, hence the walk up `/proc`.
+- **`Video.muted` mutes in software, and `pactl` reports `mute: no` the whole
+  time.** Do not read that flag to decide whether muting works. Record the
+  sink instead: `parec --format=s16le --rate=16000 --channels=1 -d
+  "$(pactl get-default-sink).monitor"` and look at the peak -- 0 is silence.
+  Measured: the flag says one thing and the speakers another.
+- **KWin 6 scripting has no `maximizedMode`**; it reads as `undefined`.
+  Compare the window's `frameGeometry` with
+  `workspace.clientArea(KWin.MaximizeArea, w.output, workspace.currentDesktop)`,
+  which is the screen minus the panels -- 2560x1377 of a 2560x1413 screen
+  here. Comparing against the whole screen misses every maximised window.
+- **"Show desktop" changes neither a window's state nor its geometry.** The
+  script sees nothing happen and goes on reporting a covered screen while the
+  wallpaper is the thing somebody asked to look at. `workspace.showingDesktop`
+  is `undefined` in the scripting API; KWin announces it on D-Bus instead, as
+  `org.kde.KWin.showingDesktopChanged`, which is what `ScreenCover` listens to.
+- **`loadScript` with a name KWin already has reads nothing.** It hands back
+  the script that is loaded, so after a restart the compositor is left running
+  one that calls a bus name nobody answers to any more. Unload first, always.
+- **Chromium will not freeze a page that is on screen.** `lifecycleState`
+  follows the view's visibility rather than the cover itself, which is why
+  `onVisibleChanged` sets it.
+- **`qmllint` is not in `PATH`** on this machine; it is
+  `/usr/lib/qt6/bin/qmllint`.
 - **`qt6-wayland` does not exist on CachyOS**; the Wayland plugin lives in
   `qt6-base`.
 
@@ -102,7 +152,7 @@ alone is enough and this problem does not exist.
 
 ```sh
 cmake --build build && ctest --test-dir build --output-on-failure
-qmllint -I build/ qml/Main.qml qml/Picker.qml
+/usr/lib/qt6/bin/qmllint -I build/ qml/Main.qml qml/Picker.qml
 ```
 
 Anything about stacking or what is on screen has to be measured, not
@@ -114,6 +164,15 @@ reasoned about:
   with `... /Scripting start`, read the output with `journalctl --user`.
   Setting `workspace.activeWindow` to the plasmashell desktop window is what
   a click on the desktop does.
+- **Whether anything is actually coming out of the speakers**: record the
+  default sink's monitor with `parec` and look at the peak, as above. Ears
+  and `pactl`'s mute flag both lie here, in opposite directions.
+- **Driving the sound behaviour without touching the mouse**: `qdbus6
+  org.kde.kglobalaccel /component/kwin invokeShortcut "Show Desktop"` takes
+  every window off the wallpaper and puts it back, which is a covered screen
+  and an uncovered one; `paplay` on anything in `/usr/share/sounds` is
+  another program using the speakers. Both states can be read back from
+  `QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="wallflux.*=true"`.
 - **A picture of the desktop** with the windows out of the way:
   `qdbus6 org.kde.kglobalaccel /component/kwin invokeShortcut "Show Desktop"`
   (again to undo), then `spectacle -b -n -f -o <file.png>`.
@@ -121,8 +180,11 @@ reasoned about:
 
 ## Open, in the order they are likely to be taken
 
-1. **A sound switch.** Video wallpapers play their audio and the only way to
-   silence one is to turn the wallpaper off. A menu item, a few lines.
+1. **A list of wallpapers that take turns.** Asked for: a person's own
+   selection out of the grid, each one on the desktop for a quarter of an
+   hour, swapped on a schedule while the program sits in the panel. Nothing
+   in the sound or cover behaviour stands in the way -- neither of them cares
+   which wallpaper is playing.
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper` from
    the icon theme. A drawn one has been asked for, without any hurry.
 3. **Scene wallpapers**, all 41 of them. A direction to decide, not an
