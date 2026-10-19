@@ -1,1 +1,8 @@
 /build/
+
+# makepkg works beside its PKGBUILD: the clone, the build tree, the staged
+# package and the package itself.
+/packaging/wallflux/
+/packaging/src/
+/packaging/pkg/
+/packaging/*.pkg.tar.zst

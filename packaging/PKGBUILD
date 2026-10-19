@@ -1,0 +1,43 @@
+# Maintainer: invisigoth-cz <invisigoth@seznam.cz>
+
+pkgname=wallflux
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Plays the Wallpaper Engine wallpapers you already own'
+arch=('x86_64')
+url='https://github.com/invisigoth-cz/WallFlux'
+license=('GPL-3.0-or-later')
+
+# qt6-base brings Wayland and the widgets the tray icon falls back on, and
+# qt6-multimedia brings a playback backend through its own virtual
+# dependency, so neither is named here. breeze-icons is: the tray icon is
+# the only way to reach the picker, and it is a name out of the icon theme
+# rather than a file we ship.
+depends=('breeze-icons' 'layer-shell-qt' 'qt6-base' 'qt6-declarative'
+         'qt6-multimedia' 'qt6-webengine')
+makedepends=('cmake' 'git' 'ninja')
+
+# Built from this checkout rather than from the remote, so what is packaged
+# is what is in front of you -- committed, though: the clone cannot see
+# anything still sitting in the working tree.
+#
+# This file lives in a directory of its own because makepkg works in src/
+# and pkg/ beside it, and the project already has a src/ holding the
+# program. Run from the project root, makepkg -C would empty it.
+source=("$pkgname::git+file://$startdir/..")
+sha256sums=('SKIP')
+
+build() {
+    cmake -S "$pkgname" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=None \
+        -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build
+}
+
+check() {
+    ctest --test-dir build --output-on-failure
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+}
