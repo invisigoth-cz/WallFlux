@@ -19,8 +19,10 @@ QML_ELEMENT
 /// (`WallpaperKind.Web`) without having to reach inside a value type.
 enum Kind {
     Unknown, ///< No `type` in project.json, or one we have never seen.
+             ///< A scan drops these, so it is only what `current` holds
+             ///< while nothing is chosen.
     Web,     ///< HTML, CSS and JavaScript. QtWebEngine draws these.
-    Video,   ///< A plain video file. QtMultimedia will draw these.
+    Video,   ///< A plain video file. QtMultimedia draws these.
     Scene,   ///< Wallpaper Engine's own packed format. Nothing here draws it.
 };
 Q_ENUM_NS(Kind)
@@ -59,8 +61,8 @@ public:
 
     /// Whether the file this wallpaper is made of was found on disk.
     ///
-    /// Not a promise that it can be drawn: a video wallpaper has its file
-    /// right there and still waits for QtMultimedia.
+    /// Not a promise that it can be drawn: a scene wallpaper keeps its own
+    /// format even when the file is there.
     bool hasFile() const { return !source.isEmpty(); }
 };
 

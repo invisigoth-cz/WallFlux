@@ -66,6 +66,14 @@ void TestWallpaperCore::readsWhatIsThere()
                   QStringLiteral("a.mp4"));
     // Not JSON at all. Must be skipped without taking the scan down.
     makeWallpaper(steam.path(), QStringLiteral("444"), "{ this is not json");
+    // A preset: no type of its own, only settings for somebody else's
+    // wallpaper. Nothing can draw it, so it must not be listed.
+    makeWallpaper(steam.path(), QStringLiteral("555"),
+                  R"({"title":"A preset","preset":{"ColorMode":1},"dependency":"111"})");
+    // A type we have never seen. Also not listed.
+    makeWallpaper(steam.path(), QStringLiteral("666"),
+                  R"({"title":"A something else","type":"hologram","file":"a.txt"})",
+                  QStringLiteral("a.txt"));
 
     const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
     QCOMPARE(found.size(), 3);

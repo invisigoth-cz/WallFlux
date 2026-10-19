@@ -13,6 +13,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # link time.
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick WebEngineQuick)
 
+# Video wallpapers. 6.7 rather than 6.5 because that is when Video gained
+# autoPlay; asking for it here fails at configure time with the version named
+# instead of at runtime with an unknown property.
+find_package(Qt6 6.7 REQUIRED COMPONENTS Multimedia)
+
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
 find_package(Qt6 6.5 QUIET COMPONENTS Test)
@@ -61,6 +66,7 @@ target_link_libraries(wallflux PRIVATE
     LayerShellQt::Interface
     Qt6::Core
     Qt6::Gui
+    Qt6::Multimedia
     Qt6::Qml
     Qt6::Quick
     Qt6::WebEngineQuick

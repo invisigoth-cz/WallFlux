@@ -82,11 +82,22 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
 
     const QJsonObject root = document.object();
 
+    // A preset carries no `type` at all -- it is somebody else's wallpaper
+    // plus a file of settings, and the two in this library are exactly that.
+    // Nothing here can draw one, or a type we have never seen, so neither
+    // gets into the list in the first place.
+    const WallpaperKind::Kind kind =
+        kindFromType(root.value(QLatin1StringView("type")).toString());
+    if (kind == WallpaperKind::Unknown) {
+        qCDebug(lcScan) << "skipping" << folder.dirName() << "-- no type we can draw";
+        return std::nullopt;
+    }
+
     Wallpaper wallpaper;
     wallpaper.id = folder.dirName();
     // An untitled wallpaper is still worth listing, under its id.
     wallpaper.title = root.value(QLatin1StringView("title")).toString(wallpaper.id);
-    wallpaper.kind = kindFromType(root.value(QLatin1StringView("type")).toString());
+    wallpaper.kind = kind;
     wallpaper.source = entryPoint(folder, root.value(QLatin1StringView("file")).toString());
     return wallpaper;
 }
