@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 invisigoth
 
-import QtCore
 import QtQuick
 import QtQuick.Window
 import QtMultimedia
@@ -36,16 +35,12 @@ Window {
     // before the window reaches the compositor, and showing it from QML would
     // be too early for that.
     visible: false
-    color: "black"
+    // Transparent while nothing is playing, so the desktop's own wallpaper
+    // shows through rather than being covered by a black rectangle. Black
+    // under a wallpaper that is playing, which is what a video's letterbox
+    // edges sit on in the moment before the first frame arrives.
+    color: root.playing ? "black" : "transparent"
     title: qsTr("WallFlux")
-
-    /// Plays this one and remembers it for next time. Everything that
-    /// chooses a wallpaper goes through here, so there is one place where a
-    /// choice is made and one place where it is written down.
-    function choose(id: string) {
-        if (Wallpapers.select(id))
-            saved.wallpaperId = id;
-    }
 
     function showPicker() {
         picker.show();
@@ -53,29 +48,9 @@ Window {
         picker.requestActivate();
     }
 
-    // Written to ~/.config/WallFlux/wallflux.conf, under the names main()
-    // gives the application.
-    Settings {
-        id: saved
-
-        property string wallpaperId
-    }
-
-    // Last time's wallpaper, or -- on a first run, or if that one has since
-    // been uninstalled -- the first one we can draw, so that the screen is
-    // never left empty with wallpapers sitting right there.
-    Component.onCompleted: {
-        if (Wallpapers.select(saved.wallpaperId))
-            return;
-
-        const found = Wallpapers.wallpapers;
-        for (let i = 0; i < found.length; ++i) {
-            if (found[i].playable) {
-                root.choose(found[i].id);
-                return;
-            }
-        }
-    }
+    // Nothing is chosen at startup, by design: the program comes up as an
+    // icon in the panel and the desktop keeps the wallpaper it already had
+    // until somebody picks one from the grid.
 
     Picker {
         id: picker
@@ -84,7 +59,7 @@ Window {
         // the compositor keeps in the background and takes no input, and a
         // window belonging to it would be dragged down there with it.
         transientParent: null
-        onChose: (id) => root.choose(id)
+        onChose: (id) => Wallpapers.select(id)
     }
 
     // The only thing a person can click: the wallpaper itself is in the
@@ -110,6 +85,13 @@ Window {
             Platform.MenuItem {
                 text: qsTr("Choose wallpaper…")
                 onTriggered: root.showPicker()
+            }
+            Platform.MenuItem {
+                text: qsTr("Turn the wallpaper off")
+                // Nothing to turn off otherwise: this is the state the
+                // program starts in.
+                enabled: root.playing
+                onTriggered: Wallpapers.clear()
             }
             Platform.MenuItem {
                 text: qsTr("Look for new wallpapers")
@@ -163,30 +145,4 @@ Window {
             console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
     }
 
-    // Shown whenever nothing is playing, which is most of the time so far.
-    Column {
-        anchors.centerIn: parent
-        spacing: 10
-        visible: !root.playing
-
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            color: "#d8d8d8"
-            font.pixelSize: 30
-            font.weight: Font.Light
-            text: Wallpapers.wallpapers.length === 0
-                  ? qsTr("No wallpapers found")
-                  : qsTr("Nothing to play")
-        }
-
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            color: "#787878"
-            font.pixelSize: 15
-            text: Wallpapers.wallpapers.length === 0
-                  ? qsTr("Wallpaper Engine's workshop folder is empty or missing.")
-                  : qsTr("%1 installed, none of them a web or video wallpaper.")
-                        .arg(Wallpapers.wallpapers.length)
-        }
-    }
 }
