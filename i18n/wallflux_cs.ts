@@ -248,32 +248,32 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Nic takového tu není.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="576" />
+        <location filename="../qml/Picker.qml" line="584" />
         <source>Coming soon</source>
         <translation>Připravuje se</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="607" />
+        <location filename="../qml/Picker.qml" line="614" />
         <source>%1  |  %2</source>
         <translation>%1  |  %2</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="609" />
+        <location filename="../qml/Picker.qml" line="616" />
         <source>No active wallpaper</source>
         <translation>Žádná tapeta neběží</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="616" />
+        <location filename="../qml/Picker.qml" line="623" />
         <source>Turn off</source>
         <translation>Vypnout</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="629" />
+        <location filename="../qml/Picker.qml" line="636" />
         <source>Turn the sound on</source>
         <translation>Zapnout zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="630" />
+        <location filename="../qml/Picker.qml" line="637" />
         <source>Turn the sound off</source>
         <translation>Vypnout zvuk</translation>
     </message>
@@ -281,23 +281,87 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>WallpaperCard</name>
     <message>
-        <location filename="../qml/WallpaperCard.qml" line="139" />
+        <location filename="../qml/WallpaperCard.qml" line="69" />
         <source>Web</source>
         <translation>Web</translation>
     </message>
     <message>
-        <location filename="../qml/WallpaperCard.qml" line="139" />
+        <location filename="../qml/WallpaperCard.qml" line="69" />
         <source>Video</source>
         <translation>Video</translation>
     </message>
     <message>
-        <location filename="../qml/WallpaperCard.qml" line="149" />
+        <location filename="../qml/WallpaperCard.qml" line="78" />
         <source>Native</source>
         <translation>Nativní</translation>
     </message>
     <message>
         <source>…</source>
         <translation type="vanished">…</translation>
+    </message>
+</context>
+<context>
+    <name>WorkshopView</name>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="53" />
+        <source>Unspecified</source>
+        <translation>Neurčeno</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="58" />
+        <source>Native</source>
+        <translation>Nativní</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="66" />
+        <source>Subscribe</source>
+        <translation>Odebírat</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="91" />
+        <source>See more</source>
+        <translation>Zobrazit víc</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="106" />
+        <source>Keep this row at the top</source>
+        <translation>Držet tuhle řadu nahoře</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="133" />
+        <source>Rows picked for you</source>
+        <translation>Řady vybrané pro tebe</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="141" />
+        <source>Everything, in one grid</source>
+        <translation>Všechno v jedné mřížce</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="146" />
+        <source>Search workshop…</source>
+        <translation>Hledat ve Workshopu…</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="160" />
+        <source>Filters</source>
+        <translation>Filtry</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="165" />
+        <location filename="../qml/WorkshopView.qml" line="197" />
+        <source>Trending</source>
+        <translation>Populární</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="174" />
+        <source>Not connected to the workshop yet — these are the wallpapers already installed, standing in so the layout can be judged.</source>
+        <translation>Workshop zatím není napojený — tohle jsou už nainstalované tapety, zastupují ho, aby šlo posoudit rozvržení.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="220" />
+        <source>New</source>
+        <translation>Novinky</translation>
     </message>
 </context>
 </TS>

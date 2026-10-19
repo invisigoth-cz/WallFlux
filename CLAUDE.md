@@ -51,6 +51,9 @@ qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
 qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band, its name and its hover panel
 qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
+qml/PreviewTile.qml   a preview, a name and a hover panel -- the shape of a
+                      card, shared by the library and the workshop
+qml/WorkshopView.qml  the Steam Workshop tab: rows of what nobody owns yet
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
@@ -161,6 +164,16 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   nothing, every card blank. A `Rectangle` is not a texture until it is a
   layer, and the effect quietly has nothing to work with. Looked at side by
   side, with and without, which is the only way this one shows itself.
+- **The whole workshop vocabulary is on the disk already.** Wallpaper
+  Engine's own install -- `steamapps/common/wallpaper_engine` -- carries
+  `locale/ui_en-us.json`, 3332 strings, with every workshop tag among them:
+  103 of them under `ui_workshop_tags_*`, covering genre (Abstract, Anime,
+  Cyberpunk, Pixel art, Relaxing, Sci-Fi and the rest), type (Scene, Video,
+  Web, Application, Preset, Asset pack), age rating (`G - All ages`,
+  `PG13 - Parental guidance`, `R - Mature`) and every resolution from
+  1280x720 to 7680x4320 plus the ultrawide and portrait ones. So the
+  sections and the filters need no API key and no network. **Read it from
+  there rather than typing a list into the source.**
 - **What project.json does and does not carry**, counted across all 53:
   `tags` and `preview` in every one, `type` and `file` in 51, `contentrating`
   in 49 and always "Everyone", and **no resolution anywhere**. So the tag,
@@ -264,14 +277,19 @@ reasoned about:
   whose caption contains "choose a wallpaper" -- which also prints its
   geometry, so the screenshot can be cropped to exactly the window --
   then `spectacle -b -n -f -o <file.png>`.
-- **A picture of the picker without taking the screen off whoever is using
-  it**: give the window `onVisibleChanged: if (visible) grab.restart()` and a
-  timer that calls `picker.contentItem.grabToImage(r => r.saveToFile(...))`.
-  It renders from the scene graph, so it does not matter what is in front of
-  the window, and nothing has to be raised or activated -- which is better
-  manners than the recipe above when somebody is at the keyboard. The timer
-  has to be started from the window becoming visible: at component creation
-  there is nothing on the screen to grab and the callback never comes.
+- **A picture of the picker without raising it**: give the window
+  `onVisibleChanged: if (visible) grab.restart()` and a timer that calls
+  `picker.contentItem.grabToImage(r => r.saveToFile(...))`. The timer has to
+  be started from the window becoming visible: at component creation there is
+  nothing on the screen to grab and the callback never comes.
+
+  **It needs the window to be drawing.** `grabToImage` returns true and then
+  the callback simply never arrives if the window is fully covered -- by
+  another window, or by the lock screen -- because the compositor stops
+  asking it for frames. Measured, after half an hour of wondering why a file
+  never appeared: the session had locked. So this is the polite recipe, not
+  the reliable one; when it goes quiet, check what is in front of the window
+  before suspecting the code.
 - **A picture of one piece of QML**, without the application at all:
   `item.grabToImage(function (r) { r.saveToFile("<file.png>") })` in a file
   run with `/usr/lib/qt6/bin/qml`. Several variants of the same thing side

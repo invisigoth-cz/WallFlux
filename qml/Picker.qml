@@ -565,9 +565,17 @@ Window {
                 }
             }
 
-            // The four that are not built yet. One component, four times,
-            // because four copies of the same label is four places to change
-            // it when one of them stops being a placeholder.
+            // Steam Workshop. Built when it is being looked at and not
+            // before: it fills rows of previews, which is work nobody asked
+            // for while they are in the library.
+            Loader {
+                active: tabs.currentIndex === 1
+                source: "WorkshopView.qml"
+            }
+
+            // The three that are not built yet. One component, three times,
+            // because three copies of the same label is three places to
+            // change when one of them stops being a placeholder.
             component Later: Label {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -576,7 +584,6 @@ Window {
                 text: qsTr("Coming soon")
             }
 
-            Later {}
             Later {}
             Later {}
             Later {}
