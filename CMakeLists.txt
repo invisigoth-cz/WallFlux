@@ -22,13 +22,6 @@ find_package(Qt6 6.5 QUIET COMPONENTS Test)
 # compositor's background layer. KDE ships it; so do the wlroots distributions.
 find_package(LayerShellQt REQUIRED)
 
-find_package(ZLIB REQUIRED)
-
-# lz4 ships no CMake config on Arch, only a pkg-config file, so it comes in
-# that way. PkgConfig::LZ4 is an imported target like any other.
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LZ4 REQUIRED IMPORTED_TARGET liblz4)
-
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(wallflux
@@ -71,8 +64,6 @@ target_link_libraries(wallflux PRIVATE
     # Only for the tray icon's fallback, which Qt.labs.platform needs linked
     # whether or not this desktop ends up using it.
     Qt6::Widgets
-    ZLIB::ZLIB
-    PkgConfig::LZ4
 )
 
 if(Qt6Test_FOUND)
