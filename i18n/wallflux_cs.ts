@@ -313,53 +313,57 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Nativní</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="66" />
         <source>Subscribe</source>
-        <translation>Odebírat</translation>
+        <translation type="vanished">Odebírat</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="91" />
+        <location filename="../qml/WorkshopView.qml" line="66" />
+        <source>Download</source>
+        <translation>Stáhnout</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="93" />
         <source>See more</source>
         <translation>Zobrazit víc</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="106" />
+        <location filename="../qml/WorkshopView.qml" line="108" />
         <source>Keep this row at the top</source>
         <translation>Držet tuhle řadu nahoře</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="133" />
+        <location filename="../qml/WorkshopView.qml" line="135" />
         <source>Rows picked for you</source>
         <translation>Řady vybrané pro tebe</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="141" />
+        <location filename="../qml/WorkshopView.qml" line="143" />
         <source>Everything, in one grid</source>
         <translation>Všechno v jedné mřížce</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="146" />
+        <location filename="../qml/WorkshopView.qml" line="148" />
         <source>Search workshop…</source>
         <translation>Hledat ve Workshopu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="160" />
+        <location filename="../qml/WorkshopView.qml" line="162" />
         <source>Filters</source>
         <translation>Filtry</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="165" />
-        <location filename="../qml/WorkshopView.qml" line="197" />
+        <location filename="../qml/WorkshopView.qml" line="167" />
+        <location filename="../qml/WorkshopView.qml" line="199" />
         <source>Trending</source>
         <translation>Populární</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="174" />
+        <location filename="../qml/WorkshopView.qml" line="176" />
         <source>Not connected to the workshop yet — these are the wallpapers already installed, standing in so the layout can be judged.</source>
         <translation>Workshop zatím není napojený — tohle jsou už nainstalované tapety, zastupují ho, aby šlo posoudit rozvržení.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="220" />
+        <location filename="../qml/WorkshopView.qml" line="222" />
         <source>New</source>
         <translation>Novinky</translation>
     </message>

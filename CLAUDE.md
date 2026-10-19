@@ -1,7 +1,14 @@
 # WallFlux
 
 Plays the Wallpaper Engine wallpapers somebody already owns, on Linux and
-Wayland, without Steam or Windows. C++20, Qt 6, GPL-3.0-or-later, fourteen
+Wayland, without Windows and without Wallpaper Engine running.
+
+**Steam is how the wallpapers get here.** Wallpaper Engine is bought and
+installed through it, the workshop is where wallpapers are fetched from, and
+Steam is the only thing that can fetch one: a workshop item for a paid app
+is downloadable only by an account that owns the app. So Steam is a
+dependency of getting wallpapers, not of playing them -- WallFlux reads the
+folder Steam has already filled and needs nothing running. C++20, Qt 6, GPL-3.0-or-later, fourteen
 files and about sixteen hundred lines. Target machine is CachyOS with KDE
 Plasma 6.7 on Wayland, and that is where everything below was measured.
 

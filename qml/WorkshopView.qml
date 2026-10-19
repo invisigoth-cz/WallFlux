@@ -63,10 +63,12 @@ Item {
 
             Button {
                 Layout.fillWidth: true
-                text: qsTr("Subscribe")
+                text: qsTr("Download")
                 icon.name: "download"
-                // Nothing behind it yet: subscribing is Steam's to do, and
-                // what asks Steam to do it is the next question.
+                // Nothing behind it yet. Fetching the file is Steam's to do
+                // -- a workshop item for a paid app is only downloadable by
+                // somebody who owns it -- so what this will come to is
+                // asking the Steam client, not fetching anything ourselves.
                 enabled: false
             }
         }

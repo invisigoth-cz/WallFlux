@@ -23,6 +23,13 @@ depends=('breeze-icons' 'layer-shell-qt' 'libpulse' 'qt6-base'
 # binary at build time. Nothing needs it afterwards.
 makedepends=('cmake' 'git' 'ninja' 'qt6-tools')
 
+# Not a dependency of running: WallFlux reads the folder Steam has already
+# filled and needs nothing of Steam's while it plays. It is a dependency of
+# having anything to play, since Wallpaper Engine is bought through Steam and
+# a workshop item for a paid app can only be fetched by an account that owns
+# it. Anyone who already has the folder does not need this installed.
+optdepends=('steam: to install Wallpaper Engine and fetch wallpapers from its workshop')
+
 # Built from this checkout rather than from the remote, so what is packaged
 # is what is in front of you -- committed, though: the clone cannot see
 # anything still sitting in the working tree.
