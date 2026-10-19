@@ -96,6 +96,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
 ## Decisions that are settled — do not reopen without being asked
 
+- **GPL-3.0-or-later, with an added permission for the Steamworks SDK** and
+  for nothing else, written out in LICENSE-EXCEPTION. The licence itself is
+  not up for discussion; the permission is there so the Steam part can be
+  written at all, since a workshop item for a paid application can only be
+  fetched through Valve's proprietary SDK. Every other library WallFlux
+  links must still be GPL-compatible.
+
 - **Qt draws the wallpapers. There is no renderer of our own.** An earlier
   attempt wrote one in Rust with OpenGL; it is parked on the branch
   `zaloha-puvodniho-pokusu-o-vlastni-engine` and only matters if scene

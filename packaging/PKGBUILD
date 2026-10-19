@@ -6,7 +6,9 @@ pkgrel=1
 pkgdesc='Plays the Wallpaper Engine wallpapers you already own'
 arch=('x86_64')
 url='https://github.com/invisigoth-cz/WallFlux'
-license=('GPL-3.0-or-later')
+# The exception is for the Steamworks SDK and is spelled out in
+# LICENSE-EXCEPTION, which package() installs beside the binary.
+license=('GPL-3.0-or-later' 'custom:Steamworks-SDK-linking-exception')
 
 # qt6-base brings Wayland and the widgets the tray icon falls back on, and
 # qt6-multimedia brings a playback backend through its own virtual
@@ -53,4 +55,7 @@ check() {
 
 package() {
     DESTDIR="$pkgdir" cmake --install build
+    # The added permission travels with the binary it applies to.
+    install -Dm644 "$pkgname/LICENSE-EXCEPTION" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE-EXCEPTION"
 }

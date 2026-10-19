@@ -6,6 +6,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The licence gained one added permission**, for the Steamworks SDK and
+  nothing else. Fetching a workshop item needs an account that owns the
+  application it belongs to, and the Steamworks SDK is the only interface
+  Valve offers for that; the GPL alone would forbid shipping WallFlux linked
+  against it. See [LICENSE-EXCEPTION](LICENSE-EXCEPTION). Every other library
+  still has to be GPL-compatible.
+
 ## [0.2.0] — 2026-10-19
 
 A different program from 0.1.0 under the same name. That one was a renderer

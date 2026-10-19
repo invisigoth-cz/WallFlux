@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
 #include "otheraudio.h"
 

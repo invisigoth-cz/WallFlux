@@ -1,0 +1,32 @@
+WallFlux — Steamworks SDK linking exception
+Copyright (C) 2026 invisigoth
+
+WallFlux is licensed under the GNU General Public License, version 3 or any
+later version, as set out in LICENSE. The copyright holders grant the
+following additional permission on top of it:
+
+    As a special exception, the copyright holders of WallFlux give you
+    permission to link the code of this program with the Steamworks SDK, or
+    with modified versions of the Steamworks SDK that are licensed on the
+    same terms as the Steamworks SDK, and to distribute linked combinations
+    including the two. You must obey the GNU General Public License in all
+    respects for all of the code used other than the Steamworks SDK. If you
+    modify a file of this program, you may extend this exception to your
+    version of that file, but you are not obliged to do so. If you do not
+    wish to do so, delete this exception statement from your version.
+
+Why this is here
+----------------
+
+A workshop item for a paid application can be fetched only by an account
+that owns that application, and the only interface Valve offers for doing so
+is the Steamworks SDK, which is proprietary. Without this permission the GPL
+would forbid distributing WallFlux linked against it, and every wallpaper
+somebody wanted would mean a trip to the Steam client by hand.
+
+What it does not cover
+----------------------
+
+The Steamworks SDK and nothing else. Every other library WallFlux links has
+to be compatible with the GNU General Public License as before, and the
+Steamworks SDK's own licence still applies to the Steamworks SDK.

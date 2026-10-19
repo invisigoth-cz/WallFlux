@@ -65,5 +65,12 @@ with this project.
 
 ## License
 
-GPL-3.0-or-later. WallFlux is free software: use it, change it and pass it on,
-as long as what you pass on stays free on the same terms. See [LICENSE](LICENSE).
+GPL-3.0-or-later, with one added permission. WallFlux is free software: use
+it, change it and pass it on, as long as what you pass on stays free on the
+same terms. See [LICENSE](LICENSE).
+
+The added permission is for the Steamworks SDK, and for nothing else: it
+allows WallFlux to be linked against it and distributed that way. A workshop
+item for a paid application can be fetched only by an account that owns that
+application, and the Steamworks SDK is the only interface Valve offers for
+doing so. See [LICENSE-EXCEPTION](LICENSE-EXCEPTION).
