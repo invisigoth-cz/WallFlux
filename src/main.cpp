@@ -6,9 +6,12 @@
 #include <LayerShellQt/Window>
 
 #include <QApplication>
+#include <QDir>
+#include <QLockFile>
 #include <QQmlApplicationEngine>
 #include <QLoggingCategory>
 #include <QQuickWindow>
+#include <QStandardPaths>
 #include <QtWebEngineQuick>
 
 int main(int argc, char *argv[])
@@ -35,6 +38,27 @@ int main(int argc, char *argv[])
     // KWin reads the desktop file name to decide what the window is; a
     // wallpaper that claims to be an ordinary application gets treated as one.
     app.setDesktopFileName(QStringLiteral("wallflux"));
+
+    // One wallpaper to a session. Starting at login means the program is
+    // usually already running by the time somebody starts it again by hand,
+    // and two copies is two videos drawn over each other and two lots of
+    // sound coming out of the speakers.
+    //
+    // The runtime directory is per-user and emptied at logout, which is the
+    // lifetime this lock wants. Where a system has none, a temporary file
+    // named after the user does the same job.
+    const QString runtime = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+    QLockFile running(runtime.isEmpty()
+                          ? QDir::tempPath() + QStringLiteral("/wallflux-")
+                                + qEnvironmentVariable("USER", QStringLiteral("user"))
+                                + QStringLiteral(".lock")
+                          : runtime + QStringLiteral("/wallflux.lock"));
+    if (!running.tryLock()) {
+        // Not a failure: the wallpaper this copy was asked for is on the
+        // screen already, put there by the copy that got here first.
+        qWarning("wallflux: another copy is already running, leaving the screen to it");
+        return 0;
+    }
 
     // WallpaperCore declares itself a singleton of the WallFlux QML module,
     // so there is nothing to register here: the engine builds it when the QML
