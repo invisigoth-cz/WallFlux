@@ -400,13 +400,46 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **A list of wallpapers that take turns.** The tab is already there and
-   says "Coming soon". Asked for: a person's own
-   selection out of the grid, each one on the desktop for a quarter of an
-   hour, swapped on a schedule while the program sits in the panel. Nothing
-   in the sound or cover behaviour stands in the way -- neither of them cares
-   which wallpaper is playing.
-2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper` from
-   the icon theme. A drawn one has been asked for, without any hurry.
-3. **Scene wallpapers**, all 41 of them. A direction to decide, not an
+1. **Download.** The button is in the hover panel of every workshop card and
+   is switched off. What it needs is `SteamAPI_ISteamUGC_SubscribeItem` and
+   `DownloadItem`, the progress out of `GetItemDownloadInfo`, and then
+   nothing: the folder watcher already notices what Steam puts on the disk,
+   so the wallpaper turns up in the library by itself. The reading of
+   Steam's answers is written and measured, so this is the small half of
+   what the browsing was.
+
+   To try it, `libsteam_api.so` has to be on the machine -- see the comment
+   at the top of `src/steamworks.cpp` for why WallFlux does not ship one.
+   Either install `steamworks-sdk` from the AUR, or take the SDK once:
+
+   ```sh
+   base=https://github.com/calendulish/Overlays/raw/master/dev-util/steamworks-sdk
+   curl -L -o sdk.zip "$base/files/steamworks_sdk_158.zip"
+   sha256sum sdk.zip
+   # 4142982451d25120ddf35abf2b55499154b56132a16a7ccdae4806aaed5c99d0
+   bsdtar -xf sdk.zip sdk/redistributable_bin/linux64/libsteam_api.so
+   ```
+
+   and point `WALLFLUX_STEAM_API` at it. The hash is the one the AUR package
+   has been building against since 2023; it was checked against that, and
+   the library's own exports were read before any of it was called.
+
+2. **Searching and filtering the workshop.** The field and the two buttons
+   above the rows do nothing yet. `AddRequiredTag` takes the same tag
+   vocabulary the library filters already use, and `SetSearchText` the
+   field. One more order -- most subscribed -- is already in the enum.
+
+3. **A list of wallpapers that take turns.** The tab is there and says
+   "Coming soon". Asked for: a person's own selection out of the grid, each
+   one on the desktop for a quarter of an hour, swapped on a schedule while
+   the program sits in the panel. Nothing in the sound or cover behaviour
+   stands in the way -- neither of them cares which wallpaper is playing.
+
+4. **Displays and Settings**, the two remaining tabs. Nothing has been asked
+   for in either of them yet.
+
+5. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
+   from the icon theme. A drawn one has been asked for, without any hurry.
+
+6. **Scene wallpapers**, all 41 of them. A direction to decide, not an
    afternoon's work.
