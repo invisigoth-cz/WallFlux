@@ -19,7 +19,9 @@ license=('GPL-3.0-or-later')
 # program it is not something the linker would ever mention.
 depends=('breeze-icons' 'layer-shell-qt' 'libpulse' 'qt6-base'
          'qt6-declarative' 'qt6-multimedia' 'qt6-webengine')
-makedepends=('cmake' 'git' 'ninja')
+# qt6-tools is here for lrelease, which compiles the Czech catalogue into the
+# binary at build time. Nothing needs it afterwards.
+makedepends=('cmake' 'git' 'ninja' 'qt6-tools')
 
 # Built from this checkout rather than from the remote, so what is packaged
 # is what is in front of you -- committed, though: the clone cannot see

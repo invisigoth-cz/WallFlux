@@ -59,6 +59,9 @@ private slots:
     /// What the picker shows when somebody looks at one card: the size of
     /// what is on disk, and nothing at all for a wallpaper that is not here.
     void tellsWhatIsOnDisk();
+
+    /// What was played in this run, newest first and each one only once.
+    void remembersWhatWasPlayedInThisRun();
 };
 
 void TestWallpaperCore::readsWhatIsThere()
@@ -226,6 +229,31 @@ void TestWallpaperCore::tellsWhatIsOnDisk()
 
     QVERIFY2(core.details(QStringLiteral("nobody")).isEmpty(),
              "a wallpaper that is not installed was described anyway");
+}
+
+void TestWallpaperCore::remembersWhatWasPlayedInThisRun()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+
+    makeWallpaper(steam.path(), QStringLiteral("111"),
+                  R"({"title":"First","type":"video","file":"a.mp4"})",
+                  {QStringLiteral("a.mp4")});
+    makeWallpaper(steam.path(), QStringLiteral("222"),
+                  R"({"title":"Second","type":"video","file":"b.mp4"})",
+                  {QStringLiteral("b.mp4")});
+
+    WallpaperCore core;
+    core.rescan({steam.path()});
+    QVERIFY2(core.recent().isEmpty(), "something was played before anything was played");
+
+    QVERIFY(core.select(QStringLiteral("111")));
+    QVERIFY(core.select(QStringLiteral("222")));
+    QVERIFY(core.select(QStringLiteral("111")));
+
+    // Going back to the first one moves it to the front rather than putting
+    // it in the list twice, which an order in a menu has to get right.
+    QCOMPARE(core.recent(), QStringList({QStringLiteral("111"), QStringLiteral("222")}));
 }
 
 QTEST_MAIN(TestWallpaperCore)

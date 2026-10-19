@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # speaks no other language and Wayland tells a window nothing about the ones
 # in front of it.
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core DBus Gui Multimedia Qml Quick WebEngineQuick Widgets)
+    Core DBus Gui LinguistTools Multimedia Qml Quick WebEngineQuick Widgets)
 
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
@@ -54,11 +54,18 @@ qt_add_qml_module(wallflux
     SOURCES
         src/otheraudio.h
         src/otheraudio.cpp
+        src/language.h
+        src/language.cpp
         src/screencover.h
         src/screencover.cpp
         src/wallpapercore.h
         src/wallpapercore.cpp
 )
+
+# The Czech catalogue, compiled into the binary under /i18n -- which is where
+# Language looks for it. `cmake --build build --target update_translations`
+# refreshes the .ts file after strings change.
+qt_add_translations(wallflux TS_FILES i18n/wallflux_cs.ts)
 
 target_include_directories(wallflux PRIVATE src)
 

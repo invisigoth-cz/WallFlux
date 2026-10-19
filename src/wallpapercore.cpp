@@ -41,6 +41,20 @@ WallpaperKind::Kind kindFromType(const QString &type)
     return WallpaperKind::Unknown;
 }
 
+/// Everything under this folder, added up.
+///
+/// A web wallpaper is a folder of files and its `index.html` is the least of
+/// them -- measured on this machine: 13 kB of HTML in 3.6 MB of wallpaper.
+/// Reporting the entry file's size would be reporting nothing.
+qint64 sizeUnder(const QString &folder)
+{
+    qint64 total = 0;
+    QDirIterator files(folder, QDir::Files, QDirIterator::Subdirectories);
+    while (files.hasNext())
+        total += QFileInfo(files.next()).size();
+    return total;
+}
+
 /// A file that project.json names, resolved inside the wallpaper's own
 /// folder.
 ///
@@ -104,6 +118,14 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     wallpaper.kind = kind;
     wallpaper.source = entryPoint(folder, root.value(QLatin1StringView("file")).toString());
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
+
+    const QFileInfo here(folder.absolutePath());
+    // birthTime where the filesystem keeps one -- btrfs does, measured --
+    // and the last change where it does not, which is the nearest thing to
+    // when it arrived.
+    wallpaper.added = here.birthTime().isValid() ? here.birthTime() : here.lastModified();
+    wallpaper.bytes = sizeUnder(folder.absolutePath());
+
     return wallpaper;
 }
 
@@ -212,6 +234,13 @@ bool WallpaperCore::select(const QString &id)
 
     m_current = *match;
     emit currentChanged();
+
+    // Newest first, and only once in the list: picking the same wallpaper
+    // again with another in between should move it, not list it twice.
+    m_recent.removeAll(m_current.id);
+    m_recent.prepend(m_current.id);
+    emit recentChanged();
+
     return true;
 }
 
@@ -224,20 +253,6 @@ void WallpaperCore::clear()
 }
 
 namespace {
-
-/// Everything under this folder, added up.
-///
-/// A web wallpaper is a folder of files and its `index.html` is the least of
-/// them -- measured on this machine: 13 kB of HTML in 3.6 MB of wallpaper.
-/// Reporting the entry file's size would be reporting nothing.
-qint64 sizeUnder(const QString &folder)
-{
-    qint64 total = 0;
-    QDirIterator files(folder, QDir::Files, QDirIterator::Subdirectories);
-    while (files.hasNext())
-        total += QFileInfo(files.next()).size();
-    return total;
-}
 
 /// The picture size of a video file, as `1920x1080`, or nothing.
 ///
@@ -284,14 +299,10 @@ QVariantMap WallpaperCore::details(const QString &id) const
     const QString file = match->source.toLocalFile();
     QVariantMap facts;
 
-    // A web wallpaper is its whole folder; a video is the one file.
-    if (!file.isEmpty()) {
-        const qint64 bytes = match->kind == WallpaperKind::Web
-                                 ? sizeUnder(QFileInfo(file).absolutePath())
-                                 : QFileInfo(file).size();
-        if (bytes > 0)
-            facts.insert(QStringLiteral("size"), QLocale().formattedDataSize(bytes));
-    }
+    // Added up during the scan, since ordering the grid by size needs every
+    // one of them anyway.
+    if (match->bytes > 0)
+        facts.insert(QStringLiteral("size"), QLocale().formattedDataSize(match->bytes));
 
     if (match->kind == WallpaperKind::Video && !file.isEmpty()) {
         if (const QString shape = videoResolution(file); !shape.isEmpty())

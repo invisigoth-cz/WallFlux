@@ -15,8 +15,10 @@ Plasma 6.7 on Wayland, and that is where everything below was measured.
   one switch there is turns the wallpaper's own sound off altogether.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
   the one that is clicked.
+- **English and Czech**, switched in the window without a restart.
 - **A picker with its sections across the top**: Installed, Steam Workshop,
-  Playlists, Displays, Settings. Only Installed is built; the other four say
+  Playlists, Displays, Settings, centred. Only Installed is built; the four
+  others say
   "Coming soon" and are there because naming them is what decides where the
   next piece of work goes.
 - **A picker that looks like something**: dark and light themes switched
@@ -39,6 +41,8 @@ click does nothing.
 src/main.cpp          WebEngine init, the single-copy lock, layer-shell setup
 src/wallpapercore.h   WallpaperKind::Kind, Wallpaper (Q_GADGET), WallpaperCore
 src/wallpapercore.cpp scanning Steam's folders, reading project.json
+src/language.h        Language: the EN/CZ switch, and what it has to call
+src/language.cpp      installs a QTranslator and retranslates the engine
 src/otheraudio.h      OtherAudio: is another program using the speakers
 src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
 src/screencover.h     ScreenCover: is a window covering the wallpaper
@@ -49,6 +53,7 @@ qml/WallpaperCard.qml one preview, its band, its name and its hover panel
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
+i18n/wallflux_cs.ts   the Czech catalogue, compiled into the binary
 packaging/PKGBUILD    builds from this checkout's git history
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 ```
@@ -62,7 +67,9 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
   `details(id)` (`{ size, resolution }`, read off the disk when the picker
   shows one card and kept afterwards)
 - static: `scan(roots)`, `steamRoots()`
-- `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `hasFile`, `playable`
+- `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `added`, `bytes`,
+  `hasFile`, `playable`
+- also on the singleton: `recent` (ids chosen in this run, newest first)
 
 `OtherAudio` and `ScreenCover` are singletons of the same module, each with
 one property -- `playing` and `covered` -- and no business of their own in
@@ -153,6 +160,21 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   nothing, every card blank. A `Rectangle` is not a texture until it is a
   layer, and the effect quietly has nothing to work with. Looked at side by
   side, with and without, which is the only way this one shows itself.
+- **Every wallpaper here carries the same date.** All 53 folders were
+  downloaded by Steam in one go, and their creation time and last change are
+  the same minute -- so ordering by "date added" barely reorders anything on
+  this machine. It is not broken; there is nothing to sort by.
+- **A checkable Controls item cannot both be told what to be and asked what
+  it is.** Bind `checked` to a property and set that property from
+  `onToggled`, and the click breaks the binding it was reading. The sort menu
+  holds its own state instead and the window reads it off the items.
+- **`autoExclusive` takes in every checkable sibling.** The sort menu's
+  direction shares a parent with its four keys and would have joined their
+  group; a `ButtonGroup` naming its members is what keeps them apart.
+- **Switching language needs `QQmlEngine::retranslate()`.** Installing the
+  translator alone changes what is built next and nothing already on screen.
+  `qt_add_translations` compiles the catalogue into the binary under `/i18n`,
+  and `qt6-tools` has to be in the package's makedepends for it.
 - **`icon.color` tints whatever it is given, glyph or picture.** The four
   monochrome tab icons need it, or they stay whatever colour the system icon
   theme drew them and go invisible in one of the two themes -- this machine's
@@ -222,6 +244,14 @@ reasoned about:
   whose caption contains "choose a wallpaper" -- which also prints its
   geometry, so the screenshot can be cropped to exactly the window --
   then `spectacle -b -n -f -o <file.png>`.
+- **A picture of the picker without taking the screen off whoever is using
+  it**: give the window `onVisibleChanged: if (visible) grab.restart()` and a
+  timer that calls `picker.contentItem.grabToImage(r => r.saveToFile(...))`.
+  It renders from the scene graph, so it does not matter what is in front of
+  the window, and nothing has to be raised or activated -- which is better
+  manners than the recipe above when somebody is at the keyboard. The timer
+  has to be started from the window becoming visible: at component creation
+  there is nothing on the screen to grab and the callback never comes.
 - **A picture of one piece of QML**, without the application at all:
   `item.grabToImage(function (r) { r.saveToFile("<file.png>") })` in a file
   run with `/usr/lib/qt6/bin/qml`. Several variants of the same thing side

@@ -40,9 +40,20 @@ Window {
     /// picker is a window full of pictures.
     property bool dark: true
 
-    /// Whether the grid is in name order or reversed. The scan hands them
-    /// over in name order already, so reversing is all there is to do.
-    property bool byNameDescending: false
+    /// What the grid is ordered by, and which way round. Both are held by
+    /// the menu items themselves rather than set from them: a checkable
+    /// Controls item that is told what to be and also says what it is ends
+    /// up fighting its own binding.
+    readonly property int sortBy: byAdded.checked ? 1
+                                : bySize.checked ? 2
+                                : byRecent.checked ? 3
+                                : 0
+    readonly property bool ascending: upwards.checked
+
+    /// What each of those is called. Read twice over -- by the menu and by
+    /// the button in front of it -- so it is written once.
+    readonly property var sortLabels: [qsTr("Name"), qsTr("Date added"),
+                                       qsTr("Size"), qsTr("Recent")]
 
     /// Whether the scene wallpapers are left out. This is what the filter
     /// button does today; it is the only filter the backend can answer.
@@ -106,7 +117,33 @@ Window {
                 continue;
             kept.push(one);
         }
-        return picker.byNameDescending ? kept.reverse() : kept;
+
+        // The backend hands them over in name order, so that one is already
+        // done; the other three are worked out here because what they need
+        // -- a date, a size, what was played when -- is all on the wallpaper
+        // or on the singleton already.
+        const played = Wallpapers.recent;
+        switch (picker.sortBy) {
+        case 1:
+            kept.sort((a, b) => a.added < b.added ? -1 : a.added > b.added ? 1 : 0);
+            break;
+        case 2:
+            kept.sort((a, b) => a.bytes - b.bytes);
+            break;
+        case 3:
+            // Rank 0 is the one played last. Anything never played has no
+            // rank at all and goes behind everything that has one, which is
+            // every wallpaper until something is chosen.
+            kept.sort((a, b) => {
+                const ra = played.indexOf(a.id);
+                const rb = played.indexOf(b.id);
+                return (ra < 0 ? Infinity : ra) - (rb < 0 ? Infinity : rb);
+            });
+            break;
+        default:
+            break;
+        }
+        return picker.ascending ? kept : kept.reverse();
     }
 
     width: 1100
@@ -173,8 +210,7 @@ Window {
             TabBar {
                 id: tabs
 
-                anchors.left: parent.left
-                anchors.leftMargin: 16
+                anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
 
@@ -241,6 +277,21 @@ Window {
                 // There is nothing to look for again from any other section.
                 visible: tabs.currentIndex === 0
                 onClicked: Wallpapers.rescan()
+            }
+
+            Button {
+                // The language it is in now, rather than the one the click
+                // would give you: a language is what somebody looks for to
+                // check, and the tooltip says what happens.
+                //
+                // Not translated, deliberately. "EN" and "CZ" are the same
+                // in both, and a language switch that renames itself is a
+                // language switch nobody can find their way back from.
+                text: Language.czech ? "CZ" : "EN"
+                ToolTip.visible: hovered
+                ToolTip.text: Language.czech ? qsTr("Switch to English")
+                                             : qsTr("Switch to Czech")
+                onClicked: Language.czech = !Language.czech
             }
 
             Button {
@@ -317,10 +368,62 @@ Window {
                     }
 
                     Button {
-                        text: qsTr("Name")
-                        icon.name: picker.byNameDescending ? "view-sort-descending"
-                                                           : "view-sort-ascending"
-                        onClicked: picker.byNameDescending = !picker.byNameDescending
+                        id: order
+
+                        text: picker.sortLabels[picker.sortBy]
+                        icon.name: picker.ascending ? "view-sort-ascending"
+                                                    : "view-sort-descending"
+                        onClicked: orderMenu.open()
+
+                        Menu {
+                            id: orderMenu
+
+                            y: order.height
+
+                            // One of the four at a time. A ButtonGroup
+                            // rather than autoExclusive, which would take
+                            // the direction below into the same group --
+                            // they share a parent and nothing else.
+                            ButtonGroup {
+                                id: keys
+                                exclusive: true
+                            }
+
+                            MenuItem {
+                                id: byName
+                                text: picker.sortLabels[0]
+                                checkable: true
+                                checked: true
+                                ButtonGroup.group: keys
+                            }
+                            MenuItem {
+                                id: byAdded
+                                text: picker.sortLabels[1]
+                                checkable: true
+                                ButtonGroup.group: keys
+                            }
+                            MenuItem {
+                                id: bySize
+                                text: picker.sortLabels[2]
+                                checkable: true
+                                ButtonGroup.group: keys
+                            }
+                            MenuItem {
+                                id: byRecent
+                                text: picker.sortLabels[3]
+                                checkable: true
+                                ButtonGroup.group: keys
+                            }
+
+                            MenuSeparator {}
+
+                            MenuItem {
+                                id: upwards
+                                text: qsTr("Ascending")
+                                checkable: true
+                                checked: true
+                            }
+                        }
                     }
                 }
 
