@@ -78,14 +78,25 @@ Item {
             Item { Layout.fillHeight: true }
 
             Button {
+                id: fetch
+
+                /// What `Steamworks.downloads` says about this one:
+                /// undefined until it has been asked for, then 0 to 100,
+                /// or -1 where Steam would not do it.
+                readonly property var progress: Steamworks.downloads[offered.item.id]
+                readonly property bool untouched: fetch.progress === undefined
+
                 Layout.fillWidth: true
-                text: qsTr("Download")
-                icon.name: "download"
-                // Nothing behind it yet. Fetching the file is Steam's to do
-                // -- a workshop item for a paid app is only downloadable by
-                // somebody who owns it -- so what this will come to is
-                // asking the Steam client, not fetching anything ourselves.
-                enabled: false
+                text: fetch.untouched ? qsTr("Download")
+                     : fetch.progress < 0 ? qsTr("Steam would not")
+                     : fetch.progress >= 100 ? qsTr("Downloaded")
+                     : qsTr("%1 %").arg(fetch.progress)
+                icon.name: fetch.progress >= 100 ? "download-later" : "download"
+                // Asking again while it is on its way would have Steam
+                // start over; a refusal is worth a second try.
+                enabled: Steamworks.available
+                         && (fetch.untouched || fetch.progress < 0)
+                onClicked: Steamworks.download(offered.item.id)
             }
         }
     }

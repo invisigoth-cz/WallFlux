@@ -11,6 +11,7 @@
 #include <QPair>
 #include <QTimer>
 #include <QVariantList>
+#include <QVariantMap>
 
 /// Whether this machine can be asked about the Steam Workshop, and the way in.
 ///
@@ -53,6 +54,14 @@ class Steamworks : public QObject
     /// Whether a question is outstanding.
     Q_PROPERTY(bool busy READ isBusy NOTIFY busyChanged)
 
+    /// How far along each download is, keyed by published file id: 0 to 100
+    /// while it runs, 100 once Steam says it is there, and -1 where Steam
+    /// would not do it. An id that is absent was never asked for.
+    ///
+    /// One map rather than a signal per wallpaper, because what wants to
+    /// know is a button on a card and a binding is how a card asks.
+    Q_PROPERTY(QVariantMap downloads READ downloads NOTIFY downloadsChanged)
+
 public:
     /// What to put at the top, in the order the picker's own menu has them.
     enum Order {
@@ -70,6 +79,7 @@ public:
     QVariantList trending() const { return m_trending; }
     QVariantList newest() const { return m_newest; }
     bool isBusy() const { return m_call != 0; }
+    QVariantMap downloads() const { return m_downloads; }
 
     /// Asks the workshop for one page of wallpapers, fifty at a time, which
     /// is what Steam gives. The answer arrives in the list for that order a
@@ -78,9 +88,17 @@ public:
     /// let go of before the next is made.
     Q_INVOKABLE void browse(Steamworks::Order order, int page = 1);
 
+    /// Subscribes to one wallpaper and asks Steam to fetch it now. Nothing
+    /// is fetched here: Steam downloads it into the folder it already owns,
+    /// and the watcher on that folder is what puts it in the library -- so
+    /// there is nothing to do once this has been called but watch
+    /// `downloads` and wait.
+    Q_INVOKABLE void download(const QString &id);
+
 signals:
     void foundChanged();
     void busyChanged();
+    void downloadsChanged();
 
 private:
     /// Opens libsteam_api.so from wherever it is, or says where it looked.
@@ -92,6 +110,12 @@ private:
 
     /// Reads one finished query out of Steam and into `found`.
     void collect(quint64 call, int callbackId, int paramSize);
+
+    /// Asks Steam how far each outstanding download has got.
+    void measure();
+
+    /// Whether the pump still has anything to pump for.
+    bool waiting() const { return m_call != 0 || !m_downloading.isEmpty(); }
 
     void *m_library = nullptr;
     /// The ISteamUGC pointer, which is what everything about the workshop is
@@ -105,6 +129,11 @@ private:
     /// still waiting to be asked.
     Order m_asking = Trending;
     QList<QPair<Order, int>> m_queued;
+
+    /// What is on its way down, and how far each has got. The list is the
+    /// ids to ask about; the map is what the interface reads.
+    QList<quint64> m_downloading;
+    QVariantMap m_downloads;
 
     /// The pipe callbacks come down, and what is outstanding on it.
     qint32 m_pipe = 0;
@@ -124,4 +153,7 @@ private:
     bool (*m_queryResult)(void *, quint64, quint32, void *) = nullptr;
     bool (*m_previewUrl)(void *, quint64, quint32, char *, quint32) = nullptr;
     bool (*m_releaseQuery)(void *, quint64) = nullptr;
+    quint64 (*m_subscribe)(void *, quint64) = nullptr;
+    bool (*m_downloadItem)(void *, quint64, bool) = nullptr;
+    bool (*m_downloadInfo)(void *, quint64, quint64 *, quint64 *) = nullptr;
 };

@@ -108,6 +108,17 @@ struct CallCompleted
     qint32 paramSize;
 };
 
+/// What arrives when one download has finished, or given up. Unlike a
+/// query, this is not an answer to a call we made: it turns up on the pipe
+/// by itself, with its own callback number, which is why pump() has to look
+/// for it rather than collect() reading it.
+struct DownloadFinished
+{
+    quint32 app;                  // 0
+    quint64 id;                   // 4
+    qint32 result;                // 12
+};
+
 #pragma pack(pop)
 
 static_assert(sizeof(UgcDetails) == 9764);
@@ -120,11 +131,15 @@ static_assert(sizeof(QueryCompleted) == 280);
 static_assert(sizeof(CallbackMsg) == 20);
 static_assert(offsetof(CallbackMsg, param) == 8);
 static_assert(sizeof(CallCompleted) == 16);
+static_assert(sizeof(DownloadFinished) == 16);
+static_assert(offsetof(DownloadFinished, id) == 4);
+static_assert(offsetof(DownloadFinished, result) == 12);
 
 /// Callback numbers, and the few enum values worth naming. Measured the same
 /// way.
 constexpr int CallCompletedId = 703;
 constexpr int QueryCompletedId = 3401;
+constexpr int DownloadFinishedId = 3406;
 constexpr qint32 ResultOk = 1;
 constexpr int MatchingItemsReadyToUse = 2;
 
@@ -206,12 +221,19 @@ bool Steamworks::open()
                      "SteamAPI_ISteamUGC_GetQueryUGCPreviewURL");
     WALLFLUX_RESOLVE(m_releaseQuery, bool (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_ReleaseQueryUGCRequest");
+    WALLFLUX_RESOLVE(m_subscribe, quint64 (*)(void *, quint64),
+                     "SteamAPI_ISteamUGC_SubscribeItem");
+    WALLFLUX_RESOLVE(m_downloadItem, bool (*)(void *, quint64, bool),
+                     "SteamAPI_ISteamUGC_DownloadItem");
+    WALLFLUX_RESOLVE(m_downloadInfo, bool (*)(void *, quint64, quint64 *, quint64 *),
+                     "SteamAPI_ISteamUGC_GetItemDownloadInfo");
 
 #undef WALLFLUX_RESOLVE
 
     if (!initSafe || !steamUser || !findInterface || !dispatchInit || !steamPipe || !m_runFrame
         || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery || !m_sendQuery
-        || !m_queryResult || !m_previewUrl || !m_releaseQuery) {
+        || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
+        || !m_downloadItem || !m_downloadInfo) {
         m_trouble = tr("The Steamworks library on this machine is not one this "
                        "program knows how to talk to.");
         return false;
@@ -281,6 +303,61 @@ void Steamworks::browse(Steamworks::Order order, int page)
     emit busyChanged();
 }
 
+void Steamworks::download(const QString &id)
+{
+    if (!m_ugc)
+        return;
+
+    bool numeric = false;
+    const quint64 fileId = id.toULongLong(&numeric);
+    if (!numeric || fileId == 0) {
+        qCWarning(lcSteam) << "not a published file id:" << id;
+        return;
+    }
+
+    // Already on its way. Asking twice would have Steam start over.
+    if (m_downloading.contains(fileId))
+        return;
+
+    // Two calls, because they are two different things. Subscribing is what
+    // makes Steam keep the wallpaper and show it as the person's own; the
+    // download is asked for separately so it starts now rather than
+    // whenever Steam gets round to it.
+    //
+    // Subscribing answers with a call result of its own, which is not waited
+    // for: it tells us nothing the download does not, and a subscription
+    // that fails shows up as a download that fails. pump() ignores and frees
+    // it like any other callback it was not asked about.
+    m_subscribe(m_ugc, fileId);
+
+    if (!m_downloadItem(m_ugc, fileId, true)) {
+        qCWarning(lcSteam) << "Steam would not download" << fileId;
+        m_downloads.insert(id, -1);
+        emit downloadsChanged();
+        return;
+    }
+
+    qCInfo(lcSteam) << "downloading" << fileId;
+    m_downloading.append(fileId);
+    m_downloads.insert(id, 0);
+    m_pump.start();
+    emit downloadsChanged();
+}
+
+void Steamworks::measure()
+{
+    for (const quint64 id : m_downloading) {
+        quint64 done = 0;
+        quint64 total = 0;
+        // False before Steam has started and after it has finished, so what
+        // was there last is left alone rather than reset to nothing.
+        if (m_downloadInfo(m_ugc, id, &done, &total) && total > 0)
+            m_downloads.insert(QString::number(id),
+                               static_cast<int>(done * 100 / total));
+    }
+    emit downloadsChanged();
+}
+
 void Steamworks::pump()
 {
     m_runFrame(m_pipe);
@@ -291,10 +368,32 @@ void Steamworks::pump()
             const auto *done = static_cast<const CallCompleted *>(msg.param);
             if (done->call == m_call)
                 collect(done->call, done->callback, done->paramSize);
+        } else if (msg.callback == DownloadFinishedId && msg.param
+                   && msg.paramSize >= qint32(sizeof(DownloadFinished))) {
+            const auto *done = static_cast<const DownloadFinished *>(msg.param);
+            if (m_downloading.removeOne(done->id)) {
+                const bool ok = done->result == ResultOk;
+                if (!ok)
+                    qCWarning(lcSteam) << "download of" << done->id << "failed, result"
+                                       << done->result;
+                else
+                    qCInfo(lcSteam) << "Steam has" << done->id << "on the disk";
+                // Left at 100 rather than taken out: the folder watcher
+                // needs a moment to notice, and until it does the card
+                // should say the thing is there, not offer to fetch it again.
+                m_downloads.insert(QString::number(done->id), ok ? 100 : -1);
+                emit downloadsChanged();
+            }
         }
         // Freed whatever it was: the queue does not move on otherwise.
         m_freeCallback(m_pipe);
     }
+
+    if (!m_downloading.isEmpty())
+        measure();
+
+    if (!waiting())
+        m_pump.stop();
 }
 
 void Steamworks::collect(quint64 call, int callbackId, int paramSize)
@@ -303,7 +402,6 @@ void Steamworks::collect(quint64 call, int callbackId, int paramSize)
     bool failed = false;
     const bool got = m_callResult(m_pipe, call, answer.data(), answer.size(), callbackId, &failed);
 
-    m_pump.stop();
     m_call = 0;
 
     if (!got || failed || callbackId != QueryCompletedId
