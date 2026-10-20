@@ -68,23 +68,15 @@ Popup {
         return seen;
     }
 
-    /// `{ v, l }` for each tag: what it means to Steam, and what Valve
-    /// calls it in this language. Sorted by what it says rather than by
-    /// what it means, since what it says is what is read.
-    function labelled(tags, locale) {
-        return tags.map((tag) => ({ v: tag, l: Tags.name(tag, locale) }))
-                   .sort((first, second) => first.l.localeCompare(second.l));
-    }
-
     readonly property var genreValues:
-        panel.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) >= 0),
+        Tags.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) >= 0),
                        panel.catalogue)
 
     /// Everything that is not a genre: audio responsive, customizable,
     /// approved and the rest, which describe a wallpaper rather than say
     /// what it is of.
     readonly property var tagValues:
-        panel.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) < 0),
+        Tags.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) < 0),
                        panel.catalogue)
 
     /// Every picture size among the videos, and one for everything that has
@@ -114,108 +106,25 @@ Popup {
         radius: 8
     }
 
-    /// One value, on or off. A rectangle and a mouse area rather than a
-    /// CheckBox: a checkable Controls item that is told what to be and also
-    /// clicked ends up fighting its own binding, and a chip is what was
-    /// asked for anyway.
-    component Chip: Rectangle {
-        id: chip
-
-        required property string label
-        required property bool on
-
-        signal asked()
-
-        implicitWidth: name.implicitWidth + 24
-        implicitHeight: 28
-        radius: height / 2
-        color: chip.on ? panel.palette.highlight : "transparent"
-        border.width: 1
-        border.color: chip.on ? panel.palette.highlight : panel.palette.mid
-        // Inherited, so a section with nothing behind it can switch this off
-        // and the mouse area inside goes with it.
-        opacity: chip.enabled ? 1 : 0.4
-
-        Label {
-            id: name
-
-            anchors.centerIn: parent
-            text: chip.label
-            font.pixelSize: 12
-            color: chip.on ? panel.palette.highlightedText : panel.palette.windowText
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: chip.asked()
-        }
-    }
-
-    /// A heading and the chips under it, wrapped onto as many rows as they
-    /// need.
-    component Section: ColumnLayout {
-        id: section
-
-        required property string title
-        /// `{ v, l }` for each: what it means and what it says.
-        required property var values
-        /// Which of those are on.
-        required property var picked
-
-        signal asked(var value)
-
-        Layout.fillWidth: true
-        spacing: 7
-        // A heading over nothing: with only genres installed, the section
-        // for everything else has no chips to show.
-        visible: section.values.length > 0
-
-        Label {
-            text: section.title
-            font.pixelSize: 11
-            font.letterSpacing: 1.2
-            font.weight: Font.DemiBold
-            opacity: 0.55
-        }
-
-        Flow {
-            Layout.fillWidth: true
-            spacing: 6
-
-            Repeater {
-                model: section.values
-
-                delegate: Chip {
-                    required property var modelData
-
-                    label: modelData.l
-                    on: section.picked.indexOf(modelData.v) >= 0
-                    onAsked: section.asked(modelData.v)
-                }
-            }
-        }
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 16
 
-        Section {
+        ChipSection {
             title: qsTr("GENRE")
             values: panel.genreValues
             picked: panel.tags
             onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
         }
 
-        Section {
+        ChipSection {
             title: qsTr("TAGS")
             values: panel.tagValues
             picked: panel.tags
             onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
         }
 
-        Section {
+        ChipSection {
             title: qsTr("AGE RATING")
             // The three Wallpaper Engine has, under the names shown here.
             // Everything installed on the machine this was written on is the
@@ -225,7 +134,7 @@ Popup {
             onAsked: (value) => panel.ratings = panel.toggled(panel.ratings, value)
         }
 
-        Section {
+        ChipSection {
             title: qsTr("COMPATIBILITY")
             // Nothing answers this yet: it is for when a wallpaper fetched
             // from the workshop has been tried and found to work or not.
@@ -241,14 +150,14 @@ Popup {
             onAsked: (value) => {}
         }
 
-        Section {
+        ChipSection {
             title: qsTr("RESOLUTION")
             values: panel.resolutionValues
             picked: panel.resolutions
             onAsked: (value) => panel.resolutions = panel.toggled(panel.resolutions, value)
         }
 
-        Section {
+        ChipSection {
             title: qsTr("TYPE")
             values: [{ v: WallpaperKind.Scene, l: qsTr("Scene") },
                      { v: WallpaperKind.Video, l: qsTr("Video") },

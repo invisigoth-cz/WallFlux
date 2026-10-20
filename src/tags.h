@@ -9,6 +9,7 @@
 #include <QQmlEngine>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 
 /// What the workshop's tags are called, and which of them name a genre.
 ///
@@ -52,6 +53,12 @@ public:
     /// reads "Unspecified genre", and `3840 x 2160` reads "3840 x 2160 - 4K".
     /// Each language is read off the disk once and kept.
     Q_INVOKABLE QString name(const QString &tag, const QString &locale);
+
+    /// The same, for a whole list, as `{ v, l }` pairs ready for a row of
+    /// chips: what the tag means to Steam and what it says to a person.
+    /// Ordered by what it says, the way the language orders words, since
+    /// what it says is what is read.
+    Q_INVOKABLE QVariantList labelled(const QStringList &tags, const QString &locale);
 
 private:
     /// locale -> the part of the key after `ui_workshop_tags_` -> the name.

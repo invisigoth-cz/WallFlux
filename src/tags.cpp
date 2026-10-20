@@ -11,6 +11,9 @@
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QRegularExpression>
+#include <QVariantMap>
+
+#include <algorithm>
 
 Q_LOGGING_CATEGORY(lcTags, "wallflux.tags")
 
@@ -77,6 +80,24 @@ QStringList Tags::genres() const
         QStringLiteral("Television"), QStringLiteral("Vehicle"),
         QStringLiteral("Unspecified"),
     };
+}
+
+QVariantList Tags::labelled(const QStringList &tags, const QString &locale)
+{
+    QStringList sorted = tags;
+    std::sort(sorted.begin(), sorted.end(),
+              [this, &locale](const QString &first, const QString &second) {
+                  return QString::localeAwareCompare(name(first, locale),
+                                                     name(second, locale)) < 0;
+              });
+
+    QVariantList chips;
+    chips.reserve(sorted.size());
+    for (const QString &tag : std::as_const(sorted)) {
+        chips.append(QVariantMap{{QStringLiteral("v"), tag},
+                                 {QStringLiteral("l"), name(tag, locale)}});
+    }
+    return chips;
 }
 
 QString Tags::name(const QString &tag, const QString &locale)
