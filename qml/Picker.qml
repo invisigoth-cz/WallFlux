@@ -64,7 +64,7 @@ Window {
     readonly property var sections: [
         { name: qsTr("Installed"),
           blurb: qsTr("Wallpapers downloaded to your system") },
-        { name: qsTr("Steam Workshop"),
+        { name: qsTr("Steam"),
           blurb: qsTr("Browse wallpapers from Steam Workshop") },
         { name: qsTr("Playlists"),
           blurb: qsTr("Wallpapers that take turns on a schedule") },

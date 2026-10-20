@@ -40,6 +40,7 @@ set_source_files_properties(qml/WallpaperCard.qml PROPERTIES QT_RESOURCE_ALIAS W
 set_source_files_properties(qml/FilterPanel.qml PROPERTIES QT_RESOURCE_ALIAS FilterPanel.qml)
 set_source_files_properties(qml/PreviewTile.qml PROPERTIES QT_RESOURCE_ALIAS PreviewTile.qml)
 set_source_files_properties(qml/WorkshopView.qml PROPERTIES QT_RESOURCE_ALIAS WorkshopView.qml)
+set_source_files_properties(qml/WorkshopFilters.qml PROPERTIES QT_RESOURCE_ALIAS WorkshopFilters.qml)
 set_source_files_properties(qml/Chip.qml PROPERTIES QT_RESOURCE_ALIAS Chip.qml)
 set_source_files_properties(qml/ChipSection.qml PROPERTIES QT_RESOURCE_ALIAS ChipSection.qml)
 
@@ -59,6 +60,7 @@ qt_add_qml_module(wallflux
         qml/FilterPanel.qml
         qml/PreviewTile.qml
         qml/WorkshopView.qml
+        qml/WorkshopFilters.qml
         qml/Chip.qml
         qml/ChipSection.qml
     SOURCES

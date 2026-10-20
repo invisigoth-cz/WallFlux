@@ -8,7 +8,6 @@
 #include <QQmlEngine>
 #include <QString>
 #include <QList>
-#include <QPair>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -41,15 +40,19 @@ class Steamworks : public QObject
     /// Why not, in words an interface can show. Empty while all is well.
     Q_PROPERTY(QString trouble READ trouble CONSTANT)
 
-    /// What each question came back with: one map per wallpaper, with `id`,
-    /// `title`, `preview`, `tags`, `bytes` and `votesUp`.
+    /// What each question came back with, under the name the asker gave
+    /// it: a list of maps, each with `id`, `title`, `preview`, `tags`,
+    /// `bytes` and `votesUp`.
     ///
-    /// One list per order rather than one shared one, because the window
-    /// shows two rows at once and filling both from a single question would
-    /// mean the second row showing the tail of the first -- which is not
-    /// what "New" says.
-    Q_PROPERTY(QVariantList trending READ trending NOTIFY foundChanged)
-    Q_PROPERTY(QVariantList newest READ newest NOTIFY foundChanged)
+    /// Named rather than one shared list, because the window shows many
+    /// rows at once -- Trending, New and a row per genre -- and filling
+    /// them from one list would mean every row after the first showing the
+    /// tail of the one before.
+    Q_PROPERTY(QVariantMap found READ found NOTIFY foundChanged)
+
+    /// How many wallpapers the workshop says match each question, which is
+    /// what a page count is worked out from. Fifty come back at a time.
+    Q_PROPERTY(QVariantMap totals READ totals NOTIFY foundChanged)
 
     /// Whether a question is outstanding.
     Q_PROPERTY(bool busy READ isBusy NOTIFY busyChanged)
@@ -76,17 +79,26 @@ public:
 
     bool isAvailable() const { return m_ugc != nullptr; }
     QString trouble() const { return m_trouble; }
-    QVariantList trending() const { return m_trending; }
-    QVariantList newest() const { return m_newest; }
+    QVariantMap found() const { return m_found; }
+    QVariantMap totals() const { return m_totals; }
     bool isBusy() const { return m_call != 0; }
     QVariantMap downloads() const { return m_downloads; }
 
     /// Asks the workshop for one page of wallpapers, fifty at a time, which
-    /// is what Steam gives. The answer arrives in the list for that order a
-    /// moment later. Asking again while one is outstanding is allowed: the
-    /// questions are asked one after another, since a query handle has to be
-    /// let go of before the next is made.
-    Q_INVOKABLE void browse(Steamworks::Order order, int page = 1);
+    /// is what Steam gives, and files the answer under `key`.
+    ///
+    /// `tags` narrows it to wallpapers carrying all of them, spelled as
+    /// Steam spells them -- `Sci-Fi`, `MMD`, `Everyone`, `3840 x 2160` --
+    /// which is what makes a genre row and the filters one mechanism.
+    /// `search` is free text; giving any switches the order to ranking by
+    /// text, since that is the only ranking a search means anything under.
+    ///
+    /// Asking again while one is outstanding is allowed: the questions are
+    /// asked one after another, since a query handle has to be let go of
+    /// before the next is made. Asking the same `key` again replaces what
+    /// was under it.
+    Q_INVOKABLE void browse(const QString &key, Steamworks::Order order, int page = 1,
+                            const QStringList &tags = {}, const QString &search = {});
 
     /// Subscribes to one wallpaper and asks Steam to fetch it now. Nothing
     /// is fetched here: Steam downloads it into the folder it already owns,
@@ -111,6 +123,9 @@ private:
     /// Reads one finished query out of Steam and into `found`.
     void collect(quint64 call, int callbackId, int paramSize);
 
+    /// Asks whatever question has been waiting its turn.
+    void askNext();
+
     /// Asks Steam how far each outstanding download has got.
     void measure();
 
@@ -122,13 +137,24 @@ private:
     /// asked through. Null until open() has worked.
     void *m_ugc = nullptr;
     QString m_trouble;
-    QVariantList m_trending;
-    QVariantList m_newest;
 
-    /// What was asked, so the answer lands in the right list, and what is
-    /// still waiting to be asked.
-    Order m_asking = Trending;
-    QList<QPair<Order, int>> m_queued;
+    /// One question, whole, so it can wait its turn without being taken
+    /// apart first.
+    struct Question
+    {
+        QString key;
+        Order order = Trending;
+        int page = 1;
+        QStringList tags;
+        QString search;
+    };
+
+    /// What is being asked now, so the answer lands under the right name,
+    /// and what is still waiting to be asked.
+    QString m_asking;
+    QList<Question> m_queued;
+    QVariantMap m_found;
+    QVariantMap m_totals;
 
     /// What is on its way down, and how far each has got. The list is the
     /// ids to ask about; the map is what the interface reads.
@@ -153,6 +179,8 @@ private:
     bool (*m_queryResult)(void *, quint64, quint32, void *) = nullptr;
     bool (*m_previewUrl)(void *, quint64, quint32, char *, quint32) = nullptr;
     bool (*m_releaseQuery)(void *, quint64) = nullptr;
+    bool (*m_requireTag)(void *, quint64, const char *) = nullptr;
+    bool (*m_searchText)(void *, quint64, const char *) = nullptr;
     quint64 (*m_subscribe)(void *, quint64) = nullptr;
     bool (*m_downloadItem)(void *, quint64, bool) = nullptr;
     bool (*m_downloadInfo)(void *, quint64, quint64 *, quint64 *) = nullptr;

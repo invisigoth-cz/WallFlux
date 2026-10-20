@@ -9,18 +9,20 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import WallFlux
 
-/// Browsing the Steam Workshop: rows of wallpapers nobody here owns yet.
+/// The Steam Workshop: three and a quarter million wallpapers, two ways in.
 ///
-/// The layout only. Nothing is fetched: the rows are filled with the
-/// previews of what is already installed, so the arrangement can be judged
-/// against real pictures rather than grey rectangles, and the window says so
-/// rather than letting anyone think these are the workshop's.
+/// **Discover** is rows picked for you -- Trending, New, and one per genre
+/// -- a few cards each, with more rows built as the page is scrolled rather
+/// than all twenty-seven asked for at once. "See more" on a row is not a
+/// third view: it switches to Workshop with that row's tag already ticked,
+/// which is the same thing with paging and the filters showing.
 ///
-/// What it will be filled from is settled: Wallpaper Engine's own install
-/// carries the whole workshop vocabulary in locale/ui_en-us.json -- 103 tags
-/// across genre, type, age rating and resolution -- so the sections and the
-/// filters need no API key and no network. Fetching the items themselves is
-/// the open question, and the one thing a mock cannot answer.
+/// **Workshop** is one grid: search, filters and fifty at a time.
+///
+/// Every section and every filter is the same mechanism underneath. Type,
+/// age rating, picture size and genre are all just tags on a workshop item,
+/// so a genre row and a ticked chip both come out as a required tag on the
+/// one query.
 Item {
     id: workshop
 
@@ -29,24 +31,85 @@ Item {
     readonly property int cardWidth: 240
     readonly property int cardHeight: Math.round((workshop.cardWidth - 16) * 9 / 16) + 46
 
-    /// What the workshop said, where it could be asked; otherwise the
-    /// previews of what is already installed, standing in so the layout can
-    /// be judged against real pictures.
-    readonly property bool real: Steamworks.trending.length > 0
-    readonly property var trending: workshop.real ? Steamworks.trending
-                                                  : Wallpapers.wallpapers.slice(0, 12)
-    readonly property var fresh: Steamworks.newest.length > 0
-                                 ? Steamworks.newest
-                                 : (workshop.real ? [] : Wallpapers.wallpapers.slice(12))
+    /// Which of Wallpaper Engine's catalogues to call the tags by.
+    readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
-    // Asked once, when somebody first comes here, and both rows at once --
-    // they are asked one after another, which the backend sees to.
-    Component.onCompleted: {
-        if (Steamworks.available) {
-            Steamworks.browse(Steamworks.Trending);
-            Steamworks.browse(Steamworks.Newest);
+    /// 0 while Discover is showing, 1 while the Workshop grid is.
+    property int mode: 0
+
+    /// How many of the Discover rows have been built. More are added as the
+    /// page is scrolled, so coming here costs two questions rather than
+    /// twenty-seven.
+    property int shown: 4
+
+    /// What Steam gives in one answer. Not ours to choose.
+    readonly property int perPage: 50
+
+    // ---- Discover -----------------------------------------------------
+
+    /// Trending and New, then a row per genre. Each row is its own question
+    /// under its own name, so one row's answer never lands in another.
+    readonly property var sections: {
+        const rows = [
+            { key: "trending", title: qsTr("Trending"),
+              order: Steamworks.Trending, tag: "" },
+            { key: "new", title: qsTr("New"), order: Steamworks.Newest, tag: "" }
+        ];
+        const genres = Tags.genres;
+        for (let i = 0; i < genres.length; ++i) {
+            rows.push({ key: "genre:" + genres[i],
+                        title: Tags.name(genres[i], workshop.catalogue),
+                        order: Steamworks.Trending,
+                        tag: genres[i] });
         }
+        return rows;
     }
+
+    // ---- Workshop -----------------------------------------------------
+
+    property int order: Steamworks.Trending
+    property int page: 1
+    property string search: ""
+
+    readonly property var grid: Steamworks.found["browse"] || []
+    readonly property int total: Steamworks.totals["browse"] || 0
+    readonly property int pages:
+        Math.max(1, Math.ceil(workshop.total / workshop.perPage))
+
+    function orderName(which) {
+        switch (which) {
+        case Steamworks.Newest: return qsTr("New");
+        case Steamworks.MostSubscribed: return qsTr("Most subscribed");
+        }
+        return qsTr("Trending");
+    }
+
+    /// Asks for the grid as it is currently set up. Called rather than
+    /// bound: a binding would fire once per property on the way to a new
+    /// set of filters, and each firing is a question to Steam.
+    function ask() {
+        if (Steamworks.available)
+            Steamworks.browse("browse", workshop.order, workshop.page,
+                              filters.picked, workshop.search);
+    }
+
+    /// Any change to what is being asked starts again at the first page --
+    /// page eleven of the old question means nothing under the new one.
+    function askAfresh() {
+        workshop.page = 1;
+        workshop.ask();
+    }
+
+    /// Switches to the grid showing one row's tag, which is what "See more"
+    /// means. Replaces whatever was ticked: the row was the whole request.
+    function seeMore(tag) {
+        filters.picked = tag ? [tag] : [];
+        workshop.search = "";
+        workshop.mode = 1;
+        workshop.askAfresh();
+    }
+
+    onModeChanged: if (workshop.mode === 1 && workshop.grid.length === 0) workshop.ask()
 
     /// One wallpaper as the workshop shows it: the same tile the library
     /// uses, with something to do about not owning it.
@@ -65,13 +128,18 @@ Item {
             spacing: 2
 
             Label {
-                text: offered.item.tags.length > 0 ? offered.item.tags[0]
-                                                   : qsTr("Unspecified")
+                text: offered.item.tags.length > 0
+                      ? Tags.name(offered.item.tags[0], workshop.catalogue)
+                      : qsTr("Unspecified")
                 font.weight: Font.DemiBold
             }
             Label {
-                text: offered.item.resolution ? offered.item.resolution
-                                              : qsTr("Native")
+                // What the workshop answers with. There is no resolution in
+                // it -- Steam does not carry one -- so the size is what
+                // there is to say about how big a thing this is.
+                text: offered.item.bytes > 0
+                      ? qsTr("%1 MB").arg(Math.round(offered.item.bytes / 1048576))
+                      : ""
                 opacity: 0.75
             }
 
@@ -101,38 +169,77 @@ Item {
         }
     }
 
-    /// A heading, a way to see the rest of it, and somewhere to mark it.
-    component Heading: RowLayout {
-        id: heading
+    /// One Discover row: a heading, a sideways strip of cards, and a way
+    /// into the rest of it.
+    component DiscoverRow: ColumnLayout {
+        id: row
 
-        required property string title
+        required property var section
+
+        readonly property var items: Steamworks.found[row.section.key] || []
+        readonly property bool answered:
+            Steamworks.found[row.section.key] !== undefined
 
         Layout.fillWidth: true
-        spacing: 8
+        spacing: 6
 
-        Label {
-            text: heading.title
-            font.pixelSize: 17
-            font.weight: Font.DemiBold
+        // Asked once, when the row is built, which is when it is first
+        // scrolled to. The backend takes them one after another.
+        Component.onCompleted: {
+            if (Steamworks.available) {
+                Steamworks.browse(row.section.key, row.section.order, 1,
+                                  row.section.tag ? [row.section.tag] : []);
+            }
         }
 
-        Button {
-            text: qsTr("See more")
-            icon.name: "go-down"
-            flat: true
-            enabled: false
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                text: row.section.title
+                font.pixelSize: 17
+                font.weight: Font.DemiBold
+            }
+
+            Button {
+                text: qsTr("See more")
+                icon.name: "go-next"
+                flat: true
+                enabled: row.items.length > 0
+                onClicked: workshop.seeMore(row.section.tag)
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Label {
+                text: row.answered ? qsTr("nothing here") : qsTr("asking…")
+                visible: row.items.length === 0
+                opacity: 0.45
+                font.pixelSize: 11
+            }
         }
 
-        Item { Layout.fillWidth: true }
+        // Sideways, because a row that runs off the edge says there is more
+        // of it without taking the height to show it.
+        ListView {
+            Layout.fillWidth: true
+            Layout.preferredHeight: workshop.cardHeight
+            visible: row.items.length > 0
+            orientation: ListView.Horizontal
+            spacing: 12
+            clip: true
+            model: row.items
 
-        ToolButton {
-            checkable: true
-            icon.name: checked ? "starred-symbolic" : "non-starred-symbolic"
-            // Fusion leaves a ToolButton's icon colour unset, which draws it
-            // in nothing at all. Measured.
-            icon.color: checked ? "#3daee9" : workshop.palette.windowText
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Keep this row at the top")
+            delegate: WorkshopCard {
+                required property var modelData
+
+                width: workshop.cardWidth
+                height: ListView.view.height
+                item: modelData
+            }
+
+            ScrollBar.horizontal: ScrollBar {}
         }
     }
 
@@ -156,24 +263,44 @@ Item {
                 icon.name: "compass"
                 icon.color: workshop.palette.windowText
                 checkable: true
-                checked: true
+                checked: workshop.mode === 0
                 ButtonGroup.group: layouts
                 ToolTip.visible: hovered
-                ToolTip.text: qsTr("Rows picked for you")
+                ToolTip.text: qsTr("Discover")
+                onClicked: workshop.mode = 0
             }
             ToolButton {
                 icon.name: "view-list-icons"
                 icon.color: workshop.palette.windowText
                 checkable: true
+                checked: workshop.mode === 1
                 ButtonGroup.group: layouts
                 ToolTip.visible: hovered
-                ToolTip.text: qsTr("Everything, in one grid")
+                ToolTip.text: qsTr("Workshop")
+                onClicked: workshop.mode = 1
             }
 
             TextField {
+                id: searchField
+
                 Layout.preferredWidth: 300
                 placeholderText: qsTr("Search workshop…")
                 leftPadding: 34
+
+                // Typing is not a question. Steam is asked once the typing
+                // stops, or at once if somebody presses return.
+                Timer {
+                    id: settle
+                    interval: 400
+                    onTriggered: {
+                        workshop.mode = 1;
+                        workshop.search = searchField.text;
+                        workshop.askAfresh();
+                    }
+                }
+
+                onTextEdited: settle.restart()
+                onAccepted: settle.triggered()
 
                 ToolButton {
                     x: 4
@@ -186,108 +313,194 @@ Item {
             }
 
             Button {
-                text: qsTr("Filters")
+                text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
+                                         : qsTr("Filters")
                 icon.name: "view-filter"
+                onClicked: {
+                    workshop.mode = 1;
+                    filters.open();
+                }
+
+                WorkshopFilters {
+                    id: filters
+
+                    y: parent.height + 4
+                    onChanged: workshop.askAfresh()
+                }
             }
 
             Button {
-                text: qsTr("Trending")
+                id: sortButton
+
+                text: workshop.orderName(workshop.order)
                 icon.name: "view-sort-descending"
+                onClicked: sorting.open()
+
+                // Plain items rather than checkable ones: a checkable
+                // Controls item told what to be and also clicked breaks the
+                // binding it was reading. The button's own text is where
+                // the choice shows.
+                Menu {
+                    id: sorting
+
+                    y: sortButton.height
+
+                    Repeater {
+                        model: [Steamworks.Trending, Steamworks.Newest,
+                                Steamworks.MostSubscribed]
+
+                        delegate: MenuItem {
+                            required property var modelData
+
+                            text: workshop.orderName(modelData)
+                            onTriggered: {
+                                workshop.order = modelData;
+                                workshop.askAfresh();
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // Said plainly rather than left to be worked out from the fact that
-        // the rows look familiar. Two different truths: whether Steam can be
-        // asked at all, and whether anything has asked it yet.
+        // Said plainly rather than left to be worked out from an empty
+        // page: whether Steam can be asked at all is a different thing from
+        // whether anything has come back yet.
         Label {
             Layout.alignment: Qt.AlignHCenter
             Layout.maximumWidth: parent.width - 48
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            visible: !workshop.real
-            text: Steamworks.available
-                  ? qsTr("Asking Steam…")
-                  : qsTr("%1 Until then the rows below are the wallpapers already "
-                         + "installed, standing in so the layout can be judged.")
-                    .arg(Steamworks.trouble)
+            visible: !Steamworks.available
+            text: Steamworks.trouble
             opacity: 0.5
             font.pixelSize: 11
         }
 
-        Flickable {
+        StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.leftMargin: 24
             Layout.rightMargin: 24
+            currentIndex: workshop.mode
 
-            contentWidth: width
-            contentHeight: rows.implicitHeight
-            clip: true
-            ScrollBar.vertical: ScrollBar {}
+            // ---- Discover ----
+            Flickable {
+                id: discover
 
-            ColumnLayout {
-                id: rows
+                contentWidth: width
+                contentHeight: rows.implicitHeight
+                clip: true
+                ScrollBar.vertical: ScrollBar {}
 
-                width: parent.width
-                spacing: 10
-
-                Heading { title: qsTr("Trending") }
-
-                // Sideways, because a row that runs off the edge says there
-                // is more of it without taking the height to show it.
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: workshop.cardHeight
-                    orientation: ListView.Horizontal
-                    spacing: 12
-                    clip: true
-                    model: workshop.trending
-
-                    delegate: WorkshopCard {
-                        required property var modelData
-
-                        width: workshop.cardWidth
-                        height: ListView.view.height
-                        item: modelData
+                // One more handful of rows once the bottom is in sight.
+                // Each row asks Steam for itself, so building them all at
+                // once would be twenty-seven questions nobody has looked at.
+                onContentYChanged: {
+                    if (workshop.shown < workshop.sections.length
+                        && contentY + height > contentHeight - 400) {
+                        workshop.shown += 2;
                     }
-
-                    ScrollBar.horizontal: ScrollBar {}
                 }
 
-                Heading { title: qsTr("New") }
+                ColumnLayout {
+                    id: rows
+
+                    width: discover.width
+                    spacing: 16
+
+                    Repeater {
+                        model: workshop.sections.slice(0, workshop.shown)
+
+                        delegate: DiscoverRow {
+                            required property var modelData
+
+                            section: modelData
+                        }
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 8
+                        Layout.bottomMargin: 8
+                        visible: workshop.shown < workshop.sections.length
+                        text: qsTr("More rows as you scroll")
+                        font.pixelSize: 11
+                        opacity: 0.45
+                    }
+                }
+            }
+
+            // ---- Workshop ----
+            ColumnLayout {
+                spacing: 10
 
                 GridView {
-                    id: latest
+                    id: everything
 
                     Layout.fillWidth: true
-                    // As tall as it needs: the page below scrolls, so this
-                    // one must not try to as well.
-                    Layout.preferredHeight: latest.contentHeight
-                    interactive: false
+                    Layout.fillHeight: true
+                    clip: true
 
                     // The same sum the library's grid does: as many columns
                     // of about the card width as fit, then the width shared
                     // out between them.
                     readonly property int columns:
-                        Math.max(1, Math.floor(latest.width / workshop.cardWidth))
+                        Math.max(1, Math.floor(everything.width / workshop.cardWidth))
 
-                    cellWidth: Math.floor(latest.width / latest.columns)
+                    cellWidth: Math.floor(everything.width / everything.columns)
                     cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
-                    model: workshop.fresh
+                    model: workshop.grid
+
+                    ScrollBar.vertical: ScrollBar {}
 
                     delegate: Item {
-                        id: cell
-
                         required property var modelData
 
-                        width: latest.cellWidth
-                        height: latest.cellHeight
+                        width: everything.cellWidth
+                        height: everything.cellHeight
 
                         WorkshopCard {
                             anchors.fill: parent
-                            anchors.margins: 8
-                            item: cell.modelData
+                            anchors.margins: 6
+                            item: parent.modelData
                         }
+                    }
+                }
+
+                Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: workshop.grid.length === 0
+                    text: Steamworks.busy ? qsTr("Asking Steam…")
+                                          : qsTr("Nothing matches all of that")
+                    opacity: 0.5
+                    font.pixelSize: 12
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.bottomMargin: 8
+                    spacing: 12
+                    visible: workshop.grid.length > 0
+
+                    Button {
+                        text: qsTr("Previous")
+                        icon.name: "go-previous"
+                        enabled: workshop.page > 1 && !Steamworks.busy
+                        onClicked: { workshop.page -= 1; workshop.ask(); }
+                    }
+
+                    Label {
+                        text: qsTr("Page %1 of %2").arg(workshop.page).arg(workshop.pages)
+                        font.pixelSize: 12
+                        opacity: 0.7
+                    }
+
+                    Button {
+                        text: qsTr("Next")
+                        icon.name: "go-next"
+                        enabled: workshop.page < workshop.pages && !Steamworks.busy
+                        onClicked: { workshop.page += 1; workshop.ask(); }
                     }
                 }
             }

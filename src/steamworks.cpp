@@ -143,6 +143,11 @@ constexpr int DownloadFinishedId = 3406;
 constexpr qint32 ResultOk = 1;
 constexpr int MatchingItemsReadyToUse = 2;
 
+/// The ranking a free-text search is the only sensible one under: Steam
+/// orders by how well the text matched, so any other ranking would throw
+/// the match away.
+constexpr int RankedByTextSearch = 11;
+
 /// EUGCQuery, for the three orders the picker offers.
 int ugcOrder(Steamworks::Order order)
 {
@@ -221,6 +226,10 @@ bool Steamworks::open()
                      "SteamAPI_ISteamUGC_GetQueryUGCPreviewURL");
     WALLFLUX_RESOLVE(m_releaseQuery, bool (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_ReleaseQueryUGCRequest");
+    WALLFLUX_RESOLVE(m_requireTag, bool (*)(void *, quint64, const char *),
+                     "SteamAPI_ISteamUGC_AddRequiredTag");
+    WALLFLUX_RESOLVE(m_searchText, bool (*)(void *, quint64, const char *),
+                     "SteamAPI_ISteamUGC_SetSearchText");
     WALLFLUX_RESOLVE(m_subscribe, quint64 (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_SubscribeItem");
     WALLFLUX_RESOLVE(m_downloadItem, bool (*)(void *, quint64, bool),
@@ -233,7 +242,7 @@ bool Steamworks::open()
     if (!initSafe || !steamUser || !findInterface || !dispatchInit || !steamPipe || !m_runFrame
         || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
-        || !m_downloadItem || !m_downloadInfo) {
+        || !m_downloadItem || !m_downloadInfo || !m_requireTag || !m_searchText) {
         m_trouble = tr("The Steamworks library on this machine is not one this "
                        "program knows how to talk to.");
         return false;
@@ -269,7 +278,8 @@ bool Steamworks::open()
     return true;
 }
 
-void Steamworks::browse(Steamworks::Order order, int page)
+void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
+                        const QStringList &tags, const QString &search)
 {
     if (!m_ugc)
         return;
@@ -277,19 +287,26 @@ void Steamworks::browse(Steamworks::Order order, int page)
     // One at a time: a query handle has to be released before the next is
     // made, so a question asked while one is outstanding waits its turn.
     if (m_call != 0) {
-        m_queued.append({order, page});
+        m_queued.append({key, order, page, tags, search});
         return;
     }
 
-    m_asking = order;
+    m_asking = key;
 
     const quint32 app = QByteArrayView(WallpaperEngineAppId).toByteArray().toUInt();
-    m_query = m_createQuery(m_ugc, ugcOrder(order), MatchingItemsReadyToUse, 0, app,
+    const int ranking = search.isEmpty() ? ugcOrder(order) : RankedByTextSearch;
+    m_query = m_createQuery(m_ugc, ranking, MatchingItemsReadyToUse, 0, app,
                             static_cast<quint32>(qMax(1, page)));
     if (!m_query) {
         qCWarning(lcSteam) << "the workshop would not take the question";
         return;
     }
+
+    // Narrowing has to be said before the question is sent, never after.
+    for (const QString &tag : tags)
+        m_requireTag(m_ugc, m_query, tag.toUtf8().constData());
+    if (!search.isEmpty())
+        m_searchText(m_ugc, m_query, search.toUtf8().constData());
 
     m_call = m_sendQuery(m_ugc, m_query);
     if (m_call == 0) {
@@ -299,6 +316,8 @@ void Steamworks::browse(Steamworks::Order order, int page)
         return;
     }
 
+    qCDebug(lcSteam) << "asking" << key << "page" << page << "tags" << tags
+                     << "search" << search;
     m_pump.start();
     emit busyChanged();
 }
@@ -410,16 +429,12 @@ void Steamworks::collect(quint64 call, int callbackId, int paramSize)
         m_releaseQuery(m_ugc, m_query);
         m_query = 0;
         emit busyChanged();
-        if (!m_queued.isEmpty()) {
-            const auto next = m_queued.takeFirst();
-            browse(next.first, next.second);
-        }
+        askNext();
         return;
     }
 
     const auto *finished = reinterpret_cast<const QueryCompleted *>(answer.constData());
-    QVariantList &landing = m_asking == Newest ? m_newest : m_trending;
-    landing.clear();
+    QVariantList landing;
 
     if (finished->result != ResultOk) {
         qCWarning(lcSteam) << "the workshop refused the question, result" << finished->result;
@@ -444,19 +459,28 @@ void Steamworks::collect(quint64 call, int callbackId, int paramSize)
                 {QStringLiteral("votesUp"), item.votesUp},
             });
         }
-        qCInfo(lcSteam) << "the workshop returned" << landing.size() << "of"
-                        << finished->total << "wallpapers";
+        qCInfo(lcSteam) << m_asking << "returned" << landing.size() << "of" << finished->total;
     }
+
+    // Filed even when it came back empty, so a row that found nothing can
+    // say so rather than sit there looking like it is still asking.
+    m_found.insert(m_asking, landing);
+    m_totals.insert(m_asking, static_cast<int>(finished->total));
 
     m_releaseQuery(m_ugc, m_query);
     m_query = 0;
     emit foundChanged();
     emit busyChanged();
 
-    if (!m_queued.isEmpty()) {
-        const auto next = m_queued.takeFirst();
-        browse(next.first, next.second);
-    }
+    askNext();
+}
+
+void Steamworks::askNext()
+{
+    if (m_queued.isEmpty())
+        return;
+    const Question next = m_queued.takeFirst();
+    browse(next.key, next.order, next.page, next.tags, next.search);
 }
 
 Steamworks::~Steamworks()

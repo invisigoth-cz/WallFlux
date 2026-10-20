@@ -82,6 +82,54 @@ QStringList Tags::genres() const
     };
 }
 
+QStringList Tags::types() const
+{
+    // What was seen, not what the catalogue lists: the catalogue also has
+    // Application and Asset pack, neither of which turned up in 1100
+    // wallpapers, and a filter for something nobody has is a dead chip.
+    return {
+        QStringLiteral("Scene"), QStringLiteral("Video"),  QStringLiteral("Web"),
+        QStringLiteral("Image"), QStringLiteral("Preset"), QStringLiteral("Asset"),
+    };
+}
+
+QStringList Tags::ratings() const
+{
+    return {
+        QStringLiteral("Everyone"),
+        QStringLiteral("Questionable"),
+        QStringLiteral("Mature"),
+    };
+}
+
+QStringList Tags::resolutions() const
+{
+    // ponytail: the ones seen over 22 queries, in reading order rather than
+    // alphabetical. The catalogue knows of 8K and a few more that did not
+    // turn up; add them here if somebody misses one.
+    return {
+        QStringLiteral("1280 x 720"),
+        QStringLiteral("1366 x 768"),
+        QStringLiteral("1920 x 1080"),
+        QStringLiteral("2560 x 1440"),
+        QStringLiteral("3840 x 2160"),
+        QStringLiteral("Ultrawide 2560 x 1080"),
+        QStringLiteral("Ultrawide 3440 x 1440"),
+        QStringLiteral("Dual 5120 x 1440"),
+        QStringLiteral("Dual 7680 x 2160"),
+        QStringLiteral("Triple 7680 x 1440"),
+        QStringLiteral("Portrait 720 x 1280"),
+        QStringLiteral("Portrait 1080 x 1920"),
+        QStringLiteral("Portrait 1440 x 2560"),
+        QStringLiteral("Portrait 2160 x 3840"),
+        QStringLiteral("Standard Definition"),
+        QStringLiteral("Ultrawide Standard Definition"),
+        QStringLiteral("Portrait Standard Definition"),
+        QStringLiteral("Dynamic resolution"),
+        QStringLiteral("Other resolution"),
+    };
+}
+
 QVariantList Tags::labelled(const QStringList &tags, const QString &locale)
 {
     QStringList sorted = tags;

@@ -40,10 +40,25 @@ class Tags : public QObject
     /// was seen coming back from Steam.
     Q_PROPERTY(QStringList genres READ genres CONSTANT)
 
+    /// What a wallpaper is: the tag Wallpaper Engine marks the kind with.
+    Q_PROPERTY(QStringList types READ types CONSTANT)
+
+    /// Steam's three, which are not Wallpaper Engine's three. The catalogue
+    /// files them as "G - All ages", "PG13 - Parental guidance" and
+    /// "R - Mature"; what Steam actually tags with is these.
+    Q_PROPERTY(QStringList ratings READ ratings CONSTANT)
+
+    /// Every picture size seen coming back from Steam, the odd shapes
+    /// included.
+    Q_PROPERTY(QStringList resolutions READ resolutions CONSTANT)
+
 public:
     explicit Tags(QObject *parent = nullptr);
 
     QStringList genres() const;
+    QStringList types() const;
+    QStringList ratings() const;
+    QStringList resolutions() const;
 
     /// What `tag` is called in `locale` ("cs-cz", "en-us"), or `tag` itself
     /// where Valve has no name for it.
