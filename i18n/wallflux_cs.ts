@@ -280,29 +280,6 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
     </message>
 </context>
 <context>
-    <name>Steamworks</name>
-    <message>
-        <location filename="../src/steamworks.cpp" line="198"/>
-        <source>The Steamworks library is not on this machine.</source>
-        <translation>Knihovna Steamworks na tomhle počítači není.</translation>
-    </message>
-    <message>
-        <location filename="../src/steamworks.cpp" line="251"/>
-        <source>The Steamworks library on this machine is not one this program knows how to talk to.</source>
-        <translation>S knihovnou Steamworks, která je na tomhle počítači, si tenhle program nerozumí.</translation>
-    </message>
-    <message>
-        <location filename="../src/steamworks.cpp" line="264"/>
-        <source>Steam did not answer. It has to be running, and signed in to the account that owns Wallpaper Engine.</source>
-        <translation>Steam neodpověděl. Musí běžet a být přihlášený k účtu, který vlastní Wallpaper Engine.</translation>
-    </message>
-    <message>
-        <location filename="../src/steamworks.cpp" line="271"/>
-        <source>Steam answered but offered no workshop to ask about.</source>
-        <translation>Steam odpověděl, ale žádný workshop k dotazování nenabídl.</translation>
-    </message>
-</context>
-<context>
     <name>Tags</name>
     <message>
         <location filename="../src/tags.cpp" line="191"/>
@@ -379,134 +356,154 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>WorkshopView</name>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="138"/>
+        <location filename="../qml/WorkshopView.qml" line="170"/>
         <source>Unspecified</source>
         <translation>Neurčeno</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="171"/>
+        <location filename="../qml/WorkshopView.qml" line="203"/>
         <source>Download</source>
         <translation>Stáhnout</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="172"/>
+        <location filename="../qml/WorkshopView.qml" line="204"/>
         <source>Steam would not</source>
         <translation>Steam odmítl</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="173"/>
+        <location filename="../qml/WorkshopView.qml" line="205"/>
         <source>Downloaded</source>
         <translation>Staženo</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="174"/>
+        <location filename="../qml/WorkshopView.qml" line="206"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="221"/>
+        <location filename="../qml/WorkshopView.qml" line="263"/>
         <source>See more</source>
         <translation>Zobrazit víc</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="303"/>
+        <location filename="../qml/WorkshopView.qml" line="345"/>
         <source>Search workshop…</source>
         <translation>Hledat ve Workshopu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="333"/>
+        <location filename="../qml/WorkshopView.qml" line="375"/>
         <source>Filters</source>
         <translation>Filtry</translation>
     </message>
     <message>
         <location filename="../qml/WorkshopView.qml" line="54"/>
-        <location filename="../qml/WorkshopView.qml" line="84"/>
+        <location filename="../qml/WorkshopView.qml" line="106"/>
         <source>Trending</source>
         <translation>Populární</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="82"/>
+        <location filename="../qml/WorkshopView.qml" line="88"/>
+        <source>The Steamworks library is not on this machine.</source>
+        <translation>Knihovna Steamworks na tomhle počítači není.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="90"/>
+        <source>The Steamworks library on this machine is not one this program knows how to talk to.</source>
+        <translation>S knihovnou Steamworks, která je na tomhle počítači, si tenhle program nerozumí.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="93"/>
+        <source>Steam did not answer. It has to be running, and signed in to the account that owns Wallpaper Engine.</source>
+        <translation>Steam neodpověděl. Musí běžet a být přihlášený k účtu, který vlastní Wallpaper Engine.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="96"/>
+        <source>Steam answered but offered no workshop to ask about.</source>
+        <translation>Steam odpověděl, ale žádný workshop k dotazování nenabídl.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="104"/>
         <source>Most subscribed</source>
         <translation>Nejodebíranější</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="146"/>
+        <location filename="../qml/WorkshopView.qml" line="178"/>
         <source>%1 MB</source>
         <translation>%1 MB</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="170"/>
+        <location filename="../qml/WorkshopView.qml" line="202"/>
         <source>Installed</source>
         <translation>Nainstalované</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="231"/>
+        <location filename="../qml/WorkshopView.qml" line="273"/>
         <source>nothing here</source>
         <translation>nic tu není</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="231"/>
+        <location filename="../qml/WorkshopView.qml" line="273"/>
         <source>asking…</source>
         <translation>ptám se…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="285"/>
+        <location filename="../qml/WorkshopView.qml" line="327"/>
         <source>Discover</source>
         <translation>Objevování</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="295"/>
+        <location filename="../qml/WorkshopView.qml" line="337"/>
         <source>Workshop</source>
         <translation>Workshop</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="332"/>
+        <location filename="../qml/WorkshopView.qml" line="374"/>
         <source>Filters (%1)</source>
         <translation>Filtry (%1)</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="400"/>
+        <location filename="../qml/WorkshopView.qml" line="445"/>
         <source>The workshop is not available</source>
         <translation>Workshop není dostupný</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="417"/>
+        <location filename="../qml/WorkshopView.qml" line="462"/>
         <source>Try again</source>
         <translation>Zkusit znovu</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="473"/>
+        <location filename="../qml/WorkshopView.qml" line="518"/>
         <source>More rows as you scroll</source>
         <translation>Další řady při posouvání</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="520"/>
+        <location filename="../qml/WorkshopView.qml" line="565"/>
         <source>Asking Steam…</source>
         <translation>Ptám se Steamu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="521"/>
+        <location filename="../qml/WorkshopView.qml" line="566"/>
         <source>Nothing matches all of that</source>
         <translation>Tomu všemu neodpovídá nic</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="533"/>
+        <location filename="../qml/WorkshopView.qml" line="578"/>
         <source>Previous</source>
         <translation>Předchozí</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="540"/>
+        <location filename="../qml/WorkshopView.qml" line="585"/>
         <source>Page %1 of %2</source>
         <translation>Stránka %1 z %2</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="546"/>
+        <location filename="../qml/WorkshopView.qml" line="591"/>
         <source>Next</source>
         <translation>Další</translation>
     </message>
     <message>
         <location filename="../qml/WorkshopView.qml" line="56"/>
-        <location filename="../qml/WorkshopView.qml" line="81"/>
+        <location filename="../qml/WorkshopView.qml" line="103"/>
         <source>New</source>
         <translation>Novinky</translation>
     </message>

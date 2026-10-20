@@ -40,8 +40,15 @@ class Steamworks : public QObject
     /// again is what `retry()` is for.
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
 
-    /// Why not, in words an interface can show. Empty while all is well.
-    Q_PROPERTY(QString trouble READ trouble NOTIFY availableChanged)
+    /// Why not -- as a reason, not as a sentence.
+    ///
+    /// A sentence built here is built once, in whatever language was
+    /// installed at that moment, and stays that way: `retranslate()`
+    /// refreshes bindings that do their own translating, and a string
+    /// handed over from C++ is not one. Measured -- the heading changed
+    /// with the language and the reason under it did not. So the words
+    /// belong to the interface, and this says only which words.
+    Q_PROPERTY(Steamworks::Trouble trouble READ trouble NOTIFY availableChanged)
 
     /// What each question came back with, under the name the asker gave
     /// it: a list of maps, each with `id`, `title`, `preview`, `tags`,
@@ -69,6 +76,16 @@ class Steamworks : public QObject
     Q_PROPERTY(QVariantMap downloads READ downloads NOTIFY downloadsChanged)
 
 public:
+    /// Why the workshop cannot be asked.
+    enum Trouble {
+        Fine,            ///< Nothing the matter.
+        NoLibrary,       ///< No libsteam_api.so anywhere this looks.
+        UnknownLibrary,  ///< One is there, but not one this can talk to.
+        SteamSilent,     ///< Steam is not running, or does not own the app.
+        NoWorkshop,      ///< Steam answered, but offered no workshop.
+    };
+    Q_ENUM(Trouble)
+
     /// What to put at the top, in the order the picker's own menu has them.
     enum Order {
         Trending,     ///< What the workshop is making a fuss of now.
@@ -81,7 +98,7 @@ public:
     ~Steamworks() override;
 
     bool isAvailable() const { return m_ugc != nullptr; }
-    QString trouble() const { return m_trouble; }
+    Trouble trouble() const { return m_trouble; }
     QVariantMap found() const { return m_found; }
     QVariantMap totals() const { return m_totals; }
     bool isBusy() const { return m_call != 0; }
@@ -149,7 +166,7 @@ private:
     /// The ISteamUGC pointer, which is what everything about the workshop is
     /// asked through. Null until open() has worked.
     void *m_ugc = nullptr;
-    QString m_trouble;
+    Trouble m_trouble = Fine;
 
     /// One question, whole, so it can wait its turn without being taken
     /// apart first.

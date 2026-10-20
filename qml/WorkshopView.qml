@@ -76,6 +76,28 @@ Item {
     readonly property int pages:
         Math.max(1, Math.ceil(workshop.total / workshop.perPage))
 
+    /// The reason the workshop cannot be asked, in words.
+    ///
+    /// `language` is read but not used: it is there so this is asked again
+    /// when the language is switched. `retranslate()` refreshes a binding
+    /// that translates, and a call into a function is not one -- without
+    /// the argument the heading changes language and this does not.
+    function wordsFor(why, language) {
+        switch (why) {
+        case Steamworks.NoLibrary:
+            return qsTr("The Steamworks library is not on this machine.");
+        case Steamworks.UnknownLibrary:
+            return qsTr("The Steamworks library on this machine is not one this "
+                        + "program knows how to talk to.");
+        case Steamworks.SteamSilent:
+            return qsTr("Steam did not answer. It has to be running, and signed in "
+                        + "to the account that owns Wallpaper Engine.");
+        case Steamworks.NoWorkshop:
+            return qsTr("Steam answered but offered no workshop to ask about.");
+        }
+        return "";
+    }
+
     function orderName(which) {
         switch (which) {
         case Steamworks.Newest: return qsTr("New");
@@ -430,7 +452,7 @@ Item {
                 Layout.maximumWidth: Math.min(460, workshop.width - 48)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
-                text: Steamworks.trouble
+                text: workshop.wordsFor(Steamworks.trouble, Language.czech)
                 opacity: 0.7
             }
 

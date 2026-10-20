@@ -195,7 +195,7 @@ bool Steamworks::open()
     }
 
     if (!m_library) {
-        m_trouble = tr("The Steamworks library is not on this machine.");
+        m_trouble = NoLibrary;
         return false;
     }
 
@@ -248,8 +248,7 @@ bool Steamworks::open()
         || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
         || !m_downloadItem || !m_downloadInfo || !m_requireTag || !m_searchText) {
-        m_trouble = tr("The Steamworks library on this machine is not one this "
-                       "program knows how to talk to.");
+        m_trouble = UnknownLibrary;
         return false;
     }
 
@@ -261,14 +260,13 @@ bool Steamworks::open()
     if (!initSafe()) {
         // Almost always: Steam is not running, or the account signed in to it
         // does not own Wallpaper Engine.
-        m_trouble = tr("Steam did not answer. It has to be running, and signed in to the "
-                       "account that owns Wallpaper Engine.");
+        m_trouble = SteamSilent;
         return false;
     }
 
     m_ugc = findInterface(steamUser(), UgcInterfaceVersion);
     if (!m_ugc) {
-        m_trouble = tr("Steam answered but offered no workshop to ask about.");
+        m_trouble = NoWorkshop;
         return false;
     }
 
@@ -280,7 +278,7 @@ bool Steamworks::open()
     m_pump.setInterval(100);
     connect(&m_pump, &QTimer::timeout, this, &Steamworks::pump, Qt::UniqueConnection);
 
-    m_trouble.clear();
+    m_trouble = Fine;
     return true;
 }
 
