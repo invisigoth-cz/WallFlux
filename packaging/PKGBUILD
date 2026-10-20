@@ -19,8 +19,26 @@ license=('GPL-3.0-or-later' 'custom:Steamworks-SDK-linking-exception')
 # libpulse is here for the `pactl` program rather than for the library. It
 # is what tells us another program is using the speakers, and being a
 # program it is not something the linker would ever mention.
+#
+# steamworks-sdk is Valve's own, out of the AUR, and it is the only thing
+# on a Linux machine that carries libsteam_api.so -- the flat C API that
+# ISteamUGC is reached through. Measured on a machine with both Steam and
+# Wallpaper Engine installed: Steam ships no libsteam_api.so at all, the
+# Wallpaper Engine folder holds only the Windows steam_api.dll, and
+# Steam's own steamclient.so exports CreateInterface and not one
+# SteamAPI_* symbol. So without this package the workshop tab can say
+# nothing except that it cannot ask, which is why it is a dependency and
+# not an optional one.
+#
+# It is also the only way the SDK can arrive here without WallFlux being
+# the one to hand it on: that package puts it under /opt in its entirety,
+# unmodified, with Valve's own licence beside it, which is what the SDK's
+# terms require and what shipping it inside this package would break. An
+# AUR helper resolves it like any other AUR dependency; plain makepkg -si
+# will say it cannot find it and want it built first.
 depends=('breeze-icons' 'layer-shell-qt' 'libpulse' 'qt6-base'
-         'qt6-declarative' 'qt6-multimedia' 'qt6-webengine')
+         'qt6-declarative' 'qt6-multimedia' 'qt6-webengine'
+         'steamworks-sdk')
 # qt6-tools is here for lrelease, which compiles the Czech catalogue into the
 # binary at build time. Nothing needs it afterwards.
 makedepends=('cmake' 'git' 'ninja' 'qt6-tools')
