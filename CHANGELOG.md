@@ -6,20 +6,45 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-20
+
 ### Added
 
-- **The Steam Workshop tab shows the workshop.** Where the Steamworks
-  library is on the machine, the Trending and New rows are asked of Steam
-  itself -- fifty at a time out of three and a quarter million -- and come
-  back with titles, previews, tags and sizes. No API key and no web page is
-  involved.
-- **WallFlux can tell whether the Steam Workshop is reachable.** The
-  Steamworks library is looked for when the workshop is first wanted and
-  opened by name; nothing of Valve's is shipped with WallFlux or linked at
-  build time. Where it is absent the window says so and carries on.
+- **The Steam Workshop can be browsed, and wallpapers fetched from it.** The
+  Steam tab has two ways in. **Discover** is rows picked for you -- Trending,
+  New and one per genre -- built a few at a time as the page is scrolled,
+  because each row is its own question to Steam. **Workshop** is one grid
+  with search, filters, sort and paging, fifty at a time out of three and a
+  quarter million. Everything comes from Steam itself: no API key, no web
+  page scraped.
+- **Download.** The button on every workshop card subscribes to the
+  wallpaper and asks Steam to fetch it now, showing how far along it is.
+  Nothing else is needed afterwards: the folder watcher notices what Steam
+  puts on the disk and the wallpaper appears in Installed by itself.
+- **Filters over the workshop's whole vocabulary**: type, age rating,
+  picture size and genre. All four are tags as far as Steam is concerned,
+  so a genre row and a ticked chip are the same mechanism. Everything
+  ticked has to match, which the panel says, because it is the opposite of
+  what a row of chips usually means.
+- **Tags are called what Valve calls them, in 36 languages.** Wallpaper
+  Engine's own install carries the names, so the Czech interface says
+  "Abstraktní" and "Dopravní Prostředky" where it used to say the raw Steam
+  tag. No tag name is written into WallFlux in any language. Where Valve
+  has no name -- the three age ratings and a few tags newer than the
+  installed copy -- the tag itself is shown.
+- **WallFlux says when the workshop cannot be reached** rather than looking
+  empty, and carries on with everything else.
 
 ### Changed
 
+- **The Steamworks SDK is now a dependency rather than a suggestion.**
+  Browsing and downloading need `libsteam_api.so`, and there is no second
+  source for it: Steam ships none on Linux, and Wallpaper Engine carries
+  only the Windows DLL. Installing WallFlux from the AUR now brings
+  `steamworks-sdk` with it, so nothing is asked of anybody. The cost, said
+  plainly: Valve's SDK lands on the disk of everyone who installs WallFlux,
+  whether they open the Steam tab or not.
+- **The Steam Workshop tab is called Steam.**
 - **The licence gained one added permission**, for the Steamworks SDK and
   nothing else. Fetching a workshop item needs an account that owns the
   application it belongs to, and the Steamworks SDK is the only interface
@@ -78,6 +103,7 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/invisigoth-cz/WallFlux/releases/tag/v0.1.0
