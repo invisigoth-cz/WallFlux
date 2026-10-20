@@ -181,11 +181,16 @@ Steamworks::Steamworks(QObject *parent)
 
 bool Steamworks::open()
 {
-    for (const QString &path : candidates()) {
-        m_library = dlopen(path.toLocal8Bit().constData(), RTLD_LAZY | RTLD_LOCAL);
-        if (m_library) {
-            qCDebug(lcSteam) << "opened" << path;
-            break;
+    // Opened once and kept. Everything after it may be done again, which
+    // is what asking a second time costs: dlsym on a handle already open
+    // is free, and Steam is asked afresh.
+    if (!m_library) {
+        for (const QString &path : candidates()) {
+            m_library = dlopen(path.toLocal8Bit().constData(), RTLD_LAZY | RTLD_LOCAL);
+            if (m_library) {
+                qCDebug(lcSteam) << "opened" << path;
+                break;
+            }
         }
     }
 
@@ -273,9 +278,23 @@ bool Steamworks::open()
     m_pipe = steamPipe();
 
     m_pump.setInterval(100);
-    connect(&m_pump, &QTimer::timeout, this, &Steamworks::pump);
+    connect(&m_pump, &QTimer::timeout, this, &Steamworks::pump, Qt::UniqueConnection);
 
+    m_trouble.clear();
     return true;
+}
+
+void Steamworks::retry()
+{
+    if (m_ugc)
+        return;
+
+    if (open())
+        qCInfo(lcSteam) << "the workshop can be asked now";
+    else
+        qCInfo(lcSteam) << "still no workshop:" << m_trouble;
+
+    emit availableChanged();
 }
 
 void Steamworks::browse(const QString &key, Steamworks::Order order, int page,

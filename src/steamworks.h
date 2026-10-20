@@ -35,10 +35,13 @@ class Steamworks : public QObject
     QML_SINGLETON
 
     /// Whether Steam answered and the workshop interface is there to ask.
-    Q_PROPERTY(bool available READ isAvailable CONSTANT)
+    ///
+    /// Not constant: Steam can be started after WallFlux was, and asking
+    /// again is what `retry()` is for.
+    Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
 
     /// Why not, in words an interface can show. Empty while all is well.
-    Q_PROPERTY(QString trouble READ trouble CONSTANT)
+    Q_PROPERTY(QString trouble READ trouble NOTIFY availableChanged)
 
     /// What each question came back with, under the name the asker gave
     /// it: a list of maps, each with `id`, `title`, `preview`, `tags`,
@@ -107,7 +110,17 @@ public:
     /// `downloads` and wait.
     Q_INVOKABLE void download(const QString &id);
 
+    /// Asks Steam again, for when it was not running a moment ago and is
+    /// now. Does nothing where the workshop can already be asked.
+    ///
+    /// Without this, being told to start Steam would be useless advice:
+    /// the library is opened once when the workshop is first wanted, and
+    /// starting Steam afterwards would change nothing until WallFlux was
+    /// restarted.
+    Q_INVOKABLE void retry();
+
 signals:
+    void availableChanged();
     void foundChanged();
     void busyChanged();
     void downloadsChanged();

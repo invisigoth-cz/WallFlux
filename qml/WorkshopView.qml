@@ -111,6 +111,21 @@ Item {
 
     onModeChanged: if (workshop.mode === 1 && workshop.grid.length === 0) workshop.ask()
 
+    // Steam may have been started since WallFlux was. Coming to this tab
+    // asks again, so the usual way out of an empty page is to do the
+    // obvious thing and come back.
+    Component.onCompleted: if (!Steamworks.available) Steamworks.retry()
+
+    // The grid has the same problem the rows do: switched to while Steam
+    // was not running, it asked nothing and would never ask again.
+    Connections {
+        target: Steamworks
+        function onAvailableChanged() {
+            if (Steamworks.available && workshop.mode === 1 && workshop.grid.length === 0)
+                workshop.ask();
+        }
+    }
+
     /// One wallpaper as the workshop shows it: the same tile the library
     /// uses, with something to do about not owning it.
     component WorkshopCard: PreviewTile {
@@ -193,13 +208,23 @@ Item {
         Layout.fillWidth: true
         spacing: 6
 
-        // Asked once, when the row is built, which is when it is first
-        // scrolled to. The backend takes them one after another.
-        Component.onCompleted: {
-            if (Steamworks.available) {
+        /// Asked when the row is built, which is when it is first scrolled
+        /// to, and again if Steam becomes reachable after that -- a row
+        /// built while Steam was not running would otherwise stay empty
+        /// for good, which is what made "Try again" useless the first time
+        /// it was tried. `answered` is what stops it being asked twice.
+        function ask() {
+            if (Steamworks.available && !row.answered) {
                 Steamworks.browse(row.section.key, row.section.order, 1,
                                   row.section.tag ? [row.section.tag] : []);
             }
+        }
+
+        Component.onCompleted: row.ask()
+
+        Connections {
+            target: Steamworks
+            function onAvailableChanged() { row.ask(); }
         }
 
         RowLayout {
@@ -263,6 +288,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 4
             spacing: 10
+            visible: Steamworks.available
 
             ButtonGroup {
                 id: layouts
@@ -376,21 +402,51 @@ Item {
             }
         }
 
-        // Said plainly rather than left to be worked out from an empty
-        // page: whether Steam can be asked at all is a different thing from
-        // whether anything has come back yet.
-        Label {
+        // Nothing at all rather than rows that sit there saying "asking..."
+        // about a question nobody asked. Which of the two reasons it is --
+        // no library on the machine, or Steam not running -- is the one
+        // thing that matters here, so it is said in full and in the middle
+        // of the page rather than in small grey type under the controls.
+        ColumnLayout {
+            // Centred as a block rather than stretched with its children
+            // aligned inside it: filling the width and aligning each child
+            // left the whole thing sitting against the left edge. Looked at.
             Layout.alignment: Qt.AlignHCenter
-            Layout.maximumWidth: parent.width - 48
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
+            Layout.fillHeight: true
             visible: !Steamworks.available
-            text: Steamworks.trouble
-            opacity: 0.5
-            font.pixelSize: 11
+            spacing: 10
+
+            Item { Layout.fillHeight: true }
+
+            Label {
+                Layout.alignment: Qt.AlignHCenter
+                text: qsTr("The workshop is not available")
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+
+            Label {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.maximumWidth: Math.min(460, workshop.width - 48)
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: Steamworks.trouble
+                opacity: 0.7
+            }
+
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 6
+                text: qsTr("Try again")
+                icon.name: "view-refresh"
+                onClicked: Steamworks.retry()
+            }
+
+            Item { Layout.fillHeight: true }
         }
 
         StackLayout {
+            visible: Steamworks.available
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.leftMargin: 24
