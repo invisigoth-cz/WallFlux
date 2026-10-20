@@ -6,6 +6,40 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-10-20
+
+### Added
+
+- **The workshop filter gained a ŠTÍTKY section**, the eleven tags that say
+  what a wallpaper does rather than what it is of: 3D, HDR, Audio
+  responsive, Customizable, Approved and the rest. The library's filter
+  already had one; now both have the same five.
+
+### Changed
+
+- **A wallpaper's age rating is kept in Steam's own word** -- Everyone,
+  Questionable, Mature -- rather than turned into G, PG13 and R. The old
+  chips worked, but a rating read one way off the disk and another out of a
+  workshop query, so no single chip could serve both filters. These three
+  are the only tag names WallFlux carries itself, in any language, because
+  they are the one place Wallpaper Engine's catalogues are no help: it
+  files age under "G - All ages" and the like, which is a different
+  vocabulary from what Steam tags with.
+- **The library and the workshop say the same words**: DRUH, PŘÍSTUPNOST,
+  ROZLIŠENÍ, ŽÁNR and ŠTÍTKY in both, where the workshop used to say TYP,
+  VĚKOVÉ OMEZENÍ and ZNAČKY, and called the genres by the word the library
+  uses for everything else.
+- **The picture sizes offered are the ones a monitor has.** The four
+  portrait sizes and the portrait standard definition are for telephones;
+  WallFlux draws on a desktop, so they were five chips that could only ever
+  disappoint. Fourteen left, ultrawide and multi-monitor among them.
+
+### Fixed
+
+- **A wallpaper already on the disk is no longer offered for download.**
+  The card reads the library's own list of ids, so a download that finishes
+  turns its own button over the moment the folder watcher notices.
+
 ## [0.3.0] — 2026-10-20
 
 ### Added
@@ -103,7 +137,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/invisigoth-cz/WallFlux/releases/tag/v0.1.0
