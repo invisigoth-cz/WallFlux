@@ -30,6 +30,9 @@ Popup {
     /// named `locale`: a Popup has one already and it is FINAL.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
+    /// How tall this is allowed to get, which only whoever placed it knows.
+    property int room: 600
+
     signal changed()
 
     function toggled(value) {
@@ -53,6 +56,18 @@ Popup {
     modal: false
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
+    // Fifty-three chips is taller than the window on anything but a very
+    // tall screen, and a popup that overflows does not scroll by itself --
+    // it just runs off the bottom edge, taking Clear with it. Measured:
+    // the whole of TAGS and the footer were unreachable. So it takes what
+    // it is told there is room for and scrolls the rest.
+    //
+    // Told, rather than worked out from `Window`: a Popup is not an Item
+    // and has no Window attached to it, so asking gives undefined and the
+    // height comes out as nothing at all. Measured that too.
+    height: Math.min(panel.implicitContentHeight + panel.topPadding + panel.bottomPadding,
+                     panel.room)
+
     background: Rectangle {
         color: panel.palette.base
         border.color: panel.palette.mid
@@ -60,38 +75,57 @@ Popup {
         radius: 8
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 16
+    contentItem: ColumnLayout {
+        spacing: 12
 
-        ChipSection {
-            title: qsTr("TYPE")
-            values: Tags.labelled(Tags.types, panel.catalogue)
-            picked: panel.picked
-            onAsked: (value) => panel.pick(value)
+        Flickable {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.preferredHeight: body.implicitHeight
+
+            contentWidth: width
+            contentHeight: body.implicitHeight
+            clip: true
+            ScrollBar.vertical: ScrollBar {}
+
+            ColumnLayout {
+                id: body
+
+                width: parent.width
+                spacing: 16
+
+                ChipSection {
+                    title: qsTr("TYPE")
+                    values: Tags.labelled(Tags.types, panel.catalogue)
+                    picked: panel.picked
+                    onAsked: (value) => panel.pick(value)
+                }
+
+                ChipSection {
+                    title: qsTr("AGE RATING")
+                    values: Tags.labelled(Tags.ratings, panel.catalogue)
+                    picked: panel.picked
+                    onAsked: (value) => panel.pick(value)
+                }
+
+                ChipSection {
+                    title: qsTr("RESOLUTION")
+                    values: Tags.labelled(Tags.resolutions, panel.catalogue)
+                    picked: panel.picked
+                    onAsked: (value) => panel.pick(value)
+                }
+
+                ChipSection {
+                    title: qsTr("TAGS")
+                    values: Tags.labelled(Tags.genres, panel.catalogue)
+                    picked: panel.picked
+                    onAsked: (value) => panel.pick(value)
+                }
+            }
         }
 
-        ChipSection {
-            title: qsTr("AGE RATING")
-            values: Tags.labelled(Tags.ratings, panel.catalogue)
-            picked: panel.picked
-            onAsked: (value) => panel.pick(value)
-        }
-
-        ChipSection {
-            title: qsTr("RESOLUTION")
-            values: Tags.labelled(Tags.resolutions, panel.catalogue)
-            picked: panel.picked
-            onAsked: (value) => panel.pick(value)
-        }
-
-        ChipSection {
-            title: qsTr("TAGS")
-            values: Tags.labelled(Tags.genres, panel.catalogue)
-            picked: panel.picked
-            onAsked: (value) => panel.pick(value)
-        }
-
+        // Outside the Flickable on purpose: a Clear button that has to be
+        // scrolled to is a Clear button nobody finds.
         RowLayout {
             Layout.fillWidth: true
 

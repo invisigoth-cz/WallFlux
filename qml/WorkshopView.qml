@@ -325,6 +325,9 @@ Item {
                     id: filters
 
                     y: parent.height + 4
+                    // What is left of the window below the button, less a
+                    // margin so it does not sit on the bottom edge.
+                    room: workshop.height - 90
                     onChanged: workshop.askAfresh()
                 }
             }
