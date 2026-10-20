@@ -44,9 +44,18 @@ Popup {
         panel.kinds = [];
     }
 
-    /// The tags the installed wallpapers actually carry, rather than a list
-    /// written in here: a filter for something nobody has is a dead chip.
-    readonly property var tagValues: {
+    /// Which of Wallpaper Engine's catalogues to call the tags by. Read as
+    /// a property rather than worked out inside `labelled`, so the chips
+    /// rebuild when the language is switched.
+    ///
+    /// Not called `locale`: a Popup has one of those already and it is
+    /// FINAL, so the name takes the whole application down at load with
+    /// "Cannot override FINAL property" -- not just this file.
+    readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
+
+    /// The tags the installed wallpapers actually carry, rather than all 65
+    /// Steam knows: a filter for something nobody has is a dead chip.
+    readonly property var carriedTags: {
         const seen = [];
         const all = Wallpapers.wallpapers;
         for (let i = 0; i < all.length; ++i) {
@@ -56,9 +65,27 @@ Popup {
                     seen.push(carried[t]);
             }
         }
-        seen.sort();
-        return seen.map((tag) => ({ v: tag, l: tag }));
+        return seen;
     }
+
+    /// `{ v, l }` for each tag: what it means to Steam, and what Valve
+    /// calls it in this language. Sorted by what it says rather than by
+    /// what it means, since what it says is what is read.
+    function labelled(tags, locale) {
+        return tags.map((tag) => ({ v: tag, l: Tags.name(tag, locale) }))
+                   .sort((first, second) => first.l.localeCompare(second.l));
+    }
+
+    readonly property var genreValues:
+        panel.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) >= 0),
+                       panel.catalogue)
+
+    /// Everything that is not a genre: audio responsive, customizable,
+    /// approved and the rest, which describe a wallpaper rather than say
+    /// what it is of.
+    readonly property var tagValues:
+        panel.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) < 0),
+                       panel.catalogue)
 
     /// Every picture size among the videos, and one for everything that has
     /// none -- a scene or web wallpaper has no single answer, and a video
@@ -140,6 +167,9 @@ Popup {
 
         Layout.fillWidth: true
         spacing: 7
+        // A heading over nothing: with only genres installed, the section
+        // for everything else has no chips to show.
+        visible: section.values.length > 0
 
         Label {
             text: section.title
@@ -170,6 +200,13 @@ Popup {
     ColumnLayout {
         anchors.fill: parent
         spacing: 16
+
+        Section {
+            title: qsTr("GENRE")
+            values: panel.genreValues
+            picked: panel.tags
+            onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
+        }
 
         Section {
             title: qsTr("TAGS")

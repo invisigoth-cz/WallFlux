@@ -177,6 +177,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **Chromium will not freeze a page that is on screen.** `lifecycleState`
   follows the view's visibility rather than the cover itself, which is why
   `onVisibleChanged` sets it.
+- **A `Popup` already has a `locale`, and it is FINAL.** Declaring one on a
+  component that derives from Popup does not shadow it or warn in passing:
+  the file fails to load, and with it everything that uses the file, so the
+  application comes up with no window at all and says only "the QML did not
+  give us a window to show". The real reason is three lines further up --
+  `Cannot override FINAL property`. `qmllint` passes it. Found by running
+  the program, which is the only thing that showed it.
 - **`qmllint` is not in `PATH`** on this machine; it is
   `/usr/lib/qt6/bin/qmllint`.
 - **A `MultiEffect` mask draws nothing unless the mask has
@@ -184,16 +191,49 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   nothing, every card blank. A `Rectangle` is not a texture until it is a
   layer, and the effect quietly has nothing to work with. Looked at side by
   side, with and without, which is the only way this one shows itself.
-- **The whole workshop vocabulary is on the disk already.** Wallpaper
-  Engine's own install -- `steamapps/common/wallpaper_engine` -- carries
-  `locale/ui_en-us.json`, 3332 strings, with every workshop tag among them:
-  103 of them under `ui_workshop_tags_*`, covering genre (Abstract, Anime,
-  Cyberpunk, Pixel art, Relaxing, Sci-Fi and the rest), type (Scene, Video,
-  Web, Application, Preset, Asset pack), age rating (`G - All ages`,
-  `PG13 - Parental guidance`, `R - Mature`) and every resolution from
-  1280x720 to 7680x4320 plus the ultrawide and portrait ones. So the
-  sections and the filters need no API key and no network. **Read it from
-  there rather than typing a list into the source.**
+- **Wallpaper Engine's `locale/` is a translation table, not the list of
+  tags.** The install -- `steamapps/common/wallpaper_engine` -- carries
+  `locale/` in **36 languages**, `ui_cs-cz.json` among them, each with 103
+  keys under `ui_workshop_tags_*`. Matching `ui_en-us.json` against another
+  of them by key gives English name -> translated name for nothing, and the
+  names are Valve's own: `Cartoon` is "Skica" and `Vehicle` is "Dopravní
+  Prostředky". **So no tag name is ever typed into the source or into
+  `wallflux_cs.ts`, in any language.**
+
+  **Look a tag up by its key, not by its English value.** The key is
+  `ui_workshop_tags_` followed by the tag lowercased with every run of
+  non-alphanumerics turned into one `_`: `Sci-Fi` -> `..._sci_fi`,
+  `MMD (Miku-Miku Dance)` -> `..._mmd_miku_miku_dance`. Measured over the
+  25 tags the installed wallpapers and a live query actually carry, the key
+  finds 19 and the value only 17, and what the key adds is the two that
+  matter: `Unspecified` is keyed `..._unspecified` but *valued*
+  "Unspecified genre", so only the key reaches "Nespecifikovaný žánr", and
+  `3840 x 2160` is valued "3840 x 2160 - 4K". Nothing the value finds is
+  missed by the key. **Do not use the rule backwards** -- value to key
+  fails for 38 of the 103, because `asset_type_*` and `dual_*` keys carry a
+  prefix their value does not and the resolutions carry a `- 4K` their key
+  does not.
+
+  **What the file is not is the vocabulary.** An earlier note here said the
+  whole workshop vocabulary was on the disk; it is not. Six of those 25 are
+  absent however they are looked up:
+
+  | what Steam really sends | what `locale/` has |
+  | --- | --- |
+  | `Everyone`, `Questionable`, `Mature` | `G - All ages`, `PG13 - Parental guidance`, `R - Mature` |
+  | `Media Integration`, `Puppet Warp`, `Video Texture` | nothing at all |
+
+  Age rating is a different vocabulary outright and three tags are newer
+  than the snapshot. So the list of tags comes from the data --
+  `project.json` for what is installed, the query's answer for the rest --
+  and `locale/` is only laid over it, falling back to the raw tag where
+  Valve has nothing.
+
+- **Which tags are a genre is nowhere on the disk.** Resolutions can be told
+  from the key (`_1920_x_1080`) and `asset_type_*` and `visibility_*` have
+  prefixes, but the 25 genres are not grouped in `locale/` or anywhere under
+  `ui/` -- both were searched. That one list is written out in the source,
+  and it is the only tag list that is.
 - **What project.json does and does not carry**, counted across all 53:
   `tags` and `preview` in every one, `type` and `file` in 51, `contentrating`
   in 49 and always "Everyone", and **no resolution anywhere**. So the tag,

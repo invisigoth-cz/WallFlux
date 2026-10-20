@@ -66,6 +66,8 @@ qt_add_qml_module(wallflux
         src/screencover.cpp
         src/steamworks.h
         src/steamworks.cpp
+        src/tags.h
+        src/tags.cpp
         src/wallpapercore.h
         src/wallpapercore.cpp
 )
@@ -102,6 +104,15 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_wallpapercore PRIVATE src)
     target_link_libraries(tst_wallpapercore PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME wallpapercore COMMAND tst_wallpapercore)
+
+    qt_add_executable(tst_tags
+        tests/tst_tags.cpp
+        src/tags.cpp
+        src/wallpapercore.cpp
+    )
+    target_include_directories(tst_tags PRIVATE src)
+    target_link_libraries(tst_tags PRIVATE Qt6::Qml Qt6::Test)
+    add_test(NAME tags COMMAND tst_tags)
 
     qt_add_executable(tst_otheraudio
         tests/tst_otheraudio.cpp
