@@ -6,6 +6,27 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-10-20
+
+### Fixed
+
+- **The Steam tab says why it is empty.** With Steam not running it showed
+  rows that sat there saying "asking…" about a question nobody had asked,
+  and the real reason in small grey type under the controls -- it looked
+  broken rather than unavailable. The tab now shows nothing but the reason,
+  in the middle of the page and in full, since the two reasons it can be --
+  no Steamworks library on the machine, or Steam not running -- need
+  different things done about them.
+- **Being told to start Steam is now advice worth taking.** The Steamworks
+  library was opened once, when the workshop was first wanted, so starting
+  Steam afterwards changed nothing until WallFlux was restarted. There is a
+  Try again button, and coming back to the tab asks again by itself. The
+  rows and the grid fill themselves the moment Steam becomes reachable.
+- **The reason is shown in the language the window is in.** It was built in
+  C++ when the workshop failed to open, which fixed it in whatever language
+  was installed at that moment: the heading changed with the language and
+  the sentence under it did not.
+
 ## [0.3.1] — 2026-10-20
 
 ### Added
@@ -137,7 +158,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.1.0...v0.2.0
