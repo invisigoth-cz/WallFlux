@@ -116,8 +116,15 @@ Popup {
                 }
 
                 ChipSection {
-                    title: qsTr("TAGS")
+                    title: qsTr("GENRE")
                     values: Tags.labelled(Tags.genres, panel.catalogue)
+                    picked: panel.picked
+                    onAsked: (value) => panel.pick(value)
+                }
+
+                ChipSection {
+                    title: qsTr("TAGS")
+                    values: Tags.labelled(Tags.properties, panel.catalogue)
                     picked: panel.picked
                     onAsked: (value) => panel.pick(value)
                 }

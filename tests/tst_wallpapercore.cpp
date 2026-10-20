@@ -234,8 +234,12 @@ void TestWallpaperCore::tellsWhatIsOnDisk()
     // The tags and the rating come out of project.json beside it, which is
     // the same read, so they are checked here rather than in a test of their
     // own.
+    //
+    // The rating is kept in Steam's own word rather than turned into G,
+    // PG13 or R: a workshop query answers with these, so holding both to
+    // the same word is what lets one filter chip be given to both.
     QCOMPARE(core.wallpapers().constFirst().tags, QStringList({QStringLiteral("Game")}));
-    QCOMPARE(core.wallpapers().constFirst().rating, QStringLiteral("G"));
+    QCOMPARE(core.wallpapers().constFirst().rating, QStringLiteral("Everyone"));
 }
 
 void TestWallpaperCore::remembersWhatWasPlayedInThisRun()

@@ -148,6 +148,13 @@ Item {
             Button {
                 id: fetch
 
+                /// Whether this one is already on the disk. Reads the
+                /// library's own list, so a download that finishes turns
+                /// the button over by itself the moment the folder watcher
+                /// notices -- no asking Steam a second time.
+                readonly property bool owned:
+                    Wallpapers.installedIds.indexOf(offered.item.id) >= 0
+
                 /// What `Steamworks.downloads` says about this one:
                 /// undefined until it has been asked for, then 0 to 100,
                 /// or -1 where Steam would not do it.
@@ -155,14 +162,17 @@ Item {
                 readonly property bool untouched: fetch.progress === undefined
 
                 Layout.fillWidth: true
-                text: fetch.untouched ? qsTr("Download")
+                text: fetch.owned ? qsTr("Installed")
+                     : fetch.untouched ? qsTr("Download")
                      : fetch.progress < 0 ? qsTr("Steam would not")
                      : fetch.progress >= 100 ? qsTr("Downloaded")
                      : qsTr("%1 %").arg(fetch.progress)
-                icon.name: fetch.progress >= 100 ? "download-later" : "download"
-                // Asking again while it is on its way would have Steam
-                // start over; a refusal is worth a second try.
-                enabled: Steamworks.available
+                icon.name: fetch.owned ? "dialog-ok-apply"
+                         : fetch.progress >= 100 ? "download-later" : "download"
+                // Nothing to fetch for something already here. Asking again
+                // while it is on its way would have Steam start over; a
+                // refusal is worth a second try.
+                enabled: Steamworks.available && !fetch.owned
                          && (fetch.untouched || fetch.progress < 0)
                 onClicked: Steamworks.download(offered.item.id)
             }

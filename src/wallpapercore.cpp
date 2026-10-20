@@ -113,20 +113,22 @@ QUrl entryPoint(const QDir &folder, const QString &name)
     return QUrl::fromLocalFile(resolved);
 }
 
-/// What the interface calls the content rating in project.json.
+/// The content rating in project.json, as Steam spells it.
 ///
-/// Wallpaper Engine writes one of three words; these are the same three
-/// under the names shown in the filter. Anything else, including nothing at
-/// all, leaves it empty rather than guessing.
+/// Kept in Steam's own words rather than turned into G, PG13 and R, so that
+/// one wallpaper's rating means the same thing whether it came off the disk
+/// or out of a workshop query -- and so one filter chip can be given to
+/// both. Wallpaper Engine writes one of three words; anything else,
+/// including nothing at all, leaves it empty rather than guessing.
 QString ratingFrom(const QString &contentRating)
 {
     const QString lowered = contentRating.toLower();
     if (lowered == QLatin1StringView("everyone"))
-        return QStringLiteral("G");
+        return QStringLiteral("Everyone");
     if (lowered == QLatin1StringView("questionable"))
-        return QStringLiteral("PG13");
+        return QStringLiteral("Questionable");
     if (lowered == QLatin1StringView("mature"))
-        return QStringLiteral("R");
+        return QStringLiteral("Mature");
     return {};
 }
 

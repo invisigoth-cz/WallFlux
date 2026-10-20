@@ -48,9 +48,13 @@ class Tags : public QObject
     /// "R - Mature"; what Steam actually tags with is these.
     Q_PROPERTY(QStringList ratings READ ratings CONSTANT)
 
-    /// Every picture size seen coming back from Steam, the odd shapes
-    /// included.
+    /// Every picture size a monitor has. The telephone ones Wallpaper
+    /// Engine also tags are left out.
     Q_PROPERTY(QStringList resolutions READ resolutions CONSTANT)
+
+    /// What a wallpaper does rather than what it is of: audio responsive,
+    /// customizable, approved and the rest.
+    Q_PROPERTY(QStringList properties READ properties CONSTANT)
 
 public:
     explicit Tags(QObject *parent = nullptr);
@@ -59,6 +63,7 @@ public:
     QStringList types() const;
     QStringList ratings() const;
     QStringList resolutions() const;
+    QStringList properties() const;
 
     /// What `tag` is called in `locale` ("cs-cz", "en-us"), or `tag` itself
     /// where Valve has no name for it.
@@ -76,6 +81,10 @@ public:
     Q_INVOKABLE QVariantList labelled(const QStringList &tags, const QString &locale);
 
 private:
+    /// One language's names, read off the disk, keyed by the part of the
+    /// key after `ui_workshop_tags_`.
+    QHash<QString, QString> read(const QString &locale) const;
+
     /// locale -> the part of the key after `ui_workshop_tags_` -> the name.
     QHash<QString, QHash<QString, QString>> m_read;
 };

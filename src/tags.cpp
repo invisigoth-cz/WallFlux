@@ -104,9 +104,14 @@ QStringList Tags::ratings() const
 
 QStringList Tags::resolutions() const
 {
-    // ponytail: the ones seen over 22 queries, in reading order rather than
-    // alphabetical. The catalogue knows of 8K and a few more that did not
-    // turn up; add them here if somebody misses one.
+    // The picture sizes a monitor has. Wallpaper Engine also tags four
+    // portrait sizes and a portrait standard definition, which are for
+    // telephones -- WallFlux draws on a desktop, so offering them would be
+    // five chips that match nothing anybody here can use.
+    //
+    // ponytail: the ones seen over 22 queries. The catalogue knows of 8K
+    // and a few more that did not turn up; add them here if somebody
+    // misses one.
     return {
         QStringLiteral("1280 x 720"),
         QStringLiteral("1366 x 768"),
@@ -118,15 +123,31 @@ QStringList Tags::resolutions() const
         QStringLiteral("Dual 5120 x 1440"),
         QStringLiteral("Dual 7680 x 2160"),
         QStringLiteral("Triple 7680 x 1440"),
-        QStringLiteral("Portrait 720 x 1280"),
-        QStringLiteral("Portrait 1080 x 1920"),
-        QStringLiteral("Portrait 1440 x 2560"),
-        QStringLiteral("Portrait 2160 x 3840"),
         QStringLiteral("Standard Definition"),
         QStringLiteral("Ultrawide Standard Definition"),
-        QStringLiteral("Portrait Standard Definition"),
         QStringLiteral("Dynamic resolution"),
         QStringLiteral("Other resolution"),
+    };
+}
+
+QStringList Tags::properties() const
+{
+    // What is left of the 65 once the genres, the types, the ratings and
+    // the picture sizes are taken out: what a wallpaper does rather than
+    // what it is of. `Wallpaper` is left out although Steam tags nearly
+    // everything with it -- a chip that matches everything narrows nothing.
+    return {
+        QStringLiteral("3D"),
+        QStringLiteral("Approved"),
+        QStringLiteral("Audio responsive"),
+        QStringLiteral("Audio visualizer"),
+        QStringLiteral("Customizable"),
+        QStringLiteral("HDR"),
+        QStringLiteral("Media Integration"),
+        QStringLiteral("No Animation"),
+        QStringLiteral("Puppet Warp"),
+        QStringLiteral("Scripted Layer"),
+        QStringLiteral("Video Texture"),
     };
 }
 
@@ -150,10 +171,34 @@ QVariantList Tags::labelled(const QStringList &tags, const QString &locale)
 
 QString Tags::name(const QString &tag, const QString &locale)
 {
-    const auto known = m_read.constFind(locale);
-    if (known != m_read.constEnd())
-        return known->value(keyFor(tag), tag);
+    if (!m_read.contains(locale))
+        m_read.insert(locale, read(locale));
 
+    const QString called = m_read.value(locale).value(keyFor(tag));
+    if (!called.isEmpty())
+        return called;
+
+    // Steam's three age ratings are the one place Valve's catalogues are no
+    // help: Wallpaper Engine files age under "G - All ages" and the like,
+    // which is a different vocabulary from what Steam tags with. So these
+    // three are the only tag names this program carries itself, and the
+    // only ones in wallflux_cs.ts.
+    //
+    // They follow the language the interface is in rather than `locale`,
+    // which in practice is the same thing -- `locale` is worked out from
+    // that language.
+    if (tag == QLatin1StringView("Everyone"))
+        return tr("Everyone");
+    if (tag == QLatin1StringView("Questionable"))
+        return tr("Questionable");
+    if (tag == QLatin1StringView("Mature"))
+        return tr("Mature");
+
+    return tag;
+}
+
+QHash<QString, QString> Tags::read(const QString &locale) const
+{
     QHash<QString, QString> names;
 
     const QString dir = catalogueDir();
@@ -162,26 +207,23 @@ QString Tags::name(const QString &tag, const QString &locale)
         // puts it. Every tag then shows as Steam spells it, which is
         // readable English rather than nothing.
         qCInfo(lcTags) << "no Wallpaper Engine catalogue; tags stay as Steam spells them";
-        m_read.insert(locale, names);
-        return tag;
+        return names;
     }
 
     QFile catalogue(dir + QLatin1StringView("/ui_") + locale + QLatin1StringView(".json"));
     if (!catalogue.open(QIODevice::ReadOnly)) {
         qCInfo(lcTags) << "no catalogue for" << locale << "at" << catalogue.fileName();
-        m_read.insert(locale, names);
-        return tag;
+        return names;
     }
 
     QJsonParseError trouble;
-    const QJsonDocument read = QJsonDocument::fromJson(catalogue.readAll(), &trouble);
-    if (trouble.error != QJsonParseError::NoError || !read.isObject()) {
+    const QJsonDocument parsed = QJsonDocument::fromJson(catalogue.readAll(), &trouble);
+    if (trouble.error != QJsonParseError::NoError || !parsed.isObject()) {
         qCWarning(lcTags) << catalogue.fileName() << "is not an object:" << trouble.errorString();
-        m_read.insert(locale, names);
-        return tag;
+        return names;
     }
 
-    const QJsonObject all = read.object();
+    const QJsonObject all = parsed.object();
     for (auto entry = all.constBegin(); entry != all.constEnd(); ++entry) {
         if (!entry.key().startsWith(KeyPrefix))
             continue;
@@ -191,6 +233,5 @@ QString Tags::name(const QString &tag, const QString &locale)
     }
 
     qCInfo(lcTags) << "read" << names.size() << "tag names for" << locale;
-    m_read.insert(locale, names);
-    return names.value(keyFor(tag), tag);
+    return names;
 }

@@ -126,10 +126,10 @@ Popup {
 
         ChipSection {
             title: qsTr("AGE RATING")
-            // The three Wallpaper Engine has, under the names shown here.
-            // Everything installed on the machine this was written on is the
-            // first of them.
-            values: [{ v: "G", l: "G" }, { v: "PG13", l: "PG13" }, { v: "R", l: "R" }]
+            // Steam's three words, which is what a wallpaper's rating is
+            // kept as whether it came off the disk or out of a query -- so
+            // the same chip means the same thing in both filters.
+            values: Tags.labelled(Tags.ratings, panel.catalogue)
             picked: panel.ratings
             onAsked: (value) => panel.ratings = panel.toggled(panel.ratings, value)
         }

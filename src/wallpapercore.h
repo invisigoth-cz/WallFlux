@@ -153,6 +153,13 @@ class WallpaperCore : public QObject
     Q_PROPERTY(Wallpaper current READ current NOTIFY currentChanged)
     Q_PROPERTY(QStringList recent READ recent NOTIFY recentChanged)
 
+    /// The ids of everything on the disk, for anyone who has an id and
+    /// wants to know whether it is already here -- the workshop's cards
+    /// ask, so they can stop offering to fetch what is sitting there. A
+    /// property rather than a question, so an answer that changes when the
+    /// folder watcher finds something reaches whoever asked.
+    Q_PROPERTY(QStringList installedIds READ installedIds NOTIFY wallpapersChanged)
+
 public:
     /// Scans on construction: a freshly built one already knows what is
     /// installed.
@@ -169,6 +176,17 @@ public:
     /// startup, which is what ordering by it shows until something is
     /// played.
     QStringList recent() const { return m_recent; }
+
+    /// Every id on the disk, so somebody holding an id can tell whether it
+    /// is already here.
+    QStringList installedIds() const
+    {
+        QStringList ids;
+        ids.reserve(m_wallpapers.size());
+        for (const Wallpaper &one : m_wallpapers)
+            ids.append(one.id);
+        return ids;
+    }
 
     /// Looks through the Steam folders again. Called once at startup, and
     /// by itself whenever Steam puts something new in them.
