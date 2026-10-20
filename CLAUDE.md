@@ -26,12 +26,27 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **Noticing what Steam downloads.** The workshop folders are watched, so a
   wallpaper subscribed to in Steam turns up in the grid on its own, a couple
   of seconds after the writing stops.
+- **The Steam Workshop, browsed and downloaded from.** Two ways in.
+  *Discover* is rows picked for you -- Trending, New and one per genre --
+  built a few at a time as the page is scrolled, since each row is its own
+  question. *Workshop* is one grid with search, filters, sort and paging,
+  fifty at a time out of three and a quarter million. Download subscribes
+  and fetches with the progress on the card, and then nothing: the folder
+  watcher puts it in the library. A wallpaper already on the disk is not
+  offered.
+- **One vocabulary for both filters.** Type, age rating, picture size,
+  genre and the rest are all tags as far as Steam is concerned, so a genre
+  row and a ticked chip are the same required tag. Both panels read DRUH,
+  PŘÍSTUPNOST, ROZLIŠENÍ, ŽÁNR, ŠTÍTKY, and every tag is called what Valve
+  calls it in whichever of its 36 languages the window is in.
+- **An empty Steam tab that says why**, with a Try again that works: the
+  Steamworks library is opened again rather than once at startup, so
+  starting Steam afterwards is advice worth taking.
 - **English and Czech**, switched in the window without a restart.
-- **A picker with its sections across the top**: Installed, Steam Workshop,
-  Playlists, Displays, Settings, centred. Only Installed is built; the four
-  others say
-  "Coming soon" and are there because naming them is what decides where the
-  next piece of work goes.
+- **A picker with its sections across the top**: Installed, Steam,
+  Playlists, Displays, Settings, centred. The first two are built; the
+  three others say "Coming soon" and are there because naming them is what
+  decides where the next piece of work goes.
 - **A picker that looks like something**: dark and light themes switched
   without a restart, a search that narrows the grid as it is typed, name
   order either way round, a band around each preview saying whether it can
@@ -41,8 +56,8 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **An Arch package** (`packaging/PKGBUILD`), installed, with an autostart
   entry that has been verified through a real logout and login.
 
-Of the 51 wallpapers found on the development machine, 10 play: 3 web and
-7 video. The other 41 are Wallpaper Engine's own packed **scene** format,
+Of the wallpapers found on the development machine -- 53 at the last count,
+and the number grows as the workshop is used -- 12 play: web and video. The other 41 are Wallpaper Engine's own packed **scene** format,
 which nothing here can read. They are listed in the picker, dimmed, and a
 click does nothing.
 
@@ -58,6 +73,8 @@ src/otheraudio.h      OtherAudio: is another program using the speakers
 src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
 src/steamworks.h      Steamworks: can the workshop be asked, and the way in
 src/steamworks.cpp    dlopen of libsteam_api.so, by name, nothing linked
+src/tags.h            Tags: what a workshop tag is called, and the genres
+src/tags.cpp          reads Wallpaper Engine's locale/, 36 languages
 src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
@@ -66,10 +83,14 @@ qml/WallpaperCard.qml one preview, its band, its name and its hover panel
 qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
 qml/PreviewTile.qml   a preview, a name and a hover panel -- the shape of a
                       card, shared by the library and the workshop
-qml/WorkshopView.qml  the Steam Workshop tab: rows of what nobody owns yet
+qml/WorkshopView.qml  the Steam tab: Discover rows and the Workshop grid
+qml/WorkshopFilters.qml  the workshop's filter popup, the whole vocabulary
+qml/Chip.qml          one value, on or off -- shared by both filters
+qml/ChipSection.qml   a heading and the chips under it -- shared
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
+tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 i18n/wallflux_cs.ts   the Czech catalogue, compiled into the binary
 packaging/PKGBUILD    builds from this checkout's git history
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
@@ -88,6 +109,15 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
   `resolution`, `sizeOnDisk`, `added`, `bytes`, `hasFile`, `playable`
 - also on the singleton: `recent` (ids chosen in this run, newest first)
 
+`Steamworks` and `Tags` are singletons of the same module:
+
+- `Steamworks`: `available`, `trouble` (a `Trouble` enum, **not** a
+  sentence -- see the trap), `busy`, `found` and `totals` (keyed by the
+  name the asker gave the question), `downloads` (id -> 0..100, -1 refused);
+  `browse(key, order, page, tags, search)`, `download(id)`, `retry()`
+- `Tags`: `genres` (25), `types`, `ratings`, `resolutions`, `properties`;
+  `name(tag, locale)`, `labelled(tags, locale)`
+
 `OtherAudio` and `ScreenCover` are singletons of the same module, each with
 one property -- `playing` and `covered` -- and no business of their own in
 what the answer is used for. `Main.qml` puts the three together in one line:
@@ -104,6 +134,17 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   written at all, since a workshop item for a paid application can only be
   fetched through Valve's proprietary SDK. Every other library WallFlux
   links must still be GPL-compatible.
+
+- **`steamworks-sdk` from the AUR is a dependency, not a suggestion.**
+  Nothing else on a Linux machine carries `libsteam_api.so`: Steam ships
+  none, and Wallpaper Engine carries only the Windows DLL -- both measured.
+  That package puts the SDK under `/opt` in its entirety, unmodified, with
+  Valve's licence beside it, which is what the SDK's terms require and what
+  carrying it inside this package would break. So it is depended on and
+  `dlopen`ed, never shipped and never linked. An AUR helper resolves it;
+  plain `makepkg -si` will want it built first. The price, which was said
+  out loud before it was chosen: everyone who installs WallFlux gets
+  Valve's SDK on disk whether they open the Steam tab or not.
 
 - **Qt draws the wallpapers. There is no renderer of our own.** An earlier
   attempt wrote one in Rust with OpenGL; it is parked on the branch
@@ -184,6 +225,33 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   give us a window to show". The real reason is three lines further up --
   `Cannot override FINAL property`. `qmllint` passes it. Found by running
   the program, which is the only thing that showed it.
+- **A `Popup` that does not fit does not scroll, it overflows.** The
+  workshop's filter holds fifty-nine chips, which is taller than the window
+  on anything but a very tall screen: the bottom section and the footer ran
+  off the edge and Clear could not be reached at all. It takes a height it
+  is told there is room for and a Flickable inside. Told, because a Popup
+  is not an Item and has no `Window` attached -- asking gives undefined and
+  the height comes out as nothing, which collapses the popup to its footer
+  floating over the page with no background.
+- **A sentence built in C++ with `tr()` is built once**, in whatever
+  language was installed at that moment, and stays that way.
+  `QQmlEngine::retranslate()` refreshes bindings that translate, and a
+  string handed over from C++ is not one. The heading changed with the
+  language and the reason under it did not. So C++ reports *which* reason
+  and the window chooses the words. **And a binding that gets its words out
+  of a JavaScript function is not refreshed either** -- the function has to
+  take the language as an argument it never reads, so that reading it is
+  what makes the binding rebuild. It looks like a pointless parameter and
+  it is not.
+- **`Row` is a QtQuick type.** An inline `component Row:` shadows it
+  silently and whatever used the real one breaks somewhere else entirely.
+  Named `DiscoverRow` for that reason.
+- **`QStringLiteral` is UTF-16 and a compiled `.qm` is compressed**, so
+  plain `strings` finds neither. Checking what actually went into a built
+  binary needs `strings -a -e l` for the first and nothing at all for the
+  second -- look for `:/i18n/wallflux_cs.qm` instead. Both of these were
+  read as "the package is missing my change" before the method was
+  suspected.
 - **`qmllint` is not in `PATH`** on this machine; it is
   `/usr/lib/qt6/bin/qmllint`.
 - **A `MultiEffect` mask draws nothing unless the mask has
@@ -440,46 +508,32 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **Download.** The button is in the hover panel of every workshop card and
-   is switched off. What it needs is `SteamAPI_ISteamUGC_SubscribeItem` and
-   `DownloadItem`, the progress out of `GetItemDownloadInfo`, and then
-   nothing: the folder watcher already notices what Steam puts on the disk,
-   so the wallpaper turns up in the library by itself. The reading of
-   Steam's answers is written and measured, so this is the small half of
-   what the browsing was.
-
-   To try it, `libsteam_api.so` has to be on the machine -- see the comment
-   at the top of `src/steamworks.cpp` for why WallFlux does not ship one.
-   Either install `steamworks-sdk` from the AUR, or take the SDK once:
-
-   ```sh
-   base=https://github.com/calendulish/Overlays/raw/master/dev-util/steamworks-sdk
-   curl -L -o sdk.zip "$base/files/steamworks_sdk_158.zip"
-   sha256sum sdk.zip
-   # 4142982451d25120ddf35abf2b55499154b56132a16a7ccdae4806aaed5c99d0
-   bsdtar -xf sdk.zip sdk/redistributable_bin/linux64/libsteam_api.so
-   ```
-
-   and point `WALLFLUX_STEAM_API` at it. The hash is the one the AUR package
-   has been building against since 2023; it was checked against that, and
-   the library's own exports were read before any of it was called.
-
-2. **Searching and filtering the workshop.** The field and the two buttons
-   above the rows do nothing yet. `AddRequiredTag` takes the same tag
-   vocabulary the library filters already use, and `SetSearchText` the
-   field. One more order -- most subscribed -- is already in the enum.
-
-3. **A list of wallpapers that take turns.** The tab is there and says
+1. **A list of wallpapers that take turns.** The tab is there and says
    "Coming soon". Asked for: a person's own selection out of the grid, each
    one on the desktop for a quarter of an hour, swapped on a schedule while
    the program sits in the panel. Nothing in the sound or cover behaviour
    stands in the way -- neither of them cares which wallpaper is playing.
 
-4. **Displays and Settings**, the two remaining tabs. Nothing has been asked
-   for in either of them yet.
+2. **Displays and Settings**, the two remaining tabs. Nothing has been
+   asked for in either of them yet.
 
-5. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
+3. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-6. **Scene wallpapers**, all 41 of them. A direction to decide, not an
+4. **Scene wallpapers**, the packed ones. A direction to decide, not an
    afternoon's work.
+
+### Small things seen and left
+
+- A card for a wallpaper Steam reports as under half a megabyte reads
+  "0 MB". Rounding, not a lie, but it looks like one.
+- `Tags::resolutions()` dropped the four portrait sizes and the portrait
+  standard definition as telephone sizes. Somebody with a monitor turned on
+  its side has no chip to tick; it is one line to put them back.
+- The COMPATIBILITY section in the library's filter is a placeholder,
+  shown and switched off. It is for when a wallpaper fetched from the
+  workshop has been tried and found to work or not, and nothing records
+  that yet.
+- `SteamAppId=431960` in the environment makes the window's resource class
+  `steam_app_431960`, which is confusing when reading `workspace.windowList()`.
+  Harmless; worth knowing before chasing it.
