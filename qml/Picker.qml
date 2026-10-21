@@ -282,7 +282,7 @@ Window {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            RoundedButton {
                 text: qsTr("Refresh")
                 icon.name: "view-refresh"
                 // There is nothing to look for again from any other section.
@@ -290,7 +290,7 @@ Window {
                 onClicked: Wallpapers.rescan()
             }
 
-            Button {
+            RoundedButton {
                 // The language it is in now, rather than the one the click
                 // would give you: a language is what somebody looks for to
                 // check, and the tooltip says what happens.
@@ -305,7 +305,7 @@ Window {
                 onClicked: Language.czech = !Language.czech
             }
 
-            Button {
+            RoundedButton {
                 // The icon is what the click will do, not what is on
                 // screen now: turn the lights up, or down.
                 //
@@ -353,7 +353,7 @@ Window {
                         // one.
                         maximumLength: 50
 
-                        ToolButton {
+                        RoundedTool {
                             x: 4
                             anchors.verticalCenter: parent.verticalCenter
                             icon.name: "system-search"
@@ -370,7 +370,7 @@ Window {
                             onClicked: search.forceActiveFocus()
                         }
 
-                        ToolButton {
+                        RoundedTool {
                             anchors.right: parent.right
                             anchors.rightMargin: 2
                             anchors.verticalCenter: parent.verticalCenter
@@ -386,7 +386,7 @@ Window {
                         }
                     }
 
-                    Button {
+                    RoundedButton {
                         text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                                  : qsTr("Filters")
                         icon.name: "view-filter"
@@ -396,7 +396,7 @@ Window {
                         onClicked: filters.visible = !filters.visible
                     }
 
-                    Button {
+                    RoundedButton {
                         id: order
 
                         text: picker.sortLabels[picker.sortBy]
@@ -599,11 +599,7 @@ Window {
                                     anchors.fill: parent
                                     anchors.margins: 8
                                     wallpaper: cell.modelData
-                                    volume: picker.volume
-                                    muted: picker.muted
                                     onChose: (id) => picker.chose(id)
-                                    onVolumeAsked: (volume) => picker.volume = volume
-                                    onMuteAsked: picker.muted = !picker.muted
                                 }
                             }
 
@@ -683,7 +679,7 @@ Window {
                     opacity: 0.8
                 }
 
-                Button {
+                RoundedButton {
                     text: qsTr("Turn off")
                     flat: true
                     // Nothing to turn off until something plays, which is the
@@ -692,7 +688,7 @@ Window {
                     onClicked: Wallpapers.clear()
                 }
 
-                ToolButton {
+                RoundedTool {
                     icon.name: picker.muted ? "audio-volume-muted" : "audio-volume-high"
                     // See the magnifier above: without this it is invisible.
                     icon.color: picker.palette.windowText

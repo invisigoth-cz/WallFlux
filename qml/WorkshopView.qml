@@ -5,7 +5,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Window
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import WallFlux
@@ -36,29 +35,27 @@ Item {
     /// Which of Wallpaper Engine's catalogues to call the tags by.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
-    /// A preview at the size a card actually draws it.
+    /// Previews are taken exactly as Steam gives them, and **asking the
+    /// CDN to resize one is a trap** -- measured twice, in both directions.
     ///
-    /// Steam's own answer is the full-size picture, and that is what made
-    /// this tab slow: measured, a preview is 300 kB to 1 MB, fifty of them
-    /// is some fifteen megabytes, and every one of them was being fetched
-    /// to be drawn 224 pixels wide. The CDN resizes on request -- the same
-    /// parameters Steam's own pages use -- and the same four previews came
-    /// down as 11 to 38 kB, between eight and twenty times less. An
-    /// animated GIF it hands back whole and nothing can be done about that.
+    /// It looks like the obvious saving: a preview is a few hundred
+    /// kilobytes and a card draws it 240 across, and Steam's own pages put
+    /// `?imw=...&imh=...&ima=fit&impolicy=Letterbox` on the same URLs. For
+    /// a photograph it is a real saving -- 296 kB becomes 11 kB. But most
+    /// of the workshop's previews are animated, and for those:
     ///
-    /// The card is 224 pixels across, so that is what is asked for -- times
-    /// whatever the screen draws a pixel as, or it would be soft on a
-    /// screen that doubles everything.
-    function thumbnail(url) {
-        if (!url)
-            return "";
-        // Twice the card, because the grid shares its width out between
-        // whole columns: a cell is between one card wide and two, and a
-        // picture asked for at one card's width is soft in the wide case.
-        const across = Math.round(workshop.cardWidth * 2 * Screen.devicePixelRatio);
-        return url + "?imw=" + across + "&imh=" + Math.round(across * 9 / 16)
-             + "&ima=fit&impolicy=Letterbox";
-    }
+    /// - the picture is **re-encoded when it is asked for**, and a size
+    ///   nobody has asked for before is made on the spot. Measured over six
+    ///   previews: 0.7 to 7.9 seconds each, where the file as stored came
+    ///   back in 0.03 to 0.09. That is where "a page takes tens of seconds"
+    ///   came from, with fifty of them on a page.
+    /// - it is not even smaller. One came back as 1 099 kB asked for at 268
+    ///   across and 924 kB asked for not at all.
+    ///
+    /// Sixteen previews as stored, eight at a time: 8 MB in 0.19 s. So the
+    /// bytes were never the problem on a connection like this one. On a
+    /// slow one the sums would come out differently for the photographs --
+    /// if that ever matters, it is this comment and a URL, not a design.
 
     /// 0 while Discover is showing, 1 while the Workshop grid is, 2 while
     /// one of Discover's sections is open whole.
@@ -100,6 +97,24 @@ Item {
     /// What Steam gives in one answer. Not ours to choose.
     readonly property int perPage: 50
 
+    /// How many of that answer a Discover row shows.
+    ///
+    /// A row is a taste of a section rather than the section: fifty cards
+    /// in a strip is a lot of sideways scrolling for something somebody is
+    /// only glancing along, and Wallpaper Engine's own rows stop at twenty.
+    /// "See more" is where the rest of them are.
+    readonly property int perRow: 20
+
+    /// How deep the paging goes, whatever the total says.
+    ///
+    /// Steam does not answer for ever: measured against Trending, page 1001
+    /// came back with its fifty and page 1024 was refused outright -- result
+    /// 25, the limit -- as were 2000 and 64929. And offering 64 929 pages
+    /// of three and a quarter million wallpapers is not an offer anyway; it
+    /// is a number nobody can do anything with. Wallpaper Engine stops at a
+    /// thousand pages and so does this.
+    readonly property int deepest: 1000
+
     // ---- Discover -----------------------------------------------------
 
     /// Trending and New, then a row per genre. Each row is its own question
@@ -129,7 +144,37 @@ Item {
     readonly property var grid: Steamworks.found["browse"] || []
     readonly property int total: Steamworks.totals["browse"] || 0
     readonly property int pages:
-        Math.max(1, Math.ceil(workshop.total / workshop.perPage))
+        Math.max(1, Math.min(workshop.deepest,
+                             Math.ceil(workshop.total / workshop.perPage)))
+
+    /// The row of pages to offer: the first, the last, the five around the
+    /// one being looked at, and a gap -- written as 0 -- wherever numbers
+    /// were left out. A thousand pages cannot all be on the screen, and
+    /// the ones worth a click are the near ones and the two ends.
+    readonly property var pageRow: {
+        const last = workshop.pages;
+        const near = [];
+        for (let i = workshop.page - 2; i <= workshop.page + 2; ++i) {
+            if (i >= 1 && i <= last)
+                near.push(i);
+        }
+
+        const row = [];
+        if (near[0] > 1) {
+            row.push(1);
+            if (near[0] > 2)
+                row.push(0);
+        }
+        for (let i = 0; i < near.length; ++i)
+            row.push(near[i]);
+        const end = near[near.length - 1];
+        if (end < last) {
+            if (end < last - 1)
+                row.push(0);
+            row.push(last);
+        }
+        return row;
+    }
 
     /// The reason the workshop cannot be asked, in words.
     ///
@@ -186,6 +231,15 @@ Item {
                           true);
     }
 
+    /// Goes to a page, which is the same thing whichever arrow or number
+    /// was clicked.
+    function turnTo(page) {
+        if (page < 1 || page > workshop.pages || page === workshop.page)
+            return;
+        workshop.page = page;
+        workshop.ask();
+    }
+
     /// Any change to what is being asked starts again at the first page --
     /// page eleven of the old question means nothing under the new one.
     function askAfresh() {
@@ -230,71 +284,20 @@ Item {
     }
 
     /// One wallpaper as the workshop shows it: the same tile the library
-    /// uses, with something to do about not owning it.
+    /// uses, and nothing else yet.
+    ///
+    /// What was here -- the genre, the size on disk and a Download button,
+    /// all drawn over the preview on hover -- has been taken out: it is to
+    /// be said somewhere else, and the tile is to carry something else.
+    /// Downloading goes with it for the moment; `Steamworks.download()` is
+    /// still there and nothing calls it.
     component WorkshopCard: PreviewTile {
         id: offered
 
         required property var item
 
-        preview: workshop.thumbnail(offered.item.preview)
+        preview: offered.item.preview
         label: offered.item.title
-        telling: offered.hovered
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 2
-
-            Label {
-                text: offered.item.tags.length > 0
-                      ? Tags.name(offered.item.tags[0], workshop.catalogue)
-                      : qsTr("Unspecified")
-                font.weight: Font.DemiBold
-            }
-            Label {
-                // What the workshop answers with. There is no resolution in
-                // it -- Steam does not carry one -- so the size is what
-                // there is to say about how big a thing this is.
-                text: offered.item.bytes > 0
-                      ? qsTr("%1 MB").arg(Math.round(offered.item.bytes / 1048576))
-                      : ""
-                opacity: 0.75
-            }
-
-            Item { Layout.fillHeight: true }
-
-            Button {
-                id: fetch
-
-                /// Whether this one is already on the disk. Reads the
-                /// library's own list, so a download that finishes turns
-                /// the button over by itself the moment the folder watcher
-                /// notices -- no asking Steam a second time.
-                readonly property bool owned:
-                    Wallpapers.installedIds.indexOf(offered.item.id) >= 0
-
-                /// What `Steamworks.downloads` says about this one:
-                /// undefined until it has been asked for, then 0 to 100,
-                /// or -1 where Steam would not do it.
-                readonly property var progress: Steamworks.downloads[offered.item.id]
-                readonly property bool untouched: fetch.progress === undefined
-
-                Layout.fillWidth: true
-                text: fetch.owned ? qsTr("Installed")
-                     : fetch.untouched ? qsTr("Download")
-                     : fetch.progress < 0 ? qsTr("Steam would not")
-                     : fetch.progress >= 100 ? qsTr("Downloaded")
-                     : qsTr("%1 %").arg(fetch.progress)
-                icon.name: fetch.owned ? "dialog-ok-apply"
-                         : fetch.progress >= 100 ? "download-later" : "download"
-                // Nothing to fetch for something already here. Asking again
-                // while it is on its way would have Steam start over; a
-                // refusal is worth a second try.
-                enabled: Steamworks.available && !fetch.owned
-                         && (fetch.untouched || fetch.progress < 0)
-                onClicked: Steamworks.download(offered.item.id)
-            }
-        }
     }
 
     /// One Discover row: a heading, a sideways strip of cards, and a way
@@ -348,7 +351,7 @@ Item {
                 font.weight: Font.DemiBold
             }
 
-            Button {
+            RoundedButton {
                 text: qsTr("See more")
                 icon.name: "go-next"
                 flat: true
@@ -378,7 +381,7 @@ Item {
             orientation: ListView.Horizontal
             spacing: 12
             clip: true
-            model: row.items
+            model: row.items.slice(0, workshop.perRow)
 
             delegate: WorkshopCard {
                 required property var modelData
@@ -422,7 +425,7 @@ Item {
                 exclusive: true
             }
 
-            ToolButton {
+            RoundedTool {
                 icon.name: "compass"
                 icon.color: workshop.palette.windowText
                 checkable: true
@@ -435,7 +438,7 @@ Item {
                 ToolTip.text: qsTr("Discover")
                 onClicked: workshop.mode = 0
             }
-            ToolButton {
+            RoundedTool {
                 icon.name: "view-list-icons"
                 icon.color: workshop.palette.windowText
                 checkable: true
@@ -473,7 +476,7 @@ Item {
                 onTextEdited: settle.restart()
                 onAccepted: settle.triggered()
 
-                ToolButton {
+                RoundedTool {
                     x: 4
                     anchors.verticalCenter: parent.verticalCenter
                     icon.name: "system-search"
@@ -482,7 +485,7 @@ Item {
                     focusPolicy: Qt.NoFocus
                 }
 
-                ToolButton {
+                RoundedTool {
                     anchors.right: parent.right
                     anchors.rightMargin: 2
                     anchors.verticalCenter: parent.verticalCenter
@@ -503,7 +506,7 @@ Item {
                 }
             }
 
-            Button {
+            RoundedButton {
                 text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                          : qsTr("Filters")
                 icon.name: "view-filter"
@@ -518,7 +521,7 @@ Item {
                 onClicked: filters.visible = !filters.visible
             }
 
-            Button {
+            RoundedButton {
                 id: sortButton
 
                 text: workshop.orderName(workshop.order)
@@ -592,7 +595,7 @@ Item {
                 opacity: 0.7
             }
 
-            Button {
+            RoundedButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 6
                 text: qsTr("Try again")
@@ -688,7 +691,7 @@ Item {
                         spacing: 8
                         visible: workshop.mode === 2
 
-                        ToolButton {
+                        RoundedTool {
                             icon.name: "go-previous"
                             icon.color: workshop.palette.windowText
                             ToolTip.visible: hovered
@@ -768,30 +771,82 @@ Item {
                         font.pixelSize: 12
                     }
 
+                    // The pages themselves rather than Previous and Next:
+                    // a number somebody can aim at, the two ends, and
+                    // arrows that are not there when there is nothing that
+                    // way.
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.bottomMargin: 8
-                        spacing: 12
+                        spacing: 4
                         visible: workshop.grid.length > 0
 
-                        Button {
-                            text: qsTr("Previous")
+                        RoundedTool {
+                            icon.name: "go-first"
+                            icon.color: workshop.palette.windowText
+                            visible: workshop.page > 1
+                            enabled: !Steamworks.busy
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("First page")
+                            onClicked: workshop.turnTo(1)
+                        }
+
+                        RoundedTool {
                             icon.name: "go-previous"
-                            enabled: workshop.page > 1 && !Steamworks.busy
-                            onClicked: { workshop.page -= 1; workshop.ask(); }
+                            icon.color: workshop.palette.windowText
+                            visible: workshop.page > 1
+                            enabled: !Steamworks.busy
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Previous page")
+                            onClicked: workshop.turnTo(workshop.page - 1)
                         }
 
-                        Label {
-                            text: qsTr("Page %1 of %2").arg(workshop.page).arg(workshop.pages)
-                            font.pixelSize: 12
-                            opacity: 0.7
+                        Repeater {
+                            model: workshop.pageRow
+
+                            delegate: RowLayout {
+                                id: entry
+
+                                required property int modelData
+
+                                spacing: 0
+
+                                Label {
+                                    visible: entry.modelData === 0
+                                    text: "…"
+                                    leftPadding: 4
+                                    rightPadding: 4
+                                    opacity: 0.5
+                                }
+
+                                Chip {
+                                    visible: entry.modelData !== 0
+                                    enabled: !Steamworks.busy
+                                    label: entry.modelData
+                                    on: entry.modelData === workshop.page
+                                    onAsked: workshop.turnTo(entry.modelData)
+                                }
+                            }
                         }
 
-                        Button {
-                            text: qsTr("Next")
+                        RoundedTool {
                             icon.name: "go-next"
-                            enabled: workshop.page < workshop.pages && !Steamworks.busy
-                            onClicked: { workshop.page += 1; workshop.ask(); }
+                            icon.color: workshop.palette.windowText
+                            visible: workshop.page < workshop.pages
+                            enabled: !Steamworks.busy
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Next page")
+                            onClicked: workshop.turnTo(workshop.page + 1)
+                        }
+
+                        RoundedTool {
+                            icon.name: "go-last"
+                            icon.color: workshop.palette.windowText
+                            visible: workshop.page < workshop.pages
+                            enabled: !Steamworks.busy
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Last page")
+                            onClicked: workshop.turnTo(workshop.pages)
                         }
                     }
                 }

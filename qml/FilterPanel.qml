@@ -77,9 +77,19 @@ Rectangle {
     /// Everything that is not a genre: audio responsive, customizable,
     /// approved and the rest, which describe a wallpaper rather than say
     /// what it is of.
-    readonly property var tagValues:
-        Tags.labelled(panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) < 0),
-                       panel.catalogue)
+    ///
+    /// What is on the disk, and `Audio responsive` whether anything here
+    /// carries it or not. Measured: of the 55 installed, every one carries
+    /// genres and nothing else, so this section would not appear at all --
+    /// and this is the one somebody goes looking for before they have the
+    /// wallpaper that answers it. The chip is there, and the day one is
+    /// downloaded it already means something.
+    readonly property var tagValues: {
+        const carried = panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) < 0);
+        if (carried.indexOf("Audio responsive") < 0)
+            carried.push("Audio responsive");
+        return Tags.labelled(carried, panel.catalogue);
+    }
 
     /// Every picture size among the videos, and one for everything that has
     /// none -- a scene or web wallpaper has no single answer, and a video
@@ -193,7 +203,7 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            RoundedButton {
                 text: qsTr("Clear")
                 enabled: panel.chosen > 0
                 onClicked: panel.clear()

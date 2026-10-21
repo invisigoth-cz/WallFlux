@@ -14,15 +14,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   switched to and thrown away when it was left, so every switch rebuilt the
   rows and fetched every preview over the network again. It is built the
   first time it is looked at and kept from then on.
-- **Previews are asked for at the size they are drawn, and then kept.**
-  Steam's answer is the full-size picture: measured on four of them, 296 kB
-  to 924 kB each, to be drawn a couple of hundred pixels across. The CDN
-  resizes on request -- the same parameters Steam's own pages use -- and the
-  same four came down as 11 kB to 38 kB. What has been fetched is now kept
-  on the disk as well, which Steam allows for a week
+- **Previews are kept on the disk.** They were fetched again every time
+  anything was looked at twice. Steam says a preview is good for a week
   (`Cache-Control: max-age=604800`, read off the response), so a page
-  already looked at costs no network at all. An animated GIF is the
-  exception: Steam hands those back whole whatever is asked.
+  already seen now costs no network at all and survives a restart.
+- **Previews are taken as Steam stores them, and are no longer resized.**
+  Asking the CDN for a smaller copy looks like the obvious saving and is a
+  trap: most of the workshop's previews are animated, and a size nobody has
+  asked for before is re-encoded on the spot. Measured over six of them,
+  0.7 to 7.9 seconds each against 0.03 to 0.09 for the file as stored --
+  and the resized copy was not even smaller, one coming back as 1 099 kB
+  where the stored file is 924 kB. This is what made a page take tens of
+  seconds. With it gone, and measured with an empty cache: a page of the
+  Workshop fills in 0.86 s, every Discover row in 0.40 s, a section in
+  0.20 s and the next page in 0.28 s.
 - **A question somebody is waiting for goes first.** Discover asks one
   question per row and Steam answers them one at a time, measured at 0.08
   to 0.6 seconds each -- so a search typed on arriving at the tab waited out
@@ -50,6 +55,38 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   opened out of it. They are pages somebody else picked, and the Workshop
   is the one place in this window where a question is put together by hand
   -- which is how Wallpaper Engine's own has it.
+- **Nothing is drawn over a preview on hover any more.** The panel that
+  said what the file was, how big its picture was, what it took up on disk
+  and how loud it played -- and, in the workshop, offered Download -- is
+  gone from both grids. It is to be said somewhere else and the tile is to
+  carry something else; until then the only sound control is the one in the
+  footer, and nothing in the window starts a download. `Steamworks` can
+  still do it and nothing calls it.
+- **A page of the workshop stops at a thousand.** It offered 64 929 of
+  them, which is three and a quarter million wallpapers divided by fifty
+  and not an offer at all: measured, Steam answers page 1001 and refuses
+  page 1024 outright. A thousand is what Wallpaper Engine stops at and is
+  inside what Steam will serve.
+- **A Discover row shows twenty wallpapers, not fifty.** Steam hands over
+  fifty in one answer whatever is asked; a row is a taste of a section and
+  Wallpaper Engine's own stops at twenty. "See more" is where the rest are.
+- **The pages are pages now**, not Previous and Next: the first, the last,
+  the five around the one being looked at, and arrows that are not there
+  when there is nothing that way, including a jump to either end.
+- **The buttons have their corners taken off**, and room around what is
+  written on them. Fusion draws a near-square box with the text against the
+  edge, which was the only sharp thing left in a window of rounded previews
+  and round chips.
+- **The filters are one value to a row.** They were chips side by side,
+  which puts a different number on every line and ends every line somewhere
+  else; five sections of that is a panel with no straight edge in it. Each
+  value keeps the shape of a chip and takes the width of the panel, and the
+  headings over them are bigger and heavier than what they head.
+- **The library's filter offers Audio responsive** whether anything
+  installed carries it or not -- measured, none of the 55 here does, they
+  carry genres and nothing else. It is the one somebody looks for before
+  they have the wallpaper that answers it, and the day one is downloaded
+  the chip already means something.
 - **The scrollbars can be seen, and are out of the way of the pictures.**
   Fusion's own fades out whenever it is not being touched, so a grid that
   ran over the bottom edge said nothing about it. Every scrollbar in the

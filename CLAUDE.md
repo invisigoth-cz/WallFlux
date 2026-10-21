@@ -26,14 +26,18 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **Noticing what Steam downloads.** The workshop folders are watched, so a
   wallpaper subscribed to in Steam turns up in the grid on its own, a couple
   of seconds after the writing stops.
-- **The Steam Workshop, browsed and downloaded from.** Two ways in.
-  *Discover* is rows picked for you -- Trending, New and one per genre --
-  built a few at a time as the page is scrolled, since each row is its own
-  question. *Workshop* is one grid with search, filters, sort and paging,
-  fifty at a time out of three and a quarter million. Download subscribes
-  and fetches with the progress on the card, and then nothing: the folder
-  watcher puts it in the library. A wallpaper already on the disk is not
-  offered.
+- **The Steam Workshop, browsed.** Two ways in. *Discover* is rows picked
+  for you -- Trending, New and one per genre, twenty wallpapers to a row --
+  as many rows as the window is tall, with more as it is scrolled, since
+  each row is its own question. Nothing in Discover is filtered or sorted
+  by hand; "See more" opens one row whole, as a page with the section's
+  name and the way back. *Workshop* is one grid with search, filters, sort
+  and paging, fifty at a time and a thousand pages deep.
+  **Downloading is not reachable from the window at the moment**: the
+  Download button lived on the panel that was drawn over a preview on
+  hover, and that panel has been taken out on purpose while where the
+  information belongs is decided. `Steamworks::download()` works and
+  nothing calls it.
 - **One vocabulary for both filters.** Type, age rating, picture size,
   genre and the rest are all tags as far as Steam is concerned, so a genre
   row and a ticked chip are the same required tag. Both panels read DRUH,
@@ -48,11 +52,12 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   three others say "Coming soon" and are there because naming them is what
   decides where the next piece of work goes.
 - **A picker that looks like something**: dark and light themes switched
-  without a restart, a search that narrows the grid as it is typed, name
-  order either way round, a band around each preview saying whether it can
-  be played, and a panel over the preview with what the file is, how big its
-  picture is and what it takes up on disk -- with the volume for a video on
-  the card itself.
+  without a restart, a search that narrows the grid as it is typed and a
+  cross to empty it, name order either way round, a band around each
+  preview saying whether it can be played, rounded buttons with room around
+  their words, filters as one value to a row beside the grid, and
+  scrollbars that stay visible in a strip of their own rather than fading
+  out over the pictures.
 - **An Arch package** (`packaging/PKGBUILD`), installed, with an autostart
   entry that has been verified through a real logout and login.
 
@@ -79,14 +84,17 @@ src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
 qml/Picker.qml        the picker window: header, search, grid, footer
-qml/WallpaperCard.qml one preview, its band, its name and its hover panel
+qml/WallpaperCard.qml one preview, its band and its name
 qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
-qml/PreviewTile.qml   a preview, a name and a hover panel -- the shape of a
-                      card, shared by the library and the workshop
+qml/PreviewTile.qml   a preview and a name -- the shape of a card, shared
+                      by the library and the workshop
 qml/WorkshopView.qml  the Steam tab: Discover rows and the Workshop grid
 qml/WorkshopFilters.qml  the workshop's filter popup, the whole vocabulary
 qml/Chip.qml          one value, on or off -- shared by both filters
-qml/ChipSection.qml   a heading and the chips under it -- shared
+qml/ChipSection.qml   a heading and the values under it, one to a row
+qml/Scroller.qml      a scrollbar that stays visible, used by every view
+qml/RoundedButton.qml a button with its corners off -- every button here
+qml/RoundedTool.qml   the same corners for an icon on its own
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
@@ -363,6 +371,33 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   browse page, details off the keyless endpoint, and Download opens the
   item's page for somebody to press Subscribe once -- after which the folder
   watcher makes the rest invisible.
+- **Asking Steam's CDN to resize a preview is a trap**, and it looks like
+  the obvious saving. A preview is a few hundred kilobytes and a card draws
+  it 240 across, and Steam's own pages put
+  `?imw=...&imh=...&ima=fit&impolicy=Letterbox` on the very same URLs. For
+  a photograph it is real -- 296 kB becomes 11 kB. But most of the
+  workshop's previews are animated, and for those the picture is
+  **re-encoded when it is asked for**: a size nobody has asked for before
+  is made on the spot. Measured over six previews, 0.7 to 7.9 seconds each,
+  where the file as stored came back in 0.03 to 0.09 -- and the resized
+  copy was not even smaller, one of them 1 099 kB against 924 kB stored.
+  Sixteen stored previews, eight at a time: 8 MB in 0.19 s. So the bytes
+  were never the problem on a connection like this one; the re-encoding
+  was, and it is what made a page take tens of seconds. Take the URL as
+  Steam gives it. On a slow line the sums would come out differently for
+  the photographs, and that is a comment and a URL away.
+- **Steam will not page for ever.** Measured against Trending: page 1001
+  comes back with its fifty, page 1024 is refused outright with result 25,
+  and so are 2000 and 64 929. The total it reports -- three and a quarter
+  million -- divided by the fifty it answers with is 64 929 pages that do
+  not exist. The grid stops at a thousand, which is where Wallpaper Engine
+  stops too.
+- **A Popup closes on the press, not the click, so a button cannot toggle
+  one** without being told to. The press lands outside the popup, which
+  closes it, and the click that follows opens it again -- so the menu
+  flickers and stays. `Popup.CloseOnPressOutsideParent` keeps a press on
+  the button that owns it from counting as outside, and then
+  `opened ? close() : open()` does what everybody expects.
 - **Asking ffprobe during the scan is a trap.** It is 53 milliseconds a
   video, which sounds free until the constructor of WallpaperCore scans the
   real machine on every test that builds one: the suite went from 0.03 to
@@ -508,25 +543,35 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **A list of wallpapers that take turns.** The tab is there and says
+1. **Somewhere to put what a wallpaper is, and a way to download one.**
+   Both were on the panel drawn over a preview on hover, which has been
+   taken out: the kind, the picture size, what it takes up on disk, the
+   volume for a video, and Download / Installed in the workshop. Asked for
+   explicitly -- it is to be shown elsewhere and the tile is to carry
+   something else. Until then nothing in the window can fetch a wallpaper.
+
+2. **A list of wallpapers that take turns.** The tab is there and says
    "Coming soon". Asked for: a person's own selection out of the grid, each
    one on the desktop for a quarter of an hour, swapped on a schedule while
    the program sits in the panel. Nothing in the sound or cover behaviour
    stands in the way -- neither of them cares which wallpaper is playing.
 
-2. **Displays and Settings**, the two remaining tabs. Nothing has been
+3. **Displays and Settings**, the two remaining tabs. Nothing has been
    asked for in either of them yet.
 
-3. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
+4. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-4. **Scene wallpapers**, the packed ones. A direction to decide, not an
+5. **Scene wallpapers**, the packed ones. A direction to decide, not an
    afternoon's work.
 
 ### Small things seen and left
 
 - A card for a wallpaper Steam reports as under half a megabyte reads
   "0 MB". Rounding, not a lie, but it looks like one.
+- The workshop's filter has fifty-nine values and one to a row is a long
+  panel. The headings carry it for now; sections that fold would be the
+  next thing if it stops being enough.
 - `Tags::resolutions()` dropped the four portrait sizes and the portrait
   standard definition as telephone sizes. Somebody with a monitor turned on
   its side has no chip to tick; it is one line to put them back.

@@ -9,12 +9,11 @@ import QtQuick.Controls.Fusion
 import QtQuick.Effects
 import QtQuick.Layouts
 
-/// A preview with a name under it and a panel that draws over it on hover.
+/// A preview with a name under it.
 ///
 /// What a wallpaper looks like in this program, wherever it comes from: the
 /// library grid and the workshop both use this, so neither can drift from
-/// the other. Whatever goes in the panel is handed in as children; this
-/// knows nothing about what is being shown.
+/// the other.
 ///
 /// The colours come from the window's palette rather than from anything named
 /// here, which is what lets the whole picker change theme without a restart.
@@ -27,18 +26,8 @@ Item {
     /// The band around the preview. Transparent for no band at all.
     property color band: "transparent"
 
-    /// Whether the panel over the preview is showing.
-    property bool telling: false
-
     /// Whether a click means anything here.
     property bool clickable: true
-
-    /// Whatever the panel shows. Laid out by whoever hands it in.
-    default property alias panelContent: panel.data
-
-    /// Whether the pointer is over the preview. What `telling` is usually
-    /// made of, but the decision belongs to whoever is using this.
-    readonly property alias hovered: hover.containsMouse
 
     signal clicked()
 
@@ -93,12 +82,10 @@ Item {
                 maskSource: rounded
             }
 
-            // Underneath the panel, so that anything interactive in it gets
-            // the mouse first and a click anywhere else falls through here.
             MouseArea {
-                id: hover
-
                 anchors.fill: parent
+                // What draws the cursor over the preview, which is the one
+                // thing this says about whether a click is worth making.
                 hoverEnabled: true
                 cursorShape: tile.clickable ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                 onClicked: {
@@ -107,19 +94,15 @@ Item {
                 }
             }
 
-            Rectangle {
-                id: panel
-
-                anchors.fill: parent
-                anchors.margins: frame.border.width
-                radius: rounded.radius
-                color: Qt.alpha(tile.palette.window, 0.88)
-
-                opacity: tile.telling ? 1 : 0
-                visible: opacity > 0
-                Behavior on opacity {
-                    NumberAnimation { duration: 120 }
-                }
+            // A preview off the workshop is a few hundred kilobytes over
+            // the network, which is long enough that an empty frame reads
+            // as a wallpaper with no picture rather than as one on its way.
+            BusyIndicator {
+                anchors.centerIn: parent
+                implicitWidth: 32
+                implicitHeight: 32
+                running: shown.status === Image.Loading
+                visible: running
             }
         }
 

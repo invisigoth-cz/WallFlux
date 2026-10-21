@@ -9,7 +9,12 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import WallFlux
 
-/// A heading and the chips under it, wrapped onto as many rows as they need.
+/// A heading and the values under it, one to a row.
+///
+/// Rows rather than a flow of chips side by side: a flow puts a different
+/// number on every line and every line ends somewhere else, and five
+/// sections of that is a panel with no straight edge anywhere in it. Each
+/// value keeps the shape of a chip and takes the width of the panel.
 ColumnLayout {
     id: section
 
@@ -28,16 +33,22 @@ ColumnLayout {
     visible: section.values.length > 0
 
     Label {
+        // Bigger and heavier than what it is a heading for. At the same
+        // size as the values, and half faded, it sank into them -- which
+        // in a panel of five sections is the one thing worth seeing at a
+        // glance.
         text: section.title
-        font.pixelSize: 11
-        font.letterSpacing: 1.2
-        font.weight: Font.DemiBold
-        opacity: 0.55
+        font.pixelSize: 14
+        font.letterSpacing: 1.1
+        font.weight: Font.Bold
+        font.capitalization: Font.AllUppercase
+        opacity: 0.85
+        bottomPadding: 2
     }
 
-    Flow {
+    ColumnLayout {
         Layout.fillWidth: true
-        spacing: 6
+        spacing: 5
 
         Repeater {
             model: section.values
@@ -45,6 +56,7 @@ ColumnLayout {
             delegate: Chip {
                 required property var modelData
 
+                Layout.fillWidth: true
                 label: modelData.l
                 on: section.picked.indexOf(modelData.v) >= 0
                 onAsked: section.asked(modelData.v)

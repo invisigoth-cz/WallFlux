@@ -142,7 +142,7 @@ Rectangle {
                 wrapMode: Text.WordWrap
             }
 
-            Button {
+            RoundedButton {
                 text: qsTr("Clear")
                 enabled: panel.chosen > 0
                 onClicked: panel.clear()

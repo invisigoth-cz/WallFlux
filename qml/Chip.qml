@@ -29,6 +29,10 @@ Control {
         text: chip.label
         font.pixelSize: 12
         verticalAlignment: Text.AlignVCenter
+        // A chip is as wide as the panel now, so a long name has room --
+        // but the resolutions and one of the genres are long enough to
+        // want this on a narrow window.
+        elide: Text.ElideRight
         color: chip.on ? chip.palette.highlightedText : chip.palette.windowText
     }
 
