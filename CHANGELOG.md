@@ -6,6 +6,41 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-21
+
+### Added
+
+- **Wallpapers that take turns.** Hovering a card in the library shows a
+  tick box; the first tick opens a strip along the bottom with the chosen
+  wallpapers in it, ten to a row, and under them Configure and Save. A
+  saved playlist is started from the Playlists button beside the filters
+  and stopped by clicking it again. Configure holds the name, how often it
+  turns -- hours and minutes -- and whether it shuffles. Measured end to
+  end: three wallpapers, a minute each, turning on the minute.
+- **The first thing WallFlux remembers between runs.** Playlists are
+  written to `playlists.json` under the configuration directory, so they
+  are there at the next start. Nothing is *started* at the next start:
+  the program still comes up as a tray icon and leaves the desktop as it
+  found it.
+
+### Changed
+
+- **The Playlists tab is gone.** A playlist is made out of the grid of
+  installed wallpapers, so it is made in that grid rather than in a tab of
+  its own -- which is how Wallpaper Engine has it.
+
+### Fixed
+
+- **A playlist set to a minute was saved as a quarter of an hour.** The
+  number in the box never reached what was saved: a Controls item bound to
+  a property and also setting that property keeps its value to itself.
+  Measured -- the box read 1 and the property was still 15. The box holds
+  the number now and the window reads it off when it saves, and both
+  numbers can be typed as well as clicked.
+- **The tick box on a card no longer flickers.** It appeared because the
+  pointer was on the card and then took the hover for itself, which hid
+  it, which gave the hover back -- several times a second.
+
 ## [0.6.0] — 2026-10-21
 
 ### Added
@@ -303,7 +338,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.2...v0.5.0
 [0.3.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.1...v0.3.2
