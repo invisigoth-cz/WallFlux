@@ -275,7 +275,13 @@ bool Steamworks::open()
     dispatchInit();
     m_pipe = steamPipe();
 
-    m_pump.setInterval(100);
+    // How often Steam's queue is looked at while something is outstanding.
+    // Every question costs a tick of this before its answer is seen, and
+    // Discover asks one question per row, one after another -- at 100 ms
+    // that was a tenth of a second of waiting per row on top of Steam's own
+    // time. RunFrame on an empty queue is nothing, and the timer stops
+    // itself when there is nothing to wait for.
+    m_pump.setInterval(30);
     connect(&m_pump, &QTimer::timeout, this, &Steamworks::pump, Qt::UniqueConnection);
 
     m_trouble = Fine;
@@ -296,7 +302,7 @@ void Steamworks::retry()
 }
 
 void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
-                        const QStringList &tags, const QString &search)
+                        const QStringList &tags, const QString &search, bool urgent)
 {
     if (!m_ugc)
         return;
@@ -304,7 +310,24 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     // One at a time: a query handle has to be released before the next is
     // made, so a question asked while one is outstanding waits its turn.
     if (m_call != 0) {
-        m_queued.append({key, order, page, tags, search});
+        const Question question{key, order, page, tags, search};
+
+        // A name already waiting is overwritten rather than added to. Only
+        // the last answer under a name is ever shown, so asking for the
+        // ones before it is time spent on nothing.
+        for (Question &already : m_queued) {
+            if (already.key == key) {
+                already = question;
+                return;
+            }
+        }
+
+        // What somebody is waiting for goes in front of the rows Discover
+        // builds for itself.
+        if (urgent)
+            m_queued.prepend(question);
+        else
+            m_queued.append(question);
         return;
     }
 
@@ -497,6 +520,8 @@ void Steamworks::askNext()
     if (m_queued.isEmpty())
         return;
     const Question next = m_queued.takeFirst();
+    // Already at the head of the queue, so its turn is now whatever it was
+    // asked as.
     browse(next.key, next.order, next.page, next.tags, next.search);
 }
 

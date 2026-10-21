@@ -216,6 +216,11 @@ Window {
             TabBar {
                 id: tabs
 
+                // What builds the Steam tab, the once. Here rather than on
+                // the Loader, which cannot both follow the tab and stay
+                // behind when it changes.
+                onCurrentIndexChanged: if (tabs.currentIndex === 1) steam.active = true
+
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
@@ -339,8 +344,14 @@ Window {
                         Layout.fillWidth: true
                         Layout.maximumWidth: 420
                         placeholderText: qsTr("Search wallpapers…")
-                        // Room for the magnifier that sits in it.
+                        // Room for the magnifier that sits in it, and for
+                        // the cross on the other side.
                         leftPadding: 34
+                        rightPadding: 34
+                        // No wallpaper is named at greater length than
+                        // this, and a field that takes a paragraph invites
+                        // one.
+                        maximumLength: 50
 
                         ToolButton {
                             x: 4
@@ -358,6 +369,21 @@ Window {
                             // end up.
                             onClicked: search.forceActiveFocus()
                         }
+
+                        ToolButton {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            icon.name: "edit-clear"
+                            icon.color: search.palette.text
+                            flat: true
+                            focusPolicy: Qt.NoFocus
+                            // Nothing to clear until something is typed.
+                            visible: search.text.length > 0
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Clear the search")
+                            onClicked: search.clear()
+                        }
                     }
 
                     Button {
@@ -366,7 +392,12 @@ Window {
                         text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                                  : qsTr("Filters")
                         icon.name: "view-filter"
-                        onClicked: filters.open()
+                        // Closes it as well as opens it. A popup set to
+                        // close on a press outside its parent does not
+                        // count a press on the button as outside, so
+                        // without this the only way to put it away was to
+                        // click somewhere that meant something else.
+                        onClicked: filters.opened ? filters.close() : filters.open()
 
                         FilterPanel {
                             id: filters
@@ -515,16 +546,25 @@ Window {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.leftMargin: 24
-                    Layout.rightMargin: 24
+                    // Short, because the scrollbar lives in this edge and
+                    // the whole point of it is to be out at the side rather
+                    // than among the pictures.
+                    Layout.rightMargin: 8
                     clip: true
 
                     // As many columns of about 240 as fit, then share the
                     // width out between them: a fixed cell width leaves a
                     // ragged empty strip down the side of every window that
                     // is not an exact multiple of it.
-                    readonly property int columns: Math.max(1, Math.floor(grid.width / 240))
+                    //
+                    // Not the whole width: a strip down the right is left
+                    // for the scrollbar, which otherwise draws over the last
+                    // column of previews and reads as part of the picture.
+                    readonly property int room: grid.width - 30
 
-                    cellWidth: Math.floor(grid.width / grid.columns)
+                    readonly property int columns: Math.max(1, Math.floor(grid.room / 240))
+
+                    cellWidth: Math.floor(grid.room / grid.columns)
                     // The preview is sixteen by nine, and the name sits
                     // under it.
                     cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
@@ -551,7 +591,7 @@ Window {
                         }
                     }
 
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: Scroller {}
                 }
 
                 Label {
@@ -566,11 +606,16 @@ Window {
                 }
             }
 
-            // Steam Workshop. Built when it is being looked at and not
-            // before: it fills rows of previews, which is work nobody asked
-            // for while they are in the library.
+            // Steam Workshop. Built the first time it is looked at and not
+            // before -- it fills rows of previews, which is work nobody
+            // asked for while they are in the library -- and kept from then
+            // on. Built and thrown away with the tab, every switch meant
+            // rebuilding the rows and fetching every preview over the
+            // network again, which is what made both tabs slow to reach.
             Loader {
-                active: tabs.currentIndex === 1
+                id: steam
+
+                active: false
                 source: "WorkshopView.qml"
             }
 

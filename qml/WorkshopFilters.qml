@@ -11,13 +11,20 @@ import WallFlux
 
 /// What to ask the workshop for, in sections of chips.
 ///
+/// A panel beside the grid rather than a popup over it. Fifty-nine chips is
+/// taller than most windows, and a popup that does not fit does not scroll
+/// -- it runs off the bottom edge taking Clear with it, and how much room
+/// there is is something only whoever placed it can know. Standing in the
+/// layout, it is given the height of the page and the grid reflows into
+/// what is left, so the same panel fits a small window and a maximised one.
+///
 /// Unlike the library's filter, which offers only what is on the disk, this
 /// offers the workshop's whole vocabulary -- there are three and a quarter
 /// million wallpapers out there and no way to know what they carry without
 /// asking. Every section is tags as far as Steam is concerned: type, age
 /// rating, picture size and genre are all just tags on a workshop item, so
 /// they go out as one list of required tags.
-Popup {
+Rectangle {
     id: panel
 
     /// Everything ticked, in the one list Steam is given.
@@ -26,12 +33,8 @@ Popup {
     /// How many chips are on, for the button that opens this.
     readonly property int chosen: panel.picked.length
 
-    /// Which of Wallpaper Engine's catalogues to call the tags by. Not
-    /// named `locale`: a Popup has one already and it is FINAL.
+    /// Which of Wallpaper Engine's catalogues to call the tags by.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
-
-    /// How tall this is allowed to get, which only whoever placed it knows.
-    property int room: 600
 
     signal changed()
 
@@ -51,47 +54,39 @@ Popup {
         panel.changed();
     }
 
-    implicitWidth: 420
-    padding: 14
-    modal: false
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    implicitWidth: 300
+    // Shown by the Filters button, which is the only way in.
+    visible: false
 
-    // Fifty-three chips is taller than the window on anything but a very
-    // tall screen, and a popup that overflows does not scroll by itself --
-    // it just runs off the bottom edge, taking Clear with it. Measured:
-    // the whole of TAGS and the footer were unreachable. So it takes what
-    // it is told there is room for and scrolls the rest.
-    //
-    // Told, rather than worked out from `Window`: a Popup is not an Item
-    // and has no Window attached to it, so asking gives undefined and the
-    // height comes out as nothing at all. Measured that too.
-    height: Math.min(panel.implicitContentHeight + panel.topPadding + panel.bottomPadding,
-                     panel.room)
+    color: panel.palette.base
+    border.color: panel.palette.mid
+    border.width: 1
+    radius: 8
 
-    background: Rectangle {
-        color: panel.palette.base
-        border.color: panel.palette.mid
-        border.width: 1
-        radius: 8
-    }
-
-    contentItem: ColumnLayout {
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 14
         spacing: 12
 
         Flickable {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.preferredHeight: body.implicitHeight
 
             contentWidth: width
             contentHeight: body.implicitHeight
             clip: true
-            ScrollBar.vertical: ScrollBar {}
+
+            // Always on, which Scroller is: there are more chips here
+            // than fit any window, and a panel cut off at the bottom edge
+            // with nothing beside it says nothing about there being more.
+            ScrollBar.vertical: Scroller {}
 
             ColumnLayout {
                 id: body
 
-                width: parent.width
+                // Short of the scrollbar, so the bar is not sitting on the
+                // chips it scrolls.
+                width: parent.width - 18
                 spacing: 16
 
                 ChipSection {

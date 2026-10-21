@@ -116,9 +116,18 @@ public:
     /// Asking again while one is outstanding is allowed: the questions are
     /// asked one after another, since a query handle has to be let go of
     /// before the next is made. Asking the same `key` again replaces what
-    /// was under it.
+    /// was under it -- in the queue as well, so three clicks on Next mean
+    /// page four rather than pages two, three and four in turn.
+    ///
+    /// `urgent` is for a question somebody is sitting in front of waiting
+    /// for: it goes ahead of whatever is still queued. Discover asks one
+    /// question per row and builds a dozen rows, and a question takes
+    /// between a tenth of a second and three quarters of one -- measured --
+    /// so a search typed on arriving at the tab sat behind several seconds
+    /// of rows nobody had looked at yet.
     Q_INVOKABLE void browse(const QString &key, Steamworks::Order order, int page = 1,
-                            const QStringList &tags = {}, const QString &search = {});
+                            const QStringList &tags = {}, const QString &search = {},
+                            bool urgent = false);
 
     /// Subscribes to one wallpaper and asks Steam to fetch it now. Nothing
     /// is fetched here: Steam downloads it into the folder it already owns,

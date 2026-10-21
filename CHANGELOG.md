@@ -6,6 +6,60 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Steam tab is quick to reach.** It was built when the tab was
+  switched to and thrown away when it was left, so every switch rebuilt the
+  rows and fetched every preview over the network again. It is built the
+  first time it is looked at and kept from then on.
+- **Previews are asked for at the size they are drawn, and then kept.**
+  Steam's answer is the full-size picture: measured on four of them, 296 kB
+  to 924 kB each, to be drawn a couple of hundred pixels across. The CDN
+  resizes on request -- the same parameters Steam's own pages use -- and the
+  same four came down as 11 kB to 38 kB. What has been fetched is now kept
+  on the disk as well, which Steam allows for a week
+  (`Cache-Control: max-age=604800`, read off the response), so a page
+  already looked at costs no network at all. An animated GIF is the
+  exception: Steam hands those back whole whatever is asked.
+- **A question somebody is waiting for goes first.** Discover asks one
+  question per row and Steam answers them one at a time, measured at 0.08
+  to 0.6 seconds each -- so a search typed on arriving at the tab waited out
+  every row still queued. Searching, paging and sorting now go to the front:
+  measured, a search went from last of six to second, answered in 0.4 s.
+  The same question is never asked twice either, so three clicks on Next
+  mean page four rather than pages two, three and four in turn.
+- **The workshop's filter stands beside the grid** rather than popping up
+  over it, in the same place whether the window is its usual size or
+  maximised, with the grid reflowing into what is left. It was a popup that
+  did not fit: fifty-nine chips is taller than most windows, and the bottom
+  of it ran off the edge taking Clear with it.
+- **Discover fills the page.** Four rows left a maximised window half empty,
+  and with nothing hanging over the bottom edge there was nothing to scroll
+  -- so the rest were never asked for at all. How many rows there are now
+  comes from the height of the window, topped up on every resize, and
+  scrolling adds to it as before.
+- **The scrollbars can be seen, and are out of the way of the pictures.**
+  Fusion's own fades out whenever it is not being touched, so a grid that
+  ran over the bottom edge said nothing about it. Every scrollbar in the
+  picker is now one that stays, is wide enough to aim at, and lives in a
+  strip of its own out by the window's edge rather than drawn over the last
+  column of previews.
+
+### Fixed
+
+- **Both Filters buttons close what they opened.** A popup set to close on a
+  press outside its parent does not count a press on the button that opened
+  it as outside, so the only way to put the library's filter away was to
+  click somewhere that meant something else.
+- **The search fields have a cross to clear them**, and stop at 50
+  characters. Clearing the workshop's search asks Steam again without the
+  word, since what is on the screen is otherwise still the answer to
+  something that is no longer in the field.
+- **Something on the screen says Steam has been asked.** The grid went on
+  showing the last answer at full strength while a new one was on its way,
+  which made searching look like nothing happening at all. It dims while
+  Steam is being asked, with a spinner over it.
+
 ## [0.3.2] — 2026-10-20
 
 ### Fixed

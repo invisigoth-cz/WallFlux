@@ -5,6 +5,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import WallFlux
@@ -34,13 +35,54 @@ Item {
     /// Which of Wallpaper Engine's catalogues to call the tags by.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
+    /// A preview at the size a card actually draws it.
+    ///
+    /// Steam's own answer is the full-size picture, and that is what made
+    /// this tab slow: measured, a preview is 300 kB to 1 MB, fifty of them
+    /// is some fifteen megabytes, and every one of them was being fetched
+    /// to be drawn 224 pixels wide. The CDN resizes on request -- the same
+    /// parameters Steam's own pages use -- and the same four previews came
+    /// down as 11 to 38 kB, between eight and twenty times less. An
+    /// animated GIF it hands back whole and nothing can be done about that.
+    ///
+    /// The card is 224 pixels across, so that is what is asked for -- times
+    /// whatever the screen draws a pixel as, or it would be soft on a
+    /// screen that doubles everything.
+    function thumbnail(url) {
+        if (!url)
+            return "";
+        // Twice the card, because the grid shares its width out between
+        // whole columns: a cell is between one card wide and two, and a
+        // picture asked for at one card's width is soft in the wide case.
+        const across = Math.round(workshop.cardWidth * 2 * Screen.devicePixelRatio);
+        return url + "?imw=" + across + "&imh=" + Math.round(across * 9 / 16)
+             + "&ima=fit&impolicy=Letterbox";
+    }
+
     /// 0 while Discover is showing, 1 while the Workshop grid is.
     property int mode: 0
 
     /// How many of the Discover rows have been built. More are added as the
-    /// page is scrolled, so coming here costs two questions rather than
-    /// twenty-seven.
+    /// page is scrolled, so coming here costs a handful of questions rather
+    /// than twenty-seven.
     property int shown: 4
+
+    /// Tops the rows up to what the page has room for, with two over the
+    /// edge so there is something to scroll towards.
+    ///
+    /// Four of them filled a window of the usual size and left a maximised
+    /// one half empty -- and with nothing hanging over the bottom edge
+    /// there was nothing to scroll, so the rest were never asked for at
+    /// all. Called on every resize, which is what maximising is.
+    function topUp() {
+        // A row is a card, the heading over it and the gap after it.
+        const each = workshop.cardHeight + 60;
+        const need = Math.ceil(workshop.height / each) + 2;
+        if (need > workshop.shown)
+            workshop.shown = Math.min(need, workshop.sections.length);
+    }
+
+    onHeightChanged: workshop.topUp()
 
     /// What Steam gives in one answer. Not ours to choose.
     readonly property int perPage: 50
@@ -110,9 +152,13 @@ Item {
     /// bound: a binding would fire once per property on the way to a new
     /// set of filters, and each firing is a question to Steam.
     function ask() {
-        if (Steamworks.available)
+        if (Steamworks.available) {
+            // Urgent: this is the question somebody is sitting in front of,
+            // and Discover's rows are not. Without it a search typed on
+            // arriving here waited out every row still queued.
             Steamworks.browse("browse", workshop.order, workshop.page,
-                              filters.picked, workshop.search);
+                              filters.picked, workshop.search, true);
+        }
     }
 
     /// Any change to what is being asked starts again at the first page --
@@ -136,7 +182,11 @@ Item {
     // Steam may have been started since WallFlux was. Coming to this tab
     // asks again, so the usual way out of an empty page is to do the
     // obvious thing and come back.
-    Component.onCompleted: if (!Steamworks.available) Steamworks.retry()
+    Component.onCompleted: {
+        workshop.topUp();
+        if (!Steamworks.available)
+            Steamworks.retry();
+    }
 
     // The grid has the same problem the rows do: switched to while Steam
     // was not running, it asked nothing and would never ask again.
@@ -155,7 +205,7 @@ Item {
 
         required property var item
 
-        preview: offered.item.preview
+        preview: workshop.thumbnail(offered.item.preview)
         label: offered.item.title
         telling: offered.hovered
 
@@ -227,6 +277,13 @@ Item {
         readonly property bool answered:
             Steamworks.found[row.section.key] !== undefined
 
+        /// Whether this row's question is already with Steam. `answered`
+        /// alone was not enough: a row built before the workshop was known
+        /// to be reachable asks on being told it is, and measured, that is
+        /// a second helping of the same question while the first is still
+        /// in the air.
+        property bool asked: false
+
         Layout.fillWidth: true
         spacing: 6
 
@@ -236,7 +293,8 @@ Item {
         /// for good, which is what made "Try again" useless the first time
         /// it was tried. `answered` is what stops it being asked twice.
         function ask() {
-            if (Steamworks.available && !row.answered) {
+            if (Steamworks.available && !row.answered && !row.asked) {
+                row.asked = true;
                 Steamworks.browse(row.section.key, row.section.order, 1,
                                   row.section.tag ? [row.section.tag] : []);
             }
@@ -296,8 +354,21 @@ Item {
                 item: modelData
             }
 
-            ScrollBar.horizontal: ScrollBar {}
+            ScrollBar.horizontal: Scroller {}
         }
+    }
+
+    // Steam is being asked something. Measured at a tenth of a second to
+    // three quarters of one for a question it answers at once, and longer
+    // for one that waits its turn -- long enough that without this the
+    // window looked like it had not heard the click.
+    BusyIndicator {
+        anchors.centerIn: parent
+        implicitWidth: 56
+        implicitHeight: 56
+        z: 2
+        running: Steamworks.busy && workshop.mode === 1 && Steamworks.available
+        visible: running
     }
 
     ColumnLayout {
@@ -344,6 +415,11 @@ Item {
                 Layout.preferredWidth: 300
                 placeholderText: qsTr("Search workshop…")
                 leftPadding: 34
+                // Room for the cross on the other side.
+                rightPadding: 34
+                // Nothing Steam is asked is longer than this, and a field
+                // that takes a paragraph invites one.
+                maximumLength: 50
 
                 // Typing is not a question. Steam is asked once the typing
                 // stops, or at once if somebody presses return.
@@ -368,25 +444,40 @@ Item {
                     flat: true
                     focusPolicy: Qt.NoFocus
                 }
+
+                ToolButton {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 2
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon.name: "edit-clear"
+                    icon.color: searchField.palette.text
+                    flat: true
+                    focusPolicy: Qt.NoFocus
+                    visible: searchField.text.length > 0
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Clear the search")
+                    // Emptying the field is only half of it: what is on the
+                    // screen is still the answer to the word that was
+                    // there, so the question is asked again without it.
+                    onClicked: {
+                        searchField.clear();
+                        settle.triggered();
+                    }
+                }
             }
 
             Button {
                 text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                          : qsTr("Filters")
                 icon.name: "view-filter"
+                // The panel stands in the layout beside the grid rather
+                // than popping up over it, so it is in the same place
+                // whatever size the window is -- see WorkshopFilters.qml.
+                // Filtering is about the grid, so this says which view as
+                // well.
                 onClicked: {
                     workshop.mode = 1;
-                    filters.open();
-                }
-
-                WorkshopFilters {
-                    id: filters
-
-                    y: parent.height + 4
-                    // What is left of the window below the button, less a
-                    // margin so it does not sit on the bottom edge.
-                    room: workshop.height - 90
-                    onChanged: workshop.askAfresh()
+                    filters.visible = !filters.visible;
                 }
             }
 
@@ -472,7 +563,10 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.leftMargin: 24
-            Layout.rightMargin: 24
+            // Short, because the scrollbar lives in this edge and the whole
+            // point of it is to be out at the side rather than among the
+            // pictures.
+            Layout.rightMargin: 8
             currentIndex: workshop.mode
 
             // ---- Discover ----
@@ -482,7 +576,7 @@ Item {
                 contentWidth: width
                 contentHeight: rows.implicitHeight
                 clip: true
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: Scroller {}
 
                 // One more handful of rows once the bottom is in sight.
                 // Each row asks Steam for itself, so building them all at
@@ -497,7 +591,8 @@ Item {
                 ColumnLayout {
                     id: rows
 
-                    width: discover.width
+                    // Short of the scrollbar, as the grids are.
+                    width: discover.width - 30
                     spacing: 16
 
                     Repeater {
@@ -523,75 +618,103 @@ Item {
             }
 
             // ---- Workshop ----
-            ColumnLayout {
-                spacing: 10
+            RowLayout {
+                spacing: 14
 
-                GridView {
-                    id: everything
+                WorkshopFilters {
+                    id: filters
 
+                    Layout.fillHeight: true
+                    Layout.bottomMargin: 8
+                    onChanged: workshop.askAfresh()
+                }
+
+                ColumnLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
+                    spacing: 10
 
-                    // The same sum the library's grid does: as many columns
-                    // of about the card width as fit, then the width shared
-                    // out between them.
-                    readonly property int columns:
-                        Math.max(1, Math.floor(everything.width / workshop.cardWidth))
+                    GridView {
+                        id: everything
 
-                    cellWidth: Math.floor(everything.width / everything.columns)
-                    cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
-                    model: workshop.grid
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
 
-                    ScrollBar.vertical: ScrollBar {}
+                        // The same sum the library's grid does: as many columns
+                        // of about the card width as fit, then the width shared
+                        // out between them -- less a strip down the right for
+                        // the scrollbar to live in, since a bar drawn over the
+                        // last column of previews reads as part of the picture.
+                        readonly property int room: everything.width - 30
 
-                    delegate: Item {
-                        required property var modelData
+                        readonly property int columns:
+                            Math.max(1, Math.floor(everything.room / workshop.cardWidth))
 
-                        width: everything.cellWidth
-                        height: everything.cellHeight
+                        cellWidth: Math.floor(everything.room / everything.columns)
+                        cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+                        model: workshop.grid
 
-                        WorkshopCard {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            item: parent.modelData
+                        // Out of the way while a new answer is on its way:
+                        // what is on the screen is the answer to the last
+                        // question, and leaving it at full strength under a
+                        // new one is what made searching look like nothing
+                        // happening at all.
+                        opacity: Steamworks.busy ? 0.35 : 1
+                        Behavior on opacity {
+                            NumberAnimation { duration: 120 }
                         }
-                    }
-                }
 
-                Label {
-                    Layout.alignment: Qt.AlignHCenter
-                    visible: workshop.grid.length === 0
-                    text: Steamworks.busy ? qsTr("Asking Steam…")
-                                          : qsTr("Nothing matches all of that")
-                    opacity: 0.5
-                    font.pixelSize: 12
-                }
+                        ScrollBar.vertical: Scroller {}
 
-                RowLayout {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.bottomMargin: 8
-                    spacing: 12
-                    visible: workshop.grid.length > 0
+                        delegate: Item {
+                            required property var modelData
 
-                    Button {
-                        text: qsTr("Previous")
-                        icon.name: "go-previous"
-                        enabled: workshop.page > 1 && !Steamworks.busy
-                        onClicked: { workshop.page -= 1; workshop.ask(); }
+                            width: everything.cellWidth
+                            height: everything.cellHeight
+
+                            WorkshopCard {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                item: parent.modelData
+                            }
+                        }
                     }
 
                     Label {
-                        text: qsTr("Page %1 of %2").arg(workshop.page).arg(workshop.pages)
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: workshop.grid.length === 0
+                        text: Steamworks.busy ? qsTr("Asking Steam…")
+                                              : qsTr("Nothing matches all of that")
+                        opacity: 0.5
                         font.pixelSize: 12
-                        opacity: 0.7
                     }
 
-                    Button {
-                        text: qsTr("Next")
-                        icon.name: "go-next"
-                        enabled: workshop.page < workshop.pages && !Steamworks.busy
-                        onClicked: { workshop.page += 1; workshop.ask(); }
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.bottomMargin: 8
+                        spacing: 12
+                        visible: workshop.grid.length > 0
+
+                        Button {
+                            text: qsTr("Previous")
+                            icon.name: "go-previous"
+                            enabled: workshop.page > 1 && !Steamworks.busy
+                            onClicked: { workshop.page -= 1; workshop.ask(); }
+                        }
+
+                        Label {
+                            text: qsTr("Page %1 of %2").arg(workshop.page).arg(workshop.pages)
+                            font.pixelSize: 12
+                            opacity: 0.7
+                        }
+
+                        Button {
+                            text: qsTr("Next")
+                            icon.name: "go-next"
+                            enabled: workshop.page < workshop.pages && !Steamworks.busy
+                            onClicked: { workshop.page += 1; workshop.ask(); }
+                        }
                     }
                 }
             }

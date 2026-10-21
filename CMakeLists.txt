@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # speaks no other language and Wayland tells a window nothing about the ones
 # in front of it.
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core DBus Gui LinguistTools Multimedia Qml Quick WebEngineQuick Widgets)
+    Core DBus Gui LinguistTools Multimedia Network Qml Quick WebEngineQuick Widgets)
 
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
@@ -43,6 +43,7 @@ set_source_files_properties(qml/WorkshopView.qml PROPERTIES QT_RESOURCE_ALIAS Wo
 set_source_files_properties(qml/WorkshopFilters.qml PROPERTIES QT_RESOURCE_ALIAS WorkshopFilters.qml)
 set_source_files_properties(qml/Chip.qml PROPERTIES QT_RESOURCE_ALIAS Chip.qml)
 set_source_files_properties(qml/ChipSection.qml PROPERTIES QT_RESOURCE_ALIAS ChipSection.qml)
+set_source_files_properties(qml/Scroller.qml PROPERTIES QT_RESOURCE_ALIAS Scroller.qml)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -63,6 +64,7 @@ qt_add_qml_module(wallflux
         qml/WorkshopFilters.qml
         qml/Chip.qml
         qml/ChipSection.qml
+        qml/Scroller.qml
     SOURCES
         src/otheraudio.h
         src/otheraudio.cpp
@@ -91,6 +93,9 @@ target_link_libraries(wallflux PRIVATE
     Qt6::DBus
     Qt6::Gui
     Qt6::Multimedia
+    # The previews the workshop shows come off Steam's own servers, and
+    # keeping them is what makes a page already looked at cost nothing.
+    Qt6::Network
     Qt6::Qml
     Qt6::Quick
     Qt6::WebEngineQuick

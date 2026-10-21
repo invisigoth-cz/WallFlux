@@ -9,11 +9,44 @@
 #include <QApplication>
 #include <QDir>
 #include <QLockFile>
+#include <QNetworkAccessManager>
+#include <QNetworkDiskCache>
 #include <QQmlApplicationEngine>
+#include <QQmlNetworkAccessManagerFactory>
 #include <QLoggingCategory>
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QtWebEngineQuick>
+
+namespace {
+
+/// What QML fetches pictures with, with somewhere to keep them.
+///
+/// QML's own keeps nothing: every workshop preview is fetched again every
+/// time it is shown, and the workshop answers fifty pictures at a time --
+/// so turning back a page, or coming back to the tab, meant the whole lot
+/// over the network again. Steam says a preview is good for a week
+/// (`Cache-Control: max-age=604800`, read off the response), which is
+/// exactly what a cache on the disk is for.
+class CachingNetwork : public QQmlNetworkAccessManagerFactory
+{
+public:
+    QNetworkAccessManager *create(QObject *parent) override
+    {
+        auto *network = new QNetworkAccessManager(parent);
+        auto *cache = new QNetworkDiskCache(network);
+        cache->setCacheDirectory(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                                 + QStringLiteral("/previews"));
+        // A preview is some twenty kilobytes at the size the cards ask for,
+        // so this is room for thousands of them and still nothing much on
+        // a disk. Qt throws the oldest out when it fills.
+        cache->setMaximumCacheSize(200 * 1024 * 1024);
+        network->setCache(cache);
+        return network;
+    }
+};
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -65,7 +98,12 @@ int main(int argc, char *argv[])
     // so there is nothing to register here: the engine builds it when the QML
     // first asks for `Wallpapers`, and it scans the Steam folders as it is
     // built.
+    // Before the engine, so it is still there when the engine goes: the
+    // engine is handed the factory and does not take it over.
+    CachingNetwork network;
+
     QQmlApplicationEngine engine;
+    engine.setNetworkAccessManagerFactory(&network);
 
     // Without this the program would sit there with no window and no reason
     // given when the QML fails to load.
