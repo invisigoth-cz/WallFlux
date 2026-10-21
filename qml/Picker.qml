@@ -387,23 +387,13 @@ Window {
                     }
 
                     Button {
-                        id: filterButton
-
                         text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                                  : qsTr("Filters")
                         icon.name: "view-filter"
-                        // Closes it as well as opens it. A popup set to
-                        // close on a press outside its parent does not
-                        // count a press on the button as outside, so
-                        // without this the only way to put it away was to
-                        // click somewhere that meant something else.
-                        onClicked: filters.opened ? filters.close() : filters.open()
-
-                        FilterPanel {
-                            id: filters
-
-                            y: filterButton.height + 4
-                        }
+                        // One click shows the panel beside the grid, the
+                        // next puts it away -- the same button in the same
+                        // window as the workshop's, behaving the same way.
+                        onClicked: filters.visible = !filters.visible
                     }
 
                     Button {
@@ -412,12 +402,19 @@ Window {
                         text: picker.sortLabels[picker.sortBy]
                         icon.name: picker.ascending ? "view-sort-ascending"
                                                     : "view-sort-descending"
-                        onClicked: orderMenu.open()
+                        onClicked: orderMenu.opened ? orderMenu.close() : orderMenu.open()
 
                         Menu {
                             id: orderMenu
 
                             y: order.height + 4
+                            // Without this the menu closes on the press
+                            // and the click that follows opens it again,
+                            // which looks like a flicker and leaves it
+                            // showing. Pressing the button that owns it is
+                            // not pressing outside it.
+                            closePolicy: Popup.CloseOnEscape
+                                         | Popup.CloseOnPressOutsideParent
                             implicitWidth: 240
                             padding: 6
 
@@ -540,69 +537,90 @@ Window {
                     }
                 }
 
-                GridView {
-                    id: grid
-
+                // The filter stands beside the grid, which reflows into
+                // what is left of the window.
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.leftMargin: 24
-                    // Short, because the scrollbar lives in this edge and
-                    // the whole point of it is to be out at the side rather
-                    // than among the pictures.
+                    // Short on this side, because the scrollbar lives in
+                    // this edge and the whole point of it is to be out at
+                    // the side rather than among the pictures.
                     Layout.rightMargin: 8
-                    clip: true
+                    spacing: 14
 
-                    // As many columns of about 240 as fit, then share the
-                    // width out between them: a fixed cell width leaves a
-                    // ragged empty strip down the side of every window that
-                    // is not an exact multiple of it.
-                    //
-                    // Not the whole width: a strip down the right is left
-                    // for the scrollbar, which otherwise draws over the last
-                    // column of previews and reads as part of the picture.
-                    readonly property int room: grid.width - 30
+                    FilterPanel {
+                        id: filters
 
-                    readonly property int columns: Math.max(1, Math.floor(grid.room / 240))
-
-                    cellWidth: Math.floor(grid.room / grid.columns)
-                    // The preview is sixteen by nine, and the name sits
-                    // under it.
-                    cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
-
-                    model: picker.shown
-
-                    delegate: Item {
-                        id: cell
-
-                        required property var modelData
-
-                        width: grid.cellWidth
-                        height: grid.cellHeight
-
-                        WallpaperCard {
-                            anchors.fill: parent
-                            anchors.margins: 8
-                            wallpaper: cell.modelData
-                            volume: picker.volume
-                            muted: picker.muted
-                            onChose: (id) => picker.chose(id)
-                            onVolumeAsked: (volume) => picker.volume = volume
-                            onMuteAsked: picker.muted = !picker.muted
-                        }
+                        Layout.fillHeight: true
+                        Layout.bottomMargin: 8
                     }
 
-                    ScrollBar.vertical: Scroller {}
-                }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 14
 
-                Label {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.margins: 24
-                    visible: picker.shown.length === 0
-                    horizontalAlignment: Text.AlignHCenter
-                    opacity: 0.65
-                    text: Wallpapers.wallpapers.length === 0
-                          ? qsTr("Nothing installed.\nWallpaper Engine's workshop folder is empty or missing.")
-                          : qsTr("Nothing here by that name.")
+                        GridView {
+                            id: grid
+
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            // As many columns of about 240 as fit, then share the
+                            // width out between them: a fixed cell width leaves a
+                            // ragged empty strip down the side of every window that
+                            // is not an exact multiple of it.
+                            //
+                            // Not the whole width: a strip down the right is left
+                            // for the scrollbar, which otherwise draws over the last
+                            // column of previews and reads as part of the picture.
+                            readonly property int room: grid.width - 30
+
+                            readonly property int columns: Math.max(1, Math.floor(grid.room / 240))
+
+                            cellWidth: Math.floor(grid.room / grid.columns)
+                            // The preview is sixteen by nine, and the name sits
+                            // under it.
+                            cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+
+                            model: picker.shown
+
+                            delegate: Item {
+                                id: cell
+
+                                required property var modelData
+
+                                width: grid.cellWidth
+                                height: grid.cellHeight
+
+                                WallpaperCard {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    wallpaper: cell.modelData
+                                    volume: picker.volume
+                                    muted: picker.muted
+                                    onChose: (id) => picker.chose(id)
+                                    onVolumeAsked: (volume) => picker.volume = volume
+                                    onMuteAsked: picker.muted = !picker.muted
+                                }
+                            }
+
+                            ScrollBar.vertical: Scroller {}
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.margins: 24
+                            visible: picker.shown.length === 0
+                            horizontalAlignment: Text.AlignHCenter
+                            opacity: 0.65
+                            text: Wallpapers.wallpapers.length === 0
+                                  ? qsTr("Nothing installed.\nWallpaper Engine's workshop folder is empty or missing.")
+                                  : qsTr("Nothing here by that name.")
+                        }
+                    }
                 }
             }
 

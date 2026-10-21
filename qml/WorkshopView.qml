@@ -339,7 +339,10 @@ Item {
         // of it without taking the height to show it.
         ListView {
             Layout.fillWidth: true
-            Layout.preferredHeight: workshop.cardHeight
+            // The cards, and a strip under them for the scrollbar: a bar
+            // drawn along the bottom edge of the view sat across the
+            // bottom of every preview in the row.
+            Layout.preferredHeight: workshop.cardHeight + 20
             visible: row.items.length > 0
             orientation: ListView.Horizontal
             spacing: 12
@@ -350,7 +353,7 @@ Item {
                 required property var modelData
 
                 width: workshop.cardWidth
-                height: ListView.view.height
+                height: workshop.cardHeight
                 item: modelData
             }
 
@@ -486,7 +489,7 @@ Item {
 
                 text: workshop.orderName(workshop.order)
                 icon.name: "view-sort-descending"
-                onClicked: sorting.open()
+                onClicked: sorting.opened ? sorting.close() : sorting.open()
 
                 // Plain items rather than checkable ones: a checkable
                 // Controls item told what to be and also clicked breaks the
@@ -496,6 +499,11 @@ Item {
                     id: sorting
 
                     y: sortButton.height
+                    // Without this the menu closes on the press and the
+                    // click that follows opens it again, which looks like
+                    // a flicker and leaves it showing. Pressing the button
+                    // that owns it is not pressing outside it.
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
                     Repeater {
                         model: [Steamworks.Trending, Steamworks.Newest,

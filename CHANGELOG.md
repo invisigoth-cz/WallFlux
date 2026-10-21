@@ -28,11 +28,12 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   measured, a search went from last of six to second, answered in 0.4 s.
   The same question is never asked twice either, so three clicks on Next
   mean page four rather than pages two, three and four in turn.
-- **The workshop's filter stands beside the grid** rather than popping up
-  over it, in the same place whether the window is its usual size or
-  maximised, with the grid reflowing into what is left. It was a popup that
-  did not fit: fifty-nine chips is taller than most windows, and the bottom
-  of it ran off the edge taking Clear with it.
+- **Both filters stand beside the grid** rather than popping up over it, in
+  the same place whether the window is its usual size or maximised, with the
+  grid reflowing into what is left and a second click on Filters putting the
+  panel away. They were popups that did not fit: the workshop's fifty-nine
+  chips are taller than most windows, and the bottom of the panel ran off
+  the edge taking Clear with it.
 - **Discover fills the page.** Four rows left a maximised window half empty,
   and with nothing hanging over the bottom edge there was nothing to scroll
   -- so the rest were never asked for at all. How many rows there are now
@@ -47,10 +48,12 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **Both Filters buttons close what they opened.** A popup set to close on a
-  press outside its parent does not count a press on the button that opened
-  it as outside, so the only way to put the library's filter away was to
+- **The sort menus close on a second click.** They were closing on the
+  press, and the click that followed opened them again -- so the menu
+  flickered and stayed on the screen, and the only way to put it away was to
   click somewhere that meant something else.
+- **A Discover row's scrollbar is under its cards** rather than drawn across
+  the bottom of every preview in the row.
 - **The search fields have a cross to clear them**, and stop at 50
   characters. Clearing the workshop's search asks Steam again without the
   word, since what is on the screen is otherwise still the answer to

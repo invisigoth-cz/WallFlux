@@ -11,13 +11,15 @@ import WallFlux
 
 /// What to leave out of the grid, in sections of chips.
 ///
-/// Holds the choice itself, because a popup stays while the grid is rebuilt
-/// around it. The picker reads the four lists and does the leaving out.
+/// A panel beside the grid rather than a popup over it, which is what the
+/// workshop's filter is -- the same button in the same window should not
+/// behave two different ways. It holds the choice itself and the picker
+/// reads the four lists and does the leaving out.
 ///
 /// Every value in here comes out of project.json beside the wallpaper --
 /// tags, content rating and type are all written there by Wallpaper Engine,
 /// so nothing is asked of Steam or of the workshop over the network.
-Popup {
+Rectangle {
     id: panel
 
     /// What is ticked in each section. Values rather than labels, since one
@@ -48,9 +50,9 @@ Popup {
     /// a property rather than worked out inside `labelled`, so the chips
     /// rebuild when the language is switched.
     ///
-    /// Not called `locale`: a Popup has one of those already and it is
-    /// FINAL, so the name takes the whole application down at load with
-    /// "Cannot override FINAL property" -- not just this file.
+    /// Called what the workshop's filter calls it, which was named that
+    /// because a Popup has a `locale` already and it is FINAL -- the name
+    /// took the whole application down at load.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
     /// The tags the installed wallpapers actually carry, rather than all 65
@@ -94,79 +96,98 @@ Popup {
         return [{ v: "", l: qsTr("Unknown") }].concat(seen.map((s) => ({ v: s, l: s })));
     }
 
-    implicitWidth: 360
-    padding: 14
-    modal: false
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    implicitWidth: 300
+    // Shown by the Filters button, which is the only way in.
+    visible: false
 
-    background: Rectangle {
-        color: panel.palette.base
-        border.color: panel.palette.mid
-        border.width: 1
-        radius: 8
-    }
+    color: panel.palette.base
+    border.color: panel.palette.mid
+    border.width: 1
+    radius: 8
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 16
+        anchors.margins: 14
+        spacing: 12
 
-        ChipSection {
-            title: qsTr("GENRE")
-            values: panel.genreValues
-            picked: panel.tags
-            onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
+        Flickable {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+            contentWidth: width
+            contentHeight: body.implicitHeight
+            clip: true
+            ScrollBar.vertical: Scroller {}
+
+            ColumnLayout {
+                id: body
+
+                // Short of the scrollbar, so the bar is not sitting on the
+                // chips it scrolls.
+                width: parent.width - 18
+                spacing: 16
+
+                ChipSection {
+                    title: qsTr("GENRE")
+                    values: panel.genreValues
+                    picked: panel.tags
+                    onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
+                }
+
+                ChipSection {
+                    title: qsTr("TAGS")
+                    values: panel.tagValues
+                    picked: panel.tags
+                    onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
+                }
+
+                ChipSection {
+                    title: qsTr("AGE RATING")
+                    // Steam's three words, which is what a wallpaper's rating is
+                    // kept as whether it came off the disk or out of a query -- so
+                    // the same chip means the same thing in both filters.
+                    values: Tags.labelled(Tags.ratings, panel.catalogue)
+                    picked: panel.ratings
+                    onAsked: (value) => panel.ratings = panel.toggled(panel.ratings, value)
+                }
+
+                ChipSection {
+                    title: qsTr("COMPATIBILITY")
+                    // Nothing answers this yet: it is for when a wallpaper fetched
+                    // from the workshop has been tried and found to work or not.
+                    // Shown and switched off, so the plan is visible and nothing
+                    // pretends to do anything.
+                    enabled: false
+                    values: [{ v: "perfect", l: qsTr("Perfect") },
+                             { v: "minor", l: qsTr("Minor issues") },
+                             { v: "major", l: qsTr("Major issues") },
+                             { v: "broken", l: qsTr("Broken") },
+                             { v: "unknown", l: qsTr("Unknown") }]
+                    picked: []
+                    onAsked: (value) => {}
+                }
+
+                ChipSection {
+                    title: qsTr("RESOLUTION")
+                    values: panel.resolutionValues
+                    picked: panel.resolutions
+                    onAsked: (value) => panel.resolutions = panel.toggled(panel.resolutions, value)
+                }
+
+                ChipSection {
+                    title: qsTr("TYPE")
+                    values: [{ v: WallpaperKind.Scene, l: qsTr("Scene") },
+                             { v: WallpaperKind.Video, l: qsTr("Video") },
+                             { v: WallpaperKind.Web, l: qsTr("Web") },
+                             { v: WallpaperKind.Application, l: qsTr("Application") }]
+                    picked: panel.kinds
+                    onAsked: (value) => panel.kinds = panel.toggled(panel.kinds, value)
+                }
+            }
         }
 
-        ChipSection {
-            title: qsTr("TAGS")
-            values: panel.tagValues
-            picked: panel.tags
-            onAsked: (value) => panel.tags = panel.toggled(panel.tags, value)
-        }
-
-        ChipSection {
-            title: qsTr("AGE RATING")
-            // Steam's three words, which is what a wallpaper's rating is
-            // kept as whether it came off the disk or out of a query -- so
-            // the same chip means the same thing in both filters.
-            values: Tags.labelled(Tags.ratings, panel.catalogue)
-            picked: panel.ratings
-            onAsked: (value) => panel.ratings = panel.toggled(panel.ratings, value)
-        }
-
-        ChipSection {
-            title: qsTr("COMPATIBILITY")
-            // Nothing answers this yet: it is for when a wallpaper fetched
-            // from the workshop has been tried and found to work or not.
-            // Shown and switched off, so the plan is visible and nothing
-            // pretends to do anything.
-            enabled: false
-            values: [{ v: "perfect", l: qsTr("Perfect") },
-                     { v: "minor", l: qsTr("Minor issues") },
-                     { v: "major", l: qsTr("Major issues") },
-                     { v: "broken", l: qsTr("Broken") },
-                     { v: "unknown", l: qsTr("Unknown") }]
-            picked: []
-            onAsked: (value) => {}
-        }
-
-        ChipSection {
-            title: qsTr("RESOLUTION")
-            values: panel.resolutionValues
-            picked: panel.resolutions
-            onAsked: (value) => panel.resolutions = panel.toggled(panel.resolutions, value)
-        }
-
-        ChipSection {
-            title: qsTr("TYPE")
-            values: [{ v: WallpaperKind.Scene, l: qsTr("Scene") },
-                     { v: WallpaperKind.Video, l: qsTr("Video") },
-                     { v: WallpaperKind.Web, l: qsTr("Web") },
-                     { v: WallpaperKind.Application, l: qsTr("Application") }]
-            picked: panel.kinds
-            onAsked: (value) => panel.kinds = panel.toggled(panel.kinds, value)
-        }
-
+        // Outside the Flickable on purpose: a Clear button that has to be
+        // scrolled to is a Clear button nobody finds.
         RowLayout {
             Layout.fillWidth: true
 
@@ -174,7 +195,6 @@ Popup {
 
             Button {
                 text: qsTr("Clear")
-                flat: true
                 enabled: panel.chosen > 0
                 onClicked: panel.clear()
             }
