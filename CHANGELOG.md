@@ -6,6 +6,42 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-21
+
+### Added
+
+- **A panel beside the grid saying what a wallpaper is.** A click opens it,
+  in either tab: the picture, the name, and what is known -- the kind, the
+  picture size, what it takes up on disk, the age rating, whether it
+  answers to sound, the tags, the workshop's own number for it. What
+  cannot be answered is left out rather than shown as a dash.
+- **Downloading works again**, which it had not since the hover panel was
+  taken out: a green Download at the foot of the panel, with the progress
+  on it, turning itself over to "Installed" the moment the folder watcher
+  notices the wallpaper arrive.
+- **A wallpaper can be given back.** A red Remove, with a line under it
+  saying what will happen. It is two halves: Steam is told to unsubscribe,
+  and the folder is deleted -- because Steam does not do the second half.
+  Measured: unsubscribing answers `k_EResultOK` and the item leaves the
+  subscribed list, and the folder then stays where it is, both while
+  WallFlux runs and a minute after it has quit. Nothing is deleted that is
+  not the workshop folder named after that id under a root this program
+  scanned, and there is a test for the refusal.
+- **An asset or a preset says what it is.** They carry no type of their
+  own -- an asset is a part to build a scene out of, a preset is somebody
+  else's wallpaper plus settings -- so the library has nothing to list them
+  as and does not. The panel now says so under the Download button rather
+  than letting one download quietly into nothing.
+
+### Changed
+
+- **One click picks a wallpaper out, two put it on the desktop.** One click
+  used to do both, which with a panel to fill meant reading about a
+  wallpaper changed what was on the screen.
+- **Nothing is drawn over a preview on hover.** What that panel carried is
+  what the panel beside the grid now says, which was the point of taking it
+  out in 0.5.0.
+
 ## [0.5.0] — 2026-10-21
 
 ### Changed
@@ -267,7 +303,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.2...v0.5.0
 [0.3.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.0...v0.3.1
