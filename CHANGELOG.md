@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-21
+
 ### Changed
 
 - **The Steam tab is quick to reach.** It was built when the tab was
@@ -39,6 +41,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   -- so the rest were never asked for at all. How many rows there are now
   comes from the height of the window, topped up on every resize, and
   scrolling adds to it as before.
+- **"See more" opens that row whole.** It used to be a trip to the Workshop
+  with the row's tag ticked, which left somebody who had asked for Trending
+  looking at a page of filters and a sort button. It is its own page now:
+  the section's name with the way back beside it, the wallpapers under it,
+  and paging through all of them.
+- **Discover offers nothing to filter or sort by.** Neither does a section
+  opened out of it. They are pages somebody else picked, and the Workshop
+  is the one place in this window where a question is put together by hand
+  -- which is how Wallpaper Engine's own has it.
 - **The scrollbars can be seen, and are out of the way of the pictures.**
   Fusion's own fades out whenever it is not being touched, so a grid that
   ran over the bottom edge said nothing about it. Every scrollbar in the
@@ -54,6 +65,10 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   click somewhere that meant something else.
 - **A Discover row's scrollbar is under its cards** rather than drawn across
   the bottom of every preview in the row.
+- **The grid starts at the top of a new answer.** Page two opened where page
+  one had been scrolled to, and so did a section opened out of Discover.
+- **The Czech catalogue has the new words in it.** Three strings had been
+  added to the window without being added to it.
 - **The search fields have a cross to clear them**, and stop at 50
   characters. Clearing the workshop's search asks Steam again without the
   word, since what is on the screen is otherwise still the answer to
@@ -215,7 +230,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.2.0...v0.3.0

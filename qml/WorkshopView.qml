@@ -14,9 +14,10 @@ import WallFlux
 ///
 /// **Discover** is rows picked for you -- Trending, New, and one per genre
 /// -- a few cards each, with more rows built as the page is scrolled rather
-/// than all twenty-seven asked for at once. "See more" on a row is not a
-/// third view: it switches to Workshop with that row's tag already ticked,
-/// which is the same thing with paging and the filters showing.
+/// than all twenty-seven asked for at once. Nothing here is filtered or
+/// sorted by hand: that is what the Workshop is for. "See more" on a row
+/// opens that row whole, as a page of its own with the section's name at
+/// the top and the way back beside it.
 ///
 /// **Workshop** is one grid: search, filters and fifty at a time.
 ///
@@ -59,8 +60,20 @@ Item {
              + "&ima=fit&impolicy=Letterbox";
     }
 
-    /// 0 while Discover is showing, 1 while the Workshop grid is.
+    /// 0 while Discover is showing, 1 while the Workshop grid is, 2 while
+    /// one of Discover's sections is open whole.
     property int mode: 0
+
+    /// Which section is open, while one is. The same entry out of
+    /// `sections`, so it carries its own name, order and tag.
+    property var section: null
+
+    /// Which mode the answer now in the grid was asked for, since both the
+    /// Workshop and a section are shown in the same grid. Coming back to
+    /// the Workshop from a section has to ask again, or it would go on
+    /// showing the section's answer under the Workshop's controls. -1 until
+    /// anything has been asked at all.
+    property int answering: -1
 
     /// How many of the Discover rows have been built. More are added as the
     /// page is scrolled, so coming here costs a handful of questions rather
@@ -152,13 +165,25 @@ Item {
     /// bound: a binding would fire once per property on the way to a new
     /// set of filters, and each firing is a question to Steam.
     function ask() {
-        if (Steamworks.available) {
-            // Urgent: this is the question somebody is sitting in front of,
-            // and Discover's rows are not. Without it a search typed on
-            // arriving here waited out every row still queued.
-            Steamworks.browse("browse", workshop.order, workshop.page,
-                              filters.picked, workshop.search, true);
-        }
+        if (!Steamworks.available)
+            return;
+
+        // A section is its own question -- the row's tag and the row's
+        // order -- and has nothing to do with what the Workshop's filter
+        // and sort happen to say.
+        const open = workshop.mode === 2 && workshop.section;
+        workshop.answering = workshop.mode;
+
+        // Urgent: this is the question somebody is sitting in front of, and
+        // Discover's rows are not. Without it a search typed on arriving
+        // here waited out every row still queued.
+        Steamworks.browse("browse",
+                          open ? workshop.section.order : workshop.order,
+                          workshop.page,
+                          open ? (workshop.section.tag ? [workshop.section.tag] : [])
+                               : filters.picked,
+                          open ? "" : workshop.search,
+                          true);
     }
 
     /// Any change to what is being asked starts again at the first page --
@@ -168,16 +193,22 @@ Item {
         workshop.ask();
     }
 
-    /// Switches to the grid showing one row's tag, which is what "See more"
-    /// means. Replaces whatever was ticked: the row was the whole request.
-    function seeMore(tag) {
-        filters.picked = tag ? [tag] : [];
+    /// Opens one of Discover's rows whole, which is what "See more" means.
+    ///
+    /// Not a trip to the Workshop with the row's tag ticked, which is what
+    /// it used to be: this is still Discover, so there is nothing to filter
+    /// or sort by hand -- only the section, its wallpapers, and the way
+    /// back.
+    function seeMore(section) {
+        workshop.section = section;
+        filters.visible = false;
+        searchField.text = "";
         workshop.search = "";
-        workshop.mode = 1;
+        workshop.mode = 2;
         workshop.askAfresh();
     }
 
-    onModeChanged: if (workshop.mode === 1 && workshop.grid.length === 0) workshop.ask()
+    onModeChanged: if (workshop.mode === 1 && workshop.answering !== 1) workshop.askAfresh()
 
     // Steam may have been started since WallFlux was. Coming to this tab
     // asks again, so the usual way out of an empty page is to do the
@@ -322,7 +353,7 @@ Item {
                 icon.name: "go-next"
                 flat: true
                 enabled: row.items.length > 0
-                onClicked: workshop.seeMore(row.section.tag)
+                onClicked: workshop.seeMore(row.section)
             }
 
             Item { Layout.fillWidth: true }
@@ -370,7 +401,7 @@ Item {
         implicitWidth: 56
         implicitHeight: 56
         z: 2
-        running: Steamworks.busy && workshop.mode === 1 && Steamworks.available
+        running: Steamworks.busy && workshop.mode !== 0 && Steamworks.available
         visible: running
     }
 
@@ -395,7 +426,10 @@ Item {
                 icon.name: "compass"
                 icon.color: workshop.palette.windowText
                 checkable: true
-                checked: workshop.mode === 0
+                // A section opened out of Discover is still Discover, so
+                // this stays lit while one is showing -- and clicking it is
+                // the way back out.
+                checked: workshop.mode !== 1
                 ButtonGroup.group: layouts
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Discover")
@@ -473,15 +507,15 @@ Item {
                 text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                          : qsTr("Filters")
                 icon.name: "view-filter"
+                // Only the Workshop has filters. Discover is a page of
+                // rows somebody else picked, and a section out of it is
+                // that row whole -- neither is something to narrow by
+                // hand, which is what the Workshop is there for.
+                visible: workshop.mode === 1
                 // The panel stands in the layout beside the grid rather
                 // than popping up over it, so it is in the same place
                 // whatever size the window is -- see WorkshopFilters.qml.
-                // Filtering is about the grid, so this says which view as
-                // well.
-                onClicked: {
-                    workshop.mode = 1;
-                    filters.visible = !filters.visible;
-                }
+                onClicked: filters.visible = !filters.visible
             }
 
             Button {
@@ -489,6 +523,9 @@ Item {
 
                 text: workshop.orderName(workshop.order)
                 icon.name: "view-sort-descending"
+                // As with the filters: a section is already in the order
+                // its row is in.
+                visible: workshop.mode === 1
                 onClicked: sorting.opened ? sorting.close() : sorting.open()
 
                 // Plain items rather than checkable ones: a checkable
@@ -575,7 +612,7 @@ Item {
             // point of it is to be out at the side rather than among the
             // pictures.
             Layout.rightMargin: 8
-            currentIndex: workshop.mode
+            currentIndex: workshop.mode === 0 ? 0 : 1
 
             // ---- Discover ----
             Flickable {
@@ -642,6 +679,34 @@ Item {
                     Layout.fillHeight: true
                     spacing: 10
 
+                    // Where you are, and the way out of it. Only a section
+                    // has either: the Workshop is where the controls above
+                    // say it is.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        spacing: 8
+                        visible: workshop.mode === 2
+
+                        ToolButton {
+                            icon.name: "go-previous"
+                            icon.color: workshop.palette.windowText
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Back to Discover")
+                            onClicked: workshop.mode = 0
+                        }
+
+                        Label {
+                            // The section's own name and nothing else. The
+                            // arrow beside it says where it goes back to.
+                            text: workshop.section ? workshop.section.title : ""
+                            font.pixelSize: 17
+                            font.weight: Font.DemiBold
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
                     GridView {
                         id: everything
 
@@ -662,6 +727,11 @@ Item {
                         cellWidth: Math.floor(everything.room / everything.columns)
                         cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
                         model: workshop.grid
+
+                        // A new answer starts at its own beginning. Page
+                        // two opened where page one had been scrolled to,
+                        // and so did a section opened out of Discover.
+                        onModelChanged: everything.positionViewAtBeginning()
 
                         // Out of the way while a new answer is on its way:
                         // what is on the screen is the answer to the last
