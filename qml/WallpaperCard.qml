@@ -5,6 +5,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Fusion
 import WallFlux
 
 /// One wallpaper in the picker's grid: the preview, and the click that
@@ -29,6 +30,12 @@ Item {
     /// that made reading about a wallpaper change the desktop.
     signal applied(string id)
 
+    /// Whether this one is in the playlist being put together.
+    property bool ticked: false
+
+    /// Asked for when the tick box is clicked.
+    signal tickAsked()
+
     /// Whether this is one a click can do something with. A scene wallpaper
     /// is listed and nothing more.
     readonly property bool usable: card.wallpaper.playable
@@ -37,7 +44,20 @@ Item {
     // to say it exists, not to be chosen.
     opacity: card.usable ? 1 : 0.4
 
+    /// Whether the pointer is anywhere on this card.
+    ///
+    /// A handler rather than the tile's own hover: the tick box has a
+    /// mouse area of its own, and the moment the pointer crossed onto it
+    /// the tile stopped being hovered, which hid the box, which put the
+    /// pointer back on the tile -- a flicker several times a second.
+    /// Handlers do not take the pointer away from one another.
+    HoverHandler {
+        id: pointer
+    }
+
     PreviewTile {
+        id: tile
+
         anchors.fill: parent
         preview: card.wallpaper.preview
         label: card.wallpaper.title
@@ -47,5 +67,41 @@ Item {
         band: card.usable ? "#2ecc71" : "#e8a33d"
         onClicked: card.chose(card.wallpaper.id)
         onDoubleClicked: card.applied(card.wallpaper.id)
+    }
+
+    /// The tick that puts this one in a playlist.
+    ///
+    /// Out of the way until the pointer is on the card, and then it stays
+    /// as long as it is ticked. Only on a wallpaper that can be played: a
+    /// playlist of scene wallpapers would be a quarter of an hour of
+    /// nothing happening.
+    Rectangle {
+        id: box
+
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.margins: 14
+        width: 22
+        height: 22
+        radius: 6
+        visible: card.usable && (pointer.hovered || card.ticked)
+        color: card.ticked ? card.palette.highlight
+                           : Qt.alpha(card.palette.window, 0.8)
+        border.width: 1
+        border.color: card.ticked ? card.palette.highlight : card.palette.mid
+
+        Label {
+            anchors.centerIn: parent
+            text: "✓"
+            font.pixelSize: 13
+            visible: card.ticked
+            color: card.palette.highlightedText
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: card.tickAsked()
+        }
     }
 }

@@ -45,10 +45,18 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Steamworks library is opened again rather than once at startup, so
   starting Steam afterwards is advice worth taking.
 - **English and Czech**, switched in the window without a restart.
+- **Wallpapers that take turns.** Hovering a card shows a tick box; the
+  first tick opens a strip along the bottom of the library with the chosen
+  wallpapers in it, ten to a row, and under them Configure and Save.
+  Configure is the name, how often it turns (hours and minutes) and
+  whether it shuffles. A saved playlist is started from the Playlists
+  button beside the filters, and stopped by clicking it again. There is no
+  Playlists tab: a playlist is made out of the grid, so it is made in the
+  grid.
 - **A picker with its sections across the top**: Installed, Steam,
-  Playlists, Displays, Settings, centred. The first two are built; the
-  three others say "Coming soon" and are there because naming them is what
-  decides where the next piece of work goes.
+  Displays, Settings, centred. The first two are built; the other two say
+  "Coming soon" and are there because naming them is what decides where
+  the next piece of work goes.
 - **A panel beside the grid saying what a wallpaper is.** A click opens
   it, in either tab: the picture, the name, and what is known -- the kind,
   the picture size, what it takes up, the age rating, whether it answers to
@@ -79,6 +87,8 @@ src/wallpapercore.h   WallpaperKind::Kind, Wallpaper (Q_GADGET), WallpaperCore
 src/wallpapercore.cpp scanning Steam's folders, reading project.json
 src/language.h        Language: the EN/CZ switch, and what it has to call
 src/language.cpp      installs a QTranslator and retranslates the engine
+src/playlists.h       Playlists: wallpapers that take turns, and the file
+src/playlists.cpp     reading and writing ~/.config/WallFlux/wallflux/
 src/otheraudio.h      OtherAudio: is another program using the speakers
 src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
 src/steamworks.h      Steamworks: can the workshop be asked, and the way in
@@ -92,6 +102,7 @@ qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band and its name
 qml/Details.qml       what is known about one wallpaper, beside the grid --
                       shared, with the one button handed in as a child
+qml/PlaylistBar.qml   the playlist being put together, along the bottom
 qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
 qml/PreviewTile.qml   a preview and a name -- the shape of a card, shared
                       by the library and the workshop
@@ -136,6 +147,17 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 - `Tags`: `genres` (25), `types`, `ratings`, `resolutions`, `properties`;
   `name(tag, locale)`, `labelled(tags, locale)`
 
+`Playlists` is another singleton of that module, and the only thing in
+this program that remembers anything between runs:
+
+- `all` (each `{ name, ids, hours, minutes, shuffle }`), `playing` (a name
+  or empty); `save(name, ids, hours, minutes, shuffle)`, `forget(name)`,
+  `named(name)`, `start(name)`, `stop()`
+- it plays nothing itself: it says `plays(id)` and `Main.qml` hands that to
+  `Wallpapers.select()`, the same place a click on a card goes
+- the file is `playlists.json` under `QStandardPaths::AppConfigLocation`,
+  which on this machine is `~/.config/WallFlux/wallflux/`
+
 `OtherAudio` and `ScreenCover` are singletons of the same module, each with
 one property -- `playing` and `covered` -- and no business of their own in
 what the answer is used for. `Main.qml` puts the three together in one line:
@@ -171,6 +193,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **Nothing plays at startup.** The program comes up as a tray icon and the
   desktop keeps the wallpaper it already had until somebody picks one. The
   choice is not remembered between runs, by design.
+
+  **Playlists are the one exception, and were asked for as one.** A saved
+  playlist is written to a file and is there at the next start -- but it is
+  not started at the next start, which keeps the rule above intact.
 - **The tray icon is the whole interface.** Not a CLI, not a Plasma plugin;
   both were considered and turned down.
 - **Layer-shell is set up in C++**, from `main()`, before the window reaches
@@ -261,6 +287,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   take the language as an argument it never reads, so that reading it is
   what makes the binding rebuild. It looks like a pointless parameter and
   it is not.
+- **A `MouseArea` takes hover away from the one under it**, so anything
+  shown *because* the pointer is there and holding a mouse area of its own
+  flickers several times a second: the tick box on a card appeared, took
+  the hover, which hid it, which gave the hover back. A `HoverHandler` on
+  the card answers "is the pointer anywhere on this" without taking it
+  from anybody.
 - **`Row` is a QtQuick type.** An inline `component Row:` shadows it
   silently and whatever used the real one breaks somewhere else entirely.
   Named `DiscoverRow` for that reason.
@@ -437,8 +469,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   downloaded by Steam in one go, and their creation time and last change are
   the same minute -- so ordering by "date added" barely reorders anything on
   this machine. It is not broken; there is nothing to sort by.
-- **A checkable Controls item cannot both be told what to be and asked what
-  it is.** Bind `checked` to a property and set that property from
+- **A Controls item cannot both be told what to be and asked what it is.**
+  Caught twice now. The sort menu was the first; the second was the
+  playlist's `SpinBox`, written as `value: picker.playlistMinutes` with
+  `onValueModified: picker.playlistMinutes = value`. The box read 1 and
+  the property was still 15, so a playlist set to a minute was saved as a
+  quarter of an hour and sat there changing nothing. The control holds the
+  number and the window reads it off when it saves. Bind `checked` to a property and set that property from
   `onToggled`, and the click breaks the binding it was reading. The sort menu
   holds its own state instead and the window reads it off the items; the
   filter chips are a rectangle and a mouse area, which have no state of their
@@ -569,23 +606,25 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **A list of wallpapers that take turns.** The tab is there and says
-   "Coming soon". Asked for: a person's own selection out of the grid, each
-   one on the desktop for a quarter of an hour, swapped on a schedule while
-   the program sits in the panel. Nothing in the sound or cover behaviour
-   stands in the way -- neither of them cares which wallpaper is playing.
-
-2. **Displays and Settings**, the two remaining tabs. Nothing has been
+1. **Displays and Settings**, the two remaining tabs. Nothing has been
    asked for in either of them yet.
 
-3. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
+2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-4. **Scene wallpapers**, the packed ones. A direction to decide, not an
+3. **Scene wallpapers**, the packed ones. A direction to decide, not an
    afternoon's work.
 
 ### Small things seen and left
 
+- A saved playlist cannot be deleted or renamed from the window. Saving
+  under a name that is taken replaces it, which covers changing one; there
+  is nowhere to throw one away.
+- Wallpaper Engine's playlist settings also offer a fade between
+  wallpapers and how long it takes, changing when a video ends, and
+  whether to always begin with the first one. None are here: the first
+  needs two wallpapers drawn at once, which `Main.qml` cannot do, and a
+  switch that does nothing is worse than no switch.
 - The volume for a video went with the panel that used to be drawn over a
   preview: the only sound control now is the one in the footer, which is on
   or off. Nobody has asked for it back.

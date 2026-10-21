@@ -44,6 +44,57 @@ Window {
     /// The one the details panel is about, or null while it is shut.
     property var inspected: null
 
+    /// The wallpapers ticked for a playlist, as ids in the order they were
+    /// ticked. Nothing is remembered about this between runs: a playlist
+    /// is remembered once it is saved and not before.
+    property var inPlaylist: []
+
+    /// What the playlist being put together is called and whether it is
+    /// shuffled, until it is saved.
+    ///
+    /// How often it turns is not here: the two spin boxes hold that
+    /// themselves and the window reads it off them when it saves. Binding
+    /// their `value` to a property and setting that property back from the
+    /// control is the trap this project was already caught by once -- a
+    /// control told what to be and also asked what it is ends up fighting
+    /// its own binding. Measured again here: the box read 1 and the
+    /// property was still 15, so a playlist set to one minute was saved as
+    /// a quarter of an hour and sat there not changing anything.
+    property string playlistName: ""
+    property bool playlistShuffle: false
+
+    /// The ticked wallpapers themselves, in the order they were ticked --
+    /// which is what the strip along the bottom draws.
+    readonly property var playlistItems: {
+        const all = Wallpapers.wallpapers;
+        const held = [];
+        for (let i = 0; i < picker.inPlaylist.length; ++i) {
+            for (let w = 0; w < all.length; ++w) {
+                if (all[w].id === picker.inPlaylist[i]) {
+                    held.push(all[w]);
+                    break;
+                }
+            }
+        }
+        return held;
+    }
+
+    /// Puts one in or takes it out.
+    function tick(id) {
+        picker.inPlaylist = picker.inPlaylist.indexOf(id) >= 0
+            ? picker.inPlaylist.filter((kept) => kept !== id)
+            : picker.inPlaylist.concat([id]);
+    }
+
+    /// Writes the playlist down under whatever it is called, giving it a
+    /// name if nobody has.
+    function savePlaylist() {
+        if (picker.playlistName === "")
+            picker.playlistName = qsTr("Playlist %1").arg(Playlists.all.length + 1);
+        Playlists.save(picker.playlistName, picker.inPlaylist, everyHours.value,
+                       everyMinutes.value, picker.playlistShuffle);
+    }
+
     /// Which of Wallpaper Engine's catalogues to call the tags by.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
@@ -145,8 +196,6 @@ Window {
           blurb: qsTr("Wallpapers downloaded to your system") },
         { name: qsTr("Steam"),
           blurb: qsTr("Browse wallpapers from Steam Workshop") },
-        { name: qsTr("Playlists"),
-          blurb: qsTr("Wallpapers that take turns on a schedule") },
         { name: qsTr("Displays"),
           blurb: qsTr("Which wallpaper goes on which screen") },
         { name: qsTr("Settings"),
@@ -265,6 +314,134 @@ Window {
         onActivated: picker.hide()
     }
 
+    /// How the playlist being put together runs.
+    ///
+    /// Wallpaper Engine's own has more in it -- a fade between wallpapers
+    /// and how long it takes, changing when a video ends, whether to
+    /// always begin with the first one. None of those are here, because
+    /// none of them can be done yet and a switch that does nothing is
+    /// worse than no switch.
+    Popup {
+        id: settings
+
+        anchors.centerIn: parent
+        modal: true
+        padding: 18
+        // Wide enough for the row of two numbers and their words, which
+        // is what decides it: narrower and they run out past the edge.
+        implicitWidth: 560
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: picker.palette.base
+            border.color: picker.palette.mid
+            border.width: 1
+            radius: 8
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            Label {
+                text: qsTr("Playlist settings")
+                font.pixelSize: 17
+                font.weight: Font.Bold
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 14
+                rowSpacing: 12
+
+                Label { text: qsTr("Name") }
+
+                TextField {
+                    Layout.fillWidth: true
+                    text: picker.playlistName
+                    placeholderText: qsTr("Playlist %1").arg(Playlists.all.length + 1)
+                    maximumLength: 50
+                    onTextEdited: picker.playlistName = text
+                }
+
+                Label { text: qsTr("Change every") }
+
+                RowLayout {
+                    spacing: 8
+
+                    SpinBox {
+                        id: everyHours
+
+                        Layout.preferredWidth: 96
+                        from: 0
+                        to: 23
+                        // Holds the number itself; see the note on
+                        // `playlistName` for why it is bound to nothing.
+                        // Typed as well as clicked, because clicking an
+                        // arrow fourteen times to say "one minute" is not
+                        // a way to ask for anything.
+                        editable: true
+                        value: 0
+                    }
+                    Label { text: qsTr("hours") }
+
+                    SpinBox {
+                        id: everyMinutes
+
+                        Layout.preferredWidth: 96
+                        from: 0
+                        to: 59
+                        editable: true
+                        value: 15
+                    }
+                    Label { text: qsTr("minutes") }
+
+                    Item { Layout.fillWidth: true }
+                }
+
+                Label { text: qsTr("Order") }
+
+                RowLayout {
+                    spacing: 6
+
+                    Chip {
+                        label: qsTr("In order")
+                        on: !picker.playlistShuffle
+                        onAsked: picker.playlistShuffle = false
+                    }
+                    Chip {
+                        label: qsTr("Shuffled")
+                        on: picker.playlistShuffle
+                        onAsked: picker.playlistShuffle = true
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                font.pixelSize: 11
+                opacity: 0.8
+                // Said plainly, because nought would otherwise look like a
+                // setting rather than a mistake.
+                text: qsTr("A minute at the least, however short this is set.")
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+
+                Item { Layout.fillWidth: true }
+
+                RoundedButton {
+                    text: qsTr("Confirm")
+                    accent: "#2e9e5b"
+                    onClicked: settings.close()
+                }
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -320,16 +497,11 @@ Window {
                 }
                 Section {
                     entry: picker.sections[2]
-                    icon.name: "view-media-playlist"
-                    icon.color: picker.palette.buttonText
-                }
-                Section {
-                    entry: picker.sections[3]
                     icon.name: "preferences-desktop-display"
                     icon.color: picker.palette.buttonText
                 }
                 Section {
-                    entry: picker.sections[4]
+                    entry: picker.sections[3]
                     icon.name: "settings-configure"
                     icon.color: picker.palette.buttonText
                 }
@@ -473,6 +645,43 @@ Window {
                         // next puts it away -- the same button in the same
                         // window as the workshop's, behaving the same way.
                         onClicked: filters.visible = !filters.visible
+                    }
+
+                    RoundedButton {
+                        id: lists
+
+                        text: Playlists.playing !== "" ? Playlists.playing
+                                                       : qsTr("Playlists")
+                        icon.name: "view-media-playlist"
+                        // Nothing to offer until one has been saved.
+                        enabled: Playlists.all.length > 0
+                        onClicked: saved.opened ? saved.close() : saved.open()
+
+                        Menu {
+                            id: saved
+
+                            y: lists.height + 4
+                            closePolicy: Popup.CloseOnEscape
+                                         | Popup.CloseOnPressOutsideParent
+
+                            Repeater {
+                                model: Playlists.all
+
+                                delegate: MenuItem {
+                                    required property var modelData
+
+                                    text: (Playlists.playing === modelData.name ? "▶  " : "")
+                                          + modelData.name
+                                          + " (" + modelData.ids.length + ")"
+                                    onTriggered: {
+                                        if (Playlists.playing === modelData.name)
+                                            Playlists.stop();
+                                        else
+                                            Playlists.start(modelData.name);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     RoundedButton {
@@ -680,6 +889,8 @@ Window {
                                     wallpaper: cell.modelData
                                     onChose: (id) => picker.inspect(id)
                                     onApplied: (id) => picker.apply(id)
+                                    ticked: picker.inPlaylist.indexOf(cell.modelData.id) >= 0
+                                    onTickAsked: picker.tick(cell.modelData.id)
                                 }
                             }
 
@@ -763,6 +974,22 @@ Window {
                         }
                     }
                 }
+
+                // The playlist being put together. It is here and not in a
+                // tab of its own because a playlist is made out of the
+                // grid above it -- the tab that used to say "Coming soon"
+                // is gone.
+                PlaylistBar {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 8
+                    Layout.bottomMargin: 8
+                    visible: picker.inPlaylist.length > 0
+                    items: picker.playlistItems
+                    onDropped: (id) => picker.tick(id)
+                    onSaveAsked: picker.savePlaylist()
+                    onConfigureAsked: settings.open()
+                }
             }
 
             // Steam Workshop. Built the first time it is looked at and not
@@ -789,7 +1016,6 @@ Window {
                 text: qsTr("Coming soon")
             }
 
-            Later {}
             Later {}
             Later {}
         }

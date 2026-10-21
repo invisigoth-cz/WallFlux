@@ -91,6 +91,16 @@ Window {
         onChose: (id) => Wallpapers.select(id)
     }
 
+    /// A playlist puts its wallpapers on the desktop the same way a click
+    /// does -- it says which one and nothing more, so there is one place
+    /// where a wallpaper starts playing rather than two.
+    Connections {
+        target: Playlists
+        function onPlays(id) {
+            Wallpapers.select(id);
+        }
+    }
+
     // The only thing a person can click: the wallpaper itself is in the
     // background layer and transparent to input, so without this there would
     // be no way to reach the picker at all.

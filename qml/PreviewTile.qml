@@ -26,6 +26,10 @@ Item {
     /// The band around the preview. Transparent for no band at all.
     property color band: "transparent"
 
+    /// Whether the pointer is over the preview. What the tick box on a
+    /// card and the cross on a playlist's strip are shown by.
+    readonly property alias hovered: hover.containsMouse
+
     /// Whether a click means anything here.
     property bool clickable: true
 
@@ -87,6 +91,8 @@ Item {
             }
 
             MouseArea {
+                id: hover
+
                 anchors.fill: parent
                 // What draws the cursor over the preview, which is the one
                 // thing this says about whether a click is worth making.
