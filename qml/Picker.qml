@@ -41,6 +41,85 @@ Window {
     /// picker is a window full of pictures.
     property bool dark: true
 
+    /// The one the details panel is about, or null while it is shut.
+    property var inspected: null
+
+    /// Which of Wallpaper Engine's catalogues to call the tags by.
+    readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
+
+    /// What a wallpaper is, in a word.
+    ///
+    /// `language` is read and not used. A binding that gets its words out
+    /// of a function is not rebuilt when the language changes unless the
+    /// language is an argument it takes -- it looks like a pointless
+    /// parameter and it is not.
+    function kindName(kind, language) {
+        switch (kind) {
+        case WallpaperKind.Web: return qsTr("Web page");
+        case WallpaperKind.Video: return qsTr("Video");
+        case WallpaperKind.Scene: return qsTr("Scene");
+        case WallpaperKind.Application: return qsTr("Application");
+        }
+        return qsTr("Unknown");
+    }
+
+    /// What this window knows about one wallpaper, in the order it reads.
+    /// What it cannot answer is left out rather than shown as a dash.
+    function factsFor(one, language) {
+        if (!one)
+            return [];
+
+        const told = [{ label: qsTr("Type"), value: picker.kindName(one.kind, language) }];
+        if (one.resolution)
+            told.push({ label: qsTr("Resolution"), value: one.resolution });
+        if (one.sizeOnDisk)
+            told.push({ label: qsTr("Size on disk"), value: one.sizeOnDisk });
+        if (one.rating)
+            told.push({ label: qsTr("Age rating"),
+                        value: Tags.name(one.rating, picker.catalogue) });
+
+        // Out of the tags, which is the only place that could say so --
+        // and on this machine no installed wallpaper carries the tag at
+        // all, so "not stated" is the honest answer rather than "no".
+        told.push({ label: qsTr("Audio responsive"),
+                    value: one.tags.indexOf("Audio responsive") >= 0 ? qsTr("Yes")
+                                                                     : qsTr("Not stated") });
+        if (one.tags.length > 0) {
+            told.push({ label: qsTr("Tags"),
+                        value: one.tags.map((tag) => Tags.name(tag, picker.catalogue))
+                                       .join(", ") });
+        }
+        told.push({ label: qsTr("Workshop id"), value: one.id });
+        return told;
+    }
+
+    /// Shows one wallpaper in the panel. One click says which wallpaper
+    /// is being talked about and nothing more -- putting it on the desktop
+    /// takes two, since otherwise reading about one changed what was on
+    /// the screen.
+    function inspect(id) {
+        const all = Wallpapers.wallpapers;
+        for (let i = 0; i < all.length; ++i) {
+            if (all[i].id === id) {
+                picker.inspected = all[i];
+                break;
+            }
+        }
+        details.visible = true;
+    }
+
+    /// Puts one on the desktop, which is what a second click means. Never
+    /// for a scene wallpaper: there is nothing here that can draw one.
+    function apply(id) {
+        const all = Wallpapers.wallpapers;
+        for (let i = 0; i < all.length; ++i) {
+            if (all[i].id === id && all[i].playable) {
+                picker.chose(id);
+                return;
+            }
+        }
+    }
+
     /// What the grid is ordered by, and which way round. Both are held by
     /// the menu items themselves rather than set from them: a checkable
     /// Controls item that is told what to be and also says what it is ends
@@ -599,7 +678,8 @@ Window {
                                     anchors.fill: parent
                                     anchors.margins: 8
                                     wallpaper: cell.modelData
-                                    onChose: (id) => picker.chose(id)
+                                    onChose: (id) => picker.inspect(id)
+                                    onApplied: (id) => picker.apply(id)
                                 }
                             }
 
@@ -615,6 +695,71 @@ Window {
                             text: Wallpapers.wallpapers.length === 0
                                   ? qsTr("Nothing installed.\nWallpaper Engine's workshop folder is empty or missing.")
                                   : qsTr("Nothing here by that name.")
+                        }
+                    }
+
+                    Details {
+                        id: details
+
+                        Layout.fillHeight: true
+                        Layout.bottomMargin: 8
+                        preview: picker.inspected ? picker.inspected.preview : ""
+                        title: picker.inspected ? picker.inspected.title : ""
+                        facts: picker.factsFor(picker.inspected, Language.czech)
+                        onClosed: {
+                            details.visible = false;
+                            picker.inspected = null;
+                        }
+
+                        RoundedButton {
+                            id: giveBack
+
+                            Layout.fillWidth: true
+                            text: qsTr("Remove")
+                            icon.name: "edit-delete"
+                            // Red, because it is the one thing in this
+                            // window that takes something away.
+                            accent: "#c0392b"
+                            // Steam owns the folder, so Steam is what takes
+                            // it away. Without it running there is nothing
+                            // this could do but delete somebody's files
+                            // behind Steam's back, which would come back
+                            // the next time it looked.
+                            enabled: Steamworks.available
+                            onClicked: {
+                                const going = picker.inspected;
+                                if (!going)
+                                    return;
+                                // Taking the file out from under a player
+                                // that is drawing it leaves a black screen
+                                // with no reason given.
+                                if (Wallpapers.current.id === going.id)
+                                    Wallpapers.clear();
+                                // Two halves of the same thing: Steam
+                                // lets go of it, and the folder goes.
+                                // Steam leaves the folder exactly where it
+                                // is -- measured -- so the second half is
+                                // ours.
+                                Steamworks.remove(going.id);
+                                Wallpapers.discard(going.id);
+                                details.visible = false;
+                                picker.inspected = null;
+                            }
+                        }
+
+                        // Under the button rather than in a bubble that
+                        // has to be hovered for: what a button is about to
+                        // do to somebody's disk should be readable without
+                        // asking for it.
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            font.pixelSize: 11
+                            opacity: 0.8
+                            text: Steamworks.available
+                                ? qsTr("Steam unsubscribes it and takes the folder away. "
+                                       + "Subscribing to it again is all it takes to have it back.")
+                                : qsTr("Steam has to be running to give a wallpaper back.")
                         }
                     }
                 }

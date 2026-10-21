@@ -16,6 +16,11 @@ import QtQuick.Controls.Fusion
 Button {
     id: button
 
+    /// The colour of a button that is the thing to do on the page it is
+    /// on -- Download, and nothing else so far. Transparent leaves it
+    /// looking like every other button, which is what all the rest want.
+    property color accent: "transparent"
+
     // Room around the words. Fusion sets the text almost against the edge,
     // which on a rounded button looks like the corners are eating it.
     leftPadding: 16
@@ -29,9 +34,11 @@ Button {
         // A flat button is a word on the window background until it is
         // pointed at, which is the whole of being flat.
         visible: !button.flat || button.down || button.hovered
-        color: button.down ? Qt.darker(button.palette.button, 1.25)
-             : button.hovered ? Qt.lighter(button.palette.button, 1.12)
-                              : button.palette.button
+        readonly property color face: button.accent.a > 0 ? button.accent
+                                                          : button.palette.button
+        color: button.down ? Qt.darker(face, 1.25)
+             : button.hovered ? Qt.lighter(face, 1.12)
+                              : face
         border.width: button.flat ? 0 : 1
         border.color: button.visualFocus ? button.palette.highlight
                                          : button.palette.mid

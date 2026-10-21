@@ -61,6 +61,82 @@ Item {
     /// one of Discover's sections is open whole.
     property int mode: 0
 
+    /// The one the details panel is about, or null while it is shut.
+    property var inspected: null
+
+    /// Shows one wallpaper of the workshop in the panel. There is nothing
+    /// else a click on a card out here can mean: it is not ours to play.
+    function inspect(item) {
+        workshop.inspected = item;
+        shown.visible = true;
+    }
+
+    /// Whether this is one of the workshop's building blocks rather than
+    /// a wallpaper of its own.
+    ///
+    /// An asset and a preset carry no `type` in their project.json -- an
+    /// asset is a part for somebody to build a scene out of, a preset is
+    /// somebody else's wallpaper plus a file of settings -- so the library
+    /// has nothing to list them as and does not. Found the expensive way:
+    /// one was downloaded, the button said Downloaded, and it turned up
+    /// nowhere.
+    function notAWallpaper(item) {
+        if (!item)
+            return false;
+        return item.tags.indexOf("Asset") >= 0 || item.tags.indexOf("Preset") >= 0;
+    }
+
+    /// The first of `tags` that is one of `list`, in words -- which is how
+    /// the type, the age rating and the picture size are read, since Steam
+    /// keeps all three as tags like any other.
+    ///
+    /// `language` is read and not used; see `wordsFor` below for why.
+    function firstOf(tags, list, language) {
+        for (let i = 0; i < tags.length; ++i) {
+            if (list.indexOf(tags[i]) >= 0)
+                return Tags.name(tags[i], workshop.catalogue);
+        }
+        return "";
+    }
+
+    /// What the workshop says about one of its own, in the order it reads.
+    function factsFor(item, language) {
+        if (!item)
+            return [];
+
+        const told = [];
+        const kind = workshop.firstOf(item.tags, Tags.types, language);
+        if (kind)
+            told.push({ label: qsTr("Type"), value: kind });
+
+        const size = workshop.firstOf(item.tags, Tags.resolutions, language);
+        if (size)
+            told.push({ label: qsTr("Resolution"), value: size });
+
+        if (item.bytes > 0) {
+            told.push({ label: qsTr("Size"),
+                        value: qsTr("%1 MB").arg(Math.round(item.bytes / 1048576)) });
+        }
+
+        const rating = workshop.firstOf(item.tags, Tags.ratings, language);
+        if (rating)
+            told.push({ label: qsTr("Age rating"), value: rating });
+
+        told.push({ label: qsTr("Audio responsive"),
+                    value: item.tags.indexOf("Audio responsive") >= 0 ? qsTr("Yes")
+                                                                      : qsTr("Not stated") });
+
+        if (item.votesUp > 0)
+            told.push({ label: qsTr("Likes"), value: String(item.votesUp) });
+
+        if (item.tags.length > 0)
+            told.push({ label: qsTr("Tags"), value: Tags.labelled(item.tags, workshop.catalogue)
+                                                        .map((one) => one.l).join(", ") });
+
+        told.push({ label: qsTr("Workshop id"), value: item.id });
+        return told;
+    }
+
     /// Which section is open, while one is. The same entry out of
     /// `sections`, so it carries its own name, order and tag.
     property var section: null
@@ -298,6 +374,7 @@ Item {
 
         preview: offered.item.preview
         label: offered.item.title
+        onClicked: workshop.inspect(offered.item)
     }
 
     /// One Discover row: a heading, a sideways strip of cards, and a way
@@ -606,7 +683,7 @@ Item {
             Item { Layout.fillHeight: true }
         }
 
-        StackLayout {
+        RowLayout {
             visible: Steamworks.available
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -615,240 +692,306 @@ Item {
             // point of it is to be out at the side rather than among the
             // pictures.
             Layout.rightMargin: 8
-            currentIndex: workshop.mode === 0 ? 0 : 1
+            spacing: 14
 
-            // ---- Discover ----
-            Flickable {
-                id: discover
+            StackLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                currentIndex: workshop.mode === 0 ? 0 : 1
 
-                contentWidth: width
-                contentHeight: rows.implicitHeight
-                clip: true
-                ScrollBar.vertical: Scroller {}
+                // ---- Discover ----
+                Flickable {
+                    id: discover
 
-                // One more handful of rows once the bottom is in sight.
-                // Each row asks Steam for itself, so building them all at
-                // once would be twenty-seven questions nobody has looked at.
-                onContentYChanged: {
-                    if (workshop.shown < workshop.sections.length
-                        && contentY + height > contentHeight - 400) {
-                        workshop.shown += 2;
-                    }
-                }
+                    contentWidth: width
+                    contentHeight: rows.implicitHeight
+                    clip: true
+                    ScrollBar.vertical: Scroller {}
 
-                ColumnLayout {
-                    id: rows
-
-                    // Short of the scrollbar, as the grids are.
-                    width: discover.width - 30
-                    spacing: 16
-
-                    Repeater {
-                        model: workshop.sections.slice(0, workshop.shown)
-
-                        delegate: DiscoverRow {
-                            required property var modelData
-
-                            section: modelData
+                    // One more handful of rows once the bottom is in sight.
+                    // Each row asks Steam for itself, so building them all at
+                    // once would be twenty-seven questions nobody has looked at.
+                    onContentYChanged: {
+                        if (workshop.shown < workshop.sections.length
+                            && contentY + height > contentHeight - 400) {
+                            workshop.shown += 2;
                         }
                     }
 
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.topMargin: 8
+                    ColumnLayout {
+                        id: rows
+
+                        // Short of the scrollbar, as the grids are.
+                        width: discover.width - 30
+                        spacing: 16
+
+                        Repeater {
+                            model: workshop.sections.slice(0, workshop.shown)
+
+                            delegate: DiscoverRow {
+                                required property var modelData
+
+                                section: modelData
+                            }
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.topMargin: 8
+                            Layout.bottomMargin: 8
+                            visible: workshop.shown < workshop.sections.length
+                            text: qsTr("More rows as you scroll")
+                            font.pixelSize: 11
+                            opacity: 0.45
+                        }
+                    }
+                }
+
+                // ---- Workshop ----
+                RowLayout {
+                    spacing: 14
+
+                    WorkshopFilters {
+                        id: filters
+
+                        Layout.fillHeight: true
                         Layout.bottomMargin: 8
-                        visible: workshop.shown < workshop.sections.length
-                        text: qsTr("More rows as you scroll")
-                        font.pixelSize: 11
-                        opacity: 0.45
+                        onChanged: workshop.askAfresh()
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 10
+
+                        // Where you are, and the way out of it. Only a section
+                        // has either: the Workshop is where the controls above
+                        // say it is.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 2
+                            spacing: 8
+                            visible: workshop.mode === 2
+
+                            RoundedTool {
+                                icon.name: "go-previous"
+                                icon.color: workshop.palette.windowText
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Back to Discover")
+                                onClicked: workshop.mode = 0
+                            }
+
+                            Label {
+                                // The section's own name and nothing else. The
+                                // arrow beside it says where it goes back to.
+                                text: workshop.section ? workshop.section.title : ""
+                                font.pixelSize: 17
+                                font.weight: Font.DemiBold
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        GridView {
+                            id: everything
+
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            // The same sum the library's grid does: as many columns
+                            // of about the card width as fit, then the width shared
+                            // out between them -- less a strip down the right for
+                            // the scrollbar to live in, since a bar drawn over the
+                            // last column of previews reads as part of the picture.
+                            readonly property int room: everything.width - 30
+
+                            readonly property int columns:
+                                Math.max(1, Math.floor(everything.room / workshop.cardWidth))
+
+                            cellWidth: Math.floor(everything.room / everything.columns)
+                            cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+                            model: workshop.grid
+
+                            // A new answer starts at its own beginning. Page
+                            // two opened where page one had been scrolled to,
+                            // and so did a section opened out of Discover.
+                            onModelChanged: everything.positionViewAtBeginning()
+
+                            // Out of the way while a new answer is on its way:
+                            // what is on the screen is the answer to the last
+                            // question, and leaving it at full strength under a
+                            // new one is what made searching look like nothing
+                            // happening at all.
+                            opacity: Steamworks.busy ? 0.35 : 1
+                            Behavior on opacity {
+                                NumberAnimation { duration: 120 }
+                            }
+
+                            ScrollBar.vertical: Scroller {}
+
+                            delegate: Item {
+                                required property var modelData
+
+                                width: everything.cellWidth
+                                height: everything.cellHeight
+
+                                WorkshopCard {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    item: parent.modelData
+                                }
+                            }
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: workshop.grid.length === 0
+                            text: Steamworks.busy ? qsTr("Asking Steam…")
+                                                  : qsTr("Nothing matches all of that")
+                            opacity: 0.5
+                            font.pixelSize: 12
+                        }
+
+                        // The pages themselves rather than Previous and Next:
+                        // a number somebody can aim at, the two ends, and
+                        // arrows that are not there when there is nothing that
+                        // way.
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.bottomMargin: 8
+                            spacing: 4
+                            visible: workshop.grid.length > 0
+
+                            RoundedTool {
+                                icon.name: "go-first"
+                                icon.color: workshop.palette.windowText
+                                visible: workshop.page > 1
+                                enabled: !Steamworks.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("First page")
+                                onClicked: workshop.turnTo(1)
+                            }
+
+                            RoundedTool {
+                                icon.name: "go-previous"
+                                icon.color: workshop.palette.windowText
+                                visible: workshop.page > 1
+                                enabled: !Steamworks.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Previous page")
+                                onClicked: workshop.turnTo(workshop.page - 1)
+                            }
+
+                            Repeater {
+                                model: workshop.pageRow
+
+                                delegate: RowLayout {
+                                    id: entry
+
+                                    required property int modelData
+
+                                    spacing: 0
+
+                                    Label {
+                                        visible: entry.modelData === 0
+                                        text: "…"
+                                        leftPadding: 4
+                                        rightPadding: 4
+                                        opacity: 0.5
+                                    }
+
+                                    Chip {
+                                        visible: entry.modelData !== 0
+                                        enabled: !Steamworks.busy
+                                        label: entry.modelData
+                                        on: entry.modelData === workshop.page
+                                        onAsked: workshop.turnTo(entry.modelData)
+                                    }
+                                }
+                            }
+
+                            RoundedTool {
+                                icon.name: "go-next"
+                                icon.color: workshop.palette.windowText
+                                visible: workshop.page < workshop.pages
+                                enabled: !Steamworks.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Next page")
+                                onClicked: workshop.turnTo(workshop.page + 1)
+                            }
+
+                            RoundedTool {
+                                icon.name: "go-last"
+                                icon.color: workshop.palette.windowText
+                                visible: workshop.page < workshop.pages
+                                enabled: !Steamworks.busy
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Last page")
+                                onClicked: workshop.turnTo(workshop.pages)
+                            }
+                        }
                     }
                 }
             }
 
-            // ---- Workshop ----
-            RowLayout {
-                spacing: 14
+            Details {
+                id: shown
 
-                WorkshopFilters {
-                    id: filters
-
-                    Layout.fillHeight: true
-                    Layout.bottomMargin: 8
-                    onChanged: workshop.askAfresh()
+                Layout.fillHeight: true
+                Layout.bottomMargin: 8
+                preview: workshop.inspected ? workshop.inspected.preview : ""
+                title: workshop.inspected ? workshop.inspected.title : ""
+                facts: workshop.factsFor(workshop.inspected, Language.czech)
+                onClosed: {
+                    shown.visible = false;
+                    workshop.inspected = null;
                 }
 
-                ColumnLayout {
+                RoundedButton {
+                    id: fetch
+
+                    /// Whether this one is already on the disk. Reads the
+                    /// library's own list, so a download that finishes
+                    /// turns the button over by itself the moment the
+                    /// folder watcher notices -- no asking Steam again.
+                    readonly property string id: workshop.inspected ? workshop.inspected.id : ""
+                    readonly property bool owned: Wallpapers.installedIds.indexOf(fetch.id) >= 0
+
+                    /// What `Steamworks.downloads` says about this one:
+                    /// undefined until it has been asked for, then 0 to
+                    /// 100, or -1 where Steam would not do it.
+                    readonly property var progress: Steamworks.downloads[fetch.id]
+                    readonly property bool untouched: fetch.progress === undefined
+
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 10
+                    // The one button in this window that is the thing to do
+                    // on the page it is on.
+                    accent: fetch.owned ? "transparent" : "#2e9e5b"
+                    text: fetch.owned ? qsTr("Installed")
+                         : fetch.untouched ? qsTr("Download")
+                         : fetch.progress < 0 ? qsTr("Steam would not")
+                         : fetch.progress >= 100 ? qsTr("Downloaded")
+                         : qsTr("%1 %").arg(fetch.progress)
+                    icon.name: fetch.owned ? "dialog-ok-apply"
+                             : fetch.progress >= 100 ? "download-later" : "download"
+                    // Nothing to fetch for something already here. Asking
+                    // again while it is on its way would have Steam start
+                    // over; a refusal is worth a second try.
+                    enabled: Steamworks.available && !fetch.owned
+                             && (fetch.untouched || fetch.progress < 0)
+                    onClicked: Steamworks.download(fetch.id)
+                }
 
-                    // Where you are, and the way out of it. Only a section
-                    // has either: the Workshop is where the controls above
-                    // say it is.
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 2
-                        spacing: 8
-                        visible: workshop.mode === 2
-
-                        RoundedTool {
-                            icon.name: "go-previous"
-                            icon.color: workshop.palette.windowText
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Back to Discover")
-                            onClicked: workshop.mode = 0
-                        }
-
-                        Label {
-                            // The section's own name and nothing else. The
-                            // arrow beside it says where it goes back to.
-                            text: workshop.section ? workshop.section.title : ""
-                            font.pixelSize: 17
-                            font.weight: Font.DemiBold
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    GridView {
-                        id: everything
-
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-
-                        // The same sum the library's grid does: as many columns
-                        // of about the card width as fit, then the width shared
-                        // out between them -- less a strip down the right for
-                        // the scrollbar to live in, since a bar drawn over the
-                        // last column of previews reads as part of the picture.
-                        readonly property int room: everything.width - 30
-
-                        readonly property int columns:
-                            Math.max(1, Math.floor(everything.room / workshop.cardWidth))
-
-                        cellWidth: Math.floor(everything.room / everything.columns)
-                        cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
-                        model: workshop.grid
-
-                        // A new answer starts at its own beginning. Page
-                        // two opened where page one had been scrolled to,
-                        // and so did a section opened out of Discover.
-                        onModelChanged: everything.positionViewAtBeginning()
-
-                        // Out of the way while a new answer is on its way:
-                        // what is on the screen is the answer to the last
-                        // question, and leaving it at full strength under a
-                        // new one is what made searching look like nothing
-                        // happening at all.
-                        opacity: Steamworks.busy ? 0.35 : 1
-                        Behavior on opacity {
-                            NumberAnimation { duration: 120 }
-                        }
-
-                        ScrollBar.vertical: Scroller {}
-
-                        delegate: Item {
-                            required property var modelData
-
-                            width: everything.cellWidth
-                            height: everything.cellHeight
-
-                            WorkshopCard {
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                item: parent.modelData
-                            }
-                        }
-                    }
-
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        visible: workshop.grid.length === 0
-                        text: Steamworks.busy ? qsTr("Asking Steam…")
-                                              : qsTr("Nothing matches all of that")
-                        opacity: 0.5
-                        font.pixelSize: 12
-                    }
-
-                    // The pages themselves rather than Previous and Next:
-                    // a number somebody can aim at, the two ends, and
-                    // arrows that are not there when there is nothing that
-                    // way.
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        Layout.bottomMargin: 8
-                        spacing: 4
-                        visible: workshop.grid.length > 0
-
-                        RoundedTool {
-                            icon.name: "go-first"
-                            icon.color: workshop.palette.windowText
-                            visible: workshop.page > 1
-                            enabled: !Steamworks.busy
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("First page")
-                            onClicked: workshop.turnTo(1)
-                        }
-
-                        RoundedTool {
-                            icon.name: "go-previous"
-                            icon.color: workshop.palette.windowText
-                            visible: workshop.page > 1
-                            enabled: !Steamworks.busy
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Previous page")
-                            onClicked: workshop.turnTo(workshop.page - 1)
-                        }
-
-                        Repeater {
-                            model: workshop.pageRow
-
-                            delegate: RowLayout {
-                                id: entry
-
-                                required property int modelData
-
-                                spacing: 0
-
-                                Label {
-                                    visible: entry.modelData === 0
-                                    text: "…"
-                                    leftPadding: 4
-                                    rightPadding: 4
-                                    opacity: 0.5
-                                }
-
-                                Chip {
-                                    visible: entry.modelData !== 0
-                                    enabled: !Steamworks.busy
-                                    label: entry.modelData
-                                    on: entry.modelData === workshop.page
-                                    onAsked: workshop.turnTo(entry.modelData)
-                                }
-                            }
-                        }
-
-                        RoundedTool {
-                            icon.name: "go-next"
-                            icon.color: workshop.palette.windowText
-                            visible: workshop.page < workshop.pages
-                            enabled: !Steamworks.busy
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Next page")
-                            onClicked: workshop.turnTo(workshop.page + 1)
-                        }
-
-                        RoundedTool {
-                            icon.name: "go-last"
-                            icon.color: workshop.palette.windowText
-                            visible: workshop.page < workshop.pages
-                            enabled: !Steamworks.busy
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Last page")
-                            onClicked: workshop.turnTo(workshop.pages)
-                        }
-                    }
+                Label {
+                    Layout.fillWidth: true
+                    visible: workshop.notAWallpaper(workshop.inspected)
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 11
+                    opacity: 0.8
+                    text: qsTr("A part for Wallpaper Engine rather than a "
+                               + "wallpaper of its own. Downloading it will not "
+                               + "put anything among the installed ones.")
                 }
             }
         }

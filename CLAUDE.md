@@ -33,11 +33,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   by hand; "See more" opens one row whole, as a page with the section's
   name and the way back. *Workshop* is one grid with search, filters, sort
   and paging, fifty at a time and a thousand pages deep.
-  **Downloading is not reachable from the window at the moment**: the
-  Download button lived on the panel that was drawn over a preview on
-  hover, and that panel has been taken out on purpose while where the
-  information belongs is decided. `Steamworks::download()` works and
-  nothing calls it.
+  Clicking a wallpaper anywhere in this tab opens a panel down the right
+  with its picture, what is known about it and a green Download; the
+  library's grid has the same panel with a red Remove instead.
 - **One vocabulary for both filters.** Type, age rating, picture size,
   genre and the rest are all tags as far as Steam is concerned, so a genre
   row and a ticked chip are the same required tag. Both panels read DRUH,
@@ -51,6 +49,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Playlists, Displays, Settings, centred. The first two are built; the
   three others say "Coming soon" and are there because naming them is what
   decides where the next piece of work goes.
+- **A panel beside the grid saying what a wallpaper is.** A click opens
+  it, in either tab: the picture, the name, and what is known -- the kind,
+  the picture size, what it takes up, the age rating, whether it answers to
+  sound, the tags. Under that the one thing to do about it: green Download
+  in the workshop, red Remove in the library, each with a line under it
+  saying what will happen. One click picks a wallpaper out; two put it on
+  the desktop.
 - **A picker that looks like something**: dark and light themes switched
   without a restart, a search that narrows the grid as it is typed and a
   cross to empty it, name order either way round, a band around each
@@ -85,6 +90,8 @@ src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
 qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band and its name
+qml/Details.qml       what is known about one wallpaper, beside the grid --
+                      shared, with the one button handed in as a child
 qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
 qml/PreviewTile.qml   a preview and a name -- the shape of a card, shared
                       by the library and the workshop
@@ -110,8 +117,9 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 
 - properties: `wallpapers` (QList<Wallpaper>), `current`
 - methods: `rescan()`, `rescan(roots)`, `select(id)`, `clear()`,
-  `details(id)` (`{ size, resolution }`, read off the disk when the picker
-  shows one card and kept afterwards)
+  `discard(id)` (deletes the workshop folder -- the other half of giving a
+  wallpaper back, see the trap), `details(id)` (`{ size, resolution }`,
+  read off the disk when the picker shows one card and kept afterwards)
 - static: `scan(roots)`, `steamRoots()`
 - `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `tags`, `rating`,
   `resolution`, `sizeOnDisk`, `added`, `bytes`, `hasFile`, `playable`
@@ -122,7 +130,9 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 - `Steamworks`: `available`, `trouble` (a `Trouble` enum, **not** a
   sentence -- see the trap), `busy`, `found` and `totals` (keyed by the
   name the asker gave the question), `downloads` (id -> 0..100, -1 refused);
-  `browse(key, order, page, tags, search)`, `download(id)`, `retry()`
+  `browse(key, order, page, tags, search, urgent)`, `download(id)`,
+  `remove(id)` (unsubscribes, and nothing else -- the folder is
+  `Wallpapers.discard()`'s), `retry()`
 - `Tags`: `genres` (25), `types`, `ratings`, `resolutions`, `properties`;
   `name(tag, locale)`, `labelled(tags, locale)`
 
@@ -371,6 +381,22 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   browse page, details off the keyless endpoint, and Download opens the
   item's page for somebody to press Subscribe once -- after which the folder
   watcher makes the rest invisible.
+- **Steam unsubscribes and then leaves the folder exactly where it is.**
+  `UnsubscribeItem` works and says so -- the call answers callback 1315
+  with `k_EResultOK`, `GetNumSubscribedItems` drops by one and
+  `GetSubscribedItems` no longer carries the id -- and the wallpaper is
+  still on the disk, still in the grid, and a Refresh finds it again.
+  Measured with the program running and again a minute after it had quit;
+  Steam cleans up in its own time, if at all. So giving a wallpaper back is
+  two halves: Steam lets go of it, and `WallpaperCore::discard()` takes the
+  folder. Deleting without unsubscribing would be worse than useless -- the
+  next thing Steam does is fetch it again.
+
+  **`GetItemState` is not the way to ask whether something is subscribed
+  here.** It answered 4 (installed) and nothing else for an item the acf
+  and `GetSubscribedItems` both called subscribed, before and after the
+  call. The subscribed list is what to read.
+
 - **Asking Steam's CDN to resize a preview is a trap**, and it looks like
   the obvious saving. A preview is a few hundred kilobytes and a card draws
   it 240 across, and Steam's own pages put
@@ -543,30 +569,26 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **Somewhere to put what a wallpaper is, and a way to download one.**
-   Both were on the panel drawn over a preview on hover, which has been
-   taken out: the kind, the picture size, what it takes up on disk, the
-   volume for a video, and Download / Installed in the workshop. Asked for
-   explicitly -- it is to be shown elsewhere and the tile is to carry
-   something else. Until then nothing in the window can fetch a wallpaper.
-
-2. **A list of wallpapers that take turns.** The tab is there and says
+1. **A list of wallpapers that take turns.** The tab is there and says
    "Coming soon". Asked for: a person's own selection out of the grid, each
    one on the desktop for a quarter of an hour, swapped on a schedule while
    the program sits in the panel. Nothing in the sound or cover behaviour
    stands in the way -- neither of them cares which wallpaper is playing.
 
-3. **Displays and Settings**, the two remaining tabs. Nothing has been
+2. **Displays and Settings**, the two remaining tabs. Nothing has been
    asked for in either of them yet.
 
-4. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
+3. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-5. **Scene wallpapers**, the packed ones. A direction to decide, not an
+4. **Scene wallpapers**, the packed ones. A direction to decide, not an
    afternoon's work.
 
 ### Small things seen and left
 
+- The volume for a video went with the panel that used to be drawn over a
+  preview: the only sound control now is the one in the footer, which is on
+  or off. Nobody has asked for it back.
 - A card for a wallpaper Steam reports as under half a megabyte reads
   "0 MB". Rounding, not a lie, but it looks like one.
 - The workshop's filter has fifty-nine values and one to a row is a long

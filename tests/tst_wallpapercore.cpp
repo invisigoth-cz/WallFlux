@@ -67,6 +67,10 @@ private slots:
     /// A wallpaper that appears on disk is noticed without being asked for,
     /// which is what makes a download in Steam turn up here by itself.
     void noticesAWallpaperArriving();
+
+    /// Giving a wallpaper back takes its folder with it -- and anything
+    /// that is not that folder is left alone.
+    void takesOneOffTheDisk();
 };
 
 void TestWallpaperCore::readsWhatIsThere()
@@ -295,4 +299,39 @@ void TestWallpaperCore::noticesAWallpaperArriving()
 }
 
 QTEST_MAIN(TestWallpaperCore)
+
+void TestWallpaperCore::takesOneOffTheDisk()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+
+    makeWallpaper(steam.path(), QStringLiteral("111"),
+                  R"({"title":"Going","type":"web","file":"index.html",)"
+                  R"("preview":"preview.jpg","tags":["Game"]})",
+                  {QStringLiteral("index.html"), QStringLiteral("preview.jpg")});
+    makeWallpaper(steam.path(), QStringLiteral("222"),
+                  R"({"title":"Staying","type":"web","file":"index.html",)"
+                  R"("preview":"preview.jpg","tags":["Game"]})",
+                  {QStringLiteral("index.html"), QStringLiteral("preview.jpg")});
+
+    WallpaperCore core;
+    core.rescan({steam.path()});
+    QCOMPARE(core.wallpapers().size(), 2);
+
+    const QString content =
+        steam.path() + QStringLiteral("/steamapps/workshop/content/431960/");
+
+    // Nothing here is called that, so nothing is deleted.
+    QVERIFY(!core.discard(QStringLiteral("333")));
+    QCOMPARE(core.wallpapers().size(), 2);
+
+    QVERIFY(core.discard(QStringLiteral("111")));
+    QVERIFY2(!QDir(content + QStringLiteral("111")).exists(),
+             "the folder was left behind");
+    QVERIFY2(QDir(content + QStringLiteral("222")).exists(),
+             "the wrong folder went");
+    QCOMPARE(core.wallpapers().size(), 1);
+    QCOMPARE(core.wallpapers().constFirst().id, QStringLiteral("222"));
+}
+
 #include "tst_wallpapercore.moc"

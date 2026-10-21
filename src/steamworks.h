@@ -136,6 +136,14 @@ public:
     /// `downloads` and wait.
     Q_INVOKABLE void download(const QString &id);
 
+    /// Gives one wallpaper back.
+    ///
+    /// Unsubscribing is the whole of it: the folder is Steam's, Steam takes
+    /// it away, and the watcher on that folder is what takes the card out
+    /// of the grid. Nothing here deletes a file, and subscribing again is
+    /// all it takes to have it back.
+    Q_INVOKABLE void remove(const QString &id);
+
     /// Asks Steam again, for when it was not running a moment ago and is
     /// now. Does nothing where the workshop can already be asked.
     ///
@@ -169,7 +177,17 @@ private:
     void measure();
 
     /// Whether the pump still has anything to pump for.
-    bool waiting() const { return m_call != 0 || !m_downloading.isEmpty(); }
+    bool waiting() const
+    {
+        return m_call != 0 || !m_downloading.isEmpty() || m_draining > 0;
+    }
+
+    /// How many more turns of the pump to take for callbacks nobody is
+    /// waiting for. Unsubscribing answers with one, and a callback that is
+    /// never freed stops the queue for everything after it -- so the pump
+    /// is left running for a moment rather than stopped the instant the
+    /// last thing anybody wanted has arrived.
+    int m_draining = 0;
 
     void *m_library = nullptr;
     /// The ISteamUGC pointer, which is what everything about the workshop is
@@ -221,6 +239,7 @@ private:
     bool (*m_requireTag)(void *, quint64, const char *) = nullptr;
     bool (*m_searchText)(void *, quint64, const char *) = nullptr;
     quint64 (*m_subscribe)(void *, quint64) = nullptr;
+    quint64 (*m_unsubscribe)(void *, quint64) = nullptr;
     bool (*m_downloadItem)(void *, quint64, bool) = nullptr;
     bool (*m_downloadInfo)(void *, quint64, quint64 *, quint64 *) = nullptr;
 };

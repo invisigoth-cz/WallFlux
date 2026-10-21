@@ -237,6 +237,8 @@ bool Steamworks::open()
                      "SteamAPI_ISteamUGC_SetSearchText");
     WALLFLUX_RESOLVE(m_subscribe, quint64 (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_SubscribeItem");
+    WALLFLUX_RESOLVE(m_unsubscribe, quint64 (*)(void *, quint64),
+                     "SteamAPI_ISteamUGC_UnsubscribeItem");
     WALLFLUX_RESOLVE(m_downloadItem, bool (*)(void *, quint64, bool),
                      "SteamAPI_ISteamUGC_DownloadItem");
     WALLFLUX_RESOLVE(m_downloadInfo, bool (*)(void *, quint64, quint64 *, quint64 *),
@@ -247,7 +249,8 @@ bool Steamworks::open()
     if (!initSafe || !steamUser || !findInterface || !dispatchInit || !steamPipe || !m_runFrame
         || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
-        || !m_downloadItem || !m_downloadInfo || !m_requireTag || !m_searchText) {
+        || !m_unsubscribe || !m_downloadItem || !m_downloadInfo || !m_requireTag
+        || !m_searchText) {
         m_trouble = UnknownLibrary;
         return false;
     }
@@ -403,6 +406,33 @@ void Steamworks::download(const QString &id)
     emit downloadsChanged();
 }
 
+void Steamworks::remove(const QString &id)
+{
+    if (!m_ugc)
+        return;
+
+    bool numeric = false;
+    const quint64 fileId = id.toULongLong(&numeric);
+    if (!numeric || fileId == 0) {
+        qCWarning(lcSteam) << "not a published file id:" << id;
+        return;
+    }
+
+    m_unsubscribe(m_ugc, fileId);
+
+    // Whatever was known about fetching this one stopped being true the
+    // moment it was given back.
+    if (m_downloads.remove(id) > 0)
+        emit downloadsChanged();
+
+    // The answer to that call is nobody's business, but it still arrives
+    // and still has to be freed.
+    m_draining = 100;
+    m_pump.start();
+
+    qCInfo(lcSteam) << "unsubscribed" << fileId;
+}
+
 void Steamworks::measure()
 {
     for (const quint64 id : m_downloading) {
@@ -450,6 +480,9 @@ void Steamworks::pump()
 
     if (!m_downloading.isEmpty())
         measure();
+
+    if (m_draining > 0)
+        --m_draining;
 
     if (!waiting())
         m_pump.stop();

@@ -203,6 +203,23 @@ public:
     /// Forgets the current wallpaper, leaving the screen blank.
     Q_INVOKABLE void clear();
 
+    /// Takes one wallpaper off the disk, folder and all, and says whether
+    /// it went.
+    ///
+    /// The other half of giving a wallpaper back, and only ever to be
+    /// called once Steam has been told to unsubscribe it. Steam does not
+    /// do this part: measured, `UnsubscribeItem` answers k_EResultOK and
+    /// the item leaves the subscribed list -- `GetNumSubscribedItems`
+    /// drops by one and `GetSubscribedItems` no longer carries it -- and
+    /// then the folder stays exactly where it was, both while this program
+    /// is running and a minute after it has quit. Since Steam no longer
+    /// thinks it is subscribed, nothing fetches it again.
+    ///
+    /// Refuses anything that is not the workshop folder named after `id`,
+    /// under app 431960, under a root this program scanned. It is deleting
+    /// somebody's files; it does not take anybody's word for which ones.
+    Q_INVOKABLE bool discard(const QString &id);
+
     /// Reads the wallpapers under each of these Steam installs.
     ///
     /// Separate from rescan() so a test can point it at a folder of its own

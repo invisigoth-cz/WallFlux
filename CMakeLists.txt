@@ -46,6 +46,7 @@ set_source_files_properties(qml/ChipSection.qml PROPERTIES QT_RESOURCE_ALIAS Chi
 set_source_files_properties(qml/Scroller.qml PROPERTIES QT_RESOURCE_ALIAS Scroller.qml)
 set_source_files_properties(qml/RoundedButton.qml PROPERTIES QT_RESOURCE_ALIAS RoundedButton.qml)
 set_source_files_properties(qml/RoundedTool.qml PROPERTIES QT_RESOURCE_ALIAS RoundedTool.qml)
+set_source_files_properties(qml/Details.qml PROPERTIES QT_RESOURCE_ALIAS Details.qml)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -69,6 +70,7 @@ qt_add_qml_module(wallflux
         qml/Scroller.qml
         qml/RoundedButton.qml
         qml/RoundedTool.qml
+        qml/Details.qml
     SOURCES
         src/otheraudio.h
         src/otheraudio.cpp

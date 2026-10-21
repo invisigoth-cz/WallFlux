@@ -30,6 +30,10 @@ Item {
     property bool clickable: true
 
     signal clicked()
+    /// Two clicks, which in the library means "put this one on the desktop".
+    /// A double click delivers `clicked` first, so one picks the wallpaper
+    /// out and the other acts on it, in that order.
+    signal doubleClicked()
 
     ColumnLayout {
         anchors.fill: parent
@@ -87,10 +91,20 @@ Item {
                 // What draws the cursor over the preview, which is the one
                 // thing this says about whether a click is worth making.
                 hoverEnabled: true
-                cursorShape: tile.clickable ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+                // An ordinary arrow where a click means nothing, rather
+                // than the crossed-out one: nothing is being refused any
+                // more, since every card in the grid can at least be asked
+                // about. The one tile that takes no click is the big one
+                // in the details panel, which is a picture and not an
+                // offer.
+                cursorShape: tile.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: {
                     if (tile.clickable)
                         tile.clicked();
+                }
+                onDoubleClicked: {
+                    if (tile.clickable)
+                        tile.doubleClicked();
                 }
             }
 
@@ -111,6 +125,9 @@ Item {
         // name only competes with it.
         Label {
             Layout.fillWidth: true
+            // No name, no room taken: the details panel shows the picture
+            // with the name in its own type underneath.
+            visible: tile.label !== ""
             text: tile.label
             elide: Text.ElideRight
             maximumLineCount: 1

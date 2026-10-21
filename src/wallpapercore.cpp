@@ -319,6 +319,42 @@ void WallpaperCore::clear()
     emit currentChanged();
 }
 
+bool WallpaperCore::discard(const QString &id)
+{
+    const auto match = std::ranges::find(m_wallpapers, id, &Wallpaper::id);
+    if (match == m_wallpapers.cend()) {
+        qCWarning(lcScan) << "nothing installed here is called" << id;
+        return false;
+    }
+
+    // Every wallpaper has a preview beside its project.json -- checked
+    // across every one of them -- so the folder is that file's folder.
+    const QDir folder = QFileInfo(match->preview.toLocalFile()).absoluteDir();
+
+    QDir workshop = folder;
+    const bool named = folder.dirName() == id;
+    const bool belongs = workshop.cdUp()
+                         && workshop.dirName() == QStringLiteral("431960");
+    const bool scanned = std::ranges::any_of(m_roots, [&folder](const QString &root) {
+        return folder.absolutePath().startsWith(QDir(root).absolutePath()
+                                                + QLatin1Char('/'));
+    });
+
+    if (!named || !belongs || !scanned) {
+        qCWarning(lcScan) << "refusing to delete" << folder.absolutePath()
+                          << "-- that is not the workshop folder of" << id;
+        return false;
+    }
+
+    qCInfo(lcScan) << "deleting" << folder.absolutePath();
+    const bool gone = QDir(folder).removeRecursively();
+    if (!gone)
+        qCWarning(lcScan) << "could not delete all of" << folder.absolutePath();
+
+    rescan(m_roots);
+    return gone;
+}
+
 void WallpaperCore::watch(const QStringList &steamRoots)
 {
     const QStringList watched = m_watcher.directories();
