@@ -36,7 +36,7 @@ class Playlists : public QObject
     QML_SINGLETON
 
     /// Every playlist, each `{ name, ids, hours, minutes, seconds, shuffle,
-    /// videoEnds, whilePaused, alwaysFirst }`.
+    /// videoEnds, whilePaused, alwaysFirst, transition, transitionMs }`.
     Q_PROPERTY(QVariantList all READ all NOTIFY allChanged)
 
     /// The name of the one playing, or empty while none is.
@@ -56,6 +56,20 @@ class Playlists : public QObject
     /// counting either.
     Q_PROPERTY(bool changesWhilePaused READ changesWhilePaused NOTIFY playingChanged)
 
+    /// How the playlist now running gets from one wallpaper to the next:
+    /// `""` for straight away, `"soft"` to hold the last frame over the
+    /// gap, `"none"` for straight away said out loud, `"fade"` to cross
+    /// from one to the other, `"black"` to go out through black. Empty
+    /// while nothing is running, which is the same as no transition.
+    ///
+    /// A word rather than the number of a row in a drop down: the rows
+    /// have been reordered twice already and a number in a file would have
+    /// meant something else each time.
+    Q_PROPERTY(QString transition READ transition NOTIFY playingChanged)
+
+    /// How long that takes, in milliseconds.
+    Q_PROPERTY(int transitionMs READ transitionMs NOTIFY playingChanged)
+
 public:
     explicit Playlists(QObject *parent = nullptr);
 
@@ -63,13 +77,16 @@ public:
     QString playing() const { return m_playing; }
     bool changesOnVideoEnd() const { return m_videoEnds; }
     bool changesWhilePaused() const { return m_whilePaused; }
+    QString transition() const { return m_transition; }
+    int transitionMs() const { return m_transitionMs; }
 
     /// Writes one down, replacing whatever had that name. An empty `ids`
     /// is refused: a playlist of nothing has nothing to take turns.
     ///
     /// `how` is everything else about it, by name rather than by position:
     /// `hours`, `minutes`, `seconds`, `shuffle`, `videoEnds`,
-    /// `whilePaused`, `alwaysFirst`. Anything left out is nought or false.
+    /// `whilePaused`, `alwaysFirst`, `transition`, `transitionMs`.
+    /// Anything left out is nought, false or empty.
     /// A map rather than nine arguments, because `save(n, ids, 0, 15, 0,
     /// true, false, true, false)` is a line nobody can read or get right.
     Q_INVOKABLE void save(const QString &name, const QStringList &ids, const QVariantMap &how);
@@ -113,7 +130,10 @@ public:
 
     /// The other half of that sum: a number of seconds back into
     /// `{ hours, minutes, seconds }`, carrying the remainder rather than
-    /// dropping it, and never longer than a day less a second.
+    /// dropping it, never shorter than the floor `staysFor()` keeps and
+    /// never longer than a day less a second. An exact inverse of it, so
+    /// the window can never show an interval that is not the one that
+    /// will run.
     ///
     /// It is here and not in the window because it is the same rule read
     /// the other way round, and because a rule in QML is a rule no test
@@ -158,6 +178,8 @@ private:
     int m_stay = 0;
     bool m_videoEnds = false;
     bool m_whilePaused = false;
+    QString m_transition;
+    int m_transitionMs = 0;
 
     /// What was left on the clock when it was held, in milliseconds, or -1
     /// where it is not being held.

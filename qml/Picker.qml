@@ -103,7 +103,9 @@ Window {
             shuffle: orderBox.currentIndex === orderBox.random,
             videoEnds: afterVideoBox.checked,
             whilePaused: whilePausedBox.checked,
-            alwaysFirst: firstBox.checked
+            alwaysFirst: firstBox.checked,
+            transition: transitionBox.words[transitionBox.currentIndex],
+            transitionMs: transitionTime.value
         });
     }
 
@@ -131,6 +133,8 @@ Window {
         afterVideoBox.checked = one.videoEnds;
         whilePausedBox.checked = one.whilePaused;
         firstBox.checked = one.alwaysFirst;
+        transitionBox.currentIndex = Math.max(0, transitionBox.words.indexOf(one.transition));
+        transitionTime.value = one.transitionMs;
     }
 
     /// One of the three numbers of a playlist's interval: a word, and a
@@ -165,6 +169,12 @@ Window {
         spacing: 4
 
         Label {
+            // Both of these fill the column, so the word and the box it
+            // is over are the same width and share a middle. Centre only
+            // the word and it centres on whatever the column happens to
+            // be, which is not where the box is.
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
             text: number.label
             font.pixelSize: 12
         }
@@ -172,6 +182,7 @@ Window {
         SpinBox {
             id: box
 
+            Layout.fillWidth: true
             Layout.preferredWidth: 96
             from: 0
             to: number.most
@@ -188,6 +199,23 @@ Window {
             // number out of range but lets the digits be typed first, so
             // without this a field two characters wide takes as many as
             // somebody cares to hold down.
+            // Picked out the moment the box is reached, so that typing
+            // replaces the number rather than being refused. Two
+            // characters is the whole field, so a box reading 15 is full:
+            // without this the first keystroke did nothing at all and the
+            // number had to be selected by hand before it could be
+            // changed. Through `callLater` because a click sets the
+            // cursor *after* the focus moves, and would undo a selection
+            // made on the spot. A second click in a box that already has
+            // the keyboard puts the cursor where it was asked for, which
+            // is how a field is edited rather than replaced.
+            onActiveFocusChanged: if (box.activeFocus) Qt.callLater(box.pickItAll)
+
+            function pickItAll() {
+                if (box.activeFocus)
+                    box.contentItem.selectAll();
+            }
+
             contentItem: TextInput {
                 text: box.displayText
                 maximumLength: 2
@@ -601,7 +629,10 @@ Window {
             color: picker.palette.base
             border.color: picker.palette.mid
             border.width: 1
-            radius: 8
+            // Rounder than the panels beside the grid: those sit in the
+            // layout and this floats over the window, and the corners are
+            // what says which is which.
+            radius: 14
         }
 
         contentItem: ColumnLayout {
@@ -619,30 +650,16 @@ Window {
                 columnSpacing: 14
                 rowSpacing: 12
 
-                Label { text: qsTr("Change wallpaper") }
-
-                // An empty row in front of every list: nothing is chosen
-                // until somebody chooses it, which is how Wallpaper Engine
-                // opens this panel too.
-                ComboBox {
-                    id: changeBox
-
-                    Layout.fillWidth: true
-                    model: ["", qsTr("By timer"), qsTr("On login"), qsTr("Time of day"),
-                            qsTr("Day of week"), qsTr("Never")]
-                }
-
-                // The two numbers sit under the drop down they belong to,
-                // in its column, each with its own word over it -- which
-                // is where Wallpaper Engine puts them.
-                Item {}
+                Label { text: qsTr("Change every") }
 
                 RowLayout {
                     spacing: 10
-                    // The timer is the only one of the five that has any
-                    // use for an interval -- and while nothing at all is
-                    // chosen it is what runs, since it is all there is.
-                    enabled: changeBox.currentIndex <= 1
+
+                    // Pushed over rather than left where they fall: the
+                    // drop downs and the tick boxes all meet the right
+                    // edge, and three boxes against the left of the same
+                    // column read as a different panel.
+                    Item { Layout.fillWidth: true }
 
                     PlaylistNumber {
                         id: everyHours
@@ -667,8 +684,6 @@ Window {
                         label: qsTr("Seconds")
                         value: 0
                     }
-
-                    Item { Layout.fillWidth: true }
                 }
 
                 Label { text: qsTr("Order") }
@@ -692,15 +707,39 @@ Window {
                 ComboBox {
                     id: transitionBox
 
+                    /// What each row is called in the file. A word rather
+                    /// than the number of a row: these have been
+                    /// reordered twice already, and a number written down
+                    /// would have meant something else each time.
+                    /// Random was here and is not any more. Nothing is
+                    /// lost by that: a playlist written down before it
+                    /// went still says `random`, and the window still
+                    /// plays it, since what is stored is the word and not
+                    /// the row.
+                    readonly property var words: ["", "soft", "none", "fade", "black"]
+
+                    /// Whether what is chosen takes any time to happen.
+                    /// Neither of the two ways of not fading does, and
+                    /// nor does choosing nothing at all, so the row that
+                    /// asks how long is drawn for the two fades and for
+                    /// nothing else.
+                    readonly property bool takesTime: transitionBox.currentIndex >= 3
+
                     Layout.fillWidth: true
-                    model: ["", qsTr("None (reduce flicker)"), qsTr("None"), qsTr("Random"),
+                    model: ["", qsTr("None (reduce flicker)"), qsTr("None"),
                             qsTr("Fade"), qsTr("Fade to black")]
                 }
 
-                Label { text: qsTr("Transition time") }
+                Label {
+                    text: qsTr("Transition time")
+                    visible: transitionBox.takesTime
+                    Layout.topMargin: 8
+                }
 
                 RowLayout {
                     spacing: 10
+                    visible: transitionBox.takesTime
+                    Layout.topMargin: 8
 
                     Slider {
                         id: transitionTime
@@ -746,6 +785,14 @@ Window {
                     }
                 }
 
+                // A step between what a change looks like and what sets
+                // one off. Its own row rather than a margin on the one
+                // below, because the row above it comes and goes with the
+                // transition and the gap should not go with it.
+                Item { Layout.preferredHeight: 12 }
+
+                Item { Layout.preferredHeight: 12 }
+
                 Label { text: qsTr("Change wallpaper when the video ends") }
 
                 PlaylistCheck { id: afterVideoBox }
@@ -757,45 +804,16 @@ Window {
                 Label { text: qsTr("Always start with the first wallpaper") }
 
                 PlaylistCheck { id: firstBox }
-
-                Label {
-                    Layout.leftMargin: 20
-                    Layout.fillWidth: true
-                    wrapMode: Text.Wrap
-                    // Only means anything once the one above it is on,
-                    // which is the whole of why it is indented.
-                    // Still a placeholder, unlike the one over it: this
-                    // asks for a playlist to begin at the first wallpaper
-                    // the first time round and nowhere else, and nothing
-                    // here remembers that a playlist has been round once.
-                    enabled: firstBox.checked
-                    // A Label does not dim itself when it is switched off
-                    // -- `enabled` reaches the mouse and not the colour --
-                    // so it sat there in full black beside a grey box.
-                    opacity: enabled ? 1 : 0.45
-                    text: qsTr("The first wallpaper plays only at startup")
-                }
-
-                PlaylistCheck {
-                    id: firstAtStartBox
-
-                    enabled: firstBox.checked
-                }
-            }
-
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                font.pixelSize: 11
-                opacity: 0.8
-                // Said plainly, because nought would otherwise look like a
-                // setting rather than a mistake.
-                text: qsTr("Five seconds at the least, however short this is set. "
-                           + "The list at the top and the transition do nothing yet.")
             }
 
             RowLayout {
                 Layout.fillWidth: true
+                // Clear of the last thing that can be set, so the two
+                // buttons read as what to do about the panel rather than
+                // as another row of it. The same gap the switches have
+                // above them, so the panel reads in three pieces of equal
+                // weight rather than two and a bit.
+                Layout.topMargin: 20
 
                 RoundedButton {
                     text: qsTr("Cancel")
@@ -846,7 +864,10 @@ Window {
             color: picker.palette.base
             border.color: picker.palette.mid
             border.width: 1
-            radius: 8
+            // Rounder than the panels beside the grid: those sit in the
+            // layout and this floats over the window, and the corners are
+            // what says which is which.
+            radius: 14
         }
 
         contentItem: ColumnLayout {
@@ -1035,7 +1056,10 @@ Window {
             color: picker.palette.base
             border.color: picker.palette.mid
             border.width: 1
-            radius: 8
+            // Rounder than the panels beside the grid: those sit in the
+            // layout and this floats over the window, and the corners are
+            // what says which is which.
+            radius: 14
         }
 
         contentItem: ColumnLayout {
@@ -1325,6 +1349,14 @@ Window {
                             y: lists.height + 4
                             closePolicy: Popup.CloseOnEscape
                                          | Popup.CloseOnPressOutsideParent
+                            padding: 6
+
+                            background: Rectangle {
+                                color: picker.palette.base
+                                border.color: picker.palette.mid
+                                border.width: 1
+                                radius: 14
+                            }
 
                             Repeater {
                                 model: Playlists.all
@@ -1409,7 +1441,7 @@ Window {
                                 color: picker.palette.base
                                 border.color: picker.palette.mid
                                 border.width: 1
-                                radius: 8
+                                radius: 14
                             }
 
                             // A heading rather than an item: it says what

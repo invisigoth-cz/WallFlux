@@ -91,10 +91,11 @@ private slots:
     }
 
     /// What the settings popup does with whatever was typed into its three
-    /// boxes. Carrying the remainder rather than dropping it, and the
-    /// whole thing clamped rather than the hours alone -- capping the
-    /// hours on their own let an interval get *shorter* when somebody
-    /// added to it.
+    /// boxes. Carrying the remainder rather than dropping it; the whole
+    /// thing clamped rather than the hours alone -- capping the hours on
+    /// their own let an interval get *shorter* when somebody added to it
+    /// -- and lifted to the floor at the other end, so the boxes show the
+    /// five seconds that will actually be waited.
     void turnsSecondsIntoAClock_data()
     {
         QTest::addColumn<int>("seconds");
@@ -102,14 +103,15 @@ private slots:
         QTest::addColumn<int>("minutes");
         QTest::addColumn<int>("rest");
 
-        QTest::newRow("nothing") << 0 << 0 << 0 << 0;
+        QTest::newRow("nothing is the floor") << 0 << 0 << 0 << 5;
+        QTest::newRow("under the floor is the floor") << 3 << 0 << 0 << 5;
         QTest::newRow("under a minute") << 59 << 0 << 0 << 59;
         QTest::newRow("exactly a minute") << 60 << 0 << 1 << 0;
         QTest::newRow("a minute and a half") << 90 << 0 << 1 << 30;
         QTest::newRow("ninety-five minutes") << 95 * 60 << 1 << 35 << 0;
         QTest::newRow("the longest there is") << 23 * 3600 + 59 * 60 + 59 << 23 << 59 << 59;
         QTest::newRow("longer than that") << 99 * 3600 << 23 << 59 << 59;
-        QTest::newRow("below nothing") << -5 << 0 << 0 << 0;
+        QTest::newRow("below nothing") << -5 << 0 << 0 << 5;
     }
 
     void turnsSecondsIntoAClock()

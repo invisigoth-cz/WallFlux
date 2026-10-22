@@ -96,6 +96,10 @@ void Playlists::load()
              one.value(QLatin1StringView("whilePaused")).toBool(false)},
             {QStringLiteral("alwaysFirst"),
              one.value(QLatin1StringView("alwaysFirst")).toBool(false)},
+            {QStringLiteral("transition"),
+             one.value(QLatin1StringView("transition")).toString()},
+            {QStringLiteral("transitionMs"),
+             one.value(QLatin1StringView("transitionMs")).toInt(1500)},
         });
     }
 
@@ -128,6 +132,8 @@ void Playlists::store() const
             {QStringLiteral("videoEnds"), one.value(QStringLiteral("videoEnds")).toBool()},
             {QStringLiteral("whilePaused"), one.value(QStringLiteral("whilePaused")).toBool()},
             {QStringLiteral("alwaysFirst"), one.value(QStringLiteral("alwaysFirst")).toBool()},
+            {QStringLiteral("transition"), one.value(QStringLiteral("transition")).toString()},
+            {QStringLiteral("transitionMs"), one.value(QStringLiteral("transitionMs")).toInt()},
         });
     }
 
@@ -146,7 +152,11 @@ void Playlists::store() const
 QVariantMap Playlists::asClock(int seconds) const
 {
     constexpr int LongestDay = 23 * 3600 + 59 * 60 + 59;
-    const int total = qBound(0, seconds, LongestDay);
+    // The same floor `staysFor()` applies, applied here so the three boxes
+    // show it rather than a line of small print under them explaining it.
+    // Type three noughts and they read five seconds, which is what will
+    // happen; the window says the truth instead of a footnote.
+    const int total = qBound(LeastSeconds, seconds, LongestDay);
 
     return {
         {QStringLiteral("hours"), total / 3600},
@@ -172,6 +182,9 @@ void Playlists::save(const QString &name, const QStringList &ids, const QVariant
         {QStringLiteral("videoEnds"), how.value(QStringLiteral("videoEnds")).toBool()},
         {QStringLiteral("whilePaused"), how.value(QStringLiteral("whilePaused")).toBool()},
         {QStringLiteral("alwaysFirst"), how.value(QStringLiteral("alwaysFirst")).toBool()},
+        {QStringLiteral("transition"), how.value(QStringLiteral("transition")).toString()},
+        {QStringLiteral("transitionMs"),
+         qBound(0, how.value(QStringLiteral("transitionMs")).toInt(), 3000)},
     };
 
     // The name is what a playlist is known by, so saving under one that is
@@ -248,6 +261,8 @@ void Playlists::start(const QString &name)
     m_stay = staysFor(one);
     m_videoEnds = one.value(QStringLiteral("videoEnds")).toBool();
     m_whilePaused = one.value(QStringLiteral("whilePaused")).toBool();
+    m_transition = one.value(QStringLiteral("transition")).toString();
+    m_transitionMs = one.value(QStringLiteral("transitionMs")).toInt();
 
     m_at = 0;
     m_left = -1;
@@ -304,6 +319,8 @@ void Playlists::stop()
     m_left = -1;
     m_videoEnds = false;
     m_whilePaused = false;
+    m_transition.clear();
+    m_transitionMs = 0;
     emit playingChanged();
 }
 

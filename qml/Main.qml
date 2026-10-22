@@ -107,13 +107,140 @@ Window {
         onChose: (id) => Wallpapers.select(id)
     }
 
+    /// The wallpaper a transition is on its way to, or empty while none
+    /// is running. Also what says a transition *is* running.
+    property string arriving: ""
+
+    /// Which transition is actually running. The same as the playlist's,
+    /// except that "random" is rolled here -- once per change, and held
+    /// for the length of that change so the end of it matches the start.
+    property string fading: ""
+
+    /// Puts a wallpaper on the desktop the way the running playlist asked
+    /// for.
+    ///
+    /// Four ways, and three of them need the old wallpaper to stay on the
+    /// screen after it has stopped being the wallpaper. There is no second
+    /// player to hold it in -- one video and one web view is all there is
+    /// -- so what is held is a picture of it, grabbed the instant before
+    /// the switch. `leaving` is that picture.
+    function changeTo(id) {
+        const asked = Playlists.transition;
+        root.fading = asked === "random" ? (Math.random() < 0.5 ? "fade" : "black") : asked;
+
+        // Nothing to cross from on the first wallpaper of a playlist, and
+        // nothing asked for in the other two cases.
+        if (root.fading === "" || root.fading === "none" || !root.playing) {
+            Wallpapers.select(id);
+            return;
+        }
+
+        if (root.fading === "black") {
+            root.arriving = id;
+            throughBlack.start();
+            return;
+        }
+
+        root.arriving = id;
+        // Grabbing is asynchronous and the callback never comes at all
+        // when the window is not being drawn -- which is exactly what a
+        // covered screen means. The rescue is why a covered wallpaper
+        // still changes.
+        if (!root.contentItem.grabToImage((result) => root.holdAndSwap(result)))
+            root.swapNow();
+        else
+            rescue.restart();
+    }
+
+    /// The picture came back: hold it over the screen, change underneath
+    /// it, and take it away in the manner asked for.
+    function holdAndSwap(result) {
+        rescue.stop();
+        if (root.arriving === "")
+            return;
+
+        leaving.source = result.url;
+        leaving.opacity = 1;
+        root.swapNow();
+
+        // "None (reduce flicker)" is not a fade. It holds the last frame
+        // over the gap while the next wallpaper finds its first one, which
+        // is the black blink it is named for.
+        if (root.fading === "soft")
+            holdOn.restart();
+        else
+            crossOver.start();
+    }
+
+    /// Changes the wallpaper and forgets that a transition was running.
+    function swapNow() {
+        const id = root.arriving;
+        root.arriving = "";
+        if (id !== "")
+            Wallpapers.select(id);
+    }
+
+    /// Out through black and back. The one transition that needs no
+    /// picture of anything: a black rectangle over the lot, and the
+    /// wallpaper changed behind it while nothing can be seen.
+    SequentialAnimation {
+        id: throughBlack
+
+        NumberAnimation {
+            target: veil
+            property: "opacity"
+            to: 1
+            duration: Math.max(1, Playlists.transitionMs / 2)
+        }
+        ScriptAction { script: root.swapNow() }
+        NumberAnimation {
+            target: veil
+            property: "opacity"
+            to: 0
+            duration: Math.max(1, Playlists.transitionMs / 2)
+        }
+        ScriptAction { script: leaving.source = "" }
+    }
+
+    /// The old wallpaper fading off the new one.
+    NumberAnimation {
+        id: crossOver
+
+        target: leaving
+        property: "opacity"
+        to: 0
+        duration: Math.max(1, Playlists.transitionMs)
+        onFinished: leaving.source = ""
+    }
+
+    /// Long enough for the next wallpaper to have a frame to show, and no
+    /// longer: this is the transition that is meant to look like none.
+    Timer {
+        id: holdOn
+
+        interval: 300
+        onTriggered: {
+            leaving.opacity = 0;
+            leaving.source = "";
+        }
+    }
+
+    /// The grab that never came back. Without this a wallpaper behind a
+    /// maximised window would simply never change.
+    Timer {
+        id: rescue
+
+        interval: 400
+        onTriggered: root.swapNow()
+    }
+
     /// A playlist puts its wallpapers on the desktop the same way a click
     /// does -- it says which one and nothing more, so there is one place
     /// where a wallpaper starts playing rather than two.
     Connections {
         target: Playlists
         function onPlays(id) {
-            Wallpapers.select(id);
+            root.changeTo(id);
         }
 
         // A playlist started while a window is already covering the
@@ -248,6 +375,37 @@ Window {
 
         onErrorOccurred: (error, errorString) =>
             console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
+    }
+
+    // The two things a transition is made of, over everything else and in
+    // this order: the picture of the wallpaper that is leaving, and the
+    // black that one of the transitions goes out through.
+    //
+    // Neither takes any input -- the whole window is a background surface
+    // that takes none -- and both are nothing at all until a transition
+    // runs.
+    Image {
+        id: leaving
+
+        anchors.fill: parent
+        z: 1
+        opacity: 0
+        visible: leaving.opacity > 0 && leaving.source !== ""
+        fillMode: Image.PreserveAspectCrop
+        // The grab is the size of the window, so this is drawing it back
+        // at the size it was taken at; smoothing it would only cost.
+        smooth: false
+        cache: false
+    }
+
+    Rectangle {
+        id: veil
+
+        anchors.fill: parent
+        z: 2
+        color: "black"
+        opacity: 0
+        visible: veil.opacity > 0
     }
 
 }

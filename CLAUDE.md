@@ -45,6 +45,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Steamworks library is opened again rather than once at startup, so
   starting Steam afterwards is advice worth taking.
 - **English and Czech**, switched in the window without a restart.
+- **Wallpapers that fade into one another.** A playlist can cross from one
+  wallpaper to the next, go out through black, or hold the last frame over
+  the gap, over nought to three seconds.
 - **Wallpapers that take turns.** A strip along the bottom of the library
   from the moment the window opens, empty or not -- the place a playlist is
   made has to be visible before there is anything in it. Along its top:
@@ -66,16 +69,22 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   There is no Playlists tab: a playlist is made out of the grid, so it is
   made in the grid.
 
-  **Configure is laid out as Wallpaper Engine's own.** Three of its
+  **Configure is laid out as Wallpaper Engine's own.** Five of its
   switches do what they say: *change when the video ends*, *allow changing
-  while paused* and *always begin with the first wallpaper*. What is left
-  choosing between things that are not written is the list at the top
-  (timer, login, time of day, day of week, never), the transition and its
-  time, and the indented line under "always begin with the first". Asked for that way on purpose -- the list of
-  what WallFlux is going to offer was the thing worth deciding first. Only
-  the timer and the order do anything, and the popup says so. Every drop
-  down opens with an empty row chosen, as Wallpaper Engine's does; the
-  interval is hours, minutes and seconds, typed rather than clicked at.
+  while paused*, *always begin with the first wallpaper*, the transition
+  and how long it takes. Nothing in the popup is a placeholder any
+  more: "the first wallpaper plays only at startup" was the last one and
+  it has been taken out, since WallFlux is not started with the session in
+  a way that would give it a meaning. The transition drop down opens with
+  an empty row
+  chosen, as Wallpaper Engine's does; the interval is hours, minutes and
+  seconds, typed rather than clicked at.
+
+  **There was a "change wallpaper" list and there is not any more.** It
+  offered a timer, login, time of day, day of week and never; four of
+  those were never going to be written, and a list of five with one of
+  them meant is a promise rather than a plan. A playlist turns on its
+  clock, and on a video ending where it was told to.
 
   **How the three are wired.** None of the decisions are `Playlists`':
   it knows nothing about what a wallpaper is or whether a window is in the
@@ -244,17 +253,21 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 this program that remembers anything between runs:
 
 - `all` (each `{ name, ids, hours, minutes, seconds, shuffle, videoEnds,
-  whilePaused, alwaysFirst }`), `playing` (a name or empty),
-  `changesOnVideoEnd` and `changesWhilePaused` (what the *running* one was
-  told, false while none is); `save(name, ids, how)` -- `how` being those
+  whilePaused, alwaysFirst, transition, transitionMs }`), `playing` (a
+  name or empty), `changesOnVideoEnd`, `changesWhilePaused`, `transition`
+  and `transitionMs` (what the *running* one was told, empty or false
+  while none is); `save(name, ids, how)` -- `how` being those
   settings by name rather than nine positional arguments --
   `forget(name)`, `named(name)`, `start(name)`, `stop()`, `next()` (on to
   the next one now and wind the clock again), `hold(bool)` (stop the clock
   without stopping the playlist, and pick it up where it left off), and
   the public static `staysFor(one)` -- the three numbers added up in seconds, never
   less than five, worked out in one place because that is the sum a test
-  can check; and `asClock(seconds)` -- the same rule read backwards, which
-  is what the settings popup hands its three typed boxes to
+  can check; and `asClock(seconds)` -- the same rule read backwards,
+  floor and ceiling and all, which is what the settings popup hands its
+  three typed boxes to. An exact inverse, so the boxes can never show an
+  interval that is not the one that will run: three noughts typed in read
+  back as five seconds, which is what the playlist will actually wait
 - it plays nothing itself: it says `plays(id)` and `Main.qml` hands that to
   `Wallpapers.select()`, the same place a click on a card goes
 - the file is `playlists.json` under `QStandardPaths::AppConfigLocation`,
@@ -455,9 +468,52 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   in its name field on the way up and they have nothing to put it in.
   `focus: true` on the Popup is what the other two were missing.
 
+- **A `GridLayout` says nothing when a row loses a cell.** Taking the
+  "change wallpaper" drop down out left its label behind, so every row
+  under it sat one column over -- words in the right-hand column, drop
+  downs and tick boxes in the left, and the whole panel looking shuffled
+  rather than broken. It reads as four separate complaints about
+  alignment, and it is one odd cell. Count the cells.
+
 - **A `Label` does not dim itself when it is switched off.** `enabled`
   reaches the mouse and not the colour, so a line beside a greyed-out tick
   box sat there in full black. It needs `opacity` said out loud.
+
+- **A transition needs the old wallpaper after it has stopped being the
+  wallpaper, and there is no second player to keep it in.** One video and
+  one web view is all `Main.qml` has. What is held instead is a *picture*
+  of the old one, grabbed the instant before the switch and drawn over the
+  new one while it fades -- `grabToImage` catches a playing video frame,
+  checked before any of this was built. So: `leaving` is that picture and
+  `veil` is a black rectangle, both over everything and both nothing at
+  all until a transition runs.
+
+  - *Fade to black* needs no picture: the veil goes up, the wallpaper
+    changes behind it, the veil goes down. Measured at the halfway point:
+    the screen grabs as rgb 0, pure black.
+  - *Fade* is the picture at full opacity fading to nothing over the new
+    wallpaper. Measured at the halfway point: `leaving.opacity` 0.51 and
+    the grab is plainly two wallpapers at once.
+  - *None (reduce flicker)* is the same picture held for 300 ms and then
+    dropped, which covers the black blink while the next video finds its
+    first frame. No fade -- it is the transition that is meant to look
+    like none.
+  - *Random* was offered and is not any more, but a playlist written down
+    while it was still says `random` and the window still plays it --
+    rolled once per change and held for the length of it, so the end of a
+    transition matches its start. Nothing had to be migrated, which is the
+    whole reason a transition is a word and not a row number.
+
+  **The grab never comes back when the window is not being drawn**, which
+  is exactly what a covered screen is -- so there is a 400 ms rescue timer
+  that changes the wallpaper without a transition. Without it a playlist
+  behind a maximised window would simply stop changing. Measured: covered
+  the whole time, the wallpaper still turned.
+
+  **A transition is written down as a word**, not as the number of a row
+  in a drop down: `""`, `soft`, `none`, `random`, `fade`, `black`. The
+  rows have been reordered twice already and a number in a file would have
+  meant something else each time.
 
 - **A `Popup` that does not fit does not scroll, it overflows.** The
   workshop's filter holds fifty-nine chips, which is taller than the window
@@ -707,6 +763,14 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   function", pointing at generated code rather than at the header. The
   access specifier is what decides, not the keyword: put it under `public:`.
 
+- **Say it with the control, not with a line of small print under it.**
+  The three number boxes had a sentence beneath them explaining that five
+  seconds was the least however short they were set -- because nought was
+  typeable and the floor was invisible. Putting the floor into
+  `asClock()`, which the boxes are written back from, made the sentence
+  pointless: the boxes read five by themselves. One line of C++ for one
+  fewer line of apology.
+
 - **Clamp the time, not one of its units.** The settings popup's three
   boxes take two digits each and carry what is over -- sixty seconds is a
   minute -- and the first way of doing it carried unit by unit, capping
@@ -722,6 +786,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   arrows away and leave a grey block hanging off the end of the number,
   lit up whenever the box has the keyboard, with nothing to click. The box
   needs a background of its own.
+
+- **A two-character field that is full refuses the next keystroke**, and
+  the number boxes are two characters wide: a box reading 15 could not be
+  typed over at all, only selected by hand first. They pick their whole
+  number out when they are reached, so typing replaces it. **Through
+  `Qt.callLater`**, because a click moves the focus and *then* sets the
+  cursor, which would undo a selection made on the spot. A second click
+  in a box that already has the keyboard puts the cursor where it was
+  asked for, which is how a field is edited rather than replaced.
 
 - **A `CheckBox` with no words still leaves room for them.** Its padding
   and the gap before the label are both still there, so one aligned to the
@@ -902,9 +975,6 @@ the file. Everything after it should.
 - Wallpaper Engine's Load and Save dialogs each carry a keyboard shortcut
   field. There is nothing here that could listen for one, so neither is
   drawn.
-- "The first wallpaper plays only at startup", the indented line under
-  "always begin with the first wallpaper", is still a placeholder: nothing
-  here remembers that a playlist has already been round once.
 - The volume for a video went with the panel that used to be drawn over a
   preview: the only sound control now is the one in the footer, which is on
   or off. Nobody has asked for it back.
