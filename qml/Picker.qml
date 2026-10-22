@@ -49,6 +49,24 @@ Window {
     /// The one the details panel is about, or null while it is shut.
     property var inspected: null
 
+    /// Which card the ring is on, as an id rather than as a row.
+    ///
+    /// A GridView puts its own `currentIndex` back to nought every time
+    /// its model changes, and this grid's model changes whenever a video
+    /// answers with its size -- a dozen times in the first seconds after
+    /// a scan, and again whenever Steam finishes a download. A row number
+    /// is therefore no answer to "which card is chosen": it was being
+    /// handed back to the first card a moment after every click, so only
+    /// the first card could be picked at all.
+    ///
+    /// So nothing here reads that row. The id is the ring, the grid's own
+    /// key navigation is switched off, and the arrows move the id. Putting
+    /// the row back after each rebuild was tried first and is a race: the
+    /// grid resets itself whenever it gets round to it, which is sometimes
+    /// after the repair has run -- measured, with the ring landing on a
+    /// card nobody had pressed an arrow towards.
+    property string ringOn: ""
+
     /// The wallpapers ticked for a playlist, as ids in the order they were
     /// ticked. Nothing is remembered about this between runs: a playlist
     /// is remembered once it is saved and not before.
@@ -467,12 +485,18 @@ Window {
 
     function lookUpAuthor(id) {
         Steam.detailsOf(id, function (said) {
-            if (said.tags.length > 0) {
+            // Only what is new. An answer that is already in the map is
+            // put back as a new object every time otherwise -- and since
+            // the grid's model is built out of these tags, that rebuilds
+            // the whole grid: every delegate destroyed, and the view
+            // scrolled back to the top. Measured: one click on a card
+            // somewhere down the list put the grid back to its first row.
+            if (said.tags.length > 0 && !picker.workshopTags[id]) {
                 const seen = Object.assign({}, picker.workshopTags);
                 seen[id] = said.tags;
                 picker.workshopTags = seen;
             }
-            if (!said.maker)
+            if (!said.maker || picker.authors[id])
                 return;
             Steam.profileOf(said.maker, function (person) {
                 const known = Object.assign({}, picker.authors);
@@ -495,6 +519,48 @@ Window {
         steam.item.everythingBy(known.owner);
     }
 
+    /// Which card was clicked last, and the wait that tells one click from
+    /// two.
+    ///
+    /// The double click is counted here rather than left to the card,
+    /// because the card may not live long enough to count it: the grid's
+    /// model is rebuilt whenever a wallpaper answers with its size, and a
+    /// rebuild destroys every delegate and builds new ones. The second
+    /// press then lands on a different object, which sees a first click.
+    ///
+    /// And the panel waits out that gap before it opens, because opening
+    /// it takes the grid from three columns to two -- every card but the
+    /// first moves, and a card that moves out from under the pointer
+    /// cannot be clicked a second time. The ring moves at once, so the
+    /// first click is still answered immediately.
+    property string lastChosen: ""
+
+    Timer {
+        id: secondClick
+
+        interval: 400
+        onTriggered: {
+            details.visible = true;
+            picker.lookUpAuthor(picker.lastChosen);
+        }
+    }
+
+    /// What a click on a card means: the first picks it out, a second one
+    /// on the same card puts it on the desktop.
+    function chooseOrApply(id) {
+        if (id === picker.lastChosen && secondClick.running) {
+            secondClick.stop();
+            picker.apply(id);
+            return;
+        }
+
+        picker.lastChosen = id;
+        picker.inspect(id);
+        // Already open: there is nothing left to reflow, so it follows the
+        // click at once and only the counting is waited out.
+        secondClick.restart();
+    }
+
     /// Shows one wallpaper in the panel. One click says which wallpaper
     /// is being talked about and nothing more -- putting it on the desktop
     /// takes two, since otherwise reading about one changed what was on
@@ -507,8 +573,12 @@ Window {
                 break;
             }
         }
-        details.visible = true;
-        picker.lookUpAuthor(id);
+        picker.ringOn = id;
+        // Opened by `secondClick`, once it is clear that no second click
+        // is coming -- see the note on `lastChosen`. Already open stays
+        // open, and simply shows the new one.
+        if (details.visible)
+            picker.lookUpAuthor(id);
     }
 
     /// Puts one on the desktop, which is what a second click means. Never
@@ -616,7 +686,13 @@ Window {
         // done; the other three are worked out here because what they need
         // -- a date, a size, what was played when -- is all on the wallpaper
         // or on the singleton already.
-        const played = Wallpapers.recent;
+        //
+        // What was played when is read inside its own case and nowhere
+        // else. A binding depends on what it reads, so reading it up here
+        // made this whole list -- and with it every card in the grid --
+        // rebuild each time a wallpaper was put on the desktop, whatever
+        // the order was. Which is a double click: the wallpaper started
+        // and the grid jumped back to its first row.
         switch (picker.sortBy) {
         case 1:
             kept.sort((a, b) => a.added < b.added ? -1 : a.added > b.added ? 1 : 0);
@@ -624,16 +700,18 @@ Window {
         case 2:
             kept.sort((a, b) => a.bytes - b.bytes);
             break;
-        case 3:
+        case 3: {
             // Rank 0 is the one played last. Anything never played has no
             // rank at all and goes behind everything that has one, which is
             // every wallpaper until something is chosen.
+            const played = Wallpapers.recent;
             kept.sort((a, b) => {
                 const ra = played.indexOf(a.id);
                 const rb = played.indexOf(b.id);
                 return (ra < 0 ? Infinity : ra) - (rb < 0 ? Infinity : rb);
             });
             break;
+        }
         default:
             break;
         }
@@ -1741,6 +1819,12 @@ Window {
 
                             model: picker.shown
 
+                            // The arrows are answered below rather than by
+                            // the grid itself, which walks `currentIndex`
+                            // -- the one thing a model rebuild throws
+                            // away. See `ringOn`.
+                            keyNavigationEnabled: false
+
                             // The grid is what the window hands the keyboard
                             // to when it opens: arrows walk the cards, Enter
                             // puts one on the desktop, Space ticks it into
@@ -1748,23 +1832,126 @@ Window {
                             // keyboard back the moment it is clicked.
                             focus: true
 
+                            /// Which row the ring is on, or -1 when the one
+                            /// it was on is not in the grid any more.
+                            function at() {
+                                for (let i = 0; i < picker.shown.length; ++i) {
+                                    if (picker.shown[i].id === picker.ringOn)
+                                        return i;
+                                }
+                                return -1;
+                            }
+
                             /// The card the arrows are on, or null where the
                             /// grid is empty or has not been walked yet.
                             function here() {
-                                return grid.currentIndex >= 0
-                                       && grid.currentIndex < picker.shown.length
-                                    ? picker.shown[grid.currentIndex] : null;
+                                const row = grid.at();
+                                return row < 0 ? null : picker.shown[row];
                             }
 
-                            // The panel follows the arrows only once it is
-                            // open. Opening one because somebody pressed
-                            // Right would be the window deciding what the
-                            // question was.
-                            onCurrentIndexChanged: {
-                                const one = grid.here();
-                                if (one && details.visible)
-                                    picker.inspect(one.id);
+                            /// Brings the card the ring is on back into
+                            /// view, after something has moved it: a
+                            /// rebuilt model, the panel opening, the
+                            /// window being resized, an arrow key.
+                            function keepTheRingInView() {
+                                const row = grid.at();
+                                if (row < 0)
+                                    return;
+
+                                // Rewound first, and only then sent where
+                                // it belongs. A view that was scrolled
+                                // when the window changed size is left
+                                // past the end of a grid that is now
+                                // shorter -- 2 588 down a grid 1 491 tall
+                                // -- and in that state it draws no cards
+                                // at all and will not be moved:
+                                // `positionViewAtIndex`, `returnToBounds`,
+                                // `forceLayout` and writing `contentY` by
+                                // hand were each measured doing nothing.
+                                // Going back to the beginning gives it
+                                // somewhere to count from again, and from
+                                // there it goes where it is asked. Both
+                                // calls are in the one function, so
+                                // nothing is drawn in between.
+                                grid.positionViewAtBeginning();
+                                grid.positionViewAtIndex(row, GridView.Contain);
                             }
+
+                            /// Moves the ring by so many cards and brings it
+                            /// into view.
+                            ///
+                            /// The panel follows it only once it is open.
+                            /// Opening one because somebody pressed Right
+                            /// would be the window deciding what the
+                            /// question was.
+                            function walk(by) {
+                                if (picker.shown.length === 0)
+                                    return;
+                                const was = grid.at();
+                                const to = was < 0 ? 0
+                                    : Math.max(0, Math.min(picker.shown.length - 1,
+                                                           was + by));
+                                picker.ringOn = picker.shown[to].id;
+                                grid.keepTheRingInView();
+                                if (details.visible)
+                                    picker.inspect(picker.ringOn);
+                            }
+
+                            // Any rebuild of the model below -- a video
+                            // answering with its size, the workshop
+                            // answering about the whole library, a
+                            // download arriving -- puts the view back to
+                            // its first row. The card the ring is on is
+                            // where somebody is working, so it is brought
+                            // back. Nothing moves while that card is on
+                            // screen already, so this is quiet except
+                            // when the view has actually been thrown.
+                            onModelChanged: settle.restart()
+
+                            // And the panel opening takes the grid from
+                            // three columns to two, which moves every card
+                            // down -- measured, a click near the bottom
+                            // put the card that was clicked off the
+                            // screen. Answered here rather than where the
+                            // panel is opened, because this is the moment
+                            // the cards actually move, and without the
+                            // wait that a `Qt.callLater` from there would
+                            // have needed.
+                            onWidthChanged: settle.restart()
+
+                            // The height as well: a window being
+                            // maximised changes the two one after the
+                            // other, and where the cards belong is not
+                            // known while only one of them has arrived.
+                            onHeightChanged: settle.restart()
+
+                            // Both of those are answered a beat later,
+                            // which is also what puts several of them
+                            // together: the model and the width often
+                            // change in the same breath, and the view is
+                            // only worth moving once the cards have their
+                            // new places.
+                            Timer {
+                                id: settle
+
+                                interval: 150
+                                onTriggered: grid.keepTheRingInView()
+                            }
+
+                            // The arrows start on the first card, as they
+                            // did while the grid kept the ring itself.
+                            // Nothing is drawn until the grid has the
+                            // keyboard, so this is not a choice anybody
+                            // sees being made for them.
+                            Component.onCompleted: {
+                                if (picker.ringOn === "" && picker.shown.length > 0)
+                                    picker.ringOn = picker.shown[0].id;
+                            }
+
+                            Keys.onLeftPressed: grid.walk(-1)
+                            Keys.onRightPressed: grid.walk(1)
+                            Keys.onUpPressed: grid.walk(-grid.columns)
+                            Keys.onDownPressed: grid.walk(grid.columns)
 
                             Keys.onReturnPressed: {
                                 const one = grid.here();
@@ -1786,7 +1973,6 @@ Window {
                                 id: cell
 
                                 required property var modelData
-                                required property int index
 
                                 width: grid.cellWidth
                                 height: grid.cellHeight
@@ -1796,14 +1982,13 @@ Window {
                                     anchors.margins: 8
                                     wallpaper: cell.modelData
                                     current: grid.activeFocus
-                                             && grid.currentIndex === cell.index
+                                             && cell.modelData.id === picker.ringOn
                                     // A click moves the arrows here as well,
                                     // so the two ways of walking the grid do
                                     // not each keep a place of their own.
                                     onChose: (id) => {
-                                        grid.currentIndex = cell.index;
                                         grid.forceActiveFocus();
-                                        picker.inspect(id);
+                                        picker.chooseOrApply(id);
                                     }
                                     onApplied: (id) => picker.apply(id)
                                     ticked: picker.inPlaylist.indexOf(cell.modelData.id) >= 0

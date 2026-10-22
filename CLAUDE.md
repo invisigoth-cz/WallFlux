@@ -625,6 +625,65 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   suspected.
 - **`qmllint` is not in `PATH`** on this machine; it is
   `/usr/lib/qt6/bin/qmllint`.
+- **A `GridView` puts `currentIndex` back to nought whenever its model
+  changes**, and this grid's model is a fresh array every time anything
+  about any wallpaper changes -- a video answering with its size, Steam
+  finishing a download, a card being looked at. So a row number is no
+  answer to "which card is the ring on": it was handed back to the first
+  card a moment after every click, which is why only the first wallpaper
+  could be picked and why the arrow keys went nowhere. The id is the ring
+  now (`picker.ringOn`), the grid's own `keyNavigationEnabled` is off and
+  the four arrows are answered by `grid.walk()`, which scrolls to what it
+  lands on. Putting the row back after each rebuild was tried first and is
+  a race: the grid resets itself when it gets round to it, which is
+  sometimes after the repair has run -- measured, with the ring landing on
+  a card nobody had pressed an arrow towards.
+
+  **And looking at a card rebuilt the whole grid.** The details answer was
+  assigned into `workshopTags` even for an id already in it, and `shown`
+  is built out of that map -- so one click destroyed every delegate and
+  put the view back to its first row. Only what is new goes in now.
+  Measured: the ring ten cards down, and the grid stayed where it was.
+
+- **The grid read "what was played when" whether or not it sorted by it.**
+  `shown` is a binding, so it depends on everything it reads -- and
+  putting a wallpaper on the desktop changes `Wallpapers.recent`, which
+  rebuilt the list and with it every card. A rebuild puts the view back to
+  its first row, so a double click somewhere down the grid started the
+  wallpaper and threw the window up to the top of the library. `recent` is
+  read inside its own `case` now, where sorting by it happens. Measured:
+  the view stayed where it was, 3 757 pixels down.
+
+- **A view that was scrolled when the window changed size is left past the
+  end of the grid, and in that state it draws nothing and will not be
+  moved.** Measured on maximising with the grid scrolled down: 2 588 down
+  a content height of 1 491, no cards drawn at all, and only a scroll of
+  somebody's own brought them back. `positionViewAtIndex`,
+  `returnToBounds`, `forceLayout` and writing `contentY` by hand were each
+  measured doing nothing there -- and this is not something the ring
+  introduced: it reproduces with the repair switched off, so it has been
+  waiting in there for a grid that was scrolled when something resized it.
+  `grid.positionViewAtBeginning()` **first**, and then
+  `positionViewAtIndex` -- rewinding gives the view somewhere to count
+  from, after which it goes where it is asked. Both in the one function,
+  so nothing is drawn in between.
+
+  **So one place does all of it.** `grid.keepTheRingInView()` is what the
+  arrows, the panel opening, every model rebuild and every resize go
+  through, and the grid asks for it on `onModelChanged`, `onWidthChanged`
+  and `onHeightChanged` -- through a 150 ms timer, which is what puts the
+  three of them together when a window is maximised and they all arrive at
+  once.
+
+- **A double click cannot be counted by the card it lands on.** A rebuild
+  between the two presses destroys the delegate, so the second press
+  reaches a different object which sees a first click -- and with the
+  model rebuilding as often as it did, a double click on anything but the
+  first card was two single clicks. `Picker.qml` counts it instead, over
+  a 400 ms timer, which also waits out the reflow: opening the panel takes
+  the grid from three columns to two, and a card that moves out from under
+  the pointer cannot be clicked a second time.
+
 - **A ring round a card is a second frame, and it takes the name in with
   it.** The preview already has a band, so an arrow-key highlight drawn as
   a rectangle over the whole card put two frames round one picture and a
