@@ -6,6 +6,54 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-22
+
+### Added
+
+- **Three of the playlist switches do what they say.** *Change wallpaper
+  when the video ends* turns on the clip rather than on the clock, and
+  holds the clock while it waits. *Allow changing while paused* decides
+  whether the clock keeps counting while a window covers the wallpaper,
+  and it picks up where it left off rather than starting the turn again.
+  *Always begin with the first wallpaper* holds the first one out of the
+  shuffle. Each behaves as Wallpaper Engine's own does, read off its
+  guides rather than guessed at.
+- **Wallpapers that fade into one another.** A playlist can cross from one
+  wallpaper to the next, go out through black, or hold the last frame over
+  the gap while the next one finds its first, over nought to three
+  seconds. There is no second player to keep the old wallpaper in, so what
+  is held is a picture of it, grabbed the instant before the switch.
+- **A playlist behind a covering window still changes.** The grab a
+  transition needs never comes back while the window is not being drawn,
+  so there is a rescue that changes the wallpaper without one.
+
+### Changed
+
+- **There is no "change wallpaper" list any more.** It offered a timer,
+  login, time of day, day of week and never; four of those were never
+  going to be written. A playlist turns on its clock, and on a video
+  ending where it was told to.
+- **Nothing in Playlist settings is a placeholder.** "The first wallpaper
+  plays only at startup" was the last one and it has gone: WallFlux is not
+  started with the session in a way that would give it a meaning.
+- **The five-second floor is in the boxes rather than in small print under
+  them.** Type three noughts and they read five seconds, which is what the
+  playlist will actually wait. The line explaining it is gone.
+- **Playlist settings reads in three pieces** — what changes and how
+  often, then the switches, then the two buttons — with room between them,
+  the words centred over the three number boxes, and rounder corners on
+  every popup.
+
+### Fixed
+
+- **A number box reading two digits could not be typed over.** Two
+  characters is the whole field, so it was full and the next keystroke was
+  refused. The boxes pick their whole number out when they are reached.
+- **Playlist settings had its labels and its controls in the wrong
+  columns.** Taking the "change wallpaper" drop down out left its label
+  behind, and one odd cell in a two-column grid shifted every row under
+  it.
+
 ## [0.9.0] — 2026-10-22
 
 ### Added
@@ -460,7 +508,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.6.0...v0.7.0
