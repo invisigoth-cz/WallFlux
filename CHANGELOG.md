@@ -6,6 +6,73 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-22
+
+### Added
+
+- **The playlist strip is in the window from the start**, empty or not --
+  a place to put something has to be visible before there is anything in
+  it. Along its top: Playlists, then Load, Save, Configure and Add
+  wallpaper, laid out as Wallpaper Engine lays them out. Add wallpaper
+  holds every tick box open so several cards can be ticked without
+  hunting for the box on each one.
+- **A saved playlist can be opened back onto the strip, and thrown away.**
+  Load is a list of what has been saved; opening one brings its wallpapers
+  and its settings back so it can be changed and saved again, and the bin
+  beside it is the only way a playlist has ever had of being deleted.
+- **Configure says what WallFlux is going to offer**: when the wallpaper
+  changes (timer, login, time of day, day of week, never), the order, the
+  transition, changing when a video ends, changing while paused and always
+  beginning with the first one. Four of those choose between things that
+  are not written yet and the popup says so; the list was the part worth
+  deciding first.
+- **Who made a wallpaper**, in both tabs: their avatar, their name, and a
+  magnifier that turns the workshop grid into everything else they have
+  published, with a chip beside the filters to come back from. Nothing
+  here needs a Steam Web API key. project.json records no author, so for
+  an installed wallpaper it takes two keyless questions rather than one.
+- **The grid takes the keyboard.** Arrows walk the cards, Enter puts one
+  on the desktop, Space ticks it into a playlist. A click moves the arrows
+  there too, so the mouse and the keyboard do not each keep a place of
+  their own.
+
+### Changed
+
+- **The details panel reads as a list rather than a column of headings**:
+  an icon and a name on the left, the value on the right, a hairline under
+  each, and the tags as chips under their own heading. The cross moved
+  into the corner of the picture. The panel is wider, the picture and the
+  name stay put, and everything under them scrolls -- with a scrollbar
+  that is there only when there is something to scroll.
+- **Previews are three hundred across** rather than two hundred and forty,
+  in the library and in the workshop both.
+- **The previews in the playlist strip are half the size they were**,
+  twenty to a row, and the room for them comes with the first ticked
+  wallpaper and goes with the last.
+- **The tick box on a card is white with a black edge, and blue when it is
+  ticked.** Fixed colours rather than the window's: the box sits on a
+  picture, and against a dark preview the palette's own colours left it
+  all but invisible.
+
+### Fixed
+
+- **An installed wallpaper showed a third of its tags.** project.json
+  carries only the genres its author ticked -- measured, one wallpaper
+  reads `Sci-Fi` on the disk and six tags in the workshop, which adds the
+  asset type, the kind, the resolution, the age rating and whether it
+  answers to sound. The workshop's list is read instead, and the Audio
+  responsive row reads it too rather than contradicting the chips under it.
+- **Searching for an author's work could not be undone.** Pressing
+  Workshop left the last author's wallpapers in the grid: clearing the
+  author alone changes nothing, because the grid is already in the
+  Workshop's own mode and nothing asks again. It asks again now.
+- **`AsNeeded` on a scrollbar did nothing.** Fusion fades the bar it draws
+  itself, and WallFlux's scrollbar replaces that -- so the policy was set,
+  the fading had gone with the thing that did it, and a full-length bar was
+  drawn down the edge of content that fitted.
+- **The arrow-key highlight was a second frame round the card**, and it
+  took the name in with it. The band around the preview turns blue instead.
+
 ## [0.7.0] — 2026-10-21
 
 ### Added
@@ -338,7 +405,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.3.2...v0.5.0
