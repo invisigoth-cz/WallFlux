@@ -4,7 +4,6 @@
 
 #include "wallpapercore.h"
 
-#include <LayerShellQt/Window>
 
 #include <QApplication>
 #include <QDir>
@@ -14,7 +13,6 @@
 #include <QQmlApplicationEngine>
 #include <QQmlNetworkAccessManagerFactory>
 #include <QLoggingCategory>
-#include <QQuickWindow>
 #include <QStandardPaths>
 #include <QtWebEngineQuick>
 
@@ -115,40 +113,19 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
     engine.loadFromModule("WallFlux", "Main");
 
-    const QList<QObject *> roots = engine.rootObjects();
-    auto *window = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.first());
-    if (!window) {
-        qWarning("wallflux: the QML did not give us a window to show");
+    if (engine.rootObjects().isEmpty()) {
+        qWarning("wallflux: the QML did not load");
         return 1;
     }
 
-    // Asked for while the window is still only a QWindow: once it has reached
-    // the compositor it is an ordinary surface and cannot be made into a
-    // layer-shell one. This is why Main.qml leaves the window hidden.
-    if (LayerShellQt::Window *layer = LayerShellQt::Window::get(window)) {
-        using Layer = LayerShellQt::Window;
-        // Bottom rather than background. Plasma draws its own desktop --
-        // wallpaper, icons and widgets -- into a background-layer surface of
-        // its own, and clicking the desktop raises that surface above ours
-        // within the same layer, which took the wallpaper off the screen.
-        // Layers are a fixed order the compositor will not reshuffle, and
-        // bottom is still below every ordinary window.
-        layer->setLayer(Layer::LayerBottom);
-        // Anchored to all four edges, which is what makes the compositor give
-        // it the whole screen.
-        layer->setAnchors(Layer::Anchors(Layer::AnchorTop | Layer::AnchorBottom
-                                        | Layer::AnchorLeft | Layer::AnchorRight));
-        // A wallpaper reserves no space of its own and never takes the
-        // keyboard, so panels keep their room and focus never lands here.
-        layer->setExclusiveZone(-1);
-        layer->setKeyboardInteractivity(Layer::KeyboardInteractivityNone);
-        layer->setActivateOnShow(false);
-        // The compositor reads the scope as the surface's role; KWin sees
-        // this one as a desktop rather than as a panel.
-        layer->setScope(QStringLiteral("desktop"));
-    }
-
-    window->show();
+    // No window is shown from here any more. A wallpaper is a layer-shell
+    // surface and a layer-shell surface belongs to one screen, so there is
+    // one window per screen and they come and go with the monitors --
+    // which only QML is in a position to notice. `Desktop::asWallpaper()`
+    // is what used to be written out below, called by each window while it
+    // is still hidden, for the same reason it was done before `show()`:
+    // a surface that has reached the compositor cannot be made into a
+    // layer-shell one afterwards.
 
     return app.exec();
 }

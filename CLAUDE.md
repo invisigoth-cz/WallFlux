@@ -127,6 +127,18 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Displays, Settings, centred. The first two are built; the other two say
   "Coming soon" and are there because naming them is what decides where
   the next piece of work goes.
+- **A wallpaper on every screen that is ticked for it.** The Displays tab
+  draws the monitors as they are arranged -- read off their positions on
+  the shared desktop, so it is the arrangement somebody set up in their own
+  display settings -- and gives each a switch. One wallpaper, drawn on the
+  ticked ones; not a wallpaper per screen.
+
+  **The screens are Qt's own**, `Qt.application.screens`. No `xrandr`, no
+  `wlr-randr`, no `kscreen-doctor`, nobody's output parsed: Qt names a
+  screen after its connector, which is the same name KDE's display
+  settings show and the same one under `/sys/class/drm`. Checked against
+  all three on this machine.
+
 - **A panel beside the grid saying what a wallpaper is.** A click opens
   it, in either tab: the picture with a cross in its corner, the name, and
   under that a button saying who made it -- their avatar, their name and a
@@ -177,7 +189,9 @@ click does nothing.
 ## Layout
 
 ```
-src/main.cpp          WebEngine init, the single-copy lock, layer-shell setup
+src/main.cpp          WebEngine init and the single-copy lock
+src/desktop.h         Desktop: turning a window into a wallpaper
+src/desktop.cpp       the layer-shell settings, asked for per window
 src/wallpapercore.h   WallpaperKind::Kind, Wallpaper (Q_GADGET), WallpaperCore
 src/wallpapercore.cpp scanning Steam's folders, reading project.json
 src/language.h        Language: the EN/CZ switch, and what it has to call
@@ -192,7 +206,13 @@ src/tags.h            Tags: what a workshop tag is called, and the genres
 src/tags.cpp          reads Wallpaper Engine's locale/, 36 languages
 src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
-qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
+qml/Main.qml          the program: the tray icon, the picker, one surface
+                      per screen, and the transitions they share
+qml/WallpaperSurface.qml  one screen's wallpaper: the layer-shell window,
+                      the web view, the player, and what a transition
+                      holds over them
+qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
+                      switch for each
 qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band and its name
 qml/Details.qml       what is known about one wallpaper, beside the grid --
@@ -321,9 +341,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   not started at the next start, which keeps the rule above intact.
 - **The tray icon is the whole interface.** Not a CLI, not a Plasma plugin;
   both were considered and turned down.
-- **Layer-shell is set up in C++**, from `main()`, before the window reaches
-  the compositor — which is why `Main.qml` has `visible: false` and `main()`
-  calls `show()`.
+- **Layer-shell is set up in C++**, before the window reaches the
+  compositor — which is why a surface is built `visible: false` and shown
+  by hand afterwards. It used to be `main()` doing that to the one window
+  there was; a wallpaper belongs to one screen, so there is one window per
+  screen now and they come and go with the monitors, which only QML is in
+  a position to notice. `Desktop::asWallpaper(window)` is what `main()`
+  used to write out.
 
 ## Traps, each one found the expensive way
 

@@ -38,6 +38,10 @@ Window {
     /// remembers nothing.
     property real volume: 1
 
+    /// The names of the screens the wallpaper is wanted on. Read by
+    /// `Main.qml`, which builds one surface per name.
+    readonly property var screensWanted: displays.wanted
+
     /// Which way the colours go. Dark to start with, because a wallpaper
     /// picker is a window full of pictures.
     property bool dark: true
@@ -1925,19 +1929,29 @@ Window {
                 source: "WorkshopView.qml"
             }
 
-            // The three that are not built yet. One component, three times,
-            // because three copies of the same label is three places to
-            // change when one of them stops being a placeholder.
-            component Later: Label {
+            DisplaysView {
+                id: displays
+
+                // Every screen to begin with. Done here rather than as a
+                // default on the view, because the list of screens is not
+                // there yet when the view is built.
+                Component.onCompleted: {
+                    const names = [];
+                    const all = Qt.application.screens;
+                    for (let i = 0; i < all.length; ++i)
+                        names.push(all[i].name);
+                    displays.wanted = names;
+                }
+            }
+
+            // The one that is not built yet.
+            Label {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 opacity: 0.5
                 font.pixelSize: 18
                 text: qsTr("Coming soon")
             }
-
-            Later {}
-            Later {}
         }
 
         Rectangle {

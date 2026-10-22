@@ -2,14 +2,22 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Window
-import QtMultimedia
-import QtWebEngine
 import Qt.labs.platform as Platform
 import WallFlux
 
-Window {
+/// The program: a tray icon, the picker, and a wallpaper on every screen
+/// it is wanted on.
+///
+/// Not a window itself any more. A wallpaper is a layer-shell surface and
+/// a layer-shell surface belongs to one screen, so there is one window per
+/// screen -- `WallpaperSurface.qml` -- and this holds what they all show.
+/// One chosen wallpaper and one running playlist, handed down, rather than
+/// three screens each keeping their own idea of what is playing.
+Item {
     id: root
 
     /// Which drawer the chosen wallpaper belongs to. Both want a file on
@@ -20,7 +28,7 @@ Window {
                                          && Wallpapers.current.hasFile
 
     /// Whether what is chosen is of a kind this program can draw today.
-    readonly property bool playing: showingWeb || showingVideo
+    readonly property bool playing: root.showingWeb || root.showingVideo
 
     /// Whether the wallpaper should be making no sound.
     ///
@@ -34,14 +42,18 @@ Window {
     /// Whether a window is filling the screen in front of the wallpaper.
     ///
     /// Nothing of the wallpaper is on screen then, so it stops rather than
-    /// going on decoding frames and running JavaScript behind a game. Named
-    /// here rather than reached for twice below, because what follows reads
-    /// as what it is for and not as where the answer came from.
+    /// going on decoding frames and running JavaScript behind a game.
+    ///
+    /// One answer for every screen, because that is all `ScreenCover` can
+    /// say: KWin is asked whether *a* window covers the wallpaper, not
+    /// which screen it is on. A second monitor nobody has covered is
+    /// stopped along with the first; worth knowing before it is called a
+    /// bug.
     readonly property bool covered: ScreenCover.covered
 
     /// Whether the running playlist's clock should be standing still.
     ///
-    /// Two reasons, and this window is the only place that knows either.
+    /// Two reasons, and this program is the only place that knows either.
     /// A playlist told to turn when a video ends is waiting on the video
     /// and not on the clock -- and only here is it known that what is on
     /// the screen is a video at all. And a playlist not told to carry on
@@ -55,42 +67,46 @@ Window {
 
     onHoldingThePlaylistChanged: Playlists.hold(root.holdingThePlaylist)
 
-    onCoveredChanged: {
-        if (root.covered) {
-            player.pause();
-            return;
-        }
-        // Asked for only where there is a video to resume: play() with
-        // nothing loaded is how this player ends up stopped for good.
-        if (root.showingVideo)
-            player.play();
-    }
-
-    // Layer-shell takes the size from its anchors, so no fullscreen state is
-    // asked for. These two are what the window falls back to where there is
-    // no layer-shell, such as under X11.
-    width: Screen.width
-    height: Screen.height
-
-    // Transparent for input is what lets a click fall through to the desktop
-    // underneath; without it the wallpaper would swallow every one.
-    flags: Qt.FramelessWindowHint | Qt.WindowTransparentForInput
-
-    // Shown by main(), not here: the layer-shell surface has to be asked for
-    // before the window reaches the compositor, and showing it from QML would
-    // be too early for that.
-    visible: false
-    // Transparent while nothing is playing, so the desktop's own wallpaper
-    // shows through rather than being covered by a black rectangle. Black
-    // under a wallpaper that is playing, which is what a video's letterbox
-    // edges sit on in the moment before the first frame arrives.
-    color: root.playing ? "black" : "transparent"
-    title: qsTr("WallFlux")
-
     function showPicker() {
         picker.show();
         picker.raise();
         picker.requestActivate();
+    }
+
+    // One wallpaper per screen. The model is Qt's own list of screens, so
+    // plugging a monitor in builds another surface and unplugging one
+    // takes its surface with it -- there is nothing here to keep in step
+    // with the compositor.
+    //
+    // Qt names a screen after its connector, which is the same name KDE's
+    // display settings and /sys/class/drm use. No `xrandr`, no
+    // `kscreen-doctor`, no parsing anybody's output.
+    Instantiator {
+        id: surfaces
+
+        // The screens the Displays tab has ticked, as screen objects.
+        model: {
+            const kept = [];
+            const all = Qt.application.screens;
+            for (let i = 0; i < all.length; ++i) {
+                if (picker.screensWanted.indexOf(all[i].name) >= 0)
+                    kept.push(all[i]);
+            }
+            return kept;
+        }
+
+        delegate: WallpaperSurface {
+            required property var modelData
+
+            onScreen: modelData
+            showingWeb: root.showingWeb
+            showingVideo: root.showingVideo
+            playing: root.playing
+            silent: root.silent
+            covered: root.covered
+            volume: picker.volume
+            onHeld: root.oneIsHolding()
+        }
     }
 
     // Nothing is chosen at startup, by design: the program comes up as an
@@ -100,133 +116,90 @@ Window {
     Picker {
         id: picker
 
-        // Not transient for the wallpaper. That one is a layer-shell surface
-        // the compositor keeps in the background and takes no input, and a
-        // window belonging to it would be dragged down there with it.
+        // Not transient for a wallpaper. Those are layer-shell surfaces the
+        // compositor keeps in the background and which take no input, and a
+        // window belonging to one would be dragged down there with it.
         transientParent: null
         onChose: (id) => Wallpapers.select(id)
     }
 
-    /// The wallpaper a transition is on its way to, or empty while none
-    /// is running. Also what says a transition *is* running.
+    // ---- Transitions ---------------------------------------------------
+
+    /// The wallpaper a transition is on its way to, or empty while none is
+    /// running. Also what says a transition *is* running.
     property string arriving: ""
 
-    /// Which transition is actually running. The same as the playlist's,
-    /// except that "random" is rolled here -- once per change, and held
-    /// for the length of that change so the end of it matches the start.
+    /// Which transition is running. The playlist's, except that "random"
+    /// is rolled here -- once per change, and held for the length of it,
+    /// so every screen fades the same way and the end of a transition
+    /// matches its start.
     property string fading: ""
+
+    /// How many screens have yet to say they are holding still.
+    property int waiting: 0
 
     /// Puts a wallpaper on the desktop the way the running playlist asked
     /// for.
     ///
-    /// Four ways, and three of them need the old wallpaper to stay on the
-    /// screen after it has stopped being the wallpaper. There is no second
-    /// player to hold it in -- one video and one web view is all there is
-    /// -- so what is held is a picture of it, grabbed the instant before
-    /// the switch. `leaving` is that picture.
+    /// Every screen is asked to hold what it has, and the wallpaper is
+    /// changed only once they all have. Changing it as each one answers
+    /// would leave the slowest screen holding a picture of the *new*
+    /// wallpaper -- a fade from a thing to itself, which is a cut.
     function changeTo(id) {
         const asked = Playlists.transition;
         root.fading = asked === "random" ? (Math.random() < 0.5 ? "fade" : "black") : asked;
 
         // Nothing to cross from on the first wallpaper of a playlist, and
         // nothing asked for in the other two cases.
-        if (root.fading === "" || root.fading === "none" || !root.playing) {
+        if (root.fading === "" || root.fading === "none" || !root.playing
+            || surfaces.count === 0) {
             Wallpapers.select(id);
-            return;
-        }
-
-        if (root.fading === "black") {
-            root.arriving = id;
-            throughBlack.start();
             return;
         }
 
         root.arriving = id;
-        // Grabbing is asynchronous and the callback never comes at all
-        // when the window is not being drawn -- which is exactly what a
-        // covered screen means. The rescue is why a covered wallpaper
-        // still changes.
-        if (!root.contentItem.grabToImage((result) => root.holdAndSwap(result)))
-            root.swapNow();
-        else
+        root.waiting = surfaces.count;
+
+        // Only the ways that hold a *picture* need rescuing. Going out
+        // through black holds nothing: its own animation says when it is
+        // ready, and that is half the transition away -- the rescue fired
+        // first and the veil never got off the ground, so the screen never
+        // went black at all. Measured: rgb 0.46 halfway through what was
+        // meant to be the darkest moment of it.
+        if (root.fading !== "black")
             rescue.restart();
+        for (let i = 0; i < surfaces.count; ++i)
+            surfaces.objectAt(i).holdStill(root.fading, Playlists.transitionMs);
     }
 
-    /// The picture came back: hold it over the screen, change underneath
-    /// it, and take it away in the manner asked for.
-    function holdAndSwap(result) {
-        rescue.stop();
+    /// One screen is holding. The last one to say so is what lets the
+    /// change happen.
+    function oneIsHolding() {
         if (root.arriving === "")
             return;
-
-        leaving.source = result.url;
-        leaving.opacity = 1;
+        root.waiting -= 1;
+        if (root.waiting > 0)
+            return;
+        rescue.stop();
         root.swapNow();
-
-        // "None (reduce flicker)" is not a fade. It holds the last frame
-        // over the gap while the next wallpaper finds its first one, which
-        // is the black blink it is named for.
-        if (root.fading === "soft")
-            holdOn.restart();
-        else
-            crossOver.start();
     }
 
-    /// Changes the wallpaper and forgets that a transition was running.
+    /// Changes the wallpaper and lets every screen go again.
     function swapNow() {
         const id = root.arriving;
+        const how = root.fading;
         root.arriving = "";
+        root.waiting = 0;
+
         if (id !== "")
             Wallpapers.select(id);
+        for (let i = 0; i < surfaces.count; ++i)
+            surfaces.objectAt(i).release(how, Playlists.transitionMs);
     }
 
-    /// Out through black and back. The one transition that needs no
-    /// picture of anything: a black rectangle over the lot, and the
-    /// wallpaper changed behind it while nothing can be seen.
-    SequentialAnimation {
-        id: throughBlack
-
-        NumberAnimation {
-            target: veil
-            property: "opacity"
-            to: 1
-            duration: Math.max(1, Playlists.transitionMs / 2)
-        }
-        ScriptAction { script: root.swapNow() }
-        NumberAnimation {
-            target: veil
-            property: "opacity"
-            to: 0
-            duration: Math.max(1, Playlists.transitionMs / 2)
-        }
-        ScriptAction { script: leaving.source = "" }
-    }
-
-    /// The old wallpaper fading off the new one.
-    NumberAnimation {
-        id: crossOver
-
-        target: leaving
-        property: "opacity"
-        to: 0
-        duration: Math.max(1, Playlists.transitionMs)
-        onFinished: leaving.source = ""
-    }
-
-    /// Long enough for the next wallpaper to have a frame to show, and no
-    /// longer: this is the transition that is meant to look like none.
-    Timer {
-        id: holdOn
-
-        interval: 300
-        onTriggered: {
-            leaving.opacity = 0;
-            leaving.source = "";
-        }
-    }
-
-    /// The grab that never came back. Without this a wallpaper behind a
-    /// maximised window would simply never change.
+    /// The screen that never answered. A grab comes back only while the
+    /// window is being drawn, and a covered screen is not -- without this
+    /// a playlist behind a maximised window would simply never change.
     Timer {
         id: rescue
 
@@ -251,9 +224,9 @@ Window {
         }
     }
 
-    // The only thing a person can click: the wallpaper itself is in the
-    // background layer and transparent to input, so without this there would
-    // be no way to reach the picker at all.
+    // The only thing a person can click: the wallpapers are in the
+    // background layer and transparent to input, so without this there
+    // would be no way to reach the picker at all.
     Platform.SystemTrayIcon {
         visible: true
         // From the icon theme rather than shipped with us; Breeze and every
@@ -263,8 +236,6 @@ Window {
                  ? qsTr("WallFlux — %1").arg(Wallpapers.current.title)
                  : qsTr("WallFlux")
 
-        // A plain left click is the shortest way to the grid; the menu is
-        // for everything else.
         onActivated: (reason) => {
             if (reason === Platform.SystemTrayIcon.Trigger)
                 root.showPicker();
@@ -282,130 +253,4 @@ Window {
             }
         }
     }
-
-    WebEngineView {
-        id: web
-
-        anchors.fill: parent
-        visible: root.showingWeb && !root.covered
-        // A web wallpaper is a page and can make noise of its own, so the
-        // switch has to reach this one too, not just the video.
-        audioMuted: root.silent
-        // Already a file:// URL. The path was turned into one in C++, where
-        // the spaces, brackets and Chinese characters these file names carry
-        // get escaped properly; pasting "file://" onto the front of a plain
-        // path here would break exactly those.
-        url: root.showingWeb ? Wallpapers.current.source : "about:blank"
-
-        // Frozen, not merely hidden: a hidden page still runs its timers,
-        // and these wallpapers are animation loops that would go on burning
-        // a core behind a fullscreen window. Chromium will not freeze a page
-        // that is still on screen, which is why this follows the visibility
-        // rather than the cover itself -- by the time the view is hidden it
-        // can be frozen, and it is woken again before it is shown.
-        onVisibleChanged: web.lifecycleState = web.visible
-                              ? WebEngineView.LifecycleState.Active
-                              : WebEngineView.LifecycleState.Frozen
-    }
-
-    // Video wallpapers are short clips meant to run on end. Their sound --
-    // where they have any -- plays, which is what Wallpaper Engine does too;
-    // the switch for it belongs to the interface, once there is one.
-    //
-    // A player and a surface rather than the `Video` convenience item,
-    // which wraps exactly these two and hides the one property this needs:
-    // `mediaStatus`. Its `stopped` signal is not a stand-in -- it fires
-    // when a source is swapped as well as when a clip ends, so a playlist
-    // turning from one video to another would have turned twice.
-    VideoOutput {
-        id: video
-
-        anchors.fill: parent
-        visible: root.showingVideo
-        // A wallpaper fills the screen; the clip's own shape gives way rather
-        // than leaving bars down the sides.
-        fillMode: VideoOutput.PreserveAspectCrop
-    }
-
-    MediaPlayer {
-        id: player
-
-        videoOutput: video
-        source: root.showingVideo ? Wallpapers.current.source : ""
-        // Round and round, unless a playlist is waiting for the end of it:
-        // a video told to loop for ever never reports an end, so there
-        // would be nothing to turn on.
-        loops: Playlists.changesOnVideoEnd ? 1 : MediaPlayer.Infinite
-
-        audioOutput: AudioOutput {
-            muted: root.silent
-            // Set from the slider on the wallpaper's own card in the picker.
-            volume: picker.volume
-        }
-
-        // autoPlay starts the first file and no other: hand it a second one
-        // and it loads it, says nothing, reports no error and sits there
-        // stopped. Measured, not guessed -- twenty-four switches gave one
-        // start with autoPlay and twenty-five with this. Switching wallpaper
-        // is the whole point of the picker, so it cannot be left to that.
-        onSourceChanged: {
-            if (root.showingVideo && !root.covered)
-                player.play();
-        }
-
-        onMediaStatusChanged: {
-            if (player.mediaStatus !== MediaPlayer.EndOfMedia)
-                return;
-
-            // Told to turn when the video ends, so that is what its end
-            // means. The playlist picks the next one and `onPlays` puts it
-            // on, the same way a click does.
-            if (Playlists.changesOnVideoEnd)
-                Playlists.next();
-
-            // Then play whatever is on the screen now. Usually the next
-            // wallpaper, which `onSourceChanged` has already started and
-            // which this leaves alone -- but a playlist of one wallpaper
-            // turns to itself, and `select()` stays silent when the choice
-            // has not changed, so without this the video would sit there
-            // on its last frame for good.
-            if (root.showingVideo && !root.covered)
-                player.play();
-        }
-
-        onErrorOccurred: (error, errorString) =>
-            console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
-    }
-
-    // The two things a transition is made of, over everything else and in
-    // this order: the picture of the wallpaper that is leaving, and the
-    // black that one of the transitions goes out through.
-    //
-    // Neither takes any input -- the whole window is a background surface
-    // that takes none -- and both are nothing at all until a transition
-    // runs.
-    Image {
-        id: leaving
-
-        anchors.fill: parent
-        z: 1
-        opacity: 0
-        visible: leaving.opacity > 0 && leaving.source !== ""
-        fillMode: Image.PreserveAspectCrop
-        // The grab is the size of the window, so this is drawing it back
-        // at the size it was taken at; smoothing it would only cost.
-        smooth: false
-        cache: false
-    }
-
-    Rectangle {
-        id: veil
-
-        anchors.fill: parent
-        z: 2
-        color: "black"
-        opacity: 0
-        visible: veil.opacity > 0
-    }
-
 }
