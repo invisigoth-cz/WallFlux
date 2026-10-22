@@ -25,6 +25,14 @@ ScrollBar {
     // hit. This is the least of the bar it is ever drawn as.
     minimumSize: 0.08
 
+    // `AsNeeded` has to be done here, because Fusion does it by fading the
+    // contentItem it draws and this replaces that contentItem. Set the
+    // policy and nothing happens: a full-length bar is drawn down the edge
+    // of content that fits. Measured in a maximised window, where there
+    // was plainly nothing to scroll and a bar saying there was.
+    visible: bar.policy !== ScrollBar.AlwaysOff
+             && (bar.policy === ScrollBar.AlwaysOn || bar.size < 1)
+
     contentItem: Rectangle {
         implicitWidth: 9
         implicitHeight: 9

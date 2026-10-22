@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import WallFlux
+import "steamprofile.js" as Steam
 
 /// The Steam Workshop: three and a quarter million wallpapers, two ways in.
 ///
@@ -29,7 +30,7 @@ Item {
 
     /// The same width a card has in the library, so a wallpaper is the same
     /// size whether it is installed or not.
-    readonly property int cardWidth: 240
+    readonly property int cardWidth: 300
     readonly property int cardHeight: Math.round((workshop.cardWidth - 16) * 9 / 16) + 46
 
     /// Which of Wallpaper Engine's catalogues to call the tags by.
@@ -39,7 +40,7 @@ Item {
     /// CDN to resize one is a trap** -- measured twice, in both directions.
     ///
     /// It looks like the obvious saving: a preview is a few hundred
-    /// kilobytes and a card draws it 240 across, and Steam's own pages put
+    /// kilobytes and a card draws it 300 across, and Steam's own pages put
     /// `?imw=...&imh=...&ima=fit&impolicy=Letterbox` on the same URLs. For
     /// a photograph it is a real saving -- 296 kB becomes 11 kB. But most
     /// of the workshop's previews are animated, and for those:
@@ -69,6 +70,65 @@ Item {
     function inspect(item) {
         workshop.inspected = item;
         shown.visible = true;
+        if (item)
+            workshop.lookUpAuthor(item.owner);
+    }
+
+    /// Who an account is, keyed by steamID64: `{ name, avatar }`. Filled
+    /// in as the answers arrive; the asking itself is steamprofile.js,
+    /// which the library shares.
+    property var authors: ({})
+
+    /// The one the panel is about: the name and the face once they have
+    /// arrived, and a row of dots in the meantime.
+    ///
+    /// Not null until the answer lands. The button appeared a second after
+    /// the panel did, which is how it came to be missed altogether -- it
+    /// is there as soon as there is somebody to ask about.
+    readonly property var inspectedAuthor: {
+        const id = workshop.inspected ? workshop.inspected.owner : "";
+        if (!id || id === "0")
+            return null;
+        return workshop.authors[id] || { name: "…", avatar: "" };
+    }
+
+    function lookUpAuthor(id) {
+        Steam.profileOf(id, function (who) {
+            // A new object, not the one already there: assigning the same
+            // reference back changes nothing anybody is bound to.
+            const known = Object.assign({}, workshop.authors);
+            known[id] = who;
+            workshop.authors = known;
+            if (workshop.creator === id)
+                workshop.creatorName = who.name;
+        });
+    }
+
+    /// Whose work the grid is narrowed to, as a steamID64, and what to
+    /// call them. Empty while it is the whole workshop.
+    property string creator: ""
+    property string creatorName: ""
+
+    /// Everything else by whoever made the wallpaper in the panel. Asked
+    /// for here, or from the library's panel, which has no grid of its own
+    /// to answer with.
+    function everythingBy(id) {
+        workshop.creator = id;
+        // The id stands in until the name arrives -- which for anybody
+        // already asked about, in either tab, is the same instant.
+        workshop.creatorName = id;
+        workshop.lookUpAuthor(id);
+        workshop.section = null;
+        workshop.mode = 1;
+        searchField.text = "";
+        workshop.search = "";
+        workshop.askAfresh();
+    }
+
+    function wholeWorkshopAgain() {
+        workshop.creator = "";
+        workshop.creatorName = "";
+        workshop.askAfresh();
     }
 
     /// Whether this is one of the workshop's building blocks rather than
@@ -107,33 +167,29 @@ Item {
         const told = [];
         const kind = workshop.firstOf(item.tags, Tags.types, language);
         if (kind)
-            told.push({ label: qsTr("Type"), value: kind });
+            told.push({ label: qsTr("Type"), icon: "layer-visible-on", value: kind });
 
         const size = workshop.firstOf(item.tags, Tags.resolutions, language);
         if (size)
-            told.push({ label: qsTr("Resolution"), value: size });
+            told.push({ label: qsTr("Resolution"), icon: "monitor", value: size });
 
         if (item.bytes > 0) {
-            told.push({ label: qsTr("Size"),
+            told.push({ label: qsTr("Size"), icon: "drive-harddisk",
                         value: qsTr("%1 MB").arg(Math.round(item.bytes / 1048576)) });
         }
 
         const rating = workshop.firstOf(item.tags, Tags.ratings, language);
         if (rating)
-            told.push({ label: qsTr("Age rating"), value: rating });
+            told.push({ label: qsTr("Age rating"), icon: "flag", value: rating });
 
-        told.push({ label: qsTr("Audio responsive"),
+        told.push({ label: qsTr("Audio responsive"), icon: "audio-volume-high",
                     value: item.tags.indexOf("Audio responsive") >= 0 ? qsTr("Yes")
                                                                       : qsTr("Not stated") });
 
         if (item.votesUp > 0)
-            told.push({ label: qsTr("Likes"), value: String(item.votesUp) });
+            told.push({ label: qsTr("Likes"), icon: "draw-star", value: String(item.votesUp) });
 
-        if (item.tags.length > 0)
-            told.push({ label: qsTr("Tags"), value: Tags.labelled(item.tags, workshop.catalogue)
-                                                        .map((one) => one.l).join(", ") });
-
-        told.push({ label: qsTr("Workshop id"), value: item.id });
+        told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: item.id });
         return told;
     }
 
@@ -304,7 +360,10 @@ Item {
                           open ? (workshop.section.tag ? [workshop.section.tag] : [])
                                : filters.picked,
                           open ? "" : workshop.search,
-                          true);
+                          true,
+                          // A section is somebody else's row, so it is
+                          // never one author's.
+                          open ? "" : workshop.creator);
     }
 
     /// Goes to a page, which is the same thing whichever arrow or number
@@ -513,7 +572,11 @@ Item {
                 ButtonGroup.group: layouts
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Discover")
-                onClicked: workshop.mode = 0
+                onClicked: {
+                    workshop.mode = 0;
+                    workshop.creator = "";
+                    workshop.creatorName = "";
+                }
             }
             RoundedTool {
                 icon.name: "view-list-icons"
@@ -523,7 +586,19 @@ Item {
                 ButtonGroup.group: layouts
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Workshop")
-                onClicked: workshop.mode = 1
+                // The whole of it, whoever was being looked at. Clearing
+                // the author is not enough on its own: coming here from a
+                // grid that was already in mode 1 changes nothing, so
+                // `onModeChanged` never fires and the last author's work
+                // sits there under a button that says Workshop.
+                onClicked: {
+                    const narrowed = workshop.creator !== "";
+                    workshop.creator = "";
+                    workshop.creatorName = "";
+                    workshop.mode = 1;
+                    if (narrowed)
+                        workshop.askAfresh();
+                }
             }
 
             TextField {
@@ -546,6 +621,10 @@ Item {
                     onTriggered: {
                         workshop.mode = 1;
                         workshop.search = searchField.text;
+                        // Searching is a question about the workshop, not
+                        // about whoever was being looked at.
+                        workshop.creator = "";
+                        workshop.creatorName = "";
                         workshop.askAfresh();
                     }
                 }
@@ -583,6 +662,19 @@ Item {
                 }
             }
 
+            // Whose work is being shown, while it is one person's. A chip
+            // rather than a line of type: it is a filter, and it comes off
+            // the way the filters do.
+            RoundedButton {
+                text: qsTr("By %1").arg(workshop.creatorName)
+                icon.name: "user-identity"
+                visible: workshop.mode === 1 && workshop.creator !== ""
+                accent: "#3daee9"
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Back to the whole workshop")
+                onClicked: workshop.wholeWorkshopAgain()
+            }
+
             RoundedButton {
                 text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                          : qsTr("Filters")
@@ -595,6 +687,9 @@ Item {
                 // The panel stands in the layout beside the grid rather
                 // than popping up over it, so it is in the same place
                 // whatever size the window is -- see WorkshopFilters.qml.
+                // Blue while the panel it opens is open, so the
+                // button says which of its two states it is in.
+                accent: filters.visible ? "#3daee9" : "transparent"
                 onClicked: filters.visible = !filters.visible
             }
 
@@ -778,7 +873,11 @@ Item {
                                 icon.color: workshop.palette.windowText
                                 ToolTip.visible: hovered
                                 ToolTip.text: qsTr("Back to Discover")
-                                onClicked: workshop.mode = 0
+                                onClicked: {
+                    workshop.mode = 0;
+                    workshop.creator = "";
+                    workshop.creatorName = "";
+                }
                             }
 
                             Label {
@@ -943,6 +1042,12 @@ Item {
                 preview: workshop.inspected ? workshop.inspected.preview : ""
                 title: workshop.inspected ? workshop.inspected.title : ""
                 facts: workshop.factsFor(workshop.inspected, Language.czech)
+                tags: workshop.inspected
+                      ? Tags.labelled(workshop.inspected.tags, workshop.catalogue)
+                            .map((one) => one.l)
+                      : []
+                author: workshop.inspectedAuthor
+                onAuthorAsked: workshop.everythingBy(workshop.inspected.owner)
                 onClosed: {
                     shown.visible = false;
                     workshop.inspected = null;

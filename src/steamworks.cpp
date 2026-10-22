@@ -143,6 +143,13 @@ constexpr int DownloadFinishedId = 3406;
 constexpr qint32 ResultOk = 1;
 constexpr int MatchingItemsReadyToUse = 2;
 
+/// EUserUGCList and EUserUGCListSortOrder, for a question about one
+/// account's own work. Read out of Valve's headers rather than guessed,
+/// the same as every other number in this file.
+constexpr int UserListPublished = 0;      // k_EUserUGCList_Published
+constexpr int MatchingAll = ~0;           // k_EUGCMatchingUGCType_All
+constexpr int UserSortByCreationDesc = 0; // k_EUserUGCListSortOrder_CreationOrderDesc
+
 /// The ranking a free-text search is the only sensible one under: Steam
 /// orders by how well the text matched, so any other ranking would throw
 /// the match away.
@@ -223,6 +230,9 @@ bool Steamworks::open()
                      "SteamAPI_ManualDispatch_GetAPICallResult");
     WALLFLUX_RESOLVE(m_createQuery, quint64 (*)(void *, int, int, quint32, quint32, quint32),
                      "SteamAPI_ISteamUGC_CreateQueryAllUGCRequestPage");
+    WALLFLUX_RESOLVE(m_createUserQuery,
+                     quint64 (*)(void *, quint32, int, int, int, quint32, quint32, quint32),
+                     "SteamAPI_ISteamUGC_CreateQueryUserUGCRequest");
     WALLFLUX_RESOLVE(m_sendQuery, quint64 (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_SendQueryUGCRequest");
     WALLFLUX_RESOLVE(m_queryResult, bool (*)(void *, quint64, quint32, void *),
@@ -247,7 +257,8 @@ bool Steamworks::open()
 #undef WALLFLUX_RESOLVE
 
     if (!initSafe || !steamUser || !findInterface || !dispatchInit || !steamPipe || !m_runFrame
-        || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery || !m_sendQuery
+        || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery
+        || !m_createUserQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
         || !m_unsubscribe || !m_downloadItem || !m_downloadInfo || !m_requireTag
         || !m_searchText) {
@@ -305,7 +316,8 @@ void Steamworks::retry()
 }
 
 void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
-                        const QStringList &tags, const QString &search, bool urgent)
+                        const QStringList &tags, const QString &search, bool urgent,
+                        const QString &creator)
 {
     if (!m_ugc)
         return;
@@ -313,7 +325,7 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     // One at a time: a query handle has to be released before the next is
     // made, so a question asked while one is outstanding waits its turn.
     if (m_call != 0) {
-        const Question question{key, order, page, tags, search};
+        const Question question{key, order, page, tags, search, creator};
 
         // A name already waiting is overwritten rather than added to. Only
         // the last answer under a name is ever shown, so asking for the
@@ -337,9 +349,22 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     m_asking = key;
 
     const quint32 app = QByteArrayView(WallpaperEngineAppId).toByteArray().toUInt();
-    const int ranking = search.isEmpty() ? ugcOrder(order) : RankedByTextSearch;
-    m_query = m_createQuery(m_ugc, ranking, MatchingItemsReadyToUse, 0, app,
-                            static_cast<quint32>(qMax(1, page)));
+    const quint32 at = static_cast<quint32>(qMax(1, page));
+
+    if (creator.isEmpty()) {
+        const int ranking = search.isEmpty() ? ugcOrder(order) : RankedByTextSearch;
+        m_query = m_createQuery(m_ugc, ranking, MatchingItemsReadyToUse, 0, app, at);
+    } else {
+        // One account's published work is a different call with a
+        // different list of orders -- none of which is Trending -- so the
+        // order the picker is set to has nothing to say here and newest
+        // first is what the workshop's own author pages do.
+        //
+        // An AccountID_t is the bottom half of a steamID64.
+        const quint32 account = static_cast<quint32>(creator.toULongLong() & 0xFFFFFFFFULL);
+        m_query = m_createUserQuery(m_ugc, account, UserListPublished, MatchingAll,
+                                    UserSortByCreationDesc, app, app, at);
+    }
     if (!m_query) {
         qCWarning(lcSteam) << "the workshop would not take the question";
         return;
@@ -530,6 +555,9 @@ void Steamworks::collect(quint64 call, int callbackId, int paramSize)
                  textIn(item.tags, sizeof(item.tags)).split(QLatin1Char(','), Qt::SkipEmptyParts)},
                 {QStringLiteral("bytes"), item.fileSize},
                 {QStringLiteral("votesUp"), item.votesUp},
+                // A steamID64, as a string: it does not fit a double and
+                // QML would round it on the way through.
+                {QStringLiteral("owner"), QString::number(item.owner)},
             });
         }
         qCInfo(lcSteam) << m_asking << "returned" << landing.size() << "of" << finished->total;
@@ -555,7 +583,8 @@ void Steamworks::askNext()
     const Question next = m_queued.takeFirst();
     // Already at the head of the queue, so its turn is now whatever it was
     // asked as.
-    browse(next.key, next.order, next.page, next.tags, next.search);
+    browse(next.key, next.order, next.page, next.tags, next.search, false,
+           next.creator);
 }
 
 Steamworks::~Steamworks()

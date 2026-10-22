@@ -36,6 +36,16 @@ Item {
     /// Asked for when the tick box is clicked.
     signal tickAsked()
 
+    /// Whether this is the one the arrow keys are on. Drawn as a ring
+    /// round the whole card: the band along the preview already says
+    /// whether it can be played, and a second band would be a riddle.
+    property bool current: false
+
+    /// Whether the tick box shows without the pointer being on the card --
+    /// what Add wallpaper in the playlist strip switches on, so several
+    /// can be ticked without hunting for the box on each one.
+    property bool showTick: false
+
     /// Whether this is one a click can do something with. A scene wallpaper
     /// is listed and nothing more.
     readonly property bool usable: card.wallpaper.playable
@@ -64,7 +74,15 @@ Item {
         // The band says whether this one can be played: green for yes, amber
         // for the scene wallpapers that are only listed. It replaces a dot in
         // the corner, which said the same thing in a place nobody looks.
-        band: card.usable ? "#2ecc71" : "#e8a33d"
+        //
+        // Blue instead while the arrow keys are on this one. The band
+        // changes colour rather than a ring being drawn round the card: a
+        // ring is a second frame round the first and it takes the name in
+        // with it, which looked like the card had been put in a box.
+        // Nothing is lost by borrowing the band -- a wallpaper that cannot
+        // be played is drawn at four tenths and says so that way too.
+        band: card.current ? card.palette.highlight
+                           : card.usable ? "#2ecc71" : "#e8a33d"
         onClicked: card.chose(card.wallpaper.id)
         onDoubleClicked: card.applied(card.wallpaper.id)
     }
@@ -84,18 +102,22 @@ Item {
         width: 22
         height: 22
         radius: 6
-        visible: card.usable && (pointer.hovered || card.ticked)
-        color: card.ticked ? card.palette.highlight
-                           : Qt.alpha(card.palette.window, 0.8)
+        visible: card.usable && (pointer.hovered || card.ticked || card.showTick)
+        // White with a black edge, blue with a black edge when it is
+        // ticked -- fixed colours rather than the palette's, because this
+        // box sits on a picture and not on the window: against a dark
+        // preview the window's own colours left it all but invisible.
+        color: card.ticked ? "#3daee9" : "#ffffff"
         border.width: 1
-        border.color: card.ticked ? card.palette.highlight : card.palette.mid
+        border.color: "#000000"
 
         Label {
             anchors.centerIn: parent
             text: "✓"
             font.pixelSize: 13
+            font.weight: Font.Bold
             visible: card.ticked
-            color: card.palette.highlightedText
+            color: "#ffffff"
         }
 
         MouseArea {

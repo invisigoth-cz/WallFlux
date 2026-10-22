@@ -4,9 +4,19 @@
 <context>
     <name>Details</name>
     <message>
-        <location filename="../qml/Details.qml" line="88"/>
+        <location filename="../qml/Details.qml" line="94"/>
         <source>Close</source>
         <translation>Zavřít</translation>
+    </message>
+    <message>
+        <location filename="../qml/Details.qml" line="165"/>
+        <source>Everything else by this author</source>
+        <translation>Vše ostatní od tohoto autora</translation>
+    </message>
+    <message>
+        <location filename="../qml/Details.qml" line="276"/>
+        <source>Tags</source>
+        <translation>Štítky</translation>
     </message>
 </context>
 <context>
@@ -120,306 +130,466 @@
 <context>
     <name>Picker</name>
     <message>
-        <location filename="../qml/Picker.qml" line="103"/>
+        <location filename="../qml/Picker.qml" line="127"/>
         <source>Web page</source>
         <translation>Webová stránka</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="104"/>
+        <location filename="../qml/Picker.qml" line="128"/>
         <source>Video</source>
         <translation>Video</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="105"/>
+        <location filename="../qml/Picker.qml" line="129"/>
         <source>Scene</source>
         <translation>Scéna</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="106"/>
+        <location filename="../qml/Picker.qml" line="130"/>
         <source>Application</source>
         <translation>Aplikace</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="108"/>
+        <location filename="../qml/Picker.qml" line="132"/>
         <source>Unknown</source>
         <translation>Neznámé</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="117"/>
+        <location filename="../qml/Picker.qml" line="141"/>
         <source>Type</source>
         <translation>Druh</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="119"/>
+        <location filename="../qml/Picker.qml" line="144"/>
         <source>Resolution</source>
         <translation>Rozlišení</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="121"/>
+        <location filename="../qml/Picker.qml" line="146"/>
         <source>Size on disk</source>
         <translation>Velikost na disku</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="123"/>
+        <location filename="../qml/Picker.qml" line="149"/>
         <source>Age rating</source>
         <translation>Přístupnost</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="129"/>
+        <location filename="../qml/Picker.qml" line="156"/>
         <source>Audio responsive</source>
         <translation>Reaguje na zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="130"/>
+        <location filename="../qml/Picker.qml" line="158"/>
         <source>Yes</source>
         <translation>Ano</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="131"/>
+        <location filename="../qml/Picker.qml" line="158"/>
         <source>Not stated</source>
         <translation>Neuvedeno</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="133"/>
         <source>Tags</source>
-        <translation>Štítky</translation>
+        <translation type="vanished">Štítky</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="137"/>
+        <location filename="../qml/Picker.qml" line="159"/>
         <source>Workshop id</source>
         <translation>Číslo ve workshopu</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="180"/>
-        <location filename="../qml/Picker.qml" line="349"/>
+        <location filename="../qml/Picker.qml" line="281"/>
+        <location filename="../qml/Picker.qml" line="807"/>
         <source>Name</source>
         <translation>Název</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="180"/>
+        <location filename="../qml/Picker.qml" line="281"/>
         <source>Date added</source>
         <translation>Datum přidání</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="181"/>
+        <location filename="../qml/Picker.qml" line="282"/>
         <source>Size</source>
         <translation>Velikost</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="181"/>
+        <location filename="../qml/Picker.qml" line="282"/>
         <source>Recent</source>
         <translation>Naposledy spuštěné</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="189"/>
+        <location filename="../qml/Picker.qml" line="290"/>
         <source>Installed</source>
         <translation>Nainstalované</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="190"/>
+        <location filename="../qml/Picker.qml" line="291"/>
         <source>Wallpapers downloaded to your system</source>
         <translation>Tapety stažené do počítače</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="191"/>
+        <location filename="../qml/Picker.qml" line="292"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="192"/>
+        <location filename="../qml/Picker.qml" line="293"/>
         <source>Browse wallpapers from Steam Workshop</source>
         <translation>Procházet tapety ze Steam Workshopu</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="338"/>
+        <location filename="../qml/Picker.qml" line="447"/>
         <source>Playlist settings</source>
         <translation>Nastavení playlistu</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="359"/>
+        <location filename="../qml/Picker.qml" line="458"/>
+        <source>Change wallpaper</source>
+        <translation>Změnit pozadí</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="464"/>
+        <source>By timer</source>
+        <translation>Podle časovače</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="464"/>
+        <source>On login</source>
+        <translation>Při přihlášení</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="464"/>
+        <source>Time of day</source>
+        <translation>Denní doba</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="465"/>
+        <source>Day of week</source>
+        <translation>Den v týdnu</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="465"/>
+        <source>Never</source>
+        <translation>Nikdy</translation>
+    </message>
+    <message>
         <source>Change every</source>
-        <translation>Měnit po</translation>
+        <translation type="vanished">Měnit po</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="370"/>
         <source>hours</source>
-        <translation>hodinách</translation>
+        <translation type="vanished">hodinách</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="378"/>
         <source>minutes</source>
-        <translation>minutách</translation>
+        <translation type="vanished">minutách</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="383"/>
+        <location filename="../qml/Picker.qml" line="525"/>
         <source>Order</source>
         <translation>Pořadí</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="389"/>
         <source>In order</source>
-        <translation>Popořadě</translation>
+        <translation type="vanished">Popořadě</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="394"/>
         <source>Shuffled</source>
-        <translation>Náhodně</translation>
+        <translation type="vanished">Náhodně</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="409"/>
         <source>A minute at the least, however short this is set.</source>
-        <translation>Nejméně minuta, i kdyby tu bylo nastaveno míň.</translation>
+        <translation type="vanished">Nejméně minuta, i kdyby tu bylo nastaveno míň.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="418"/>
+        <location filename="../qml/Picker.qml" line="593"/>
+        <location filename="../qml/Picker.qml" line="746"/>
+        <location filename="../qml/Picker.qml" line="840"/>
         <source>Confirm</source>
         <translation>Potvrdit</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="635"/>
+        <location filename="../qml/Picker.qml" line="1065"/>
         <source>Playlists</source>
         <translation>Seznamy</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="193"/>
+        <location filename="../qml/Picker.qml" line="294"/>
         <source>Displays</source>
         <translation>Obrazovky</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="194"/>
+        <location filename="../qml/Picker.qml" line="295"/>
         <source>Which wallpaper goes on which screen</source>
         <translation>Která tapeta patří na kterou obrazovku</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="195"/>
+        <location filename="../qml/Picker.qml" line="296"/>
         <source>Settings</source>
         <translation>Nastavení</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="196"/>
+        <location filename="../qml/Picker.qml" line="297"/>
         <source>How WallFlux behaves</source>
         <translation>Jak se WallFlux chová</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="284"/>
+        <location filename="../qml/Picker.qml" line="385"/>
         <source>WallFlux — choose a wallpaper</source>
         <translation>WallFlux — výběr tapety</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="952"/>
+        <location filename="../qml/Picker.qml" line="635"/>
+        <source>Open a playlist</source>
+        <translation>Otevřít playlist</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="657"/>
+        <source>You have not made a playlist yet.</source>
+        <translation>Zatím jsi nevytvořil žádný playlist.</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="733"/>
+        <source>Delete</source>
+        <translation>Smazat</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="828"/>
+        <source>If a playlist of this name exists already, it will be replaced.</source>
+        <translation>Pokud již existuje playlist se stejným názvem, bude přepsán.</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="1441"/>
         <source>Steam unsubscribes it and takes the folder away. Subscribing to it again is all it takes to have it back.</source>
         <translation>Steam ji odhlásí z odběru a složku odstraní. Stačí ji začít znovu odebírat a bude zpátky.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="518"/>
+        <location filename="../qml/Picker.qml" line="945"/>
         <source>Refresh</source>
         <translation>Načíst znovu</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="87"/>
-        <location filename="../qml/Picker.qml" line="354"/>
+        <location filename="../qml/Picker.qml" line="98"/>
+        <location filename="../qml/Picker.qml" line="813"/>
         <source>Playlist %1</source>
         <translation>Playlist %1</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="535"/>
+        <location filename="../qml/Picker.qml" line="483"/>
+        <source>Hours</source>
+        <translation>Hodiny</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="507"/>
+        <source>Minutes</source>
+        <translation>Minuty</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="533"/>
+        <location filename="../qml/Picker.qml" line="542"/>
+        <source>Random</source>
+        <translation>Náhodné</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="533"/>
+        <source>Ordered</source>
+        <translation>Řazené</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="536"/>
+        <source>Wallpaper transition</source>
+        <translation>Zobrazit přechod pozadí</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="542"/>
+        <source>None (reduce flicker)</source>
+        <translation>Žádný (omezí blikání)</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="542"/>
+        <source>None</source>
+        <translation>Žádná</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="543"/>
+        <source>Fade</source>
+        <translation>Prolnutí</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="543"/>
+        <source>Fade to black</source>
+        <translation>Prolnutí do černé</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="546"/>
+        <source>Change wallpaper when the video ends</source>
+        <translation>Změnit pozadí po skončení videa</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="550"/>
+        <source>Allow changing while paused</source>
+        <translation>Povolit změnu pozadí při pozastavení</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="554"/>
+        <source>Always start with the first wallpaper</source>
+        <translation>Vždy začít s prvním pozadím</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="565"/>
+        <source>The first wallpaper plays only at startup</source>
+        <translation>První tapeta se přehraje jen při zapnutí</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="583"/>
+        <source>A minute at the least, however short this is set. Only the timer and the order do anything yet.</source>
+        <translation>Nejméně jedna minuta, i když je nastaveno méně. Zatím něco dělá jen časovač a pořadí.</translation>
+    </message>
+    <message>
+        <source>Load a playlist</source>
+        <translation type="vanished">Načíst playlist</translation>
+    </message>
+    <message>
+        <source>Nothing saved yet. Tick some wallpapers and press Save.</source>
+        <translation type="vanished">Zatím není nic uloženo. Zaškrtněte pozadí a stiskněte Uložit.</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="716"/>
+        <source>Wallpapers: %1</source>
+        <translation>Pozadí: %1</translation>
+    </message>
+    <message>
+        <source>Throw this playlist away</source>
+        <translation type="vanished">Zahodit tento playlist</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation type="vanished">Zavřít</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="796"/>
+        <source>Save the playlist</source>
+        <translation>Uložit playlist</translation>
+    </message>
+    <message>
+        <source>A playlist of this name is saved already. Saving replaces it.</source>
+        <translation type="vanished">Playlist s tímto jménem už je uložen. Uložením se přepíše.</translation>
+    </message>
+    <message>
+        <source>Wallpapers: %1, saved with how the playlist runs.</source>
+        <translation type="vanished">Pozadí: %1, uloží se i to, jak playlist běží.</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="756"/>
+        <location filename="../qml/Picker.qml" line="846"/>
+        <source>Cancel</source>
+        <translation>Zrušit</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation type="vanished">Uložit</translation>
+    </message>
+    <message>
+        <location filename="../qml/Picker.qml" line="962"/>
         <source>Switch to English</source>
         <translation>Přepnout do angličtiny</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="536"/>
+        <location filename="../qml/Picker.qml" line="963"/>
         <source>Switch to Czech</source>
         <translation>Přepnout do češtiny</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="553"/>
+        <location filename="../qml/Picker.qml" line="980"/>
         <source>Light theme</source>
         <translation>Světlý motiv</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="553"/>
+        <location filename="../qml/Picker.qml" line="980"/>
         <source>Dark theme</source>
         <translation>Tmavý motiv</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="578"/>
+        <location filename="../qml/Picker.qml" line="1005"/>
         <source>Search wallpapers…</source>
         <translation>Hledat tapety…</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="616"/>
+        <location filename="../qml/Picker.qml" line="1043"/>
         <source>Clear the search</source>
         <translation>Vymazat hledání</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="622"/>
+        <location filename="../qml/Picker.qml" line="1049"/>
         <source>Filters (%1)</source>
         <translation>Filtry (%1)</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="623"/>
+        <location filename="../qml/Picker.qml" line="1050"/>
         <source>Filters</source>
         <translation>Filtry</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="703"/>
+        <location filename="../qml/Picker.qml" line="1133"/>
         <source>SORT BY</source>
         <translation>ŘADIT PODLE</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="796"/>
+        <location filename="../qml/Picker.qml" line="1226"/>
         <source>Ascending</source>
         <translation>Vzestupně</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="888"/>
+        <location filename="../qml/Picker.qml" line="1374"/>
         <source>Nothing installed.
 Wallpaper Engine&apos;s workshop folder is empty or missing.</source>
         <translation>Nic není nainstalováno.
 Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="889"/>
+        <location filename="../qml/Picker.qml" line="1375"/>
         <source>Nothing here by that name.</source>
         <translation>Nic takového tu není.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="910"/>
+        <location filename="../qml/Picker.qml" line="1399"/>
         <source>Remove</source>
         <translation>Odebrat</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="954"/>
+        <location filename="../qml/Picker.qml" line="1443"/>
         <source>Steam has to be running to give a wallpaper back.</source>
         <translation>Aby šlo tapetu vrátit, musí běžet Steam.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="997"/>
+        <location filename="../qml/Picker.qml" line="1488"/>
         <source>Coming soon</source>
         <translation>Připravuje se</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="1026"/>
+        <location filename="../qml/Picker.qml" line="1517"/>
         <source>%1  |  %2</source>
         <translation>%1  |  %2</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="1028"/>
+        <location filename="../qml/Picker.qml" line="1519"/>
         <source>No active wallpaper</source>
         <translation>Žádná tapeta neběží</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="1035"/>
+        <location filename="../qml/Picker.qml" line="1526"/>
         <source>Turn off</source>
         <translation>Vypnout</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="1048"/>
+        <location filename="../qml/Picker.qml" line="1539"/>
         <source>Turn the sound on</source>
         <translation>Zapnout zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="1049"/>
+        <location filename="../qml/Picker.qml" line="1540"/>
         <source>Turn the sound off</source>
         <translation>Vypnout zvuk</translation>
     </message>
@@ -427,24 +597,55 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>PlaylistBar</name>
     <message>
-        <location filename="../qml/PlaylistBar.qml" line="84"/>
+        <location filename="../qml/PlaylistBar.qml" line="71"/>
+        <source>Playlists</source>
+        <translation>Playlisty</translation>
+    </message>
+    <message>
+        <location filename="../qml/PlaylistBar.qml" line="77"/>
+        <source>Load</source>
+        <translation>Načíst</translation>
+    </message>
+    <message>
+        <location filename="../qml/PlaylistBar.qml" line="83"/>
+        <source>Save</source>
+        <translation>Uložit</translation>
+    </message>
+    <message>
+        <location filename="../qml/PlaylistBar.qml" line="98"/>
+        <source>Add wallpaper</source>
+        <translation>Přidat pozadí</translation>
+    </message>
+    <message>
+        <source>Nothing in it yet. Tick a wallpaper in the grid, or press Add wallpaper to tick several.</source>
+        <translation type="vanished">Zatím je prázdný. Zaškrtněte pozadí v mřížce, nebo stiskněte Přidat pozadí.</translation>
+    </message>
+    <message>
+        <location filename="../qml/PlaylistBar.qml" line="111"/>
+        <source>Wallpapers: %1</source>
+        <translation>Pozadí: %1</translation>
+    </message>
+    <message>
+        <source>Nothing in the playlist yet. Tick a wallpaper in the grid, or press Add wallpaper to tick several.</source>
+        <translation type="vanished">V playlistu zatím nic není. Zaškrtněte pozadí v mřížce, nebo stiskněte Přidat pozadí a zaškrtněte jich víc.</translation>
+    </message>
+    <message>
+        <location filename="../qml/PlaylistBar.qml" line="148"/>
         <source>%1 — click to take it out</source>
         <translation>%1 — kliknutím vyřadíš</translation>
     </message>
     <message>
-        <location filename="../qml/PlaylistBar.qml" line="118"/>
         <source>Playlist (%1)</source>
-        <translation>Playlist (%1)</translation>
+        <translation type="vanished">Playlist (%1)</translation>
     </message>
     <message>
-        <location filename="../qml/PlaylistBar.qml" line="126"/>
+        <location filename="../qml/PlaylistBar.qml" line="92"/>
         <source>Configure</source>
         <translation>Konfigurovat</translation>
     </message>
     <message>
-        <location filename="../qml/PlaylistBar.qml" line="132"/>
         <source>Save playlist</source>
-        <translation>Uložit playlist</translation>
+        <translation type="vanished">Uložit playlist</translation>
     </message>
 </context>
 <context>
@@ -506,219 +707,228 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>WorkshopView</name>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="432"/>
+        <location filename="../qml/WorkshopView.qml" line="491"/>
         <source>See more</source>
         <translation>Zobrazit víc</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="533"/>
+        <location filename="../qml/WorkshopView.qml" line="608"/>
         <source>Search workshop…</source>
         <translation>Hledat ve Workshopu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="588"/>
+        <location filename="../qml/WorkshopView.qml" line="680"/>
         <source>Filters</source>
         <translation>Filtry</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="200"/>
-        <location filename="../qml/WorkshopView.qml" line="282"/>
+        <location filename="../qml/WorkshopView.qml" line="256"/>
+        <location filename="../qml/WorkshopView.qml" line="338"/>
         <source>Trending</source>
         <translation>Populární</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="110"/>
+        <location filename="../qml/WorkshopView.qml" line="170"/>
         <source>Type</source>
         <translation>Druh</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="114"/>
+        <location filename="../qml/WorkshopView.qml" line="174"/>
         <source>Resolution</source>
         <translation>Rozlišení</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="117"/>
+        <location filename="../qml/WorkshopView.qml" line="177"/>
         <source>Size</source>
         <translation>Velikost</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="118"/>
+        <location filename="../qml/WorkshopView.qml" line="178"/>
         <source>%1 MB</source>
         <translation>%1 MB</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="123"/>
+        <location filename="../qml/WorkshopView.qml" line="183"/>
         <source>Age rating</source>
         <translation>Přístupnost</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="125"/>
+        <location filename="../qml/WorkshopView.qml" line="185"/>
         <source>Audio responsive</source>
         <translation>Reaguje na zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="126"/>
+        <location filename="../qml/WorkshopView.qml" line="186"/>
         <source>Yes</source>
         <translation>Ano</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="127"/>
+        <location filename="../qml/WorkshopView.qml" line="187"/>
         <source>Not stated</source>
         <translation>Neuvedeno</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="130"/>
+        <location filename="../qml/WorkshopView.qml" line="190"/>
         <source>Likes</source>
         <translation>Líbí se</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="133"/>
         <source>Tags</source>
-        <translation>Štítky</translation>
+        <translation type="vanished">Štítky</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="136"/>
+        <location filename="../qml/WorkshopView.qml" line="192"/>
         <source>Workshop id</source>
         <translation>Číslo ve workshopu</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="264"/>
+        <location filename="../qml/WorkshopView.qml" line="320"/>
         <source>The Steamworks library is not on this machine.</source>
         <translation>Knihovna Steamworks na tomhle počítači není.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="266"/>
+        <location filename="../qml/WorkshopView.qml" line="322"/>
         <source>The Steamworks library on this machine is not one this program knows how to talk to.</source>
         <translation>S knihovnou Steamworks, která je na tomhle počítači, si tenhle program nerozumí.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="269"/>
+        <location filename="../qml/WorkshopView.qml" line="325"/>
         <source>Steam did not answer. It has to be running, and signed in to the account that owns Wallpaper Engine.</source>
         <translation>Steam neodpověděl. Musí běžet a být přihlášený k účtu, který vlastní Wallpaper Engine.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="272"/>
+        <location filename="../qml/WorkshopView.qml" line="328"/>
         <source>Steam answered but offered no workshop to ask about.</source>
         <translation>Steam odpověděl, ale žádný workshop k dotazování nenabídl.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="280"/>
+        <location filename="../qml/WorkshopView.qml" line="336"/>
         <source>Most subscribed</source>
         <translation>Nejodebíranější</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="442"/>
+        <location filename="../qml/WorkshopView.qml" line="501"/>
         <source>nothing here</source>
         <translation>nic tu není</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="442"/>
+        <location filename="../qml/WorkshopView.qml" line="501"/>
         <source>asking…</source>
         <translation>ptám se…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="515"/>
+        <location filename="../qml/WorkshopView.qml" line="574"/>
         <source>Discover</source>
         <translation>Objevování</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="525"/>
+        <location filename="../qml/WorkshopView.qml" line="588"/>
         <source>Workshop</source>
         <translation>Workshop</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="575"/>
+        <location filename="../qml/WorkshopView.qml" line="654"/>
         <source>Clear the search</source>
         <translation>Vymazat hledání</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="587"/>
+        <location filename="../qml/WorkshopView.qml" line="669"/>
+        <source>By %1</source>
+        <translation>Od %1</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="674"/>
+        <source>Back to the whole workshop</source>
+        <translation>Zpět na celou dílnu</translation>
+    </message>
+    <message>
+        <location filename="../qml/WorkshopView.qml" line="679"/>
         <source>Filters (%1)</source>
         <translation>Filtry (%1)</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="661"/>
+        <location filename="../qml/WorkshopView.qml" line="756"/>
         <source>The workshop is not available</source>
         <translation>Workshop není dostupný</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="678"/>
+        <location filename="../qml/WorkshopView.qml" line="773"/>
         <source>Try again</source>
         <translation>Zkusit znovu</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="743"/>
+        <location filename="../qml/WorkshopView.qml" line="838"/>
         <source>More rows as you scroll</source>
         <translation>Další řady při posouvání</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="780"/>
+        <location filename="../qml/WorkshopView.qml" line="875"/>
         <source>Back to Discover</source>
         <translation>Zpět na Objevování</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="850"/>
+        <location filename="../qml/WorkshopView.qml" line="949"/>
         <source>Asking Steam…</source>
         <translation>Ptám se Steamu…</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="851"/>
+        <location filename="../qml/WorkshopView.qml" line="950"/>
         <source>Nothing matches all of that</source>
         <translation>Tomu všemu neodpovídá nic</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="872"/>
+        <location filename="../qml/WorkshopView.qml" line="971"/>
         <source>First page</source>
         <translation>První stránka</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="882"/>
+        <location filename="../qml/WorkshopView.qml" line="981"/>
         <source>Previous page</source>
         <translation>Předchozí stránka</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="920"/>
+        <location filename="../qml/WorkshopView.qml" line="1019"/>
         <source>Next page</source>
         <translation>Další stránka</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="930"/>
+        <location filename="../qml/WorkshopView.qml" line="1029"/>
         <source>Last page</source>
         <translation>Poslední stránka</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="971"/>
+        <location filename="../qml/WorkshopView.qml" line="1076"/>
         <source>Installed</source>
         <translation>Nainstalováno</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="972"/>
+        <location filename="../qml/WorkshopView.qml" line="1077"/>
         <source>Download</source>
         <translation>Stáhnout</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="973"/>
+        <location filename="../qml/WorkshopView.qml" line="1078"/>
         <source>Steam would not</source>
         <translation>Steam odmítl</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="974"/>
+        <location filename="../qml/WorkshopView.qml" line="1079"/>
         <source>Downloaded</source>
         <translation>Staženo</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="975"/>
+        <location filename="../qml/WorkshopView.qml" line="1080"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="992"/>
+        <location filename="../qml/WorkshopView.qml" line="1097"/>
         <source>A part for Wallpaper Engine rather than a wallpaper of its own. Downloading it will not put anything among the installed ones.</source>
         <translation>Doplněk pro Wallpaper Engine, ne samostatná tapeta. Po stažení se mezi nainstalovanými neobjeví.</translation>
     </message>
     <message>
-        <location filename="../qml/WorkshopView.qml" line="202"/>
-        <location filename="../qml/WorkshopView.qml" line="279"/>
+        <location filename="../qml/WorkshopView.qml" line="258"/>
+        <location filename="../qml/WorkshopView.qml" line="335"/>
         <source>New</source>
         <translation>Novinky</translation>
     </message>

@@ -125,9 +125,13 @@ public:
     /// between a tenth of a second and three quarters of one -- measured --
     /// so a search typed on arriving at the tab sat behind several seconds
     /// of rows nobody had looked at yet.
+    ///
+    /// `creator` narrows it to one account's published work, as a
+    /// steamID64 -- which is a different call of Steam's, with its own
+    /// list of orders, so `order` is ignored while it is set.
     Q_INVOKABLE void browse(const QString &key, Steamworks::Order order, int page = 1,
                             const QStringList &tags = {}, const QString &search = {},
-                            bool urgent = false);
+                            bool urgent = false, const QString &creator = {});
 
     /// Subscribes to one wallpaper and asks Steam to fetch it now. Nothing
     /// is fetched here: Steam downloads it into the folder it already owns,
@@ -204,6 +208,7 @@ private:
         int page = 1;
         QStringList tags;
         QString search;
+        QString creator;
     };
 
     /// What is being asked now, so the answer lands under the right name,
@@ -232,6 +237,8 @@ private:
     void (*m_freeCallback)(qint32) = nullptr;
     bool (*m_callResult)(qint32, quint64, void *, int, int, bool *) = nullptr;
     quint64 (*m_createQuery)(void *, int, int, quint32, quint32, quint32) = nullptr;
+    quint64 (*m_createUserQuery)(void *, quint32, int, int, int, quint32, quint32,
+                                 quint32) = nullptr;
     quint64 (*m_sendQuery)(void *, quint64) = nullptr;
     bool (*m_queryResult)(void *, quint64, quint32, void *) = nullptr;
     bool (*m_previewUrl)(void *, quint64, quint32, char *, quint32) = nullptr;

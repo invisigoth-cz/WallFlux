@@ -48,6 +48,7 @@ set_source_files_properties(qml/RoundedButton.qml PROPERTIES QT_RESOURCE_ALIAS R
 set_source_files_properties(qml/RoundedTool.qml PROPERTIES QT_RESOURCE_ALIAS RoundedTool.qml)
 set_source_files_properties(qml/Details.qml PROPERTIES QT_RESOURCE_ALIAS Details.qml)
 set_source_files_properties(qml/PlaylistBar.qml PROPERTIES QT_RESOURCE_ALIAS PlaylistBar.qml)
+set_source_files_properties(qml/steamprofile.js PROPERTIES QT_RESOURCE_ALIAS steamprofile.js)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -73,6 +74,7 @@ qt_add_qml_module(wallflux
         qml/RoundedTool.qml
         qml/Details.qml
         qml/PlaylistBar.qml
+        qml/steamprofile.js
     SOURCES
         src/otheraudio.h
         src/otheraudio.cpp

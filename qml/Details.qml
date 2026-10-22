@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import QtQuick.Controls.impl
 import QtQuick.Layouts
 
 /// What is known about one wallpaper, in a panel beside the grid.
@@ -22,17 +23,31 @@ Rectangle {
     required property url preview
     required property string title
 
-    /// What is known, as `{ label, value }` in the order it should read.
-    /// Whoever builds the list leaves out what it cannot answer rather
-    /// than filling a row with a dash.
+    /// What is known, as `{ label, value, icon }` in the order it should
+    /// read -- `icon` by the name the icon theme calls it, and left out
+    /// where there is none. Whoever builds the list leaves out what it
+    /// cannot answer rather than filling a row with a dash.
     required property var facts
+
+    /// The tags, already in the language of the window. Drawn as chips
+    /// under their own heading rather than as a line of commas, which is
+    /// what the rest of this window does with a tag.
+    property var tags: []
+
+    /// Who made it, as `{ name, avatar }`, or null where nobody knows --
+    /// which is every wallpaper in the library, since project.json does
+    /// not say who wrote it.
+    property var author: null
 
     /// Whatever can be done about this one. One button, so far.
     default property alias actions: doing.data
 
     signal closed()
 
-    implicitWidth: 300
+    /// Asked for when somebody wants the rest of this author's work.
+    signal authorAsked()
+
+    implicitWidth: 360
     // Shown when something is clicked, which is the only way in.
     visible: false
 
@@ -42,69 +57,161 @@ Rectangle {
     radius: 8
 
     ColumnLayout {
+        id: column
+
         anchors.fill: parent
-        anchors.margins: 14
-        spacing: 10
+        anchors.margins: 18
+        spacing: 14
 
         PreviewTile {
-            Layout.fillWidth: true
-            Layout.preferredHeight: Math.round(width * 9 / 16)
+            // Narrower than the panel, and centred.
+            //
+            // A tile is sixteen by nine from the inside out -- the frame in
+            // it asks for nine sixteenths of its *own* width whatever
+            // height the tile is given -- so `Layout.preferredHeight` does
+            // not shorten the picture, it only lets the name underneath be
+            // drawn over it. Holding the width is what shortens it.
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: Math.min(column.width, 280)
+            Layout.preferredHeight: Math.round(Math.min(column.width, 280) * 9 / 16)
             preview: panel.preview
             // The name goes under this in its own type, where it can wrap.
             label: ""
             clickable: false
-        }
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 6
-
-            // As wide as the button on the other side, so the name sits in
-            // the middle of the panel rather than in the middle of what is
-            // left of it once the cross has taken its room.
-            Item {
-                implicitWidth: closer.implicitWidth
-                implicitHeight: 1
-            }
-
-            Label {
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: panel.title
-                font.pixelSize: 15
-                font.weight: Font.Bold
-                wrapMode: Text.Wrap
-                maximumLineCount: 3
-                elide: Text.ElideRight
-            }
-
+            // In the corner of the picture rather than beside the name:
+            // the panel has one way out and it should be where a window's
+            // cross is, not in the middle of what the panel is about.
             RoundedTool {
                 id: closer
 
-                Layout.alignment: Qt.AlignTop
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 6
                 icon.name: "window-close"
                 icon.color: panel.palette.windowText
                 ToolTip.visible: closer.hovered
                 ToolTip.text: qsTr("Close")
                 onClicked: panel.closed()
+
+                background: Rectangle {
+                    radius: 7
+                    color: Qt.alpha(panel.palette.window, closer.hovered ? 0.95 : 0.7)
+                    border.width: 1
+                    border.color: panel.palette.mid
+                }
             }
         }
 
+        Label {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: panel.title
+            font.pixelSize: 15
+            font.weight: Font.Bold
+            wrapMode: Text.Wrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
+        }
+
+        // The picture and the name stay put; everything under them scrolls.
+        //
+        // The picture used to scroll with the rest, which in a window of
+        // any height meant a scrollbar: a hundred and sixty pixels of
+        // photograph is most of what the panel has, so the content was
+        // always taller than the room. What is worth scrolling is the list,
+        // and the author sitting over it.
         Flickable {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            // A clear step down the page from the name to the small print,
+            // on top of the column's own spacing.
+            Layout.topMargin: 16
 
             contentWidth: width
             contentHeight: told.implicitHeight
             clip: true
-            ScrollBar.vertical: Scroller {}
+            // The one scrollbar in this window that comes and goes. Every
+            // other is on a page that always has more under it, where a
+            // bar that fades is a bar nobody finds; a panel about one
+            // wallpaper often fits, and a bar beside nothing is just a
+            // line down the edge.
+            ScrollBar.vertical: Scroller { policy: ScrollBar.AsNeeded }
 
             ColumnLayout {
                 id: told
 
-                // Short of the scrollbar, as the filter panels are.
-                width: parent.width - 18
-                spacing: 8
+                // Short of the scrollbar, and then some: at eighteen the
+                // bar was against the ends of the values.
+                width: parent.width - 30
+                spacing: 0
+
+                // Who made it, and the way to the rest of their work.
+                // Nothing at all where nobody knows, rather than a row
+                // saying so.
+                //
+                // The whole row is the button. A magnifier on its own
+                // beside the name was there and was not seen: a ToolButton
+                // draws nothing until it is pointed at, so there was no
+                // button on the page to notice. This has an edge and a
+                // word on it.
+                Button {
+                    id: more
+
+                    Layout.fillWidth: true
+                    visible: !!panel.author
+                    padding: 8
+                    ToolTip.visible: more.hovered
+                    ToolTip.text: qsTr("Everything else by this author")
+                    onClicked: panel.authorAsked()
+
+                    background: Rectangle {
+                        radius: 7
+                        color: more.down ? Qt.alpha(panel.palette.highlight, 0.35)
+                             : more.hovered ? Qt.alpha(panel.palette.highlight, 0.18)
+                                            : "transparent"
+                        border.width: 1
+                        border.color: panel.palette.mid
+                    }
+
+                    contentItem: RowLayout {
+                        spacing: 8
+
+                        Image {
+                            // The avatar Steam serves is 32 square; this
+                            // draws it at 22 and lets the picture do the
+                            // smoothing.
+                            source: panel.author ? panel.author.avatar : ""
+                            sourceSize.width: 32
+                            sourceSize.height: 32
+                            Layout.preferredWidth: 22
+                            Layout.preferredHeight: 22
+                            fillMode: Image.PreserveAspectCrop
+                            visible: status === Image.Ready
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: panel.author ? panel.author.name : ""
+                            color: panel.palette.highlight
+                            elide: Text.ElideRight
+                        }
+
+                        IconImage {
+                            name: "edit-find"
+                            color: panel.palette.windowText
+                            sourceSize.width: 16
+                            sourceSize.height: 16
+                        }
+                    }
+                }
+
+                Item {
+                    // Only where there is a button over it to step down
+                    // from.
+                    visible: !!panel.author
+                    Layout.preferredHeight: 12
+                }
 
                 Repeater {
                     model: panel.facts
@@ -115,21 +222,95 @@ Rectangle {
                         required property var modelData
 
                         Layout.fillWidth: true
-                        spacing: 1
+                        spacing: 0
 
-                        Label {
-                            text: fact.modelData.label
-                            font.pixelSize: 11
-                            font.letterSpacing: 1.1
-                            font.weight: Font.Bold
-                            font.capitalization: Font.AllUppercase
-                            opacity: 0.6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 11
+                            Layout.bottomMargin: 11
+                            spacing: 10
+
+                            // The only public way to draw a theme icon in
+                            // QML without a button round it. It is told a
+                            // colour for the same reason the tab icons
+                            // are: untinted it keeps whatever the icon
+                            // theme drew it, and goes invisible in one of
+                            // the two themes.
+                            IconImage {
+                                name: fact.modelData.icon ?? ""
+                                color: panel.palette.windowText
+                                sourceSize.width: 16
+                                sourceSize.height: 16
+                                visible: !!fact.modelData.icon
+                                opacity: 0.7
+                            }
+
+                            Label {
+                                text: fact.modelData.label
+                                opacity: 0.7
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Label {
+                                Layout.maximumWidth: told.width * 0.55
+                                horizontalAlignment: Text.AlignRight
+                                text: fact.modelData.value
+                                wrapMode: Text.Wrap
+                            }
                         }
 
-                        Label {
+                        // A hairline under every row, which is what turns a
+                        // list of pairs into something that reads across.
+                        Rectangle {
                             Layout.fillWidth: true
-                            text: fact.modelData.value
-                            wrapMode: Text.Wrap
+                            implicitHeight: 1
+                            color: panel.palette.mid
+                            opacity: 0.6
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.topMargin: 20
+                    text: qsTr("Tags")
+                    font.pixelSize: 11
+                    font.letterSpacing: 1.1
+                    font.weight: Font.Bold
+                    font.capitalization: Font.AllUppercase
+                    opacity: 0.6
+                    visible: panel.tags.length > 0
+                }
+
+                Flow {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    spacing: 6
+
+                    Repeater {
+                        model: panel.tags
+
+                        // A pill with a name in it, and nothing to click.
+                        // Not the Chip from the filters: that one is a
+                        // control with a hand cursor and a signal, and a
+                        // tag here is a label.
+                        delegate: Rectangle {
+                            id: pill
+
+                            required property string modelData
+
+                            implicitWidth: name.implicitWidth + 20
+                            implicitHeight: 24
+                            radius: 5
+                            color: Qt.alpha(pill.palette.mid, 0.5)
+
+                            Label {
+                                id: name
+
+                                anchors.centerIn: parent
+                                text: pill.modelData
+                                font.pixelSize: 12
+                            }
                         }
                     }
                 }

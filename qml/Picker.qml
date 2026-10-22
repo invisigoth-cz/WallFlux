@@ -12,6 +12,7 @@ import QtQuick.Window
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import WallFlux
+import "steamprofile.js" as Steam
 
 /// The window for choosing a wallpaper: everything installed, in a grid of
 /// previews, and what the one that is playing sounds like.
@@ -49,19 +50,22 @@ Window {
     /// is remembered once it is saved and not before.
     property var inPlaylist: []
 
-    /// What the playlist being put together is called and whether it is
-    /// shuffled, until it is saved.
+    /// What the playlist being put together is called, until it is saved.
     ///
-    /// How often it turns is not here: the two spin boxes hold that
-    /// themselves and the window reads it off them when it saves. Binding
-    /// their `value` to a property and setting that property back from the
-    /// control is the trap this project was already caught by once -- a
-    /// control told what to be and also asked what it is ends up fighting
-    /// its own binding. Measured again here: the box read 1 and the
-    /// property was still 15, so a playlist set to one minute was saved as
-    /// a quarter of an hour and sat there not changing anything.
+    /// Nothing else about how it runs is here: the spin boxes and the drop
+    /// downs in the settings popup hold their own values and the window
+    /// reads them off when it saves. Binding a control's value to a
+    /// property and setting that property back from the control is the trap
+    /// this project has been caught by twice -- a control told what to be
+    /// and also asked what it is ends up fighting its own binding.
+    /// Measured: the box read 1 and the property was still 15, so a
+    /// playlist set to one minute was saved as a quarter of an hour and sat
+    /// there not changing anything.
     property string playlistName: ""
-    property bool playlistShuffle: false
+
+    /// Whether every card is showing its tick box rather than the one under
+    /// the pointer. Add wallpaper in the playlist strip switches it.
+    property bool picking: false
 
     /// The ticked wallpapers themselves, in the order they were ticked --
     /// which is what the strip along the bottom draws.
@@ -87,12 +91,26 @@ Window {
     }
 
     /// Writes the playlist down under whatever it is called, giving it a
-    /// name if nobody has.
+    /// name if nobody has. Every setting is read off the control holding
+    /// it, for the reason spelled out on `playlistName`.
     function savePlaylist() {
         if (picker.playlistName === "")
             picker.playlistName = qsTr("Playlist %1").arg(Playlists.all.length + 1);
         Playlists.save(picker.playlistName, picker.inPlaylist, everyHours.value,
-                       everyMinutes.value, picker.playlistShuffle);
+                       everyMinutes.value, orderBox.currentIndex === 0);
+    }
+
+    /// Puts a saved playlist back on the strip, settings and all, so it can
+    /// be looked at and changed rather than only started.
+    function loadPlaylist(name) {
+        const one = Playlists.named(name);
+        if (!one.name)
+            return;
+        picker.playlistName = one.name;
+        picker.inPlaylist = one.ids;
+        everyHours.value = one.hours;
+        everyMinutes.value = one.minutes;
+        orderBox.currentIndex = one.shuffle ? 0 : 1;
     }
 
     /// Which of Wallpaper Engine's catalogues to call the tags by.
@@ -120,28 +138,104 @@ Window {
         if (!one)
             return [];
 
-        const told = [{ label: qsTr("Type"), value: picker.kindName(one.kind, language) }];
+        const told = [{ label: qsTr("Type"), icon: "layer-visible-on",
+                        value: picker.kindName(one.kind, language) }];
         if (one.resolution)
-            told.push({ label: qsTr("Resolution"), value: one.resolution });
+            told.push({ label: qsTr("Resolution"), icon: "monitor", value: one.resolution });
         if (one.sizeOnDisk)
-            told.push({ label: qsTr("Size on disk"), value: one.sizeOnDisk });
+            told.push({ label: qsTr("Size on disk"), icon: "drive-harddisk",
+                        value: one.sizeOnDisk });
         if (one.rating)
-            told.push({ label: qsTr("Age rating"),
+            told.push({ label: qsTr("Age rating"), icon: "flag",
                         value: Tags.name(one.rating, picker.catalogue) });
 
-        // Out of the tags, which is the only place that could say so --
-        // and on this machine no installed wallpaper carries the tag at
-        // all, so "not stated" is the honest answer rather than "no".
-        told.push({ label: qsTr("Audio responsive"),
-                    value: one.tags.indexOf("Audio responsive") >= 0 ? qsTr("Yes")
-                                                                     : qsTr("Not stated") });
-        if (one.tags.length > 0) {
-            told.push({ label: qsTr("Tags"),
-                        value: one.tags.map((tag) => Tags.name(tag, picker.catalogue))
-                                       .join(", ") });
-        }
-        told.push({ label: qsTr("Workshop id"), value: one.id });
+        // Out of the tags, which is the only place that could say so.
+        // The workshop's list, not project.json's -- the tag is never on
+        // the disk, so reading it there said "not stated" about a
+        // wallpaper whose own chips underneath said otherwise.
+        told.push({ label: qsTr("Audio responsive"), icon: "audio-volume-high",
+                    value: picker.rawTagsOf(one).indexOf("Audio responsive") >= 0
+                               ? qsTr("Yes") : qsTr("Not stated") });
+        told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: one.id });
         return told;
+    }
+
+    /// The tags of one wallpaper, in the language of the window. Their own
+    /// list rather than a row in the one above: the panel draws them as
+    /// chips, and a chip is not a value.
+    ///
+    /// The workshop's list where it has arrived, and what is on the disk
+    /// until it does -- so an installed wallpaper reads the same here as
+    /// it does in the Steam tab rather than showing a third of the tags.
+    function tagsOf(one, language) {
+        return picker.rawTagsOf(one).map((tag) => Tags.name(tag, picker.catalogue));
+    }
+
+    /// The same list, as Valve's own words rather than the window's --
+    /// which is what anything asking "does it carry this tag" wants.
+    function rawTagsOf(one) {
+        if (!one)
+            return [];
+        return picker.workshopTags[one.id] || one.tags;
+    }
+
+    /// Who made each installed wallpaper, keyed by its workshop id:
+    /// `{ owner, name, avatar }`.
+    ///
+    /// project.json does not say -- checked across every one of them -- so
+    /// it takes two questions, both keyless and both in steamprofile.js:
+    /// the workshop is asked who made this id, and then who that account
+    /// is. The workshop tab shares the script, so an author looked up in
+    /// one tab is free in the other.
+    property var authors: ({})
+
+    /// The one the panel is about: the name and the face once they have
+    /// arrived, and a row of dots in the meantime, so the button is there
+    /// from the moment the panel opens rather than a second later.
+    readonly property var inspectedAuthor: {
+        if (!picker.inspected)
+            return null;
+        return picker.authors[picker.inspected.id] || { name: "…", avatar: "" };
+    }
+
+    /// What the workshop says the tags of an installed wallpaper are,
+    /// keyed by its id.
+    ///
+    /// project.json carries only the genres its author ticked -- measured:
+    /// one wallpaper reads `["Sci-Fi"]` on the disk and six in the
+    /// workshop, which adds Wallpaper, the type, the resolution, the age
+    /// rating and whether it answers to sound. The same question that
+    /// finds the author brings these back with it, so it costs nothing.
+    property var workshopTags: ({})
+
+    function lookUpAuthor(id) {
+        Steam.detailsOf(id, function (said) {
+            if (said.tags.length > 0) {
+                const seen = Object.assign({}, picker.workshopTags);
+                seen[id] = said.tags;
+                picker.workshopTags = seen;
+            }
+            if (!said.maker)
+                return;
+            Steam.profileOf(said.maker, function (person) {
+                const known = Object.assign({}, picker.authors);
+                known[id] = { owner: said.maker, name: person.name,
+                              avatar: person.avatar };
+                picker.authors = known;
+            });
+        });
+    }
+
+    /// Everything else by whoever made the wallpaper in the panel, which
+    /// is a question only the workshop can answer -- so the window goes
+    /// there to ask it.
+    function everythingByTheAuthor() {
+        const known = picker.inspected ? picker.authors[picker.inspected.id] : null;
+        if (!known || !known.owner)
+            return;
+        steam.active = true;
+        tabs.currentIndex = 1;
+        steam.item.everythingBy(known.owner);
     }
 
     /// Shows one wallpaper in the panel. One click says which wallpaper
@@ -157,6 +251,7 @@ Window {
             }
         }
         details.visible = true;
+        picker.lookUpAuthor(id);
     }
 
     /// Puts one on the desktop, which is what a second click means. Never
@@ -316,11 +411,17 @@ Window {
 
     /// How the playlist being put together runs.
     ///
-    /// Wallpaper Engine's own has more in it -- a fade between wallpapers
-    /// and how long it takes, changing when a video ends, whether to
-    /// always begin with the first one. None of those are here, because
-    /// none of them can be done yet and a switch that does nothing is
-    /// worse than no switch.
+    /// Four of these choose between things that are not written yet --
+    /// when the wallpaper changes, and what it does while it changes.
+    /// They are drop downs rather than nothing because the list of what
+    /// WallFlux is going to offer is the thing worth deciding first; each
+    /// one keeps the value it is set to and nothing reads it yet.
+    ///
+    /// Every control here holds its own value and the window reads it off
+    /// when it saves. Translating a drop down's model is a binding, so
+    /// switching language rebuilds the list and puts it back on its first
+    /// item -- including Order. Worth knowing; not worth the code to stop
+    /// it while there are three lists behind it that do nothing.
     Popup {
         id: settings
 
@@ -354,67 +455,121 @@ Window {
                 columnSpacing: 14
                 rowSpacing: 12
 
-                Label { text: qsTr("Name") }
+                Label { text: qsTr("Change wallpaper") }
 
-                TextField {
+                ComboBox {
+                    id: changeBox
+
                     Layout.fillWidth: true
-                    text: picker.playlistName
-                    placeholderText: qsTr("Playlist %1").arg(Playlists.all.length + 1)
-                    maximumLength: 50
-                    onTextEdited: picker.playlistName = text
+                    model: [qsTr("By timer"), qsTr("On login"), qsTr("Time of day"),
+                            qsTr("Day of week"), qsTr("Never")]
                 }
 
-                Label { text: qsTr("Change every") }
+                // The two numbers sit under the drop down they belong to,
+                // in its column, each with its own word over it -- which
+                // is where Wallpaper Engine puts them.
+                Item {}
 
                 RowLayout {
-                    spacing: 8
+                    spacing: 10
+                    // The timer is the only one of the five that has any
+                    // use for an interval.
+                    enabled: changeBox.currentIndex === 0
 
-                    SpinBox {
-                        id: everyHours
+                    ColumnLayout {
+                        spacing: 4
 
-                        Layout.preferredWidth: 96
-                        from: 0
-                        to: 23
-                        // Holds the number itself; see the note on
-                        // `playlistName` for why it is bound to nothing.
-                        // Typed as well as clicked, because clicking an
-                        // arrow fourteen times to say "one minute" is not
-                        // a way to ask for anything.
-                        editable: true
-                        value: 0
+                        Label {
+                            text: qsTr("Hours")
+                            font.pixelSize: 12
+                        }
+
+                        SpinBox {
+                            id: everyHours
+
+                            Layout.preferredWidth: 110
+                            from: 0
+                            to: 23
+                            // Holds the number itself; see the note on
+                            // `playlistName` for why it is bound to
+                            // nothing. Typed as well as clicked, because
+                            // clicking an arrow fourteen times to say
+                            // "one minute" is not a way to ask anything.
+                            editable: true
+                            value: 0
+                        }
                     }
-                    Label { text: qsTr("hours") }
 
-                    SpinBox {
-                        id: everyMinutes
+                    ColumnLayout {
+                        spacing: 4
 
-                        Layout.preferredWidth: 96
-                        from: 0
-                        to: 59
-                        editable: true
-                        value: 15
+                        Label {
+                            text: qsTr("Minutes")
+                            font.pixelSize: 12
+                        }
+
+                        SpinBox {
+                            id: everyMinutes
+
+                            Layout.preferredWidth: 110
+                            from: 0
+                            to: 59
+                            editable: true
+                            value: 15
+                        }
                     }
-                    Label { text: qsTr("minutes") }
 
                     Item { Layout.fillWidth: true }
                 }
 
                 Label { text: qsTr("Order") }
 
-                RowLayout {
-                    spacing: 6
+                ComboBox {
+                    id: orderBox
 
-                    Chip {
-                        label: qsTr("In order")
-                        on: !picker.playlistShuffle
-                        onAsked: picker.playlistShuffle = false
-                    }
-                    Chip {
-                        label: qsTr("Shuffled")
-                        on: picker.playlistShuffle
-                        onAsked: picker.playlistShuffle = true
-                    }
-                    Item { Layout.fillWidth: true }
+                    Layout.fillWidth: true
+                    // Random first, and so the one a new playlist gets.
+                    // `savePlaylist()` reads shuffle off this index.
+                    model: [qsTr("Random"), qsTr("Ordered")]
+                }
+
+                Label { text: qsTr("Wallpaper transition") }
+
+                ComboBox {
+                    id: transitionBox
+
+                    Layout.fillWidth: true
+                    model: [qsTr("None (reduce flicker)"), qsTr("None"), qsTr("Random"),
+                            qsTr("Fade"), qsTr("Fade to black")]
+                }
+
+                Label { text: qsTr("Change wallpaper when the video ends") }
+
+                CheckBox { id: afterVideoBox; Layout.alignment: Qt.AlignLeft }
+
+                Label { text: qsTr("Allow changing while paused") }
+
+                CheckBox { id: whilePausedBox; Layout.alignment: Qt.AlignLeft }
+
+                Label { text: qsTr("Always start with the first wallpaper") }
+
+                CheckBox { id: firstBox; Layout.alignment: Qt.AlignLeft }
+
+                Label {
+                    Layout.leftMargin: 20
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    // Only means anything once the one above it is on,
+                    // which is the whole of why it is indented.
+                    enabled: firstBox.checked
+                    text: qsTr("The first wallpaper plays only at startup")
+                }
+
+                CheckBox {
+                    id: firstAtStartBox
+
+                    Layout.alignment: Qt.AlignLeft
+                    enabled: firstBox.checked
                 }
             }
 
@@ -425,7 +580,8 @@ Window {
                 opacity: 0.8
                 // Said plainly, because nought would otherwise look like a
                 // setting rather than a mistake.
-                text: qsTr("A minute at the least, however short this is set.")
+                text: qsTr("A minute at the least, however short this is set. "
+                           + "Only the timer and the order do anything yet.")
             }
 
             RowLayout {
@@ -437,6 +593,258 @@ Window {
                     text: qsTr("Confirm")
                     accent: "#2e9e5b"
                     onClicked: settings.close()
+                }
+            }
+        }
+    }
+
+    /// Which saved playlist to put back on the strip.
+    ///
+    /// Saving under a name that is taken replaces it, so this is also
+    /// where a playlist is changed: open it, change it, save it. And it is
+    /// the only place one can be thrown away.
+    ///
+    /// Wallpaper Engine's own has a keyboard shortcut field under the
+    /// list. There is nothing here that could listen for one, so the field
+    /// is left out rather than drawn dead.
+    Popup {
+        id: loading
+
+        anchors.centerIn: parent
+        modal: true
+        padding: 18
+        implicitWidth: 560
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        /// The name picked in the list, or empty while none is.
+        property string picked: ""
+
+        onOpened: loading.picked = picker.playlistName
+
+        background: Rectangle {
+            color: picker.palette.base
+            border.color: picker.palette.mid
+            border.width: 1
+            radius: 8
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            Label {
+                text: qsTr("Open a playlist")
+                font.pixelSize: 17
+                font.weight: Font.Bold
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                // A box of a fixed height whether or not there is anything
+                // in it, so the dialog does not change size as playlists
+                // come and go.
+                Layout.preferredHeight: 200
+                color: "transparent"
+                border.color: picker.palette.mid
+                border.width: 1
+                radius: 4
+
+                Label {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    wrapMode: Text.Wrap
+                    opacity: 0.8
+                    visible: Playlists.all.length === 0
+                    text: qsTr("You have not made a playlist yet.")
+                }
+
+                ListView {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    clip: true
+                    model: Playlists.all
+                    ScrollBar.vertical: Scroller {}
+
+                    delegate: Rectangle {
+                        id: row
+
+                        required property var modelData
+
+                        width: ListView.view.width
+                        height: 34
+                        color: loading.picked === row.modelData.name
+                                   ? picker.palette.highlight
+                                   : rowPointer.hovered
+                                       ? Qt.alpha(picker.palette.highlight, 0.18)
+                                       : "transparent"
+
+                        HoverHandler { id: rowPointer }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: loading.picked = row.modelData.name
+                            // Twice is the shortcut for picking it and
+                            // pressing Confirm, which is what a list of
+                            // names everywhere else does.
+                            onDoubleClicked: {
+                                picker.loadPlaylist(row.modelData.name);
+                                loading.close();
+                            }
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            // Clear of the scrollbar, which keeps a strip
+                            // of its own rather than fading out over what
+                            // is under it.
+                            anchors.rightMargin: 18
+                            spacing: 8
+
+                            Label {
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                                text: (Playlists.playing === row.modelData.name ? "▶  " : "")
+                                      + row.modelData.name
+                                color: loading.picked === row.modelData.name
+                                           ? picker.palette.highlightedText
+                                           : picker.palette.windowText
+                            }
+
+                            Label {
+                                font.pixelSize: 11
+                                opacity: 0.8
+                                text: qsTr("Wallpapers: %1").arg(row.modelData.ids.length)
+                                      + " · " + row.modelData.hours + " h "
+                                      + row.modelData.minutes + " min"
+                                color: loading.picked === row.modelData.name
+                                           ? picker.palette.highlightedText
+                                           : picker.palette.windowText
+                            }
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                RoundedButton {
+                    text: qsTr("Delete")
+                    icon.name: "edit-delete"
+                    accent: "#c0392b"
+                    enabled: Playlists.named(loading.picked).name !== undefined
+                    onClicked: {
+                        Playlists.forget(loading.picked);
+                        loading.picked = "";
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                RoundedButton {
+                    text: qsTr("Confirm")
+                    accent: "#2e9e5b"
+                    enabled: Playlists.named(loading.picked).name !== undefined
+                    onClicked: {
+                        picker.loadPlaylist(loading.picked);
+                        loading.close();
+                    }
+                }
+
+                RoundedButton {
+                    text: qsTr("Cancel")
+                    onClicked: loading.close()
+                }
+            }
+        }
+    }
+
+    /// What to call the playlist being saved.
+    Popup {
+        id: saving
+
+        anchors.centerIn: parent
+        modal: true
+        padding: 18
+        implicitWidth: 460
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        onOpened: {
+            savingName.text = picker.playlistName;
+            savingName.forceActiveFocus();
+            savingName.selectAll();
+        }
+
+        function keep() {
+            picker.playlistName = savingName.text;
+            picker.savePlaylist();
+            saving.close();
+        }
+
+        background: Rectangle {
+            color: picker.palette.base
+            border.color: picker.palette.mid
+            border.width: 1
+            radius: 8
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 16
+
+            Label {
+                text: qsTr("Save the playlist")
+                font.pixelSize: 17
+                font.weight: Font.Bold
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 14
+                rowSpacing: 6
+
+                Label { text: qsTr("Name") }
+
+                TextField {
+                    id: savingName
+
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Playlist %1").arg(Playlists.all.length + 1)
+                    maximumLength: 50
+                    onAccepted: saving.keep()
+                }
+
+                Item {}
+
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 11
+                    opacity: 0.8
+                    // Said whether or not the name is taken: replacing is
+                    // how a playlist is changed, so it is the rule rather
+                    // than a warning about this particular name.
+                    text: qsTr("If a playlist of this name exists already, "
+                               + "it will be replaced.")
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Item { Layout.fillWidth: true }
+
+                RoundedButton {
+                    text: qsTr("Confirm")
+                    accent: "#2e9e5b"
+                    onClicked: saving.keep()
+                }
+
+                RoundedButton {
+                    text: qsTr("Cancel")
+                    onClicked: saving.close()
                 }
             }
         }
@@ -644,6 +1052,9 @@ Window {
                         // One click shows the panel beside the grid, the
                         // next puts it away -- the same button in the same
                         // window as the workshop's, behaving the same way.
+                        // Blue while the panel it opens is open, so the
+                        // button says which of its two states it is in.
+                        accent: filters.visible ? "#3daee9" : "transparent"
                         onClicked: filters.visible = !filters.visible
                     }
 
@@ -866,7 +1277,11 @@ Window {
                             // column of previews and reads as part of the picture.
                             readonly property int room: grid.width - 30
 
-                            readonly property int columns: Math.max(1, Math.floor(grid.room / 240))
+                            // Three hundred rather than the two hundred
+                            // and forty this started at: the previews were
+                            // small enough that picking one out meant
+                            // leaning in.
+                            readonly property int columns: Math.max(1, Math.floor(grid.room / 300))
 
                             cellWidth: Math.floor(grid.room / grid.columns)
                             // The preview is sixteen by nine, and the name sits
@@ -875,10 +1290,52 @@ Window {
 
                             model: picker.shown
 
+                            // The grid is what the window hands the keyboard
+                            // to when it opens: arrows walk the cards, Enter
+                            // puts one on the desktop, Space ticks it into
+                            // the playlist. The search field takes the
+                            // keyboard back the moment it is clicked.
+                            focus: true
+
+                            /// The card the arrows are on, or null where the
+                            /// grid is empty or has not been walked yet.
+                            function here() {
+                                return grid.currentIndex >= 0
+                                       && grid.currentIndex < picker.shown.length
+                                    ? picker.shown[grid.currentIndex] : null;
+                            }
+
+                            // The panel follows the arrows only once it is
+                            // open. Opening one because somebody pressed
+                            // Right would be the window deciding what the
+                            // question was.
+                            onCurrentIndexChanged: {
+                                const one = grid.here();
+                                if (one && details.visible)
+                                    picker.inspect(one.id);
+                            }
+
+                            Keys.onReturnPressed: {
+                                const one = grid.here();
+                                if (one)
+                                    picker.apply(one.id);
+                            }
+                            Keys.onEnterPressed: {
+                                const one = grid.here();
+                                if (one)
+                                    picker.apply(one.id);
+                            }
+                            Keys.onSpacePressed: {
+                                const one = grid.here();
+                                if (one && one.playable)
+                                    picker.tick(one.id);
+                            }
+
                             delegate: Item {
                                 id: cell
 
                                 required property var modelData
+                                required property int index
 
                                 width: grid.cellWidth
                                 height: grid.cellHeight
@@ -887,9 +1344,19 @@ Window {
                                     anchors.fill: parent
                                     anchors.margins: 8
                                     wallpaper: cell.modelData
-                                    onChose: (id) => picker.inspect(id)
+                                    current: grid.activeFocus
+                                             && grid.currentIndex === cell.index
+                                    // A click moves the arrows here as well,
+                                    // so the two ways of walking the grid do
+                                    // not each keep a place of their own.
+                                    onChose: (id) => {
+                                        grid.currentIndex = cell.index;
+                                        grid.forceActiveFocus();
+                                        picker.inspect(id);
+                                    }
                                     onApplied: (id) => picker.apply(id)
                                     ticked: picker.inPlaylist.indexOf(cell.modelData.id) >= 0
+                                    showTick: picker.picking
                                     onTickAsked: picker.tick(cell.modelData.id)
                                 }
                             }
@@ -917,6 +1384,9 @@ Window {
                         preview: picker.inspected ? picker.inspected.preview : ""
                         title: picker.inspected ? picker.inspected.title : ""
                         facts: picker.factsFor(picker.inspected, Language.czech)
+                        tags: picker.tagsOf(picker.inspected, Language.czech)
+                        author: picker.inspectedAuthor
+                        onAuthorAsked: picker.everythingByTheAuthor()
                         onClosed: {
                             details.visible = false;
                             picker.inspected = null;
@@ -984,11 +1454,13 @@ Window {
                     Layout.leftMargin: 24
                     Layout.rightMargin: 8
                     Layout.bottomMargin: 8
-                    visible: picker.inPlaylist.length > 0
                     items: picker.playlistItems
+                    adding: picker.picking
                     onDropped: (id) => picker.tick(id)
-                    onSaveAsked: picker.savePlaylist()
+                    onLoadAsked: loading.open()
+                    onSaveAsked: saving.open()
                     onConfigureAsked: settings.open()
+                    onAddAsked: picker.picking = !picker.picking
                 }
             }
 

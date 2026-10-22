@@ -45,25 +45,66 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Steamworks library is opened again rather than once at startup, so
   starting Steam afterwards is advice worth taking.
 - **English and Czech**, switched in the window without a restart.
-- **Wallpapers that take turns.** Hovering a card shows a tick box; the
-  first tick opens a strip along the bottom of the library with the chosen
-  wallpapers in it, ten to a row, and under them Configure and Save.
-  Configure is the name, how often it turns (hours and minutes) and
-  whether it shuffles. A saved playlist is started from the Playlists
-  button beside the filters, and stopped by clicking it again. There is no
-  Playlists tab: a playlist is made out of the grid, so it is made in the
-  grid.
+- **Wallpapers that take turns.** A strip along the bottom of the library
+  from the moment the window opens, empty or not -- the place a playlist is
+  made has to be visible before there is anything in it. Along its top:
+  Playlists, then Load, Save, Configure and Add wallpaper; under them the
+  chosen wallpapers, twenty to a row. Hovering a card shows a tick box --
+  white with a black edge, blue when it is ticked, fixed colours rather
+  than the palette's because the box sits on a picture and not on the
+  window -- and Add wallpaper holds every box open so several can be
+  ticked without hunting for each one. The room for the previews comes
+  with the first one that is ticked and goes with the last; the words and
+  the buttons are there from the start. Load is the saved playlists, to open one back onto
+  the strip or throw it away; Save asks what to call it and replaces one of
+  that name; Configure is how it runs. A saved playlist is started from the
+  Playlists button beside the filters, and stopped by clicking it again.
+  There is no Playlists tab: a playlist is made out of the grid, so it is
+  made in the grid.
+
+  **Configure is laid out as Wallpaper Engine's own**, and four of its
+  controls choose between things that are not written yet: when the
+  wallpaper changes (timer, login, time of day, day of week, never), the
+  transition, changing when a video ends, changing while paused, and always
+  beginning with the first one. Asked for that way on purpose -- the list of
+  what WallFlux is going to offer was the thing worth deciding first. Only
+  the timer and the order do anything, and the popup says so.
 - **A picker with its sections across the top**: Installed, Steam,
   Displays, Settings, centred. The first two are built; the other two say
   "Coming soon" and are there because naming them is what decides where
   the next piece of work goes.
 - **A panel beside the grid saying what a wallpaper is.** A click opens
-  it, in either tab: the picture, the name, and what is known -- the kind,
-  the picture size, what it takes up, the age rating, whether it answers to
-  sound, the tags. Under that the one thing to do about it: green Download
-  in the workshop, red Remove in the library, each with a line under it
-  saying what will happen. One click picks a wallpaper out; two put it on
-  the desktop.
+  it, in either tab: the picture with a cross in its corner, the name, and
+  under that a button saying who made it -- their avatar, their name and a
+  magnifier -- which turns the workshop grid into everything else they
+  have published, with a blue chip beside the filters to come back from.
+  It is there from the moment the panel opens, with the name filling
+  itself in a moment later. Then what is known, a
+  row to a line with an icon and a hairline under it: the kind, the picture
+  size, what it takes up, the age rating, whether it answers to sound. The
+  tags are chips under their own heading rather than a line of commas.
+  Under all of it the one thing to do about it: green Download in the
+  workshop, red Remove in the library, each with a line under it saying
+  what will happen. One click picks a wallpaper out; two put it on the
+  desktop.
+
+  **The library has the same row**, although project.json does not say who
+  wrote a wallpaper -- checked across every one of them. It takes two
+  keyless questions instead of one, both in `qml/steamprofile.js`: the
+  workshop is asked about this id -- which answers with the maker and with
+  the full list of tags, see the trap -- and then who that account is. The
+  magnifier there opens the Steam tab and asks the question in the grid
+  that can answer it. **Coming back is the Workshop button**, which clears
+  the author and asks again: clearing alone does nothing, because the grid
+  is already in the Workshop's own mode and `onModeChanged` never fires.
+- **A grid the arrow keys walk.** The window hands the keyboard to the
+  grid when it opens: arrows turn one card's band blue, Enter puts that one
+  on the desktop, Space ticks it into the playlist. A click moves
+  the band as well, so the mouse and the keyboard do not each keep a place
+  of their own. The panel follows it only once it is open -- opening
+  one because somebody pressed Right would be the window deciding what the
+  question was.
+
 - **A picker that looks like something**: dark and light themes switched
   without a restart, a search that narrows the grid as it is typed and a
   cross to empty it, name order either way round, a band around each
@@ -101,7 +142,10 @@ qml/Main.qml          the wallpaper window: WebEngineView, Video, tray icon
 qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band and its name
 qml/Details.qml       what is known about one wallpaper, beside the grid --
-                      shared, with the one button handed in as a child
+                      shared, with the one button handed in as a child.
+                      `facts` is `{ label, value, icon }`, `tags` is its
+                      own list drawn as chips, `author` is
+                      `{ name, avatar }` or null
 qml/PlaylistBar.qml   the playlist being put together, along the bottom
 qml/FilterPanel.qml   the filter popup: chips in sections, and what is on
 qml/PreviewTile.qml   a preview and a name -- the shape of a card, shared
@@ -111,6 +155,10 @@ qml/WorkshopFilters.qml  the workshop's filter popup, the whole vocabulary
 qml/Chip.qml          one value, on or off -- shared by both filters
 qml/ChipSection.qml   a heading and the values under it, one to a row
 qml/Scroller.qml      a scrollbar that stays visible, used by every view
+                      -- except the details panel, which passes
+                      `policy: ScrollBar.AsNeeded`
+qml/steamprofile.js   who made a workshop item, and who that account is:
+                      two keyless questions, shared by both tabs
 qml/RoundedButton.qml a button with its corners off -- every button here
 qml/RoundedTool.qml   the same corners for an icon on its own
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
@@ -141,9 +189,13 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 - `Steamworks`: `available`, `trouble` (a `Trouble` enum, **not** a
   sentence -- see the trap), `busy`, `found` and `totals` (keyed by the
   name the asker gave the question), `downloads` (id -> 0..100, -1 refused);
-  `browse(key, order, page, tags, search, urgent)`, `download(id)`,
+  `browse(key, order, page, tags, search, urgent, creator)`, `download(id)`,
   `remove(id)` (unsubscribes, and nothing else -- the folder is
-  `Wallpapers.discard()`'s), `retry()`
+  `Wallpapers.discard()`'s), `retry()`. An answer's entries carry `owner`,
+  the maker's steamID64 **as a string** -- it does not fit a double and QML
+  would round it. `creator` narrows the question to one account's published
+  work, which is a different call of Steam's with its own orders, so
+  `order` says nothing while it is set.
 - `Tags`: `genres` (25), `types`, `ratings`, `resolutions`, `properties`;
   `name(tag, locale)`, `labelled(tags, locale)`
 
@@ -221,6 +273,62 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `currentChanged` anyway makes QML hand the player the same URL, which stops
   it for good — a black screen with no error. Regression test:
   `staysQuietWhenTheChoiceIsTheSame()`.
+- **project.json's tags are the author's genres and nothing else.**
+  Measured against the workshop's own list for the same wallpaper:
+  `["Sci-Fi"]` on the disk against `Wallpaper, Scene, Sci-Fi, Audio
+  responsive, 1920 x 1080, Everyone` in the answer. Steam adds the asset
+  type, the kind, the resolution, the age rating and whether it answers to
+  sound, and none of those is written into the folder. So a wallpaper
+  looked at in the library used to show a third of the tags it showed in
+  the Steam tab. The keyless details call that finds the author brings the
+  full list back with it, so it costs nothing extra -- and **anything
+  asking "does it carry this tag" has to read that list**, or the Audio
+  responsive row says "not stated" about a wallpaper whose own chips
+  underneath say otherwise.
+
+- **Who made an installed wallpaper takes two questions, not one.**
+  project.json has no author in it at all -- the keys are `title`, `type`,
+  `file`, `preview`, `tags`, `description`, `contentrating`, `version`,
+  `visibility`, `workshopid`, `workshopurl` and `general`, counted across
+  all of them. The folder's name is the workshop id, and
+  `ISteamRemoteStorage/GetPublishedFileDetails/v1/` answers `creator` for
+  it without a key; the profile page below turns that into a name and a
+  face. Both live in `qml/steamprofile.js` as a `.pragma library`, so the
+  library and the workshop ask once between them. **`XMLHttpRequest` works
+  inside a `.pragma library`** -- checked with a throwaway `qml` run before
+  the file was written, since a shared script cannot see the engine.
+
+- **Steam's profile page served as XML needs no key**, which is the only
+  keyless way to put a name and a face to the steamID64 a UGC answer
+  carries. `GET steamcommunity.com/profiles/<id64>?xml=1` gives
+  `<steamID>` (the persona name) and `<avatarIcon>` in CDATA; the Web API's
+  `ISteamUser/GetPlayerSummaries` wants a key and is not used. Asked from
+  QML with `XMLHttpRequest`, once per account, and the answers kept in a
+  map -- a grid of fifty cards is often a dozen authors.
+
+  **Putting the answer back has to be a new object.** Assigning the same
+  map back to the property changes nothing anybody is bound to, so the
+  name arrives and the panel goes on showing nothing. `Object.assign({},
+  ...)` is why it appears.
+
+- **One author's work is `CreateQueryUserUGCRequest`, not a search.**
+  Steam's text search matches the title and the description and has no
+  idea who wrote anything. The user query takes an `AccountID_t`, which is
+  the bottom half of a steamID64, and `k_EUserUGCList_Published` with
+  `k_EUGCMatchingUGCType_All`. Those numbers were read out of
+  `/opt/steamworks-sdk/public/steam/isteamugc.h` rather than guessed, the
+  same as every other number in `steamworks.cpp`, and
+  `SteamAPI_ISteamUGC_CreateQueryUserUGCRequest` is exported by
+  `libsteam_api.so` -- checked with `nm -D`. Measured against a running
+  Steam: four pages of one author's wallpapers came back.
+
+- **A theme icon on its own, with no button round it, is `IconImage` from
+  `QtQuick.Controls.impl`.** There is no public type for it and no
+  `image://theme` provider, and it wants `color` for the same reason the
+  tab icons do -- untinted it keeps whatever the icon theme drew it and
+  goes invisible in one of the two themes. The panel's rows use it; a
+  `ToolButton` would have brought a hover and a click nobody wants.
+
 - **The picker needs `transientParent: null`.** The wallpaper window is a
   background layer-shell surface that takes no input; a window belonging to
   it gets dragged down there and cannot be clicked.
@@ -304,6 +412,48 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   suspected.
 - **`qmllint` is not in `PATH`** on this machine; it is
   `/usr/lib/qt6/bin/qmllint`.
+- **A ring round a card is a second frame, and it takes the name in with
+  it.** The preview already has a band, so an arrow-key highlight drawn as
+  a rectangle over the whole card put two frames round one picture and a
+  box round the words under it. The band changes colour instead. Nothing
+  is lost by borrowing it: a wallpaper that cannot be played is drawn at
+  four tenths and says so that way too.
+
+- **A preview is sixteen by nine because a wallpaper is.** The picture
+  Wallpaper Engine ships is the wallpaper's own shape and the screen it
+  goes on is that shape too, so a square tile would throw a third of every
+  preview away or letterbox it into grey. Asked once; the answer is the
+  same everywhere a preview is drawn.
+
+- **A `PreviewTile` is sixteen by nine from the inside out.** The frame in
+  it asks for nine sixteenths of its *own* width whatever height the tile
+  is given, so `Layout.preferredHeight` does not shorten the picture --
+  the tile overflows and the name underneath is drawn over the bottom of
+  it, with no warning anywhere. Hold the width instead. Found by capping
+  the height in the details panel and looking at the result.
+
+- **The details panel scrolls from the author's row down.** The picture
+  and the name stay put; everything under them is in the Flickable. Two
+  wrong answers were tried first: a floor under the list
+  (`Layout.minimumHeight`) overflows the column and cuts the button off the
+  bottom, and scrolling the picture too means a hundred and sixty pixels of
+  photograph in the content, so there is always more than fits and the bar
+  never goes away. With the picture outside it, a maximised window has
+  nothing to scroll and says so.
+
+- **Setting `policy: ScrollBar.AsNeeded` on `Scroller` does nothing on its
+  own.** Fusion does "as needed" by fading the `contentItem` *it* draws,
+  and Scroller replaces that contentItem -- so the policy is set, the
+  fading is gone with the thing that did it, and a full-length bar is drawn
+  down the edge of content that fits. Scroller does the hiding itself now.
+  Found in a maximised window, where there was plainly nothing to scroll
+  and a bar saying there was.
+
+- **A `ToolButton` with nothing round it is a button nobody sees.** Fusion
+  draws no background until it is pointed at, so a magnifier beside the
+  author's name read as decoration and was reported missing. The whole row
+  is a `Button` with an edge on it now.
+
 - **A `MultiEffect` mask draws nothing unless the mask has
   `layer.enabled: true`.** Not a dimmer picture or a square-cornered one:
   nothing, every card blank. A `Rectangle` is not a texture until it is a
@@ -617,14 +767,21 @@ the file. Everything after it should.
 
 ### Small things seen and left
 
-- A saved playlist cannot be deleted or renamed from the window. Saving
-  under a name that is taken replaces it, which covers changing one; there
-  is nowhere to throw one away.
-- Wallpaper Engine's playlist settings also offer a fade between
-  wallpapers and how long it takes, changing when a video ends, and
-  whether to always begin with the first one. None are here: the first
-  needs two wallpapers drawn at once, which `Main.qml` cannot do, and a
-  switch that does nothing is worse than no switch.
+- A saved playlist still cannot be renamed. Saving under a name that is
+  taken replaces it, which covers changing one; Load is where one is thrown
+  away.
+- The four placeholder controls in Configure keep whatever they are set to
+  and nothing reads them. A transition needs two wallpapers drawn at once,
+  which `Main.qml` cannot do; the other three need somewhere to put a
+  setting that is not an interval, and `Playlists::save()` takes five
+  arguments rather than a map.
+- Translating a drop down's model is a binding, so switching language
+  rebuilds the list and puts it back on its first item -- Order with it.
+  Measured in passing, not worth the code while three of the lists do
+  nothing.
+- Wallpaper Engine's Load and Save dialogs each carry a keyboard shortcut
+  field. There is nothing here that could listen for one, so neither is
+  drawn.
 - The volume for a video went with the panel that used to be drawn over a
   preview: the only sound control now is the one in the footer, which is on
   or off. Nobody has asked for it back.
