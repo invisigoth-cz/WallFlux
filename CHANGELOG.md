@@ -6,6 +6,61 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-22
+
+### Added
+
+- **A playlist turns by the second.** The interval is hours, minutes and
+  seconds rather than hours and minutes, and five seconds is the shortest
+  it will take. Old playlists are read as they stand -- no seconds means
+  none.
+- **Opening a saved playlist starts it.** Confirm in Load fills the strip,
+  brings the settings back and puts the first wallpaper on the desktop,
+  rather than leaving somebody to find the Playlists button afterwards.
+- **Transition time**, a slider from nought to three seconds, beside the
+  transition it belongs to. Like the transition itself, it keeps what it
+  is set to and nothing reads it yet.
+- **Throwing a playlist away asks first.** Delete turns into "Really
+  delete?" and only the second press does it. Forgetting a playlist cannot
+  be undone and there is nowhere to undo it from.
+
+### Changed
+
+- **Configure is laid out as Wallpaper Engine's own.** Every drop down
+  opens with nothing chosen, the three numbers are typed rather than
+  clicked at -- the arrows are gone and each box takes two characters --
+  and the tick boxes are out at the right, big, and fill in blue when they
+  are on. Cancel sits beside Confirm.
+- **The Playlists button keeps its name.** It used to turn into the name
+  of whatever was playing; the tick in its menu says that now, as the sort
+  menu does, and the count in brackets is gone.
+- **Configure is switched off while there is nothing to configure** --
+  no playlist on the strip and none saved.
+- **The playlist strip says how many wallpapers are in it** and nothing
+  else; the line of advice beside it has gone.
+
+### Fixed
+
+- **Escape hid the whole window instead of closing a popup.** A
+  window-wide shortcut took the key before any popup could use it. There
+  is no Escape handler in WallFlux now: the key belongs to whatever is
+  open, and the window is put away with the buttons in its corner.
+- **Escape then closed only one popup of the three.** `CloseOnEscape` is
+  not enough on its own, because a popup does not take the keyboard by
+  being opened -- Save worked only because it puts the cursor in its name
+  field. Measured on all three and fixed for all three.
+- **Typing a time could not overflow sensibly.** Sixty seconds is a minute
+  now, ninety-five minutes is an hour and thirty-five, and longer than a
+  day is clamped as a whole. Clamping the hours on their own let an
+  interval get *shorter* when somebody added to it: 23:59 with ninety
+  seconds typed in came out as 23:00:30.
+- **The number boxes took as many digits as anybody cared to type.** Two,
+  now.
+- **The line under a greyed-out tick box stayed black.** A Label does not
+  dim itself when it is switched off.
+- **The Load list and the details panel drew a scrollbar beside content
+  that fitted.**
+
 ## [0.8.0] — 2026-10-22
 
 ### Added
@@ -405,7 +460,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.5.0...v0.6.0
