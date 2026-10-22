@@ -1468,6 +1468,13 @@ Window {
                             y: lists.height + 4
                             closePolicy: Popup.CloseOnEscape
                                          | Popup.CloseOnPressOutsideParent
+                            // Said out loud, because a Menu takes its
+                            // width from the background it is given and
+                            // the one below has none: without this the
+                            // menu came up twelve pixels wide -- the
+                            // padding and nothing else -- with its items
+                            // sized to nothing and no text in sight.
+                            implicitWidth: 260
                             padding: 6
 
                             background: Rectangle {

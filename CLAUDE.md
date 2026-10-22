@@ -510,6 +510,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   assigns `currentIndex` itself when somebody picks a row, which breaks
   that binding for good.
 
+- **Replacing a `Menu`'s background takes its width with it.** A Menu has
+  no width of its own: it comes from the background it is given, and a
+  plain `Rectangle` has none. Rounding the corners of the playlists menu
+  that way left it twelve pixels wide -- its padding and nothing else --
+  with its items sized to nothing and no text in sight, over two saved
+  playlists that were plainly there. `contentWidth` reads -1 when this has
+  happened. Say `implicitWidth` out loud, as the sort menu beside it
+  already did, which is why that one never broke.
+
 - **A `GridLayout` says nothing when a row loses a cell.** Taking the
   "change wallpaper" drop down out left its label behind, so every row
   under it sat one column over -- words in the right-hand column, drop
