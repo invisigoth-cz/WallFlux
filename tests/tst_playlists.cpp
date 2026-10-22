@@ -34,7 +34,9 @@ private slots:
         {
             Playlists writing;
             writing.save(QStringLiteral("quick"), {QStringLiteral("1"), QStringLiteral("2")},
-                         0, 0, 20, false);
+                         {{QStringLiteral("seconds"), 20},
+                          {QStringLiteral("videoEnds"), true},
+                          {QStringLiteral("alwaysFirst"), true}});
         }
 
         Playlists reading;
@@ -42,6 +44,9 @@ private slots:
         QCOMPARE(one.value(QStringLiteral("hours")).toInt(), 0);
         QCOMPARE(one.value(QStringLiteral("minutes")).toInt(), 0);
         QCOMPARE(one.value(QStringLiteral("seconds")).toInt(), 20);
+        QCOMPARE(one.value(QStringLiteral("videoEnds")).toBool(), true);
+        QCOMPARE(one.value(QStringLiteral("whilePaused")).toBool(), false);
+        QCOMPARE(one.value(QStringLiteral("alwaysFirst")).toBool(), true);
     }
 
     /// Hours, minutes and seconds are added up rather than one of them
@@ -69,7 +74,9 @@ private slots:
 
         Playlists playlists;
         playlists.save(QStringLiteral("timed"), {QStringLiteral("1"), QStringLiteral("2")},
-                       hours, minutes, seconds, false);
+                       {{QStringLiteral("hours"), hours},
+                        {QStringLiteral("minutes"), minutes},
+                        {QStringLiteral("seconds"), seconds}});
 
         QSignalSpy plays(&playlists, &Playlists::plays);
         playlists.start(QStringLiteral("timed"));
@@ -119,25 +126,131 @@ private slots:
         QCOMPARE(clock.value(QStringLiteral("seconds")).toInt(), rest);
     }
 
-    /// A playlist set to seconds really does turn, rather than the window
-    /// having been told one thing and the timer another.
-    void turnsWhenTheSecondsAreUp()
+    /// "Always begin with the first wallpaper" holds index nought out of
+    /// the shuffle and deals the rest. Twenty goes, because a shuffle that
+    /// happened to leave the first one in place would pass a single run
+    /// whatever it did.
+    void alwaysFirstSurvivesTheShuffle()
+    {
+        const QStringList ids{QStringLiteral("first"), QStringLiteral("b"),
+                              QStringLiteral("c"), QStringLiteral("d"),
+                              QStringLiteral("e"), QStringLiteral("f")};
+
+        Playlists playlists;
+        playlists.save(QStringLiteral("held"), ids,
+                       {{QStringLiteral("shuffle"), true},
+                        {QStringLiteral("alwaysFirst"), true}});
+
+        for (int go = 0; go < 20; ++go) {
+            QSignalSpy plays(&playlists, &Playlists::plays);
+            playlists.start(QStringLiteral("held"));
+            QCOMPARE(plays.count(), 1);
+            QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("first"));
+            playlists.stop();
+        }
+    }
+
+    /// Without it, the first wallpaper moves at least once in twenty goes.
+    /// Not an assertion about randomness so much as about the setting
+    /// doing something: with the hold-back broken both tests would pass
+    /// only if this one failed.
+    void shufflingWithoutItMovesTheFirstOne()
+    {
+        const QStringList ids{QStringLiteral("first"), QStringLiteral("b"),
+                              QStringLiteral("c"), QStringLiteral("d"),
+                              QStringLiteral("e"), QStringLiteral("f")};
+
+        Playlists playlists;
+        playlists.save(QStringLiteral("loose"), ids,
+                       {{QStringLiteral("shuffle"), true}});
+
+        bool moved = false;
+        for (int go = 0; go < 20 && !moved; ++go) {
+            QSignalSpy plays(&playlists, &Playlists::plays);
+            playlists.start(QStringLiteral("loose"));
+            moved = plays.takeFirst().at(0).toString() != QStringLiteral("first");
+            playlists.stop();
+        }
+        QVERIFY(moved);
+    }
+
+    /// Holding stops the clock and letting go picks it up where it was,
+    /// rather than starting the turn again.
+    ///
+    /// Real seconds, and so most of what this suite costs to run. It is
+    /// the only thing that catches the two ways this goes wrong: the
+    /// multiplier, where seconds read as minutes make a playlist sixty
+    /// times too slow, and a hold that quietly restarts the turn instead
+    /// of resuming it.
+    void holdingKeepsWhatWasLeft()
     {
         Playlists playlists;
-        playlists.save(QStringLiteral("fast"), {QStringLiteral("a"), QStringLiteral("b")},
-                       0, 0, 5, false);
+        playlists.save(QStringLiteral("held"), {QStringLiteral("a"), QStringLiteral("b")},
+                       {{QStringLiteral("seconds"), 5}});
 
         QSignalSpy plays(&playlists, &Playlists::plays);
-        playlists.start(QStringLiteral("fast"));
+        playlists.start(QStringLiteral("held"));
         QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("a"));
 
-        // Five seconds of suite time, deliberately. The one way to get
-        // this wrong is the multiplier -- seconds read as minutes is a
-        // playlist sixty times too slow, and nothing but a real turn
-        // catches it.
-        QVERIFY(plays.wait(7000));
+        // Three seconds in, two to go.
+        QTest::qWait(3000);
+        playlists.hold(true);
+
+        // Held, so the two seconds never run out however long it sits.
+        QVERIFY(!plays.wait(3000));
+        QCOMPARE(plays.count(), 0);
+
+        // And the two seconds are still two, not five.
+        playlists.hold(false);
+        QVERIFY(plays.wait(3000));
         QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("b"));
         playlists.stop();
+    }
+
+    /// A video reaching its end is `next()`, and it winds the clock again
+    /// rather than leaving the old one to go off a moment later.
+    void nextMovesOnAndRewindsTheClock()
+    {
+        Playlists playlists;
+        playlists.save(QStringLiteral("ends"), {QStringLiteral("a"), QStringLiteral("b")},
+                       {{QStringLiteral("seconds"), 5}});
+
+        QSignalSpy plays(&playlists, &Playlists::plays);
+        playlists.start(QStringLiteral("ends"));
+        QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("a"));
+
+        QTest::qWait(3000);
+        playlists.next();
+        QCOMPARE(plays.count(), 1);
+        QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("b"));
+
+        // Five seconds from now, not the two that were left: without the
+        // rewind this would turn again almost at once.
+        QVERIFY(!plays.wait(3000));
+        playlists.stop();
+    }
+
+    /// What is running says what it was told, and says nothing once it
+    /// has stopped -- the window reads these to decide whether a video
+    /// loops and whether a covered screen holds the clock.
+    void saysWhatTheRunningPlaylistWasTold()
+    {
+        Playlists playlists;
+        playlists.save(QStringLiteral("told"), {QStringLiteral("a")},
+                       {{QStringLiteral("seconds"), 30},
+                        {QStringLiteral("videoEnds"), true},
+                        {QStringLiteral("whilePaused"), true}});
+
+        QCOMPARE(playlists.changesOnVideoEnd(), false);
+        QCOMPARE(playlists.changesWhilePaused(), false);
+
+        playlists.start(QStringLiteral("told"));
+        QCOMPARE(playlists.changesOnVideoEnd(), true);
+        QCOMPARE(playlists.changesWhilePaused(), true);
+
+        playlists.stop();
+        QCOMPARE(playlists.changesOnVideoEnd(), false);
+        QCOMPARE(playlists.changesWhilePaused(), false);
     }
 };
 

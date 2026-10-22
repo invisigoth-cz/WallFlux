@@ -96,9 +96,15 @@ Window {
     function savePlaylist() {
         if (picker.playlistName === "")
             picker.playlistName = qsTr("Playlist %1").arg(Playlists.all.length + 1);
-        Playlists.save(picker.playlistName, picker.inPlaylist, everyHours.value,
-                       everyMinutes.value, everySeconds.value,
-                       orderBox.currentIndex === orderBox.random);
+        Playlists.save(picker.playlistName, picker.inPlaylist, {
+            hours: everyHours.value,
+            minutes: everyMinutes.value,
+            seconds: everySeconds.value,
+            shuffle: orderBox.currentIndex === orderBox.random,
+            videoEnds: afterVideoBox.checked,
+            whilePaused: whilePausedBox.checked,
+            alwaysFirst: firstBox.checked
+        });
     }
 
     /// Opens a saved playlist and sets it going: the strip fills, the
@@ -122,6 +128,9 @@ Window {
         everyMinutes.value = one.minutes;
         everySeconds.value = one.seconds;
         orderBox.currentIndex = one.shuffle ? orderBox.random : orderBox.inOrder;
+        afterVideoBox.checked = one.videoEnds;
+        whilePausedBox.checked = one.whilePaused;
+        firstBox.checked = one.alwaysFirst;
     }
 
     /// One of the three numbers of a playlist's interval: a word, and a
@@ -755,6 +764,10 @@ Window {
                     wrapMode: Text.Wrap
                     // Only means anything once the one above it is on,
                     // which is the whole of why it is indented.
+                    // Still a placeholder, unlike the one over it: this
+                    // asks for a playlist to begin at the first wallpaper
+                    // the first time round and nowhere else, and nothing
+                    // here remembers that a playlist has been round once.
                     enabled: firstBox.checked
                     // A Label does not dim itself when it is switched off
                     // -- `enabled` reaches the mouse and not the colour --
@@ -778,7 +791,7 @@ Window {
                 // Said plainly, because nought would otherwise look like a
                 // setting rather than a mistake.
                 text: qsTr("Five seconds at the least, however short this is set. "
-                           + "Only the timer and the order do anything yet.")
+                           + "The list at the top and the transition do nothing yet.")
             }
 
             RowLayout {

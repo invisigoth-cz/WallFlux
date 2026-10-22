@@ -66,15 +66,30 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   There is no Playlists tab: a playlist is made out of the grid, so it is
   made in the grid.
 
-  **Configure is laid out as Wallpaper Engine's own**, and four of its
-  controls choose between things that are not written yet: when the
-  wallpaper changes (timer, login, time of day, day of week, never), the
-  transition, changing when a video ends, changing while paused, and always
-  beginning with the first one. Asked for that way on purpose -- the list of
+  **Configure is laid out as Wallpaper Engine's own.** Three of its
+  switches do what they say: *change when the video ends*, *allow changing
+  while paused* and *always begin with the first wallpaper*. What is left
+  choosing between things that are not written is the list at the top
+  (timer, login, time of day, day of week, never), the transition and its
+  time, and the indented line under "always begin with the first". Asked for that way on purpose -- the list of
   what WallFlux is going to offer was the thing worth deciding first. Only
   the timer and the order do anything, and the popup says so. Every drop
   down opens with an empty row chosen, as Wallpaper Engine's does; the
   interval is hours, minutes and seconds, typed rather than clicked at.
+
+  **How the three are wired.** None of the decisions are `Playlists`':
+  it knows nothing about what a wallpaper is or whether a window is in the
+  way, so `Main.qml` works out whether the clock should be standing still
+  and says so with `hold()` -- a video is in charge and has not finished,
+  or a window is covering the wallpaper and this playlist was not told to
+  carry on regardless. `hold()` keeps what was left rather than starting
+  the turn again, which is why the timer is single-shot and wound at every
+  turn: a repeating one cannot be stopped and picked up. Measured end to
+  end with a real cover: held with 8 515 ms left, and it turned 8.5 s after
+  the screen came back. "Always begin with the first" is the one that is
+  entirely `Playlists`' own -- it holds index nought out of the shuffle,
+  and means nothing without shuffling, since an unshuffled playlist starts
+  with its first wallpaper anyway.
 
   **What those four mean in Wallpaper Engine**, read off its own guides and
   developer replies, so that copying the behaviour is copying rather than
@@ -228,10 +243,15 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 `Playlists` is another singleton of that module, and the only thing in
 this program that remembers anything between runs:
 
-- `all` (each `{ name, ids, hours, minutes, seconds, shuffle }`), `playing`
-  (a name or empty); `save(name, ids, hours, minutes, seconds, shuffle)`,
-  `forget(name)`, `named(name)`, `start(name)`, `stop()`, and the public
-  static `staysFor(one)` -- the three numbers added up in seconds, never
+- `all` (each `{ name, ids, hours, minutes, seconds, shuffle, videoEnds,
+  whilePaused, alwaysFirst }`), `playing` (a name or empty),
+  `changesOnVideoEnd` and `changesWhilePaused` (what the *running* one was
+  told, false while none is); `save(name, ids, how)` -- `how` being those
+  settings by name rather than nine positional arguments --
+  `forget(name)`, `named(name)`, `start(name)`, `stop()`, `next()` (on to
+  the next one now and wind the clock again), `hold(bool)` (stop the clock
+  without stopping the playlist, and pick it up where it left off), and
+  the public static `staysFor(one)` -- the three numbers added up in seconds, never
   less than five, worked out in one place because that is the sum a test
   can check; and `asClock(seconds)` -- the same rule read backwards, which
   is what the settings popup hands its three typed boxes to
@@ -296,6 +316,18 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   raw ffmpeg noise in the file. Use `QT_FORCE_STDERR_LOGGING=1` (the older
   `QT_LOGGING_TO_CONSOLE` still works but warns) or `journalctl --user -f`.
   **Nothing can be debugged without knowing this.**
+- **`Video` is a convenience item that hides `mediaStatus`**, which is the
+  one property a playlist turning on the end of a clip needs. Its `stopped`
+  signal is not a stand-in: it fires when the source is swapped as well as
+  when a clip ends, so a playlist turning from one video to another would
+  have turned twice. `Main.qml` uses `MediaPlayer` + `VideoOutput` +
+  `AudioOutput` instead, which is what `Video` wraps anyway -- same traps,
+  same `onSourceChanged: play()`.
+
+  **And a video told to loop for ever never reports an end.** `loops` has
+  to drop to 1 while a playlist is waiting on it, or `EndOfMedia` never
+  arrives and nothing turns.
+
 - **`Video.autoPlay` starts the first file and no other.** Hand it a second
   source and it loads, reports nothing and sits there stopped. Measured: 24
   switches gave 1 start. `onSourceChanged: play()` is why switching works.
@@ -870,6 +902,9 @@ the file. Everything after it should.
 - Wallpaper Engine's Load and Save dialogs each carry a keyboard shortcut
   field. There is nothing here that could listen for one, so neither is
   drawn.
+- "The first wallpaper plays only at startup", the indented line under
+  "always begin with the first wallpaper", is still a placeholder: nothing
+  here remembers that a playlist has already been round once.
 - The volume for a video went with the panel that used to be drawn over a
   preview: the only sound control now is the one in the footer, which is on
   or off. Nobody has asked for it back.

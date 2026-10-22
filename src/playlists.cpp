@@ -44,7 +44,9 @@ QString Playlists::wherePlaylistsLive()
 Playlists::Playlists(QObject *parent)
     : QObject(parent)
 {
-    m_turn.setSingleShot(false);
+    // Single shot, wound again at every turn: a repeating timer cannot be
+    // stopped and picked up where it was.
+    m_turn.setSingleShot(true);
     connect(&m_turn, &QTimer::timeout, this, &Playlists::turn);
     load();
 }
@@ -89,6 +91,11 @@ void Playlists::load()
             {QStringLiteral("minutes"), one.value(QLatin1StringView("minutes")).toInt(15)},
             {QStringLiteral("seconds"), one.value(QLatin1StringView("seconds")).toInt(0)},
             {QStringLiteral("shuffle"), one.value(QLatin1StringView("shuffle")).toBool(false)},
+            {QStringLiteral("videoEnds"), one.value(QLatin1StringView("videoEnds")).toBool(false)},
+            {QStringLiteral("whilePaused"),
+             one.value(QLatin1StringView("whilePaused")).toBool(false)},
+            {QStringLiteral("alwaysFirst"),
+             one.value(QLatin1StringView("alwaysFirst")).toBool(false)},
         });
     }
 
@@ -118,6 +125,9 @@ void Playlists::store() const
             {QStringLiteral("minutes"), one.value(QStringLiteral("minutes")).toInt()},
             {QStringLiteral("seconds"), one.value(QStringLiteral("seconds")).toInt()},
             {QStringLiteral("shuffle"), one.value(QStringLiteral("shuffle")).toBool()},
+            {QStringLiteral("videoEnds"), one.value(QStringLiteral("videoEnds")).toBool()},
+            {QStringLiteral("whilePaused"), one.value(QStringLiteral("whilePaused")).toBool()},
+            {QStringLiteral("alwaysFirst"), one.value(QStringLiteral("alwaysFirst")).toBool()},
         });
     }
 
@@ -145,8 +155,7 @@ QVariantMap Playlists::asClock(int seconds) const
     };
 }
 
-void Playlists::save(const QString &name, const QStringList &ids, int hours, int minutes,
-                     int seconds, bool shuffle)
+void Playlists::save(const QString &name, const QStringList &ids, const QVariantMap &how)
 {
     if (name.isEmpty() || ids.isEmpty()) {
         qCWarning(lcPlaylists) << "a playlist needs a name and something in it";
@@ -156,10 +165,13 @@ void Playlists::save(const QString &name, const QStringList &ids, int hours, int
     const QVariantMap one{
         {QStringLiteral("name"), name},
         {QStringLiteral("ids"), ids},
-        {QStringLiteral("hours"), qMax(0, hours)},
-        {QStringLiteral("minutes"), qMax(0, minutes)},
-        {QStringLiteral("seconds"), qMax(0, seconds)},
-        {QStringLiteral("shuffle"), shuffle},
+        {QStringLiteral("hours"), qMax(0, how.value(QStringLiteral("hours")).toInt())},
+        {QStringLiteral("minutes"), qMax(0, how.value(QStringLiteral("minutes")).toInt())},
+        {QStringLiteral("seconds"), qMax(0, how.value(QStringLiteral("seconds")).toInt())},
+        {QStringLiteral("shuffle"), how.value(QStringLiteral("shuffle")).toBool()},
+        {QStringLiteral("videoEnds"), how.value(QStringLiteral("videoEnds")).toBool()},
+        {QStringLiteral("whilePaused"), how.value(QStringLiteral("whilePaused")).toBool()},
+        {QStringLiteral("alwaysFirst"), how.value(QStringLiteral("alwaysFirst")).toBool()},
     };
 
     // The name is what a playlist is known by, so saving under one that is
@@ -217,23 +229,66 @@ void Playlists::start(const QString &name)
 
     m_order = one.value(QStringLiteral("ids")).toStringList();
     if (one.value(QStringLiteral("shuffle")).toBool()) {
+        // "Always begin with the first wallpaper" is what the first index
+        // is held back from the shuffle for: the rest are dealt out, and
+        // the one at the top of the list is still the one that comes up.
+        // Without it the setting means nothing at all, since an unshuffled
+        // playlist begins with its first wallpaper anyway.
+        const qsizetype keep = one.value(QStringLiteral("alwaysFirst")).toBool() ? 1 : 0;
+
         // Shuffled once, when it starts, rather than a new guess at every
         // turn: picking at random each time plays the same wallpaper twice
         // in a row sooner or later, which looks like the playlist stopped.
-        for (qsizetype i = m_order.size() - 1; i > 0; --i)
-            m_order.swapItemsAt(i, QRandomGenerator::global()->bounded(int(i) + 1));
+        for (qsizetype i = m_order.size() - 1; i > keep; --i) {
+            const int at = int(keep) + QRandomGenerator::global()->bounded(int(i - keep) + 1);
+            m_order.swapItemsAt(i, at);
+        }
     }
 
-    const int stay = staysFor(one);
+    m_stay = staysFor(one);
+    m_videoEnds = one.value(QStringLiteral("videoEnds")).toBool();
+    m_whilePaused = one.value(QStringLiteral("whilePaused")).toBool();
 
     m_at = 0;
+    m_left = -1;
     m_playing = name;
-    m_turn.start(stay * 1000);
+    m_turn.start(m_stay * 1000);
     emit playingChanged();
 
     qCInfo(lcPlaylists) << "playing" << name << "--" << m_order.size() << "wallpapers,"
-                        << stay << "seconds each";
+                        << m_stay << "seconds each; on a video ending:" << m_videoEnds
+                        << "; while paused:" << m_whilePaused;
     emit plays(m_order.constFirst());
+}
+
+void Playlists::next()
+{
+    if (m_playing.isEmpty())
+        return;
+    goOn();
+}
+
+void Playlists::hold(bool held)
+{
+    if (m_playing.isEmpty())
+        return;
+
+    if (held) {
+        if (!m_turn.isActive())
+            return;
+        // What was left, so it is picked up where it stopped rather than
+        // started again -- a wallpaper covered for a second should not
+        // have its whole turn back.
+        m_left = m_turn.remainingTime();
+        m_turn.stop();
+        qCDebug(lcPlaylists) << "held with" << m_left << "ms left";
+        return;
+    }
+
+    if (m_turn.isActive() || m_left < 0)
+        return;
+    m_turn.start(m_left);
+    m_left = -1;
 }
 
 void Playlists::stop()
@@ -246,10 +301,18 @@ void Playlists::stop()
     m_playing.clear();
     m_order.clear();
     m_at = 0;
+    m_left = -1;
+    m_videoEnds = false;
+    m_whilePaused = false;
     emit playingChanged();
 }
 
 void Playlists::turn()
+{
+    goOn();
+}
+
+void Playlists::goOn()
 {
     if (m_order.isEmpty()) {
         stop();
@@ -257,6 +320,11 @@ void Playlists::turn()
     }
 
     m_at = (m_at + 1) % int(m_order.size());
+    // Wound again here rather than left to repeat: a single-shot timer is
+    // what lets it be stopped and picked up where it was.
+    m_left = -1;
+    m_turn.start(m_stay * 1000);
+
     qCInfo(lcPlaylists) << "turning to" << m_order.at(m_at);
     emit plays(m_order.at(m_at));
 }

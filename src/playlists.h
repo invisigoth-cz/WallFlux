@@ -35,22 +35,44 @@ class Playlists : public QObject
     QML_NAMED_ELEMENT(Playlists)
     QML_SINGLETON
 
-    /// Every playlist, each `{ name, ids, hours, minutes, seconds, shuffle }`.
+    /// Every playlist, each `{ name, ids, hours, minutes, seconds, shuffle,
+    /// videoEnds, whilePaused, alwaysFirst }`.
     Q_PROPERTY(QVariantList all READ all NOTIFY allChanged)
 
     /// The name of the one playing, or empty while none is.
     Q_PROPERTY(QString playing READ playing NOTIFY playingChanged)
+
+    /// Whether the playlist now running turns when a video ends rather
+    /// than when the clock says so. False while nothing is running.
+    ///
+    /// The window reads this: it is what decides whether a video loops for
+    /// ever or plays once, and only the window knows whether what is on
+    /// the screen is a video at all.
+    Q_PROPERTY(bool changesOnVideoEnd READ changesOnVideoEnd NOTIFY playingChanged)
+
+    /// Whether the playlist now running keeps counting while the wallpaper
+    /// is stopped behind a window. False while nothing is running, which
+    /// is the quieter answer: a playlist that is not running is not
+    /// counting either.
+    Q_PROPERTY(bool changesWhilePaused READ changesWhilePaused NOTIFY playingChanged)
 
 public:
     explicit Playlists(QObject *parent = nullptr);
 
     QVariantList all() const { return m_all; }
     QString playing() const { return m_playing; }
+    bool changesOnVideoEnd() const { return m_videoEnds; }
+    bool changesWhilePaused() const { return m_whilePaused; }
 
     /// Writes one down, replacing whatever had that name. An empty `ids`
     /// is refused: a playlist of nothing has nothing to take turns.
-    Q_INVOKABLE void save(const QString &name, const QStringList &ids, int hours, int minutes,
-                          int seconds, bool shuffle);
+    ///
+    /// `how` is everything else about it, by name rather than by position:
+    /// `hours`, `minutes`, `seconds`, `shuffle`, `videoEnds`,
+    /// `whilePaused`, `alwaysFirst`. Anything left out is nought or false.
+    /// A map rather than nine arguments, because `save(n, ids, 0, 15, 0,
+    /// true, false, true, false)` is a line nobody can read or get right.
+    Q_INVOKABLE void save(const QString &name, const QStringList &ids, const QVariantMap &how);
 
     /// Throws one away, and stops it if it was the one playing.
     Q_INVOKABLE void forget(const QString &name);
@@ -66,6 +88,21 @@ public:
     /// Stops whichever is playing. What is on the screen stays there --
     /// stopping a playlist is not the same as turning the wallpaper off.
     Q_INVOKABLE void stop();
+
+    /// On to the next one now, and the clock starts again from the top.
+    /// What a video reaching its end means, for a playlist that was told
+    /// to turn on that rather than on the clock.
+    Q_INVOKABLE void next();
+
+    /// Stops the clock without stopping the playlist, and starts it again
+    /// where it left off rather than from the beginning.
+    ///
+    /// *Why* it is held is the window's business and not this one's:
+    /// because a window is covering the wallpaper and this playlist was
+    /// not told to go on regardless, or because a video is what decides
+    /// when to turn and it has not finished. The window works out whether
+    /// either is true and says so here.
+    Q_INVOKABLE void hold(bool held);
 
     /// How long one wallpaper of a playlist stays, in seconds, floor and
     /// all -- hours, minutes and seconds added up, and never less than the
@@ -102,6 +139,10 @@ private:
     /// The next one in the running playlist, and the timer set for it.
     void turn();
 
+    /// Puts the next wallpaper on and winds the clock again. The one place
+    /// that does it, whether the clock ran out or a video did.
+    void goOn();
+
     QVariantList m_all;
     QString m_playing;
 
@@ -111,5 +152,19 @@ private:
     QStringList m_order;
     int m_at = 0;
 
+    /// How long each wallpaper of the running playlist stays, in seconds,
+    /// and what the running playlist was told about videos and pausing.
+    /// Read once when it starts rather than looked up at every turn.
+    int m_stay = 0;
+    bool m_videoEnds = false;
+    bool m_whilePaused = false;
+
+    /// What was left on the clock when it was held, in milliseconds, or -1
+    /// where it is not being held.
+    int m_left = -1;
+
+    /// Single shot, and wound again at every turn. A repeating timer
+    /// cannot be stopped and picked up where it was, which is the whole of
+    /// what holding one is.
     QTimer m_turn;
 };

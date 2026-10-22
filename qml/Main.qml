@@ -39,15 +39,31 @@ Window {
     /// as what it is for and not as where the answer came from.
     readonly property bool covered: ScreenCover.covered
 
+    /// Whether the running playlist's clock should be standing still.
+    ///
+    /// Two reasons, and this window is the only place that knows either.
+    /// A playlist told to turn when a video ends is waiting on the video
+    /// and not on the clock -- and only here is it known that what is on
+    /// the screen is a video at all. And a playlist not told to carry on
+    /// while the wallpaper is stopped behind a window should not count the
+    /// minutes nobody is watching; that is what Wallpaper Engine means by
+    /// paused, and it is why its own playlists look stuck to people who
+    /// leave a window maximised.
+    readonly property bool holdingThePlaylist:
+        (Playlists.changesOnVideoEnd && root.showingVideo)
+        || (root.covered && !Playlists.changesWhilePaused)
+
+    onHoldingThePlaylistChanged: Playlists.hold(root.holdingThePlaylist)
+
     onCoveredChanged: {
         if (root.covered) {
-            video.pause();
+            player.pause();
             return;
         }
         // Asked for only where there is a video to resume: play() with
         // nothing loaded is how this player ends up stopped for good.
         if (root.showingVideo)
-            video.play();
+            player.play();
     }
 
     // Layer-shell takes the size from its anchors, so no fullscreen state is
@@ -98,6 +114,13 @@ Window {
         target: Playlists
         function onPlays(id) {
             Wallpapers.select(id);
+        }
+
+        // A playlist started while a window is already covering the
+        // wallpaper has to be told so: the binding above has not changed,
+        // so nothing else would say it.
+        function onPlayingChanged() {
+            Playlists.hold(root.holdingThePlaylist);
         }
     }
 
@@ -161,19 +184,37 @@ Window {
     // Video wallpapers are short clips meant to run on end. Their sound --
     // where they have any -- plays, which is what Wallpaper Engine does too;
     // the switch for it belongs to the interface, once there is one.
-    Video {
+    //
+    // A player and a surface rather than the `Video` convenience item,
+    // which wraps exactly these two and hides the one property this needs:
+    // `mediaStatus`. Its `stopped` signal is not a stand-in -- it fires
+    // when a source is swapped as well as when a clip ends, so a playlist
+    // turning from one video to another would have turned twice.
+    VideoOutput {
         id: video
 
         anchors.fill: parent
         visible: root.showingVideo
-        source: root.showingVideo ? Wallpapers.current.source : ""
-        muted: root.silent
-        // Set from the slider on the wallpaper's own card in the picker.
-        volume: picker.volume
         // A wallpaper fills the screen; the clip's own shape gives way rather
         // than leaving bars down the sides.
         fillMode: VideoOutput.PreserveAspectCrop
-        loops: MediaPlayer.Infinite
+    }
+
+    MediaPlayer {
+        id: player
+
+        videoOutput: video
+        source: root.showingVideo ? Wallpapers.current.source : ""
+        // Round and round, unless a playlist is waiting for the end of it:
+        // a video told to loop for ever never reports an end, so there
+        // would be nothing to turn on.
+        loops: Playlists.changesOnVideoEnd ? 1 : MediaPlayer.Infinite
+
+        audioOutput: AudioOutput {
+            muted: root.silent
+            // Set from the slider on the wallpaper's own card in the picker.
+            volume: picker.volume
+        }
 
         // autoPlay starts the first file and no other: hand it a second one
         // and it loads it, says nothing, reports no error and sits there
@@ -182,11 +223,29 @@ Window {
         // is the whole point of the picker, so it cannot be left to that.
         onSourceChanged: {
             if (root.showingVideo && !root.covered)
-                video.play();
+                player.play();
         }
 
-        // A codec the system has no decoder for is the likely failure here,
-        // and it fails quietly otherwise: a black screen and no reason given.
+        onMediaStatusChanged: {
+            if (player.mediaStatus !== MediaPlayer.EndOfMedia)
+                return;
+
+            // Told to turn when the video ends, so that is what its end
+            // means. The playlist picks the next one and `onPlays` puts it
+            // on, the same way a click does.
+            if (Playlists.changesOnVideoEnd)
+                Playlists.next();
+
+            // Then play whatever is on the screen now. Usually the next
+            // wallpaper, which `onSourceChanged` has already started and
+            // which this leaves alone -- but a playlist of one wallpaper
+            // turns to itself, and `select()` stays silent when the choice
+            // has not changed, so without this the video would sit there
+            // on its last frame for good.
+            if (root.showingVideo && !root.covered)
+                player.play();
+        }
+
         onErrorOccurred: (error, errorString) =>
             console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
     }
