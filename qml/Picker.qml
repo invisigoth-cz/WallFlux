@@ -100,7 +100,7 @@ Window {
             hours: everyHours.value,
             minutes: everyMinutes.value,
             seconds: everySeconds.value,
-            shuffle: orderBox.currentIndex === orderBox.random,
+            shuffle: orderBox.currentIndex === 1,
             videoEnds: afterVideoBox.checked,
             whilePaused: whilePausedBox.checked,
             alwaysFirst: firstBox.checked,
@@ -129,7 +129,7 @@ Window {
         everyHours.value = one.hours;
         everyMinutes.value = one.minutes;
         everySeconds.value = one.seconds;
-        orderBox.currentIndex = one.shuffle ? orderBox.random : orderBox.inOrder;
+        orderBox.currentIndex = one.shuffle ? 1 : 2;
         afterVideoBox.checked = one.videoEnds;
         whilePausedBox.checked = one.whilePaused;
         firstBox.checked = one.alwaysFirst;
@@ -297,6 +297,30 @@ Window {
         }
     }
 
+    /// What each row of the two playlist lists is called.
+    ///
+    /// `language` is read and not used, the same trick the rest of this
+    /// window uses: a binding that gets its words out of a function is
+    /// not rebuilt when the language changes unless the language is an
+    /// argument it takes.
+    function orderName(row, language) {
+        switch (row) {
+        case 1: return qsTr("Random");
+        case 2: return qsTr("Ordered");
+        }
+        return "";
+    }
+
+    function transitionName(row, language) {
+        switch (row) {
+        case 1: return qsTr("None (reduce flicker)");
+        case 2: return qsTr("None");
+        case 3: return qsTr("Fade");
+        case 4: return qsTr("Fade to black");
+        }
+        return "";
+    }
+
     /// Which of Wallpaper Engine's catalogues to call the tags by.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
@@ -357,10 +381,27 @@ Window {
 
     /// The same list, as Valve's own words rather than the window's --
     /// which is what anything asking "does it carry this tag" wants.
+    ///
+    /// Both lists together, not one instead of the other. The workshop
+    /// knows of tags project.json does not -- the kind, the picture size,
+    /// the rating, whether it answers to sound -- and measured the other
+    /// way round, one genre on this machine is on the disk and not in the
+    /// workshop's answer, because an author can change what is published
+    /// without the downloaded copy hearing of it. Replacing one list with
+    /// the other lost that genre out of the filter.
     function rawTagsOf(one) {
         if (!one)
             return [];
-        return picker.workshopTags[one.id] || one.tags;
+        const said = picker.workshopTags[one.id];
+        if (!said)
+            return one.tags;
+
+        const all = said.slice();
+        for (let i = 0; i < one.tags.length; ++i) {
+            if (all.indexOf(one.tags[i]) < 0)
+                all.push(one.tags[i]);
+        }
+        return all;
     }
 
     /// Who made each installed wallpaper, keyed by its workshop id:
@@ -391,6 +432,34 @@ Window {
     /// rating and whether it answers to sound. The same question that
     /// finds the author brings these back with it, so it costs nothing.
     property var workshopTags: ({})
+
+    /// Asks the workshop about every installed wallpaper at once, so that
+    /// the filter beside the grid has the tags they really carry rather
+    /// than the handful project.json keeps.
+    ///
+    /// Measured on this machine: ten distinct tags on the disk against
+    /// twenty-nine in the workshop's answer -- the age ratings among them,
+    /// which project.json gives as "Everyone" for every single one.
+    ///
+    /// One question for the lot, asked when the window is first opened
+    /// rather than at startup: nothing in the tray needs it, and a program
+    /// that has not been looked at yet should not be talking to Steam.
+    function lookUpEverything() {
+        const all = Wallpapers.wallpapers;
+        const ids = [];
+        for (let i = 0; i < all.length; ++i)
+            ids.push(all[i].id);
+
+        Steam.detailsOfMany(ids, function () {
+            const seen = Object.assign({}, picker.workshopTags);
+            for (let i = 0; i < ids.length; ++i) {
+                const said = Steam.items[ids[i]];
+                if (said && said.tags.length > 0)
+                    seen[ids[i]] = said.tags;
+            }
+            picker.workshopTags = seen;
+        });
+    }
 
     function lookUpAuthor(id) {
         Steam.detailsOf(id, function (said) {
@@ -520,9 +589,17 @@ Window {
             // Each section narrows, and inside a section any one of the
             // chosen will do: three tags means "any of these three", not
             // "all three at once", which is what nobody means by it.
-            if (filters.tags.length && !one.tags.some((tag) => filters.tags.indexOf(tag) >= 0))
+            // The workshop's tags where they have arrived, which is what
+            // the chips are built from -- matching on project.json's
+            // shorter list would leave half the chips finding nothing.
+            const carried = picker.rawTagsOf(one);
+            if (filters.tags.length && !carried.some((tag) => filters.tags.indexOf(tag) >= 0))
                 continue;
-            if (filters.ratings.length && filters.ratings.indexOf(one.rating) < 0)
+            // Age rating the same way round: project.json says "Everyone"
+            // for all but a handful, and the workshop knows better.
+            if (filters.ratings.length
+                && !filters.ratings.some((rating) => carried.indexOf(rating) >= 0
+                                                     || rating === one.rating))
                 continue;
             if (filters.resolutions.length && filters.resolutions.indexOf(one.resolution) < 0)
                 continue;
@@ -585,6 +662,27 @@ Window {
         highlightedText: "#ffffff"
     }
     color: picker.palette.window
+
+    /// Whether the workshop has been asked about the library yet.
+    property bool askedAboutThemAll: false
+
+    onVisibleChanged: {
+        if (!picker.visible || picker.askedAboutThemAll)
+            return;
+        picker.askedAboutThemAll = true;
+        picker.lookUpEverything();
+    }
+
+    // A wallpaper that turns up later -- Steam finishing a download, or a
+    // Refresh -- is asked about too. Everything already answered for is
+    // skipped, so this costs nothing when nothing is new.
+    Connections {
+        target: Wallpapers
+        function onWallpapersChanged() {
+            if (picker.askedAboutThemAll)
+                picker.lookUpEverything();
+        }
+    }
 
     // Escape is not wired to anything here, and that is the point. It used
     // to hide the window -- which meant that with a popup open it hid the
@@ -688,18 +786,33 @@ Window {
 
                 Label { text: qsTr("Order") }
 
+                // Neither of these lists is translated. A translated
+                // model is a binding, so `retranslate()` rebuilds it and
+                // the box drops back to its first row -- measured: Random
+                // read as nothing after a language switch, and a playlist
+                // saved then was saved in order without anybody being
+                // told. The model is the words as they go into the file,
+                // which never change, and only what is *shown* is
+                // translated.
                 ComboBox {
                     id: orderBox
 
-                    /// Which row is which, since there is an empty one in
-                    /// front and `savePlaylist()` reads shuffle off this.
-                    /// Nothing chosen means in order, which is the quieter
-                    /// of the two to be given by default.
-                    readonly property int random: 1
-                    readonly property int inOrder: 2
+                    /// What each row is called in the file. Row nought is
+                    /// nothing chosen, which saves as in order -- the
+                    /// quieter of the two to be given by default.
+                    readonly property var words: ["", "random", "ordered"]
 
                     Layout.fillWidth: true
-                    model: ["", qsTr("Random"), qsTr("Ordered")]
+                    model: orderBox.words
+                    displayText: picker.orderName(orderBox.currentIndex, Language.czech)
+
+                    delegate: ItemDelegate {
+                        required property int index
+
+                        width: orderBox.width
+                        text: picker.orderName(index, Language.czech)
+                        highlighted: orderBox.highlightedIndex === index
+                    }
                 }
 
                 Label { text: qsTr("Wallpaper transition") }
@@ -710,12 +823,9 @@ Window {
                     /// What each row is called in the file. A word rather
                     /// than the number of a row: these have been
                     /// reordered twice already, and a number written down
-                    /// would have meant something else each time.
-                    /// Random was here and is not any more. Nothing is
-                    /// lost by that: a playlist written down before it
-                    /// went still says `random`, and the window still
-                    /// plays it, since what is stored is the word and not
-                    /// the row.
+                    /// would have meant something else each time. Random
+                    /// was here and is not any more -- a playlist saved
+                    /// while it was still says `random` and still plays.
                     readonly property var words: ["", "soft", "none", "fade", "black"]
 
                     /// Whether what is chosen takes any time to happen.
@@ -726,8 +836,17 @@ Window {
                     readonly property bool takesTime: transitionBox.currentIndex >= 3
 
                     Layout.fillWidth: true
-                    model: ["", qsTr("None (reduce flicker)"), qsTr("None"),
-                            qsTr("Fade"), qsTr("Fade to black")]
+                    model: transitionBox.words
+                    displayText: picker.transitionName(transitionBox.currentIndex,
+                                                       Language.czech)
+
+                    delegate: ItemDelegate {
+                        required property int index
+
+                        width: transitionBox.width
+                        text: picker.transitionName(index, Language.czech)
+                        highlighted: transitionBox.highlightedIndex === index
+                    }
                 }
 
                 Label {
@@ -1571,6 +1690,7 @@ Window {
                     FilterPanel {
                         id: filters
 
+                        knownTags: picker.workshopTags
                         Layout.fillHeight: true
                         Layout.bottomMargin: 8
                     }

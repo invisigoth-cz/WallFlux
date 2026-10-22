@@ -55,13 +55,27 @@ Rectangle {
     /// took the whole application down at load.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
 
+    /// What the workshop says the installed wallpapers are tagged with,
+    /// keyed by id. Handed in by the window, which is what asks.
+    property var knownTags: ({})
+
     /// The tags the installed wallpapers actually carry, rather than all 65
     /// Steam knows: a filter for something nobody has is a dead chip.
+    ///
+    /// Both lists together, the workshop's and the disk's. project.json
+    /// carries the genres its author ticked and nothing else -- ten
+    /// distinct tags across this machine's library, against twenty-nine
+    /// the workshop knows of the same wallpapers -- but measured the other
+    /// way round, one genre here is on the disk and not in the workshop's
+    /// answer, because an author can change what is published without the
+    /// downloaded copy hearing of it. Taking one instead of the other lost
+    /// that genre a chip.
     readonly property var carriedTags: {
         const seen = [];
         const all = Wallpapers.wallpapers;
         for (let i = 0; i < all.length; ++i) {
-            const carried = all[i].tags;
+            const known = panel.knownTags[all[i].id] || [];
+            const carried = known.concat(all[i].tags);
             for (let t = 0; t < carried.length; ++t) {
                 if (seen.indexOf(carried[t]) < 0)
                     seen.push(carried[t]);
@@ -85,7 +99,13 @@ Rectangle {
     /// wallpaper that answers it. The chip is there, and the day one is
     /// downloaded it already means something.
     readonly property var tagValues: {
-        const carried = panel.carriedTags.filter((tag) => Tags.genres.indexOf(tag) < 0);
+        // What the sections below ask about in their own words, so that a
+        // kind, a rating or a picture size does not turn up here as well.
+        // `Wallpaper` goes too: Steam tags nearly everything with it and a
+        // chip that matches everything narrows nothing.
+        const elsewhere = Tags.genres.concat(Tags.types, Tags.ratings, Tags.resolutions,
+                                             ["Wallpaper"]);
+        const carried = panel.carriedTags.filter((tag) => elsewhere.indexOf(tag) < 0);
         if (carried.indexOf("Audio responsive") < 0)
             carried.push("Audio responsive");
         return Tags.labelled(carried, panel.catalogue);
@@ -204,7 +224,7 @@ Rectangle {
             Item { Layout.fillWidth: true }
 
             RoundedButton {
-                text: qsTr("Clear")
+                text: qsTr("Clear selection")
                 enabled: panel.chosen > 0
                 onClicked: panel.clear()
             }

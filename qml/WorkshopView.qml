@@ -159,6 +159,21 @@ Item {
         return "";
     }
 
+    /// How big a wallpaper is, in megabytes.
+    ///
+    /// A tenth of a megabyte where it is under ten, and whole ones above:
+    /// rounding everything to whole megabytes read "0 MB" for anything
+    /// under half of one, which looks like a lie about a file that plainly
+    /// exists. Never "0.0" either -- a wallpaper of forty kilobytes is a
+    /// tenth of a megabyte as far as this is concerned, which overstates
+    /// it by less than calling it half of one would.
+    function sizeOf(item) {
+        const mb = item.bytes / 1048576;
+        if (mb >= 10)
+            return qsTr("%1 MB").arg(Math.round(mb));
+        return qsTr("%1 MB").arg(Number(Math.max(0.1, mb)).toLocaleString(Qt.locale(), "f", 1));
+    }
+
     /// What the workshop says about one of its own, in the order it reads.
     function factsFor(item, language) {
         if (!item)
@@ -173,10 +188,8 @@ Item {
         if (size)
             told.push({ label: qsTr("Resolution"), icon: "monitor", value: size });
 
-        if (item.bytes > 0) {
-            told.push({ label: qsTr("Size"), icon: "drive-harddisk",
-                        value: qsTr("%1 MB").arg(Math.round(item.bytes / 1048576)) });
-        }
+        if (item.bytes > 0)
+            told.push({ label: qsTr("Size"), icon: "drive-harddisk", value: workshop.sizeOf(item) });
 
         const rating = workshop.firstOf(item.tags, Tags.ratings, language);
         if (rating)

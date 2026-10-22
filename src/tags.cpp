@@ -104,14 +104,14 @@ QStringList Tags::ratings() const
 
 QStringList Tags::resolutions() const
 {
-    // The picture sizes a monitor has. Wallpaper Engine also tags four
-    // portrait sizes and a portrait standard definition, which are for
-    // telephones -- WallFlux draws on a desktop, so offering them would be
-    // five chips that match nothing anybody here can use.
+    // The picture sizes a screen has. The portrait ones were left out of
+    // this list as telephone sizes, which was wrong twice over: a monitor
+    // can be turned on its side, and somebody who has turned one had no
+    // chip to tick.
     //
-    // ponytail: the ones seen over 22 queries. The catalogue knows of 8K
-    // and a few more that did not turn up; add them here if somebody
-    // misses one.
+    // The ones seen over 22 queries, plus the five portrait sizes. The
+    // catalogue knows of 8K and of several more dual and triple sizes
+    // that did not turn up; add them here if somebody misses one.
     return {
         QStringLiteral("1280 x 720"),
         QStringLiteral("1366 x 768"),
@@ -123,8 +123,13 @@ QStringList Tags::resolutions() const
         QStringLiteral("Dual 5120 x 1440"),
         QStringLiteral("Dual 7680 x 2160"),
         QStringLiteral("Triple 7680 x 1440"),
+        QStringLiteral("Portrait 720 x 1280"),
+        QStringLiteral("Portrait 1080 x 1920"),
+        QStringLiteral("Portrait 1440 x 2560"),
+        QStringLiteral("Portrait 2160 x 3840"),
         QStringLiteral("Standard Definition"),
         QStringLiteral("Ultrawide Standard Definition"),
+        QStringLiteral("Portrait Standard Definition"),
         QStringLiteral("Dynamic resolution"),
         QStringLiteral("Other resolution"),
     };

@@ -84,6 +84,83 @@ function detailsOf(id, done) {
     call.send("itemcount=1&publishedfileids[0]=" + encodeURIComponent(id));
 }
 
+/// The same question about a whole library at once. `done()` once every
+/// id asked about has an answer in `items`, so `detailsOf` is free for
+/// each of them afterwards.
+///
+/// The endpoint takes as many ids as are given it in one POST -- measured
+/// with all 56 on this machine, answered in one go -- but it is asked in
+/// hundreds so that a very large library is several requests rather than
+/// one enormous one.
+function detailsOfMany(ids, done) {
+    var wanted = [];
+    for (var i = 0; i < ids.length; ++i) {
+        if (ids[i] && items[ids[i]] === undefined)
+            wanted.push(ids[i]);
+    }
+    if (wanted.length === 0) {
+        done();
+        return;
+    }
+
+    var chunks = [];
+    for (var at = 0; at < wanted.length; at += 100)
+        chunks.push(wanted.slice(at, at + 100));
+
+    var left = chunks.length;
+    for (var c = 0; c < chunks.length; ++c)
+        askAbout(chunks[c], function () {
+            if (--left === 0)
+                done();
+        });
+}
+
+/// One POST about one handful of ids.
+function askAbout(ids, done) {
+    var body = "itemcount=" + ids.length;
+    for (var i = 0; i < ids.length; ++i)
+        body += "&publishedfileids[" + i + "]=" + encodeURIComponent(ids[i]);
+
+    var call = new XMLHttpRequest();
+    call.open("POST", "https://api.steampowered.com/ISteamRemoteStorage/"
+                      + "GetPublishedFileDetails/v1/");
+    call.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    call.onreadystatechange = function () {
+        if (call.readyState !== XMLHttpRequest.DONE)
+            return;
+        if (call.status !== 200) {
+            console.warn("the workshop was asked about", ids.length, "wallpapers and said",
+                         call.status);
+            done();
+            return;
+        }
+
+        var said;
+        try {
+            said = JSON.parse(call.responseText).response.publishedfiledetails;
+        } catch (e) {
+            console.warn("what the workshop said about those wallpapers was not readable:", e);
+            done();
+            return;
+        }
+
+        for (var i = 0; said && i < said.length; ++i) {
+            var one = said[i];
+            if (!one || !one.publishedfileid)
+                continue;
+            var tags = [];
+            if (one.tags) {
+                for (var t = 0; t < one.tags.length; ++t)
+                    tags.push(one.tags[t].tag);
+            }
+            items[String(one.publishedfileid)] =
+                { maker: one.creator ? String(one.creator) : "", tags: tags };
+        }
+        done();
+    };
+    call.send(body);
+}
+
 /// The name and the face behind a steamID64. `done({ name, avatar })`.
 function profileOf(who, done) {
     if (!who || who === "0")

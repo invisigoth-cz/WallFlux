@@ -36,6 +36,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Clicking a wallpaper anywhere in this tab opens a panel down the right
   with its picture, what is known about it and a green Download; the
   library's grid has the same panel with a red Remove instead.
+- **A filter panel that folds.** Each section's heading is a switch: the
+  arrow turns, the chips slide out from under it, and a number beside the
+  heading says how many of them are ticked while they are away. The short
+  sections start open and the long ones folded -- half a dozen is the
+  line, which leaves the workshop's six kinds and three age ratings out
+  and folds its nineteen picture sizes and twenty-five genres. Sixty-four
+  chips, and the panel opens shorter than a window.
 - **One vocabulary for both filters.** Type, age rating, picture size,
   genre and the rest are all tags as far as Steam is concerned, so a genre
   row and a ticked chip are the same required tag. Both panels read DRUH,
@@ -361,6 +368,28 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   responsive row says "not stated" about a wallpaper whose own chips
   underneath say otherwise.
 
+- **The library's filter is built from the workshop's tags, asked for in
+  one question.** `GetPublishedFileDetails` takes every id in a single
+  POST -- all 56 on this machine, answered in one go, no key -- so the
+  window asks about the whole library the first time it is opened, and
+  about anything that turns up later. project.json carries the genres its
+  author ticked and nothing else: ten distinct tags on the disk against
+  twenty-nine in the answer. The TAGS section went from one chip, which
+  was put there by hand so the section would exist at all, to five that
+  are really carried; Audio responsive ticked finds ten wallpapers where
+  it used to find none, and Mature finds one where project.json calls
+  every wallpaper Everyone.
+
+  **Both lists together, never one instead of the other.** Measured the
+  other way round: one genre here is in project.json and *not* in the
+  workshop's answer, because an author can change what is published
+  without the downloaded copy hearing of it -- replacing the disk's list
+  cost that genre its chip, and the count of genres fell from ten to nine.
+
+  **And whatever the chips are built from, the grid has to match on.**
+  The filter offering a tag that the predicate cannot see is a chip that
+  finds nothing, which looks exactly like a library with nothing in it.
+
 - **Who made an installed wallpaper takes two questions, not one.**
   project.json has no author in it at all -- the keys are `title`, `type`,
   `file`, `preview`, `tags`, `description`, `contentrating`, `version`,
@@ -467,6 +496,19 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   closed on Escape and the other two did not, because Save puts the cursor
   in its name field on the way up and they have nothing to put it in.
   `focus: true` on the Popup is what the other two were missing.
+
+- **Do not translate a drop down's model.** It is a binding, so
+  `retranslate()` rebuilds the list and the box drops back to its first
+  row -- taking the choice with it. Measured: Order set to Random and the
+  transition set to Fade to black both read blank after a language switch,
+  while the three number boxes beside them survived, and a playlist saved
+  then was saved in order with no transition and nobody told. The model is
+  the words as they go into the file, which never change; `displayText`
+  and the delegate are what translate, out of a function that takes the
+  language it never reads. **Holding the chosen word in a property of your
+  own and binding `currentIndex` to it does not work** -- a ComboBox
+  assigns `currentIndex` itself when somebody picks a row, which breaks
+  that binding for good.
 
 - **A `GridLayout` says nothing when a row loses a cell.** Taking the
   "change wallpaper" drop down out left its label behind, so every row
@@ -963,29 +1005,17 @@ the file. Everything after it should.
 - A saved playlist still cannot be renamed. Saving under a name that is
   taken replaces it, which covers changing one; Load is where one is thrown
   away.
-- The four placeholder controls in Configure keep whatever they are set to
-  and nothing reads them. A transition needs two wallpapers drawn at once,
-  which `Main.qml` cannot do; the other three need somewhere to put a
-  setting that is not an interval, and `Playlists::save()` takes five
-  arguments rather than a map.
-- Translating a drop down's model is a binding, so switching language
-  rebuilds the list and puts it back on its first item -- Order with it.
-  Measured in passing, not worth the code while three of the lists do
-  nothing.
 - Wallpaper Engine's Load and Save dialogs each carry a keyboard shortcut
   field. There is nothing here that could listen for one, so neither is
-  drawn.
+  drawn, and keyboard shortcuts are not going to be taken on.
+- `Clear selection` empties what is ticked and nothing else. Checked by
+  counting the chips of every section before picking, after picking and
+  after clearing: ten genres, one tag, four picture sizes, unchanged
+  throughout. The lists come from the whole library and from `Tags`, never
+  from what is left after filtering, so there is nothing there to lose.
 - The volume for a video went with the panel that used to be drawn over a
   preview: the only sound control now is the one in the footer, which is on
   or off. Nobody has asked for it back.
-- A card for a wallpaper Steam reports as under half a megabyte reads
-  "0 MB". Rounding, not a lie, but it looks like one.
-- The workshop's filter has fifty-nine values and one to a row is a long
-  panel. The headings carry it for now; sections that fold would be the
-  next thing if it stops being enough.
-- `Tags::resolutions()` dropped the four portrait sizes and the portrait
-  standard definition as telephone sizes. Somebody with a monitor turned on
-  its side has no chip to tick; it is one line to put them back.
 - The COMPATIBILITY section in the library's filter is a placeholder,
   shown and switched off. It is for when a wallpaper fetched from the
   workshop has been tried and found to work or not, and nothing records

@@ -22,6 +22,7 @@ private slots:
     void callsATagWhatValveCallsIt();
     void findsTheOnesWhoseNameIsNotTheirKey();
     void namesEveryGenreItOffers();
+    void findsEveryPictureSizeInTheCatalogue();
 
 private:
     Tags m_tags;
@@ -108,6 +109,51 @@ void TestTags::namesEveryGenreItOffers()
         if (!sameInBoth.contains(genre))
             QVERIFY2(called != genre, qPrintable(genre + QLatin1StringView(" got no name")));
     }
+}
+
+/// Every picture size the filter offers has to be one Valve knows, or the
+/// chip reads as a raw Steam tag among translated ones -- and, worse, is a
+/// tag no wallpaper carries, so ticking it finds nothing. A size spelled
+/// wrong here looks exactly like a size nobody uses.
+void TestTags::findsEveryPictureSizeInTheCatalogue()
+{
+    if (!installed())
+        QSKIP("Wallpaper Engine is not installed, so there is no catalogue to read");
+
+    const QStringList sizes = m_tags.resolutions();
+    QVERIFY(!sizes.isEmpty());
+
+    for (const QString &size : sizes) {
+        const QString called = m_tags.name(size, QStringLiteral("cs-cz"));
+        QVERIFY2(!called.isEmpty(), qPrintable(size));
+        // The catalogue gives the numbers back unchanged, so a name that
+        // matches is no proof on its own. What proves it is the ones
+        // Valve words: the four portrait sizes and the three standard
+        // definitions all read differently from the tag itself.
+        static const QStringList valveWordsThese = {
+            QStringLiteral("Standard Definition"),
+            QStringLiteral("Ultrawide Standard Definition"),
+            QStringLiteral("Portrait Standard Definition"),
+            QStringLiteral("Dynamic resolution"),
+            QStringLiteral("Other resolution"),
+        };
+        if (valveWordsThese.contains(size))
+            QVERIFY2(called != size, qPrintable(size + QLatin1StringView(" got no name")));
+    }
+
+    // The five that were missing, by name, so that taking them out again
+    // breaks this rather than quietly shortening a list.
+    QVERIFY(sizes.contains(QStringLiteral("Portrait 720 x 1280")));
+    QVERIFY(sizes.contains(QStringLiteral("Portrait 1080 x 1920")));
+    QVERIFY(sizes.contains(QStringLiteral("Portrait 1440 x 2560")));
+    QVERIFY(sizes.contains(QStringLiteral("Portrait 2160 x 3840")));
+    QVERIFY(sizes.contains(QStringLiteral("Portrait Standard Definition")));
+
+    // And each of those really is a key the catalogue has, rather than
+    // five strings that happen to come back unchanged.
+    QCOMPARE(m_tags.name(QStringLiteral("Portrait Standard Definition"),
+                         QStringLiteral("en-us")),
+             QStringLiteral("Portrait standard"));
 }
 
 QTEST_MAIN(TestTags)

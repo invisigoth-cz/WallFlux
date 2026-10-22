@@ -143,7 +143,7 @@ Rectangle {
             }
 
             RoundedButton {
-                text: qsTr("Clear")
+                text: qsTr("Clear selection")
                 enabled: panel.chosen > 0
                 onClicked: panel.clear()
             }
