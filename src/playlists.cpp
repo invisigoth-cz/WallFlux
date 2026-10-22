@@ -21,10 +21,19 @@ namespace {
 
 /// The shortest a wallpaper may stay, whatever the window was told. A
 /// playlist set to nought would be a wallpaper changing every tick of the
-/// timer, which is a seizure rather than a feature.
-constexpr int LeastMinutes = 1;
+/// timer, which is a seizure rather than a feature. Five seconds rather
+/// than the minute it used to be, now that the window can ask in seconds.
+constexpr int LeastSeconds = 5;
 
 } // namespace
+
+int Playlists::staysFor(const QVariantMap &one)
+{
+    const int asked = one.value(QStringLiteral("hours")).toInt() * 3600
+                      + one.value(QStringLiteral("minutes")).toInt() * 60
+                      + one.value(QStringLiteral("seconds")).toInt();
+    return qMax(LeastSeconds, asked);
+}
 
 QString Playlists::wherePlaylistsLive()
 {
@@ -78,6 +87,7 @@ void Playlists::load()
             {QStringLiteral("ids"), ids},
             {QStringLiteral("hours"), one.value(QLatin1StringView("hours")).toInt(0)},
             {QStringLiteral("minutes"), one.value(QLatin1StringView("minutes")).toInt(15)},
+            {QStringLiteral("seconds"), one.value(QLatin1StringView("seconds")).toInt(0)},
             {QStringLiteral("shuffle"), one.value(QLatin1StringView("shuffle")).toBool(false)},
         });
     }
@@ -106,6 +116,7 @@ void Playlists::store() const
             {QStringLiteral("ids"), ids},
             {QStringLiteral("hours"), one.value(QStringLiteral("hours")).toInt()},
             {QStringLiteral("minutes"), one.value(QStringLiteral("minutes")).toInt()},
+            {QStringLiteral("seconds"), one.value(QStringLiteral("seconds")).toInt()},
             {QStringLiteral("shuffle"), one.value(QStringLiteral("shuffle")).toBool()},
         });
     }
@@ -122,8 +133,20 @@ void Playlists::store() const
         qCWarning(lcPlaylists) << "could not finish writing" << path;
 }
 
+QVariantMap Playlists::asClock(int seconds) const
+{
+    constexpr int LongestDay = 23 * 3600 + 59 * 60 + 59;
+    const int total = qBound(0, seconds, LongestDay);
+
+    return {
+        {QStringLiteral("hours"), total / 3600},
+        {QStringLiteral("minutes"), (total % 3600) / 60},
+        {QStringLiteral("seconds"), total % 60},
+    };
+}
+
 void Playlists::save(const QString &name, const QStringList &ids, int hours, int minutes,
-                     bool shuffle)
+                     int seconds, bool shuffle)
 {
     if (name.isEmpty() || ids.isEmpty()) {
         qCWarning(lcPlaylists) << "a playlist needs a name and something in it";
@@ -135,6 +158,7 @@ void Playlists::save(const QString &name, const QStringList &ids, int hours, int
         {QStringLiteral("ids"), ids},
         {QStringLiteral("hours"), qMax(0, hours)},
         {QStringLiteral("minutes"), qMax(0, minutes)},
+        {QStringLiteral("seconds"), qMax(0, seconds)},
         {QStringLiteral("shuffle"), shuffle},
     };
 
@@ -200,17 +224,15 @@ void Playlists::start(const QString &name)
             m_order.swapItemsAt(i, QRandomGenerator::global()->bounded(int(i) + 1));
     }
 
-    const int hours = one.value(QStringLiteral("hours")).toInt();
-    const int minutes = one.value(QStringLiteral("minutes")).toInt();
-    const int stay = qMax(LeastMinutes, hours * 60 + minutes);
+    const int stay = staysFor(one);
 
     m_at = 0;
     m_playing = name;
-    m_turn.start(stay * 60 * 1000);
+    m_turn.start(stay * 1000);
     emit playingChanged();
 
     qCInfo(lcPlaylists) << "playing" << name << "--" << m_order.size() << "wallpapers,"
-                        << stay << "minutes each";
+                        << stay << "seconds each";
     emit plays(m_order.constFirst());
 }
 

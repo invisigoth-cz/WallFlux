@@ -128,6 +128,14 @@ if(Qt6Test_FOUND)
     target_link_libraries(tst_wallpapercore PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME wallpapercore COMMAND tst_wallpapercore)
 
+    qt_add_executable(tst_playlists
+        tests/tst_playlists.cpp
+        src/playlists.cpp
+    )
+    target_include_directories(tst_playlists PRIVATE src)
+    target_link_libraries(tst_playlists PRIVATE Qt6::Qml Qt6::Test)
+    add_test(NAME playlists COMMAND tst_playlists)
+
     qt_add_executable(tst_tags
         tests/tst_tags.cpp
         src/tags.cpp

@@ -56,9 +56,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   ticked without hunting for each one. The room for the previews comes
   with the first one that is ticked and goes with the last; the words and
   the buttons are there from the start. Load is the saved playlists, to open one back onto
-  the strip or throw it away; Save asks what to call it and replaces one of
+  the strip -- which also starts it -- or throw it away, which the button
+  asks about first: forgetting a playlist cannot be undone and there is
+  nowhere to undo it from; Save asks what to call it and replaces one of
   that name; Configure is how it runs. A saved playlist is started from the
-  Playlists button beside the filters, and stopped by clicking it again.
+  Playlists button beside the filters, and stopped by clicking it again;
+  that button always says Playlists and the tick in its menu says which
+  one is on, as the sort menu does.
   There is no Playlists tab: a playlist is made out of the grid, so it is
   made in the grid.
 
@@ -68,7 +72,26 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   transition, changing when a video ends, changing while paused, and always
   beginning with the first one. Asked for that way on purpose -- the list of
   what WallFlux is going to offer was the thing worth deciding first. Only
-  the timer and the order do anything, and the popup says so.
+  the timer and the order do anything, and the popup says so. Every drop
+  down opens with an empty row chosen, as Wallpaper Engine's does; the
+  interval is hours, minutes and seconds, typed rather than clicked at.
+
+  **What those four mean in Wallpaper Engine**, read off its own guides and
+  developer replies, so that copying the behaviour is copying rather than
+  inventing:
+
+  - *Change wallpaper when the video ends* overrides the timer and applies
+    to videos only -- the developers say it cannot be done for any other
+    kind.
+  - *Allow changing while paused* decides whether the playlist goes on
+    turning while playback is paused, which happens when another window is
+    fullscreen or when it is paused from the tray. With it off the timer
+    pauses too, which is the usual reason a playlist looks stuck.
+  - *Always begin with the first wallpaper* is what it says; paired with
+    the video-end option it is how somebody builds an intro video followed
+    by a second wallpaper.
+  - A playlist does not cycle at all while Wallpaper Engine's own window is
+    open.
 - **A picker with its sections across the top**: Installed, Steam,
   Displays, Settings, centred. The first two are built; the other two say
   "Coming soon" and are there because naming them is what decides where
@@ -164,6 +187,9 @@ qml/RoundedTool.qml   the same corners for an icon on its own
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
+tests/tst_playlists.cpp       what a playlist remembers and how long a
+                              wallpaper stays -- five seconds of suite time
+                              on purpose, see below
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 i18n/wallflux_cs.ts   the Czech catalogue, compiled into the binary
 packaging/PKGBUILD    builds from this checkout's git history
@@ -202,9 +228,13 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 `Playlists` is another singleton of that module, and the only thing in
 this program that remembers anything between runs:
 
-- `all` (each `{ name, ids, hours, minutes, shuffle }`), `playing` (a name
-  or empty); `save(name, ids, hours, minutes, shuffle)`, `forget(name)`,
-  `named(name)`, `start(name)`, `stop()`
+- `all` (each `{ name, ids, hours, minutes, seconds, shuffle }`), `playing`
+  (a name or empty); `save(name, ids, hours, minutes, seconds, shuffle)`,
+  `forget(name)`, `named(name)`, `start(name)`, `stop()`, and the public
+  static `staysFor(one)` -- the three numbers added up in seconds, never
+  less than five, worked out in one place because that is the sum a test
+  can check; and `asClock(seconds)` -- the same rule read backwards, which
+  is what the settings popup hands its three typed boxes to
 - it plays nothing itself: it says `plays(id)` and `Main.qml` hands that to
   `Wallpapers.select()`, the same place a click on a card goes
 - the file is `playlists.json` under `QStandardPaths::AppConfigLocation`,
@@ -377,6 +407,26 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   give us a window to show". The real reason is three lines further up --
   `Cannot override FINAL property`. `qmllint` passes it. Found by running
   the program, which is the only thing that showed it.
+- **A window-wide `Shortcut` takes Escape before any popup does.** The
+  picker used to hide itself on Escape, which meant that with a popup open
+  Escape put the whole window away instead of closing the popup -- every
+  one of them declares `Popup.CloseOnEscape` and never got the chance to
+  use it. There is no Escape handler in this program now, on purpose: the
+  key belongs to whatever is open, and the window is put away with the
+  buttons in its corner.
+
+  **And `CloseOnEscape` only works where the popup has the keyboard.**
+  Setting the policy is not enough: a Popup does not take focus by being
+  opened, so the key goes to whatever had it -- here the grid behind it.
+  Measured with `activeFocus` on all three of the playlist popups: Save
+  closed on Escape and the other two did not, because Save puts the cursor
+  in its name field on the way up and they have nothing to put it in.
+  `focus: true` on the Popup is what the other two were missing.
+
+- **A `Label` does not dim itself when it is switched off.** `enabled`
+  reaches the mouse and not the colour, so a line beside a greyed-out tick
+  box sat there in full black. It needs `opacity` said out loud.
+
 - **A `Popup` that does not fit does not scroll, it overflows.** The
   workshop's filter holds fifty-nine chips, which is taller than the window
   on anything but a very tall screen: the bottom section and the footer ran
@@ -619,6 +669,44 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   downloaded by Steam in one go, and their creation time and last change are
   the same minute -- so ordering by "date added" barely reorders anything on
   this machine. It is not broken; there is nothing to sort by.
+- **A `static` member declared after `signals:` is a signal as far as moc
+  is concerned.** It generates a call through `this` for it and the build
+  stops with "invalid use of 'this' outside of a non-static member
+  function", pointing at generated code rather than at the header. The
+  access specifier is what decides, not the keyword: put it under `public:`.
+
+- **Clamp the time, not one of its units.** The settings popup's three
+  boxes take two digits each and carry what is over -- sixty seconds is a
+  minute -- and the first way of doing it carried unit by unit, capping
+  the hours at 23 on the way. Typing ninety seconds at 23:59 then gave
+  23:00:30: *less* than before, because capping the hours threw away the
+  minutes under them. Added up as one number of seconds, clamped once and
+  handed back as a clock, it comes out 23:59:59. The arithmetic lives in
+  `Playlists::asClock()` rather than in QML, because a rule in QML is a
+  rule no test can reach.
+
+- **Fusion paints the strip a SpinBox's arrows sit in whether or not there
+  are any.** `up.indicator: null` and `down.indicator: null` take the
+  arrows away and leave a grey block hanging off the end of the number,
+  lit up whenever the box has the keyboard, with nothing to click. The box
+  needs a background of its own.
+
+- **A `CheckBox` with no words still leaves room for them.** Its padding
+  and the gap before the label are both still there, so one aligned to the
+  right of a layout hangs over the edge it was aligned to. `padding: 0`
+  and `spacing: 0`.
+
+- **The playlist timer is tested by letting it run.** `tst_playlists`
+  waits five real seconds for a turn, which is most of the suite's time
+  and is there on purpose: the one way to get this wrong is the
+  multiplier, seconds read as minutes is a playlist sixty times too slow,
+  and no unit test of the arithmetic catches that.
+
+  The playlists menu is the same lesson from the other side: which
+  playlist is playing is `Playlists`' own business, so its items are not
+  checkable at all -- the tick is a Label reading the singleton, and there
+  is no control state to break.
+
 - **A Controls item cannot both be told what to be and asked what it is.**
   Caught twice now. The sort menu was the first; the second was the
   playlist's `SpinBox`, written as `value: picker.playlistMinutes` with

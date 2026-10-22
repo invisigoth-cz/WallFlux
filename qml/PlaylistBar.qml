@@ -24,6 +24,11 @@ Rectangle {
     /// under the pointer -- which is what Add wallpaper switches.
     required property bool adding
 
+    /// Whether there is a playlist written down somewhere. Handed in
+    /// rather than read here: this strip draws what it is given and knows
+    /// nothing about where playlists are kept.
+    required property bool anySaved
+
     /// How many go in a row. Twenty, which is half the preview the strip
     /// used to draw -- asked for after looking at ten.
     readonly property int across: 20
@@ -91,6 +96,10 @@ Rectangle {
             RoundedButton {
                 text: qsTr("Configure")
                 icon.name: "settings-configure"
+                // Nothing to set up until there is a playlist to set up:
+                // either one being put together here, or one already
+                // saved that Load can bring back.
+                enabled: bar.items.length > 0 || bar.anySaved
                 onClicked: bar.configureAsked()
             }
 

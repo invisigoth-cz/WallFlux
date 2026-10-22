@@ -35,7 +35,7 @@ class Playlists : public QObject
     QML_NAMED_ELEMENT(Playlists)
     QML_SINGLETON
 
-    /// Every playlist, each `{ name, ids, hours, minutes, shuffle }`.
+    /// Every playlist, each `{ name, ids, hours, minutes, seconds, shuffle }`.
     Q_PROPERTY(QVariantList all READ all NOTIFY allChanged)
 
     /// The name of the one playing, or empty while none is.
@@ -50,7 +50,7 @@ public:
     /// Writes one down, replacing whatever had that name. An empty `ids`
     /// is refused: a playlist of nothing has nothing to take turns.
     Q_INVOKABLE void save(const QString &name, const QStringList &ids, int hours, int minutes,
-                          bool shuffle);
+                          int seconds, bool shuffle);
 
     /// Throws one away, and stops it if it was the one playing.
     Q_INVOKABLE void forget(const QString &name);
@@ -66,6 +66,24 @@ public:
     /// Stops whichever is playing. What is on the screen stays there --
     /// stopping a playlist is not the same as turning the wallpaper off.
     Q_INVOKABLE void stop();
+
+    /// How long one wallpaper of a playlist stays, in seconds, floor and
+    /// all -- hours, minutes and seconds added up, and never less than the
+    /// floor, since a playlist set to nought would be a wallpaper changing
+    /// every tick of the timer. Public because it is a sum with a floor
+    /// and nothing else, and the test says what it should come to.
+    static int staysFor(const QVariantMap &one);
+
+    /// The other half of that sum: a number of seconds back into
+    /// `{ hours, minutes, seconds }`, carrying the remainder rather than
+    /// dropping it, and never longer than a day less a second.
+    ///
+    /// It is here and not in the window because it is the same rule read
+    /// the other way round, and because a rule in QML is a rule no test
+    /// can reach. The settings popup hands it whatever was typed into its
+    /// three boxes and writes back what comes out, which is what turns
+    /// ninety seconds into a minute and a half.
+    Q_INVOKABLE QVariantMap asClock(int seconds) const;
 
 signals:
     void allChanged();

@@ -97,7 +97,17 @@ Window {
         if (picker.playlistName === "")
             picker.playlistName = qsTr("Playlist %1").arg(Playlists.all.length + 1);
         Playlists.save(picker.playlistName, picker.inPlaylist, everyHours.value,
-                       everyMinutes.value, orderBox.currentIndex === 0);
+                       everyMinutes.value, everySeconds.value,
+                       orderBox.currentIndex === orderBox.random);
+    }
+
+    /// Opens a saved playlist and sets it going: the strip fills, the
+    /// settings come back, and its first wallpaper goes on the desktop.
+    /// Picking one out of a list and then having to find the Playlists
+    /// button to hear from it was a step nobody wanted.
+    function playPlaylist(name) {
+        picker.loadPlaylist(name);
+        Playlists.start(name);
     }
 
     /// Puts a saved playlist back on the strip, settings and all, so it can
@@ -110,7 +120,144 @@ Window {
         picker.inPlaylist = one.ids;
         everyHours.value = one.hours;
         everyMinutes.value = one.minutes;
-        orderBox.currentIndex = one.shuffle ? 0 : 1;
+        everySeconds.value = one.seconds;
+        orderBox.currentIndex = one.shuffle ? orderBox.random : orderBox.inOrder;
+    }
+
+    /// One of the three numbers of a playlist's interval: a word, and a
+    /// box with the number typed into it.
+    ///
+    /// The box holds its own value and the window reads it off when it
+    /// saves -- `value` here is an alias onto the box itself, which is the
+    /// same object read and written rather than a property bound to a
+    /// control and set back from it. That is the trap this project has
+    /// been caught by twice.
+    /// One of the three numbers of a playlist's interval: a word, and a
+    /// box with the number typed into it.
+    ///
+    /// The box holds its own value and the window reads it off when it
+    /// saves -- `value` here is an alias onto the box itself, which is the
+    /// same object read and written rather than a property bound to a
+    /// control and set back from it. That is the trap this project has
+    /// been caught by twice.
+    component PlaylistNumber: ColumnLayout {
+        id: number
+
+        property alias value: box.value
+        required property string label
+
+        /// The most this box will take while it is being typed into. Not
+        /// the ceiling of the unit: sixty seconds typed into the seconds
+        /// is a minute, not an hour of arguing with a field that will not
+        /// accept it, so the two-digit boxes take up to 99 and
+        /// `settleInterval()` turns whatever was typed into a time.
+        property int most: 99
+
+        spacing: 4
+
+        Label {
+            text: number.label
+            font.pixelSize: 12
+        }
+
+        SpinBox {
+            id: box
+
+            Layout.preferredWidth: 96
+            from: 0
+            to: number.most
+            editable: true
+            // Typed, and only typed. Clicking an arrow fourteen times to
+            // say "one minute" is not a way to ask for anything, and with
+            // seconds in the row it would be sixty.
+            up.indicator: null
+            down.indicator: null
+
+            onValueModified: picker.settleInterval()
+
+            // Fusion's own, with a length on it: the validator refuses a
+            // number out of range but lets the digits be typed first, so
+            // without this a field two characters wide takes as many as
+            // somebody cares to hold down.
+            contentItem: TextInput {
+                text: box.displayText
+                maximumLength: 2
+                font: box.font
+                color: box.palette.text
+                selectionColor: box.palette.highlight
+                selectedTextColor: box.palette.highlightedText
+                selectByMouse: true
+                horizontalAlignment: Qt.AlignHCenter
+                verticalAlignment: Qt.AlignVCenter
+                readOnly: !box.editable
+                validator: box.validator
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+            }
+
+            // Fusion paints the strip the arrows sat in whether or not
+            // there are any, and lights it up when the box has the
+            // keyboard -- a grey block hanging off the end of the number
+            // with nothing to click. Ours is a plain field.
+            background: Rectangle {
+                implicitHeight: 30
+                radius: 3
+                color: box.palette.base
+                border.width: 1
+                border.color: box.activeFocus ? box.palette.highlight : box.palette.mid
+            }
+        }
+    }
+
+    /// Turns whatever was typed into the three boxes into a time.
+    ///
+    /// The rule itself is `Playlists.asClock()`, where a test can reach
+    /// it: added up as seconds and handed back as hours, minutes and
+    /// seconds, so sixty seconds becomes a minute and ninety-five minutes
+    /// becomes an hour and thirty-five.
+    function settleInterval() {
+        const clock = Playlists.asClock(everyHours.value * 3600
+                                        + everyMinutes.value * 60 + everySeconds.value);
+        everyHours.value = clock.hours;
+        everyMinutes.value = clock.minutes;
+        everySeconds.value = clock.seconds;
+    }
+
+    /// A tick box of the playlist settings: out at the right of the panel,
+    /// big enough to aim at, and ringed in blue so it reads as something
+    /// to click rather than a hairline square.
+    component PlaylistCheck: CheckBox {
+        id: check
+
+        Layout.alignment: Qt.AlignRight
+        // No room around it: a CheckBox with no words keeps the padding
+        // and the gap it would have left for them, which puts the box
+        // itself past the edge it was aligned to.
+        padding: 0
+        spacing: 0
+
+        /// The blue it fills with. Lighter on the dark theme, darker on
+        /// the light one: white on #3daee9 is a little over two to one,
+        /// which is fine against a dark window and thin against a white
+        /// page.
+        readonly property color mark: picker.dark ? "#3daee9" : "#1f6f9e"
+
+        indicator: Rectangle {
+            implicitWidth: 26
+            implicitHeight: 26
+            radius: 5
+            color: check.checked ? check.mark : "transparent"
+            border.width: 3
+            border.color: check.enabled ? check.mark : check.palette.mid
+
+            Label {
+                anchors.centerIn: parent
+                text: "✓"
+                font.pixelSize: 16
+                font.weight: Font.Bold
+                visible: check.checked
+                color: "#ffffff"
+            }
+        }
     }
 
     /// Which of Wallpaper Engine's catalogues to call the tags by.
@@ -402,12 +549,12 @@ Window {
     }
     color: picker.palette.window
 
-    // What every other window on this desktop does, and the one key a person
-    // reaches for without being told.
-    Shortcut {
-        sequences: [StandardKey.Cancel]
-        onActivated: picker.hide()
-    }
+    // Escape is not wired to anything here, and that is the point. It used
+    // to hide the window -- which meant that with a popup open it hid the
+    // whole picker instead of closing the popup, since a window-wide
+    // Shortcut gets the key before the popup does. Every popup closes on
+    // Escape by its own policy; the window is put away with the buttons in
+    // its corner, like every other window.
 
     /// How the playlist being put together runs.
     ///
@@ -428,10 +575,18 @@ Window {
         anchors.centerIn: parent
         modal: true
         padding: 18
-        // Wide enough for the row of two numbers and their words, which
-        // is what decides it: narrower and they run out past the edge.
-        implicitWidth: 560
+        // Wide enough for the longest line of words and the row of three
+        // numbers beside it, which together are what decides it: narrower
+        // and they run out past the edge, and a Popup does not clip what
+        // overflows it -- it draws it over the window.
+        implicitWidth: 640
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        // A Popup only closes on Escape when it has the keyboard, and it
+        // does not take it by asking to be opened. Measured: the Save
+        // popup closed on Escape and these two did not, because Save puts
+        // the cursor in its name field on the way up and these have
+        // nothing to put it in -- the key went to the grid behind them.
+        focus: true
 
         background: Rectangle {
             color: picker.palette.base
@@ -457,11 +612,14 @@ Window {
 
                 Label { text: qsTr("Change wallpaper") }
 
+                // An empty row in front of every list: nothing is chosen
+                // until somebody chooses it, which is how Wallpaper Engine
+                // opens this panel too.
                 ComboBox {
                     id: changeBox
 
                     Layout.fillWidth: true
-                    model: [qsTr("By timer"), qsTr("On login"), qsTr("Time of day"),
+                    model: ["", qsTr("By timer"), qsTr("On login"), qsTr("Time of day"),
                             qsTr("Day of week"), qsTr("Never")]
                 }
 
@@ -473,50 +631,32 @@ Window {
                 RowLayout {
                     spacing: 10
                     // The timer is the only one of the five that has any
-                    // use for an interval.
-                    enabled: changeBox.currentIndex === 0
+                    // use for an interval -- and while nothing at all is
+                    // chosen it is what runs, since it is all there is.
+                    enabled: changeBox.currentIndex <= 1
 
-                    ColumnLayout {
-                        spacing: 4
+                    PlaylistNumber {
+                        id: everyHours
 
-                        Label {
-                            text: qsTr("Hours")
-                            font.pixelSize: 12
-                        }
-
-                        SpinBox {
-                            id: everyHours
-
-                            Layout.preferredWidth: 110
-                            from: 0
-                            to: 23
-                            // Holds the number itself; see the note on
-                            // `playlistName` for why it is bound to
-                            // nothing. Typed as well as clicked, because
-                            // clicking an arrow fourteen times to say
-                            // "one minute" is not a way to ask anything.
-                            editable: true
-                            value: 0
-                        }
+                        label: qsTr("Hours")
+                        // Nothing above the hours to carry into, so this
+                        // one really is a ceiling: 24 is simply refused.
+                        most: 23
+                        value: 0
                     }
 
-                    ColumnLayout {
-                        spacing: 4
+                    PlaylistNumber {
+                        id: everyMinutes
 
-                        Label {
-                            text: qsTr("Minutes")
-                            font.pixelSize: 12
-                        }
+                        label: qsTr("Minutes")
+                        value: 15
+                    }
 
-                        SpinBox {
-                            id: everyMinutes
+                    PlaylistNumber {
+                        id: everySeconds
 
-                            Layout.preferredWidth: 110
-                            from: 0
-                            to: 59
-                            editable: true
-                            value: 15
-                        }
+                        label: qsTr("Seconds")
+                        value: 0
                     }
 
                     Item { Layout.fillWidth: true }
@@ -527,10 +667,15 @@ Window {
                 ComboBox {
                     id: orderBox
 
+                    /// Which row is which, since there is an empty one in
+                    /// front and `savePlaylist()` reads shuffle off this.
+                    /// Nothing chosen means in order, which is the quieter
+                    /// of the two to be given by default.
+                    readonly property int random: 1
+                    readonly property int inOrder: 2
+
                     Layout.fillWidth: true
-                    // Random first, and so the one a new playlist gets.
-                    // `savePlaylist()` reads shuffle off this index.
-                    model: [qsTr("Random"), qsTr("Ordered")]
+                    model: ["", qsTr("Random"), qsTr("Ordered")]
                 }
 
                 Label { text: qsTr("Wallpaper transition") }
@@ -539,21 +684,70 @@ Window {
                     id: transitionBox
 
                     Layout.fillWidth: true
-                    model: [qsTr("None (reduce flicker)"), qsTr("None"), qsTr("Random"),
+                    model: ["", qsTr("None (reduce flicker)"), qsTr("None"), qsTr("Random"),
                             qsTr("Fade"), qsTr("Fade to black")]
+                }
+
+                Label { text: qsTr("Transition time") }
+
+                RowLayout {
+                    spacing: 10
+
+                    Slider {
+                        id: transitionTime
+
+                        Layout.fillWidth: true
+                        from: 0
+                        to: 3000
+                        stepSize: 50
+                        // Holds the number itself, like the three boxes
+                        // above it: a control told what to be and also
+                        // asked what it is ends up fighting its own
+                        // binding.
+                        value: 1500
+
+                        // Fusion draws a slider's handle as a rounded
+                        // square. A dot is what was asked for and what
+                        // everything else round here has its corners
+                        // taken off to look like.
+                        handle: Rectangle {
+                            x: transitionTime.leftPadding
+                               + transitionTime.visualPosition
+                                 * (transitionTime.availableWidth - width)
+                            y: transitionTime.topPadding
+                               + (transitionTime.availableHeight - height) / 2
+                            implicitWidth: 18
+                            implicitHeight: 18
+                            radius: width / 2
+                            color: transitionTime.pressed
+                                       ? Qt.darker(transitionTime.palette.highlight, 1.2)
+                                       : transitionTime.palette.highlight
+                            border.width: 1
+                            border.color: Qt.darker(transitionTime.palette.highlight, 1.4)
+                        }
+                    }
+
+                    Label {
+                        // As wide as the longest it can read, so the
+                        // slider does not shuffle sideways as it is
+                        // dragged.
+                        Layout.preferredWidth: 64
+                        horizontalAlignment: Text.AlignRight
+                        text: qsTr("%1 ms").arg(transitionTime.value)
+                    }
                 }
 
                 Label { text: qsTr("Change wallpaper when the video ends") }
 
-                CheckBox { id: afterVideoBox; Layout.alignment: Qt.AlignLeft }
+                PlaylistCheck { id: afterVideoBox }
 
                 Label { text: qsTr("Allow changing while paused") }
 
-                CheckBox { id: whilePausedBox; Layout.alignment: Qt.AlignLeft }
+                PlaylistCheck { id: whilePausedBox }
 
                 Label { text: qsTr("Always start with the first wallpaper") }
 
-                CheckBox { id: firstBox; Layout.alignment: Qt.AlignLeft }
+                PlaylistCheck { id: firstBox }
 
                 Label {
                     Layout.leftMargin: 20
@@ -562,13 +756,16 @@ Window {
                     // Only means anything once the one above it is on,
                     // which is the whole of why it is indented.
                     enabled: firstBox.checked
+                    // A Label does not dim itself when it is switched off
+                    // -- `enabled` reaches the mouse and not the colour --
+                    // so it sat there in full black beside a grey box.
+                    opacity: enabled ? 1 : 0.45
                     text: qsTr("The first wallpaper plays only at startup")
                 }
 
-                CheckBox {
+                PlaylistCheck {
                     id: firstAtStartBox
 
-                    Layout.alignment: Qt.AlignLeft
                     enabled: firstBox.checked
                 }
             }
@@ -580,12 +777,17 @@ Window {
                 opacity: 0.8
                 // Said plainly, because nought would otherwise look like a
                 // setting rather than a mistake.
-                text: qsTr("A minute at the least, however short this is set. "
+                text: qsTr("Five seconds at the least, however short this is set. "
                            + "Only the timer and the order do anything yet.")
             }
 
             RowLayout {
                 Layout.fillWidth: true
+
+                RoundedButton {
+                    text: qsTr("Cancel")
+                    onClicked: settings.close()
+                }
 
                 Item { Layout.fillWidth: true }
 
@@ -615,6 +817,12 @@ Window {
         padding: 18
         implicitWidth: 560
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        // A Popup only closes on Escape when it has the keyboard, and it
+        // does not take it by asking to be opened. Measured: the Save
+        // popup closed on Escape and these two did not, because Save puts
+        // the cursor in its name field on the way up and these have
+        // nothing to put it in -- the key went to the grid behind them.
+        focus: true
 
         /// The name picked in the list, or empty while none is.
         property string picked: ""
@@ -662,7 +870,10 @@ Window {
                     anchors.margins: 1
                     clip: true
                     model: Playlists.all
-                    ScrollBar.vertical: Scroller {}
+                    // The box is a fixed height whether or not it is full,
+                    // so most of the time there is nothing to scroll and a
+                    // bar down its edge is a line saying otherwise.
+                    ScrollBar.vertical: Scroller { policy: ScrollBar.AsNeeded }
 
                     delegate: Rectangle {
                         id: row
@@ -686,7 +897,7 @@ Window {
                             // pressing Confirm, which is what a list of
                             // names everywhere else does.
                             onDoubleClicked: {
-                                picker.loadPlaylist(row.modelData.name);
+                                picker.playPlaylist(row.modelData.name);
                                 loading.close();
                             }
                         }
@@ -716,6 +927,8 @@ Window {
                                 text: qsTr("Wallpapers: %1").arg(row.modelData.ids.length)
                                       + " · " + row.modelData.hours + " h "
                                       + row.modelData.minutes + " min"
+                                      + (row.modelData.seconds
+                                             ? " " + row.modelData.seconds + " s" : "")
                                 color: loading.picked === row.modelData.name
                                            ? picker.palette.highlightedText
                                            : picker.palette.windowText
@@ -729,14 +942,37 @@ Window {
                 Layout.fillWidth: true
                 spacing: 10
 
+                // Asks before it does it, on the button itself rather than
+                // in a second popup over the first. Throwing a playlist
+                // away cannot be undone and there is nowhere to undo it
+                // from, and one click beside a list of names is one click
+                // too few for that.
                 RoundedButton {
-                    text: qsTr("Delete")
+                    id: binIt
+
+                    property bool asking: false
+
+                    text: binIt.asking ? qsTr("Really delete?") : qsTr("Delete")
                     icon.name: "edit-delete"
                     accent: "#c0392b"
                     enabled: Playlists.named(loading.picked).name !== undefined
                     onClicked: {
+                        if (!binIt.asking) {
+                            binIt.asking = true;
+                            return;
+                        }
                         Playlists.forget(loading.picked);
                         loading.picked = "";
+                        binIt.asking = false;
+                    }
+
+                    // Picking another name, or leaving, takes the question
+                    // back: a button left saying "Really delete?" about
+                    // something else is how the wrong thing gets deleted.
+                    Connections {
+                        target: loading
+                        function onPickedChanged() { binIt.asking = false; }
+                        function onClosed() { binIt.asking = false; }
                     }
                 }
 
@@ -747,7 +983,7 @@ Window {
                     accent: "#2e9e5b"
                     enabled: Playlists.named(loading.picked).name !== undefined
                     onClicked: {
-                        picker.loadPlaylist(loading.picked);
+                        picker.playPlaylist(loading.picked);
                         loading.close();
                     }
                 }
@@ -1061,8 +1297,10 @@ Window {
                     RoundedButton {
                         id: lists
 
-                        text: Playlists.playing !== "" ? Playlists.playing
-                                                       : qsTr("Playlists")
+                        // The button says what it opens, always -- the
+                        // name of what is playing belongs in the list,
+                        // beside the tick, the same as the sort menu.
+                        text: qsTr("Playlists")
                         icon.name: "view-media-playlist"
                         // Nothing to offer until one has been saved.
                         enabled: Playlists.all.length > 0
@@ -1079,16 +1317,53 @@ Window {
                                 model: Playlists.all
 
                                 delegate: MenuItem {
+                                    id: oneList
+
                                     required property var modelData
 
-                                    text: (Playlists.playing === modelData.name ? "▶  " : "")
-                                          + modelData.name
-                                          + " (" + modelData.ids.length + ")"
+                                    leftPadding: 10
+                                    rightPadding: 10
+                                    // The mark goes on the right, where
+                                    // the eye lands after reading the
+                                    // name, so the box on the left is
+                                    // taken away.
+                                    indicator: null
+
+                                    // Not a checkable item with `checked`
+                                    // bound to what is playing: clicking
+                                    // one of those breaks the very binding
+                                    // it was reading. Which playlist is on
+                                    // is Playlists' own business and this
+                                    // only reads it.
+                                    contentItem: RowLayout {
+                                        spacing: 8
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: oneList.modelData.name
+                                            elide: Text.ElideRight
+                                            color: oneList.palette.windowText
+                                        }
+                                        Label {
+                                            text: "✓"
+                                            visible: Playlists.playing
+                                                     === oneList.modelData.name
+                                            color: oneList.palette.windowText
+                                        }
+                                    }
+
+                                    background: Rectangle {
+                                        radius: 4
+                                        color: oneList.highlighted
+                                               ? Qt.alpha(oneList.palette.highlight, 0.28)
+                                               : "transparent"
+                                    }
+
                                     onTriggered: {
-                                        if (Playlists.playing === modelData.name)
+                                        if (Playlists.playing === oneList.modelData.name)
                                             Playlists.stop();
                                         else
-                                            Playlists.start(modelData.name);
+                                            Playlists.start(oneList.modelData.name);
                                     }
                                 }
                             }
@@ -1456,6 +1731,7 @@ Window {
                     Layout.bottomMargin: 8
                     items: picker.playlistItems
                     adding: picker.picking
+                    anySaved: Playlists.all.length > 0
                     onDropped: (id) => picker.tick(id)
                     onLoadAsked: loading.open()
                     onSaveAsked: saving.open()
