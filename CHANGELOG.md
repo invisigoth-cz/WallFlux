@@ -6,6 +6,88 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-23
+
+### Added
+
+- **A wallpaper on every screen that is ticked for it.** The Displays tab
+  draws the monitors as they are arranged -- read off their positions on
+  the shared desktop, so it is the arrangement somebody set up in their own
+  display settings -- and gives each a switch. One wallpaper, drawn on the
+  ticked ones. The screens are Qt's own: `Qt.application.screens` hands
+  over the connector name natively on Wayland, which is the same string
+  KDE's display settings and `/sys/class/drm` use.
+- **A filter in the library built from the tags the workshop really
+  carries.** project.json holds the genres its author ticked and nothing
+  else -- ten distinct tags across this machine against twenty-nine the
+  workshop knows of the same wallpapers. One keyless POST asks about the
+  whole library at once. Audio responsive ticked now finds ten wallpapers
+  where it found none, and Mature finds one, where project.json calls
+  every wallpaper Everyone.
+- **A filter panel that folds.** Sixty-four chips is longer than any
+  window, so each section's heading is a switch: the arrow turns, the
+  chips slide out from under it, and a number beside the heading says how
+  many are ticked while they are away.
+- **A grid the arrow keys walk.** Arrows move the band round a card, Enter
+  puts that one on the desktop, Space ticks it into the playlist.
+- **The version, in the corner of the footer.** An `i` beside Turn off,
+  which says it when it is hovered.
+
+### Changed
+
+- **A card in the grid is a square with its name inside the picture**, as
+  Wallpaper Engine's own picker draws it, and the window opens at
+  1400 x 900 with five of them across. It opened at 1100 x 720 before,
+  where the grid came out 419 pixels tall and showed six wallpapers out of
+  fifty-three. The details panel keeps the whole sixteen-by-nine preview:
+  it is the one place a preview is looked at whole.
+- **The panel is opened and closed by the card it is about**, so the cross
+  has gone off the picture. It slides rather than appearing, with its
+  contents held at their full width and cut off by the edge so nothing
+  inside is squashed on the way. Leaving a tab shuts it, in either
+  direction.
+- **In the Steam tab the click is the only thing there is.** It opens the
+  panel and closes it again, and a double click does nothing whatever,
+  because nothing in that tab is ours to play.
+- **The window is tinted by whatever the panel is showing**: the preview
+  blurred past recognition, half the colour out of it, faded in over six
+  tenths of a second. A card's band lights up under the pointer, and the
+  preview leans in a twentieth.
+- **The portrait picture sizes are back.** They were dropped as telephone
+  sizes, which was wrong twice over: a monitor can be turned on its side,
+  and whoever has turned one had no chip to tick.
+- **A workshop wallpaper under half a megabyte no longer reads "0 MB".**
+  Tenths below ten megabytes, and never nought.
+
+### Fixed
+
+- **The grid stays where it was put.** Its model is a fresh list every
+  time anything about any wallpaper changes, and a GridView taking a new
+  model throws away both the row its ring is on and where the view is
+  scrolled -- so only the first card could be picked, the arrows went
+  nowhere, and a double click started the wallpaper and threw the window
+  up to the top of the library.
+- **The grid no longer refreshes in front of you when the window is
+  resized.** The repair above rewound the view every time, which destroys
+  every card on screen and loads the previews again; it is asked for only
+  when the view is really stranded past the end of the grid.
+- **Playing a wallpaper no longer shuts the panel.** Qt delivers the
+  second press of a double click as `doubleClicked`, which never passes
+  the counting, so four tenths of a second after the wallpaper started the
+  panel did what the first click had decided.
+- **The playlists menu came up empty.** A Menu has no width of its own --
+  it comes from the background it is given, and the plain rectangle it was
+  handed to round its corners has none. It opened twelve pixels wide over
+  two saved playlists that were plainly there.
+- **Switching language emptied both drop downs in Playlist settings.**
+  Translating a model is a binding, so rebuilding the list dropped the box
+  back to its first row, and a playlist saved afterwards was saved in
+  order with no transition and nobody told.
+- **Fade to black never reached black.** The 400 ms rescue that changes
+  the wallpaper behind a covering window was pre-empting a transition that
+  deliberately takes half its length to get the veil up. Measured at
+  rgb 0.46 where it should have been 0.
+
 ## [0.10.0] — 2026-10-22
 
 ### Added
@@ -508,7 +590,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.7.0...v0.8.0
