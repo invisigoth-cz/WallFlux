@@ -66,11 +66,10 @@ Rectangle {
         PreviewTile {
             // Narrower than the panel, and centred.
             //
-            // A tile is sixteen by nine from the inside out -- the frame in
-            // it asks for nine sixteenths of its *own* width whatever
-            // height the tile is given -- so `Layout.preferredHeight` does
-            // not shorten the picture, it only lets the name underneath be
-            // drawn over it. Holding the width is what shortens it.
+            // Sixteen by nine, where the grid's cards are squares: this
+            // is the one place a whole preview is looked at, and a square
+            // here would crop a third of it off for nothing. A tile takes
+            // the shape it is given, so both of these are read.
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: Math.min(column.width, 280)
             Layout.preferredHeight: Math.round(Math.min(column.width, 280) * 9 / 16)

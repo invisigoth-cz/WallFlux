@@ -30,8 +30,9 @@ Item {
 
     /// The same width a card has in the library, so a wallpaper is the same
     /// size whether it is installed or not.
-    readonly property int cardWidth: 300
-    readonly property int cardHeight: Math.round((workshop.cardWidth - 16) * 9 / 16) + 46
+    readonly property int cardWidth: 260
+    /// A square, as in the library: the name is inside the picture.
+    readonly property int cardHeight: workshop.cardWidth
 
     /// Which of Wallpaper Engine's catalogues to call the tags by.
     readonly property string catalogue: Language.czech ? "cs-cz" : "en-us"
@@ -922,7 +923,7 @@ Item {
                                 Math.max(1, Math.floor(everything.room / workshop.cardWidth))
 
                             cellWidth: Math.floor(everything.room / everything.columns)
-                            cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+                            cellHeight: cellWidth
                             model: workshop.grid
 
                             // A new answer starts at its own beginning. Page

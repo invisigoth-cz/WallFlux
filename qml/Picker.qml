@@ -718,8 +718,13 @@ Window {
         return picker.ascending ? kept : kept.reverse();
     }
 
-    width: 1100
-    height: 720
+    // Five cards across and two rows of them, which is as much of the
+    // library as a window can show without taking the whole screen. It
+    // opened at 1100 x 720 while a card was sixteen by nine, where the
+    // grid itself came out 419 pixels tall -- measured -- and showed six
+    // wallpapers out of fifty-three.
+    width: 1400
+    height: 900
     // Wide enough for the whole of the header. Narrower than this and a
     // layout starts squeezing what is in it, which for a Controls item means
     // squeezing it down to nothing at all rather than clipping it.
@@ -1806,16 +1811,21 @@ Window {
                             // column of previews and reads as part of the picture.
                             readonly property int room: grid.width - 30
 
-                            // Three hundred rather than the two hundred
-                            // and forty this started at: the previews were
-                            // small enough that picking one out meant
-                            // leaning in.
-                            readonly property int columns: Math.max(1, Math.floor(grid.room / 300))
+                            // Two hundred and sixty, which puts five
+                            // across the window this opens at. It was three
+                            // hundred while a card was sixteen by nine and
+                            // carried its name in a row underneath: a square
+                            // of three hundred is half again as tall, so the
+                            // same number would have left one row and a half
+                            // showing.
+                            readonly property int columns: Math.max(1, Math.floor(grid.room / 260))
 
                             cellWidth: Math.floor(grid.room / grid.columns)
-                            // The preview is sixteen by nine, and the name sits
-                            // under it.
-                            cellHeight: Math.round((cellWidth - 16) * 9 / 16) + 46
+                            // A square, with the name inside the picture.
+                            // The eight of margin a card keeps on each side
+                            // is what leaves a gap between them, across and
+                            // down alike.
+                            cellHeight: cellWidth
 
                             model: picker.shown
 
@@ -1873,7 +1883,19 @@ Window {
                                 // there it goes where it is asked. Both
                                 // calls are in the one function, so
                                 // nothing is drawn in between.
-                                grid.positionViewAtBeginning();
+                                //
+                                // Only when it is actually stranded,
+                                // though. Rewinding destroys every
+                                // delegate on screen and the previews
+                                // come back as new Images loading
+                                // asynchronously -- the whole grid
+                                // visibly blinking on every resize, for a
+                                // repair that one case in many needs. In
+                                // bounds, `Contain` scrolls the least it
+                                // can and does nothing at all when the
+                                // card is on screen already.
+                                if (grid.contentY > Math.max(0, grid.contentHeight - grid.height))
+                                    grid.positionViewAtBeginning();
                                 grid.positionViewAtIndex(row, GridView.Contain);
                             }
 

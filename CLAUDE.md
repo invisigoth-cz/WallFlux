@@ -675,6 +675,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   three of them together when a window is maximised and they all arrive at
   once.
 
+  **And the rewind only when the view is really stranded.** Rewinding
+  destroys every delegate on screen, and what comes back are new `Image`s
+  loading asynchronously -- so a repair one case in many needs was the
+  whole grid visibly blinking on every resize, which is what maximising a
+  window and putting it back looks like. In bounds, `Contain` scrolls the
+  least it can and does nothing at all when the card is on screen already.
+  Measured on open, on maximising and on coming back: contentY 0 against a
+  content height of 4 176 and then 1 491, and not one rewind.
+
 - **A double click cannot be counted by the card it lands on.** A rebuild
   between the two presses destroys the delegate, so the second press
   reaches a different object which sees a first click -- and with the
@@ -691,18 +700,39 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   is lost by borrowing it: a wallpaper that cannot be played is drawn at
   four tenths and says so that way too.
 
-- **A preview is sixteen by nine because a wallpaper is.** The picture
-  Wallpaper Engine ships is the wallpaper's own shape and the screen it
-  goes on is that shape too, so a square tile would throw a third of every
-  preview away or letterbox it into grey. Asked once; the answer is the
-  same everywhere a preview is drawn.
+- **A card in the grid is a square, and the whole preview is sixteen by
+  nine.** Both, in different places. The grid crops to a square and puts
+  the name inside the picture over a gradient, which is what Wallpaper
+  Engine's own picker draws and what fits five cards across a window
+  rather than three; the details panel and the playlist strip keep the
+  wallpaper's own shape, because the panel is the one place a preview is
+  looked at whole and a square there would crop a third of it off for
+  nothing. The price was said out loud before it was chosen: a square
+  throws away the sides of every preview in the grid.
 
-- **A `PreviewTile` is sixteen by nine from the inside out.** The frame in
-  it asks for nine sixteenths of its *own* width whatever height the tile
-  is given, so `Layout.preferredHeight` does not shorten the picture --
-  the tile overflows and the name underneath is drawn over the bottom of
-  it, with no warning anywhere. Hold the width instead. Found by capping
-  the height in the details panel and looking at the result.
+  **A `PreviewTile` takes the shape it is given.** It used to ask for
+  nine sixteenths of its *own* width whatever height it was handed, so
+  `Layout.preferredHeight` did not shorten the picture -- it let the name
+  underneath be drawn over the bottom of it, with no warning anywhere.
+  The frame fills the tile now and the name is inside the picture, so
+  there is nothing left to overflow and both of the panel's two numbers
+  are read.
+
+- **A child's scale goes into the texture an effect reads; the source
+  item's own does not.** The preview leans in a twentieth under the
+  pointer, and the picture is drawn by a `MultiEffect` that rounds its
+  corners -- so scaling the thing handed to `source` would have been
+  thrown away with the rest of that item's transform. The Image sits
+  inside a box with `clip: true` and the box is the source: the zoom is a
+  child's, the crop is the box's, and the card itself does not move.
+  Checked by drawing one at 1.0 and one at 1.3 side by side and looking at
+  the grab, which is the only way this one shows itself.
+
+- **A gradient stop of `"transparent"` is a transparent *black*.** The
+  name's gradient fades the card's own base colour up out of the picture,
+  and ending it at `"transparent"` interpolates through black on the way
+  -- a dark bruise across the bottom of every card in the light theme.
+  Each stop names the base colour and changes only the alpha.
 
 - **The details panel scrolls from the author's row down.** The picture
   and the name stay put; everything under them is in the Flickable. Two
