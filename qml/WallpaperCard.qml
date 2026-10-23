@@ -54,6 +54,10 @@ Item {
     // to say it exists, not to be chosen.
     opacity: card.usable ? 1 : 0.4
 
+    /// The colour of the band when the pointer is somewhere else.
+    readonly property color edge: card.current ? card.palette.highlight
+                                : card.usable ? "#2ecc71" : "#e8a33d"
+
     /// Whether the pointer is anywhere on this card.
     ///
     /// A handler rather than the tile's own hover: the tick box has a
@@ -81,8 +85,15 @@ Item {
         // with it, which looked like the card had been put in a box.
         // Nothing is lost by borrowing the band -- a wallpaper that cannot
         // be played is drawn at four tenths and says so that way too.
-        band: card.current ? card.palette.highlight
-                           : card.usable ? "#2ecc71" : "#e8a33d"
+        // Lit up under the pointer, which is the card saying it is
+        // ready to be clicked -- the preview is already leaning in, and
+        // this is the rest of the same gesture. The band is borrowed for
+        // it rather than a shadow being drawn, which would cost every
+        // card a layer of its own.
+        band: pointer.hovered ? Qt.lighter(card.edge, 1.4) : card.edge
+        Behavior on band {
+            ColorAnimation { duration: 150 }
+        }
         onClicked: card.chose(card.wallpaper.id)
         onDoubleClicked: card.applied(card.wallpaper.id)
     }

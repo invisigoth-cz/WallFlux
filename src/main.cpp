@@ -66,6 +66,9 @@ int main(int argc, char *argv[])
     // desktop has no native one of its own, and that fallback needs this.
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wallflux"));
+    // Read in QML as `Application.version`, which is what the footer's
+    // About icon says when it is hovered.
+    app.setApplicationVersion(QStringLiteral(WALLFLUX_VERSION));
     app.setOrganizationName(QStringLiteral("WallFlux"));
     // KWin reads the desktop file name to decide what the window is; a
     // wallpaper that claims to be an ordinary application gets treated as one.

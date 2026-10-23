@@ -66,11 +66,66 @@ Item {
     /// The one the details panel is about, or null while it is shut.
     property var inspected: null
 
+    /// The wallpaper this tab would have the window tinted by, which is
+    /// whatever its panel is showing. Read by the picker, which owns the
+    /// window and knows which tab is being looked at.
+    readonly property url ambient:
+        shown.open && workshop.inspected ? workshop.inspected.preview : ""
+
+    /// The card a click is waiting on, while it is being made sure that
+    /// no second click is coming.
+    property var waiting: null
+
+    /// A click out here waits out the double click before it does
+    /// anything, which is what lets a double click mean nothing at all.
+    ///
+    /// Nothing in this tab is ours to play, so a second click has nothing
+    /// to ask for -- and a click that acted at once would leave a double
+    /// click showing the panel and taking it away again, which reads as a
+    /// flinch. Four tenths of a second is what the library waits too, and
+    /// measured with `QtTest`, it is this machine's own double click
+    /// interval: a double click delivers one `clicked` and then one
+    /// `doubleClicked`, in that order.
+    Timer {
+        id: oneClick
+
+        interval: 400
+        onTriggered: workshop.inspect(workshop.waiting)
+    }
+
+    /// A click on a card, once it is clear that it was only the one.
+    function choose(item) {
+        workshop.waiting = item;
+        oneClick.restart();
+    }
+
+    /// And a second click, which takes the first one back.
+    function neverMind() {
+        oneClick.stop();
+        workshop.waiting = null;
+    }
+
+    /// Shuts the panel, which is what leaving this tab does. The picker
+    /// asks for it: this view has no idea it is in a tab at all.
+    function shut() {
+        workshop.neverMind();
+        shown.open = false;
+    }
+
     /// Shows one wallpaper of the workshop in the panel. There is nothing
     /// else a click on a card out here can mean: it is not ours to play.
     function inspect(item) {
+        // A click on the one the panel is already about puts it away
+        // again, which is the way out now that the picture carries no
+        // cross in its corner. What is in it is left alone, so it does
+        // not empty itself out while it slides.
+        if (shown.open && item && workshop.inspected
+                && workshop.inspected.id === item.id) {
+            shown.open = false;
+            return;
+        }
         workshop.inspected = item;
-        shown.visible = true;
+        shown.open = true;
         if (item)
             workshop.lookUpAuthor(item.owner);
     }
@@ -447,7 +502,8 @@ Item {
 
         preview: offered.item.preview
         label: offered.item.title
-        onClicked: workshop.inspect(offered.item)
+        onClicked: workshop.choose(offered.item)
+        onDoubleClicked: workshop.neverMind()
     }
 
     /// One Discover row: a heading, a sideways strip of cards, and a way
@@ -1062,10 +1118,6 @@ Item {
                       : []
                 author: workshop.inspectedAuthor
                 onAuthorAsked: workshop.everythingBy(workshop.inspected.owner)
-                onClosed: {
-                    shown.visible = false;
-                    workshop.inspected = null;
-                }
 
                 RoundedButton {
                     id: fetch

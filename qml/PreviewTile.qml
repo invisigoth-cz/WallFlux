@@ -49,7 +49,11 @@ Item {
 
     /// The colour the card is drawn on, which the name's gradient fades
     /// into. Read once rather than in each of the three stops.
-    readonly property color card: tile.palette.base
+    ///
+    /// Not called `card`: a WallpaperCard's own id is `card`, and a
+    /// property of that name here shadows it inside every binding written
+    /// in there.
+    readonly property color backing: tile.palette.base
 
     Rectangle {
         id: frame
@@ -57,7 +61,7 @@ Item {
         anchors.fill: parent
 
         radius: 6
-        color: tile.card
+        color: tile.backing
         border.width: tile.band.a > 0 ? 2 : 0
         border.color: tile.band
 
@@ -146,13 +150,13 @@ Item {
             gradient: Gradient {
                 GradientStop {
                     position: 0
-                    color: Qt.rgba(tile.card.r, tile.card.g, tile.card.b, 0)
+                    color: Qt.rgba(tile.backing.r, tile.backing.g, tile.backing.b, 0)
                 }
                 GradientStop {
                     position: 0.45
-                    color: Qt.rgba(tile.card.r, tile.card.g, tile.card.b, 0.6)
+                    color: Qt.rgba(tile.backing.r, tile.backing.g, tile.backing.b, 0.6)
                 }
-                GradientStop { position: 1; color: tile.card }
+                GradientStop { position: 1; color: tile.backing }
             }
         }
 

@@ -42,14 +42,37 @@ Rectangle {
     /// Whatever can be done about this one. One button, so far.
     default property alias actions: doing.data
 
-    signal closed()
-
     /// Asked for when somebody wants the rest of this author's work.
     signal authorAsked()
 
+    /// Whether the panel is out.
+    ///
+    /// It slides rather than appearing: the width is what moves, and the
+    /// grid beside it takes the room back as it goes. There is no cross
+    /// on the picture any more -- clicking the card the panel is about
+    /// is what puts it away, which is one fewer thing to aim at.
+    property bool open: false
+
+    /// How far out it is, nought to one. The width is read off this
+    /// rather than animated straight, because this is a plain property of
+    /// our own and `Layout.preferredWidth` is an attached one.
+    property real slide: panel.open ? 1 : 0
+
+    Behavior on slide {
+        NumberAnimation {
+            duration: 220
+            easing.type: Easing.OutCubic
+        }
+    }
+
     implicitWidth: 360
-    // Shown when something is clicked, which is the only way in.
-    visible: false
+    Layout.preferredWidth: Math.round(panel.implicitWidth * panel.slide)
+    // Away means away: a layout leaves no spacing for something invisible,
+    // so the grid ends where the window does.
+    visible: panel.slide > 0
+    // What makes this a drawer rather than a column being crushed: the
+    // contents below keep their full width and the edge cuts them off.
+    clip: true
 
     color: panel.palette.base
     border.color: panel.palette.mid
@@ -59,8 +82,15 @@ Rectangle {
     ColumnLayout {
         id: column
 
-        anchors.fill: parent
+        // Held at its full width against the right-hand edge, which is
+        // the edge that stays put while the panel slides. Anchored to
+        // `parent` and sized off `panel`, so nothing in here reflows
+        // while the width is moving.
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.margins: 18
+        width: panel.implicitWidth - 36
         spacing: 14
 
         PreviewTile {
@@ -77,29 +107,6 @@ Rectangle {
             // The name goes under this in its own type, where it can wrap.
             label: ""
             clickable: false
-
-            // In the corner of the picture rather than beside the name:
-            // the panel has one way out and it should be where a window's
-            // cross is, not in the middle of what the panel is about.
-            RoundedTool {
-                id: closer
-
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: 6
-                icon.name: "window-close"
-                icon.color: panel.palette.windowText
-                ToolTip.visible: closer.hovered
-                ToolTip.text: qsTr("Close")
-                onClicked: panel.closed()
-
-                background: Rectangle {
-                    radius: 7
-                    color: Qt.alpha(panel.palette.window, closer.hovered ? 0.95 : 0.7)
-                    border.width: 1
-                    border.color: panel.palette.mid
-                }
-            }
         }
 
         Label {

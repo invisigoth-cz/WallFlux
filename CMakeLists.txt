@@ -105,6 +105,11 @@ qt_add_translations(wallflux TS_FILES i18n/wallflux_cs.ts)
 
 target_include_directories(wallflux PRIVATE src)
 
+# The number the footer's About icon shows, taken off project() above rather
+# than written out a third time: it already has to agree with the PKGBUILD's
+# pkgver, and two places is one too many as it is.
+target_compile_definitions(wallflux PRIVATE WALLFLUX_VERSION="${PROJECT_VERSION}")
+
 target_link_libraries(wallflux PRIVATE
     LayerShellQt::Interface
     Qt6::Core

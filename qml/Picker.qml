@@ -10,6 +10,7 @@ import QtQuick.Window
 // that takes a palette, and asking for it here keeps the choice beside the
 // colours it is set with.
 import QtQuick.Controls.Fusion
+import QtQuick.Effects
 import QtQuick.Layouts
 import WallFlux
 import "steamprofile.js" as Steam
@@ -535,18 +536,24 @@ Window {
     /// first click is still answered immediately.
     property string lastChosen: ""
 
+    /// What the click being counted will do once it is clear that no
+    /// second one is coming: open the panel, or put it away again.
+    property bool opening: true
+
     Timer {
         id: secondClick
 
         interval: 400
-        onTriggered: {
-            details.visible = true;
-            picker.lookUpAuthor(picker.lastChosen);
-        }
+        onTriggered: details.open = picker.opening
     }
 
     /// What a click on a card means: the first picks it out, a second one
-    /// on the same card puts it on the desktop.
+    /// on the same card puts it on the desktop -- and a click on the one
+    /// the panel is already about shuts the panel again.
+    ///
+    /// Closing waits out the same 400 ms as opening, and for the same
+    /// reason: it moves every card too, and a card that moves out from
+    /// under the pointer cannot be clicked a second time.
     function chooseOrApply(id) {
         if (id === picker.lastChosen && secondClick.running) {
             secondClick.stop();
@@ -555,9 +562,17 @@ Window {
         }
 
         picker.lastChosen = id;
-        picker.inspect(id);
-        // Already open: there is nothing left to reflow, so it follows the
-        // click at once and only the counting is waited out.
+        picker.opening = !(details.open && picker.inspected
+                           && picker.inspected.id === id);
+        // The ring goes where the click landed either way: it says which
+        // card the keyboard is on, which is still true with the panel
+        // shut. What is in the panel is left alone while it slides away,
+        // so it does not empty itself out on the way.
+        picker.ringOn = id;
+        if (picker.opening) {
+            picker.inspect(id);
+            picker.lookUpAuthor(id);
+        }
         secondClick.restart();
     }
 
@@ -577,13 +592,35 @@ Window {
         // Opened by `secondClick`, once it is clear that no second click
         // is coming -- see the note on `lastChosen`. Already open stays
         // open, and simply shows the new one.
-        if (details.visible)
+        if (details.open)
             picker.lookUpAuthor(id);
+    }
+
+    /// Shuts the panel in both tabs, and forgets any click that was
+    /// still being counted -- which would otherwise open a panel in the
+    /// tab that had just been left, a few tenths of a second after
+    /// leaving it.
+    function shutThePanels() {
+        secondClick.stop();
+        details.open = false;
+        if (steam.item)
+            steam.item.shut();
     }
 
     /// Puts one on the desktop, which is what a second click means. Never
     /// for a scene wallpaper: there is nothing here that can draw one.
+    ///
+    /// The panel is left exactly as it was. A double click is not two
+    /// clicks as far as the counting above is concerned: Qt delivers the
+    /// second press as `doubleClicked`, which comes straight here and
+    /// never passes `chooseOrApply`, so the click being counted was still
+    /// running -- and four tenths of a second after the wallpaper
+    /// started, the panel did what that first click had decided, which
+    /// was to shut. Stopping it is what makes a double click mean one
+    /// thing only.
     function apply(id) {
+        secondClick.stop();
+
         const all = Wallpapers.wallpapers;
         for (let i = 0; i < all.length; ++i) {
             if (all[i].id === id && all[i].playable) {
@@ -1329,6 +1366,75 @@ Window {
         }
     }
 
+    /// The wallpaper the window is tinted by: whichever panel is open in
+    /// whichever tab is being looked at, and nothing at all while both
+    /// are shut.
+    readonly property url ambient: {
+        if (tabs.currentIndex === 0)
+            return details.open && picker.inspected ? picker.inspected.preview : "";
+        if (tabs.currentIndex === 1 && steam.item)
+            return steam.item.ambient;
+        return "";
+    }
+
+    // The wallpaper being looked at, blurred out of all recognition
+    // behind the whole window. Declared before everything else, which is
+    // what puts it behind: the cards, the bars and the panel are all
+    // drawn over it, and what shows through is the room between them.
+    //
+    // The picture hangs over every edge, because a blur reaches past what
+    // it is given and would otherwise go soft and see-through around the
+    // outside of the window. The box crops it back.
+    Item {
+        anchors.fill: parent
+        clip: true
+
+        Image {
+            id: backdrop
+
+            anchors.fill: parent
+            anchors.margins: -60
+            source: picker.ambient
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            // Drawn by the effect below instead.
+            visible: false
+        }
+
+        MultiEffect {
+            anchors.fill: backdrop
+            source: backdrop
+            blurEnabled: true
+            blur: 1
+            blurMax: 48
+            // Half the colour out of it, so the window is tinted by the
+            // wallpaper rather than painted with it.
+            saturation: -0.5
+            // Fades in and out rather than appearing, over twice as long
+            // as the panel takes to slide: this is the room changing
+            // colour, not a thing arriving.
+            opacity: picker.ambient != "" ? 0.4 : 0
+            Behavior on opacity {
+                NumberAnimation { duration: 600; easing.type: Easing.InOutQuad }
+            }
+        }
+
+        // And the window's own colour laid back over it, three tenths of
+        // it. Without this a bright preview lifts the whole window: the
+        // picture is only four tenths there, but four tenths of something
+        // bright over something dark is a pale grey room with grey
+        // writing in it. Measured by drawing the three strengths side by
+        // side and reading the words on each.
+        Rectangle {
+            anchors.fill: parent
+            color: picker.palette.window
+            opacity: 0.3 * (picker.ambient != "" ? 1 : 0)
+            Behavior on opacity {
+                NumberAnimation { duration: 600; easing.type: Easing.InOutQuad }
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -1362,7 +1468,18 @@ Window {
                 // What builds the Steam tab, the once. Here rather than on
                 // the Loader, which cannot both follow the tab and stay
                 // behind when it changes.
-                onCurrentIndexChanged: if (tabs.currentIndex === 1) steam.active = true
+                //
+                // And leaving a tab shuts its panel: the panel is a
+                // question about one wallpaper in one grid, and walking
+                // away from the grid is the end of the question. Coming
+                // back to a tab that had one open and finding it still
+                // open is the window remembering something nobody asked
+                // it to.
+                onCurrentIndexChanged: {
+                    if (tabs.currentIndex === 1)
+                        steam.active = true;
+                    picker.shutThePanels();
+                }
 
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
@@ -1915,7 +2032,7 @@ Window {
                                                            was + by));
                                 picker.ringOn = picker.shown[to].id;
                                 grid.keepTheRingInView();
-                                if (details.visible)
+                                if (details.open)
                                     picker.inspect(picker.ringOn);
                             }
 
@@ -2045,10 +2162,6 @@ Window {
                         tags: picker.tagsOf(picker.inspected, Language.czech)
                         author: picker.inspectedAuthor
                         onAuthorAsked: picker.everythingByTheAuthor()
-                        onClosed: {
-                            details.visible = false;
-                            picker.inspected = null;
-                        }
 
                         RoundedButton {
                             id: giveBack
@@ -2081,7 +2194,7 @@ Window {
                                 // ours.
                                 Steamworks.remove(going.id);
                                 Wallpapers.discard(going.id);
-                                details.visible = false;
+                                details.open = false;
                                 picker.inspected = null;
                             }
                         }
@@ -2189,6 +2302,17 @@ Window {
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                     opacity: 0.8
+                }
+
+                RoundedTool {
+                    icon.name: "help-about"
+                    // See the magnifier above: without this it is invisible.
+                    icon.color: picker.palette.windowText
+                    ToolTip.visible: hovered
+                    // What it has to say is said by hovering it. A dialog
+                    // with one line in it is a dialog nobody wants, so
+                    // there is nothing here for a click to do.
+                    ToolTip.text: qsTr("WallFlux %1").arg(Application.version)
                 }
 
                 RoundedButton {

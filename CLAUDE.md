@@ -35,7 +35,18 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   and paging, fifty at a time and a thousand pages deep.
   Clicking a wallpaper anywhere in this tab opens a panel down the right
   with its picture, what is known about it and a green Download; the
-  library's grid has the same panel with a red Remove instead.
+  library's grid has the same panel with a red Remove instead. Out here
+  the click is the only thing there is -- it opens the panel and closes it
+  again, and a double click does nothing whatever, because nothing in this
+  tab is ours to play.
+
+  **Leaving a tab shuts its panel**, in either direction and for every
+  tab. The panel is a question about one wallpaper in one grid, so walking
+  away from the grid ends it; coming back to a tab and finding the panel
+  as it was left is the window remembering something nobody asked it to.
+  The click still being counted is forgotten with it, or it would open a
+  panel in the tab that had just been left, a few tenths of a second after
+  leaving it.
 - **A filter panel that folds.** Each section's heading is a switch: the
   arrow turns, the chips slide out from under it, and a number beside the
   heading says how many of them are ticked while they are away. The short
@@ -140,7 +151,15 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   all three on this machine.
 
 - **A panel beside the grid saying what a wallpaper is.** A click opens
-  it, in either tab: the picture with a cross in its corner, the name, and
+  it and a click on the same card puts it away again, in either tab --
+  which is why there is no cross on the picture any more: the card is the
+  switch. It slides rather than appearing, two tenths of a second of
+  width, with its contents held at their full width and cut off by the
+  edge so that nothing inside is squashed on the way. In the library both
+  halves wait out the same 400 ms as the double click, because opening
+  and closing each move every card and a card that moves out from under
+  the pointer cannot be clicked a second time. Inside: the picture, the
+  name, and
   under that a button saying who made it -- their avatar, their name and a
   magnifier -- which turns the workshop grid into everything else they
   have published, with a blue chip beside the filters to come back from.
@@ -174,10 +193,15 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **A picker that looks like something**: dark and light themes switched
   without a restart, a search that narrows the grid as it is typed and a
   cross to empty it, name order either way round, a band around each
-  preview saying whether it can be played, rounded buttons with room around
-  their words, filters as one value to a row beside the grid, and
-  scrollbars that stay visible in a strip of their own rather than fading
-  out over the pictures.
+  preview saying whether it can be played -- lit up while the pointer is
+  on it -- a preview that leans in under the pointer, the whole window
+  tinted by whatever the panel is showing, rounded buttons with room around their words, filters as
+  one value to a row beside the grid, and scrollbars that stay visible in
+  a strip of their own rather than fading out over the pictures. In the
+  corner of the footer an `i`, which says the version when it is hovered
+  and does nothing when it is clicked -- `Application.version`, out of
+  `WALLFLUX_VERSION` in CMakeLists.txt, which is `project()`'s own number
+  rather than a third place to keep it.
 - **An Arch package** (`packaging/PKGBUILD`), installed, with an autostart
   entry that has been verified through a real logout and login.
 
@@ -690,8 +714,33 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   model rebuilding as often as it did, a double click on anything but the
   first card was two single clicks. `Picker.qml` counts it instead, over
   a 400 ms timer, which also waits out the reflow: opening the panel takes
-  the grid from three columns to two, and a card that moves out from under
+  the grid from five columns to four, and a card that moves out from under
   the pointer cannot be clicked a second time.
+
+  **And a double click never reaches that counting.** Qt delivers the
+  second press as `doubleClicked`, not as a second `clicked`, so it goes
+  straight to `apply()` and `chooseOrApply` is none the wiser -- the click
+  it was counting is still running, and four tenths of a second after the
+  wallpaper started, the panel did what that first click had decided. With
+  the panel open on the card being double clicked, that decision was
+  "shut", so playing a wallpaper closed the panel by itself. `apply()`
+  stops the timer, which is what makes a double click mean one thing only.
+  Both paths have to exist: where a model rebuild destroys the delegate
+  between the presses, the second press lands on a new object which sees a
+  first click and `doubleClicked` never comes at all.
+
+  **Which is why a double click can only be ignored by waiting.** The
+  workshop has nothing to play, so a double click there is to do nothing
+  at all -- and since the first `clicked` arrives either way, the only way
+  to take it back is not to have acted on it yet. A click out there waits
+  the four tenths out and `doubleClicked` cancels it. Measured with
+  `QtTest`, which can deliver what a mouse cannot: one click gives one
+  toggle of the panel, a double click gives none, and two clicks 380 ms
+  apart give one -- Qt no longer calls that a double click, and the second
+  click rewinds the wait rather than being counted. The wait cannot lose
+  the race, either: this machine's double click interval is 400 ms
+  measured from the first *press*, and the timer starts at the first
+  *release*, so the cancel is always that much ahead of it.
 
 - **A ring round a card is a second frame, and it takes the name in with
   it.** The preview already has a band, so an arrow-key highlight drawn as
@@ -755,6 +804,25 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   draws no background until it is pointed at, so a magnifier beside the
   author's name read as decoration and was reported missing. The whole row
   is a `Button` with an edge on it now.
+
+- **A picture four tenths there over a dark window is a pale grey room.**
+  The window is tinted by whatever the panel is showing -- the preview,
+  blurred past recognition, half the colour taken out, faded in over six
+  tenths of a second. At the opacity the effect is drawn with and nothing
+  else, a bright preview lifted the whole window and the small print under
+  the heading went with it. The window's own colour goes back over it, three
+  tenths of it, which is what the program this was copied from does too.
+  Found by drawing the three strengths side by side and reading the words
+  on each.
+
+- **A property here can shadow a caller's id.** `PreviewTile` grew a
+  `card` property for the colour its name fades into, and a
+  `WallpaperCard`'s own id is `card` -- so every binding written inside
+  that tile in `WallpaperCard.qml` read the property instead of the card.
+  `qmllint` says `id-shadows-member` and names both; nothing at runtime
+  does. It is `backing` now. Run `qmllint` over **every** qml file, not
+  the two or three a change was in: this one went in with the squares and
+  was found a day later, in a file that had not been touched.
 
 - **A `MultiEffect` mask draws nothing unless the mask has
   `layer.enabled: true`.** Not a dimmer picture or a square-cornered one:
