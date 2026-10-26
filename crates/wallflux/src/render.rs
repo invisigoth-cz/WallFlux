@@ -614,6 +614,14 @@ impl Scene {
         }
 
         unsafe {
+            // Making the canvas leaves its last picture bound, and an object
+            // with no effects of its own is drawn into whatever is bound. On
+            // the frame the canvas is built -- the first one, and every one
+            // after a resize -- every such object before the first object with
+            // effects lands in an offscreen buffer nobody reads. It looks like
+            // those objects failing to load rather than like a buffer being
+            // left bound, which is why it is worth saying out loud here.
+            gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::CULL_FACE);
         }
