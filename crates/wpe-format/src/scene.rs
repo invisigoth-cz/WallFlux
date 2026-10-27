@@ -122,6 +122,11 @@ mod vector {
             Text(String),
             Numbers(Vec<f32>),
             Single(f32),
+            // An animated property keeps the curve the editor drew beside the
+            // value that plays without it. The curve is not read; dropping it
+            // leaves the property standing still, which is a wallpaper that
+            // draws rather than one that will not load at all.
+            Animated { value: serde_json::Value },
         }
         match Form::deserialize(d)? {
             Form::Text(s) => parse(&s),
@@ -133,6 +138,7 @@ mod vector {
                 Ok(out)
             }
             Form::Single(v) => Ok([v; N]),
+            Form::Animated { value } => de::<_, N>(value).map_err(D::Error::custom),
         }
     }
 }
@@ -470,6 +476,18 @@ mod tests {
         let b = Scene::parse(br#"{"objects":[{"parallaxDepth":"1.00000 1.00000"}]}"#).unwrap();
         assert_eq!(a.objects[0].parallax_depth.0, b.objects[0].parallax_depth.0);
         assert_eq!(a.objects[0].parallax_depth.0, [1.0, 1.0]);
+    }
+
+    /// One wallpaper writes an animated vector as the curve beside its value.
+    /// Reading only the three forms a static vector takes threw the whole
+    /// scene away over a colour that was never going to be looked at.
+    #[test]
+    fn an_animated_vector_reads_as_the_value_it_rests_at() {
+        let s = Scene::parse(
+            br#"{"objects":[{"origin":{"animation":{"c0":[{"frame":0,"value":0}]},"value":"1 2 3"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(s.objects[0].origin.value.0, [1.0, 2.0, 3.0]);
     }
 
     #[test]
