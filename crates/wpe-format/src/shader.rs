@@ -137,8 +137,82 @@ pub fn preprocess(
         out.push_str("#define GLSL 1\n");
     }
 
-    out.push_str(&body);
+    out.push_str(&hoist_uniforms(&body));
     (out, missing)
+}
+
+/// Lifts every `uniform` declaration above the body it was written in.
+///
+/// Wallpaper Engine rewrites these into constant buffers and texture registers
+/// at the top of the file, so a shader may declare `g_Texture0` *after* the
+/// include whose functions sample it -- which is what `common_blur.h` does,
+/// and what every blur built on it does. GLSL wants a name declared before it
+/// is used, so the same file will not compile until the declarations are moved
+/// up. The guards they were written under come with them, since whether a
+/// uniform exists at all is often decided by an option.
+fn hoist_uniforms(body: &str) -> String {
+    // Each level of nesting remembers the branches already taken, so an
+    // `#else` reads as "none of those", which is the condition the moved line
+    // has to be put back under.
+    struct Level {
+        taken: Vec<String>,
+        current: Option<String>,
+    }
+    let mut stack: Vec<Level> = Vec::new();
+    let mut lifted = String::new();
+    let mut rest = String::with_capacity(body.len());
+
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        let directive = |word: &str| trimmed.strip_prefix(word).map(str::trim);
+        if let Some(rest) = directive("#ifdef ") {
+            stack.push(Level {
+                taken: Vec::new(),
+                current: Some(format!("defined({rest})")),
+            });
+        } else if let Some(rest) = directive("#ifndef ") {
+            stack.push(Level {
+                taken: Vec::new(),
+                current: Some(format!("!defined({rest})")),
+            });
+        } else if let Some(rest) = directive("#if ") {
+            stack.push(Level {
+                taken: Vec::new(),
+                current: Some(rest.to_owned()),
+            });
+        } else if let Some(rest) = directive("#elif ") {
+            if let Some(level) = stack.last_mut() {
+                level.taken.extend(level.current.take());
+                level.current = Some(rest.to_owned());
+            }
+        } else if trimmed.starts_with("#else") {
+            if let Some(level) = stack.last_mut() {
+                level.taken.extend(level.current.take());
+            }
+        } else if trimmed.starts_with("#endif") {
+            stack.pop();
+        } else if trimmed.starts_with("uniform ") && trimmed.contains(';') {
+            for level in &stack {
+                for gone in &level.taken {
+                    lifted.push_str(&format!("#if !({gone})\n"));
+                }
+                if let Some(now) = &level.current {
+                    lifted.push_str(&format!("#if ({now})\n"));
+                }
+            }
+            lifted.push_str(trimmed);
+            lifted.push('\n');
+            for level in &stack {
+                for _ in level.taken.iter().chain(level.current.iter()) {
+                    lifted.push_str("#endif\n");
+                }
+            }
+            continue;
+        }
+        rest.push_str(line);
+        rest.push('\n');
+    }
+    lifted + &rest
 }
 
 /// The options a shader declares for itself, with the values to use when a
@@ -442,6 +516,29 @@ void main() {}",
         );
         assert!(!out.contains("#require"));
         assert!(out.contains("void main()"));
+    }
+
+    /// Every blur in the library samples `g_Texture0` from a function in
+    /// `common_blur.h`, which the file includes before it declares the
+    /// sampler. Left where it was written, that is an undeclared identifier
+    /// and the effect draws nothing.
+    #[test]
+    fn a_uniform_is_declared_before_the_include_that_samples_it() {
+        let source = "#include \"blur.h\"\nuniform sampler2D g_Texture0;\n";
+        let (out, _) = preprocess(source, Stage::Fragment, &BTreeMap::new(), |_| {
+            Some("vec4 blur() { return texSample2D(g_Texture0, vec2(0.0)); }\n".to_owned())
+        });
+        let declared = out.find("uniform sampler2D g_Texture0").unwrap();
+        assert!(declared < out.find("texSample2D(g_Texture0").unwrap());
+    }
+
+    /// A uniform that only exists under an option has to be put back under it,
+    /// or a shader compiled without that option declares something it never
+    /// had and reads a texture nobody bound.
+    #[test]
+    fn a_hoisted_uniform_keeps_the_option_it_was_written_under() {
+        let out = hoist_uniforms("#if COPYBG\nuniform sampler2D g_Texture2;\n#endif\nvoid main() {}\n");
+        assert!(out.starts_with("#if (COPYBG)\nuniform sampler2D g_Texture2;\n#endif\n"));
     }
 
     #[test]
