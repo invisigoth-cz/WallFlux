@@ -268,7 +268,7 @@ struct Object {
     /// the last pass is drawn a second time into a picture that stays.
     kept: bool,
     /// For a particle system that emits only where its parent's particles
-    /// are born or die.
+    /// are born or die, or rides along with them.
     answers: Option<Answer>,
     /// Set when the object draws what is already on the screen rather than a
     /// picture of its own: a layer that exists to carry effects.
@@ -277,9 +277,9 @@ struct Object {
     depth: [f32; 2],
 }
 
-/// A child system that bursts at its parent's particles: which object the
-/// parent is, which of its events it answers, and where the child sits
-/// inside it.
+/// A child system that answers to its parent's particles -- bursting where
+/// they are born or die, or riding along with them: which object the parent
+/// is, which of those it does, and where the child sits inside it.
 struct Answer {
     parent: usize,
     kind: ChildKind,
@@ -992,12 +992,24 @@ impl Scene {
                     && let Drawing::Particles(parent) = &before[answer.parent].drawing
                     && let Some(events) = parent.events()
                 {
-                    let places = match answer.kind {
-                        ChildKind::EventSpawn => &events.born,
-                        _ => &events.died,
-                    };
-                    for &at in places {
-                        system.burst_at(answer.inside(at), &sound);
+                    match answer.kind {
+                        ChildKind::EventFollow => {
+                            let hosts: Vec<_> = events
+                                .alive
+                                .iter()
+                                .map(|&(serial, at)| (serial, answer.inside(at)))
+                                .collect();
+                            system.follow(&hosts, STEP, &sound);
+                        }
+                        kind => {
+                            let places = match kind {
+                                ChildKind::EventSpawn => &events.born,
+                                _ => &events.died,
+                            };
+                            for &at in places {
+                                system.burst_at(answer.inside(at), &sound);
+                            }
+                        }
                     }
                 }
                 system.advance(STEP, &sound);
@@ -1014,7 +1026,7 @@ impl Scene {
 /// scene and its own place inside the parent added together. The parent may
 /// draw nothing itself -- some exist only to carry their children -- and the
 /// children still come. A child that bursts where its parent's particles are
-/// born or die is told which object its parent is.
+/// born or die, or rides along with them, is told which object its parent is.
 ///
 /// Says which object is the system itself, if it could be drawn.
 fn load_particles(
@@ -1051,10 +1063,6 @@ fn load_particles(
         // is nothing to burst at.
         let answers = match (child.kind, drawn) {
             (ChildKind::Static, _) => None,
-            (ChildKind::EventFollow, _) => {
-                skipped.push(format!("{}: EventFollow child {} is not run yet", object.name, child.file));
-                continue;
-            }
             (_, None) => continue,
             (kind, Some(parent)) => Some(Answer {
                 parent,
@@ -1085,7 +1093,10 @@ fn load_particles(
         if let Some((answer, made)) = answers.zip(made) {
             let parent = answer.parent;
             if let Drawing::Particles(system) = &mut objects[made].drawing {
-                system.wait_for_parent();
+                match answer.kind {
+                    ChildKind::EventFollow => system.ride_along(child.maxcount),
+                    _ => system.wait_for_parent(),
+                }
             }
             objects[made].answers = Some(answer);
             if let Drawing::Particles(system) = &mut objects[parent].drawing {

@@ -355,6 +355,10 @@ pub struct Child {
     pub origin: [f32; 3],
     pub scale: [f32; 3],
     pub angles: [f32; 3],
+    /// For a child riding along with its parent's particles, how many of
+    /// them it rides with at once. Twenty when the file says nothing, which
+    /// is Almamu's reading.
+    pub maxcount: usize,
 }
 
 /// When a child system runs. Only `Static` says nothing in the file.
@@ -595,6 +599,7 @@ impl ParticleSystem {
                 origin: vector(child, "origin", [0.0; 3]),
                 scale: vector(child, "scale", [1.0; 3]),
                 angles: vector(child, "angles", [0.0; 3]),
+                maxcount: num(child, "maxcount", 20.0).max(0.0) as usize,
             });
         }
 
@@ -1020,7 +1025,7 @@ mod tests {
         let p = ParticleSystem::parse(
             br#"{"children": [
                 {"name": "particles/presets/snowstormfog.json", "origin": "0 650 0"},
-                {"name": "particles/presets/sparktrails.json", "type": "eventspawn", "scale": "2 2 2"}
+                {"name": "particles/presets/sparktrails.json", "type": "eventspawn", "scale": "2 2 2", "maxcount": 1}
             ]}"#,
         )
         .unwrap();
@@ -1033,6 +1038,7 @@ mod tests {
                     origin: [0.0, 650.0, 0.0],
                     scale: [1.0; 3],
                     angles: [0.0; 3],
+                    maxcount: 20,
                 },
                 Child {
                     kind: ChildKind::EventSpawn,
@@ -1040,6 +1046,7 @@ mod tests {
                     origin: [0.0; 3],
                     scale: [2.0; 3],
                     angles: [0.0; 3],
+                    maxcount: 1,
                 },
             ]
         );

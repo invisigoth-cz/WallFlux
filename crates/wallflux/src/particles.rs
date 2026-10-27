@@ -95,6 +95,11 @@ struct Particle {
     /// Where this particle sits in an oscillation: its frequency, how far it
     /// swings, and where in the wave it starts.
     wobble: [f32; 3],
+    /// Its number in the system, for a child riding along with it to find
+    /// it again from one step to the next.
+    serial: u32,
+    /// The parent's particle this one rides with, for a child that does.
+    host: Option<u32>,
 }
 
 /// The ranges the initializers draw a new particle's values from.
@@ -201,6 +206,20 @@ pub struct System {
     /// Where particles were born and died in the last step, kept only for a
     /// system with a child listening.
     events: Option<Events>,
+    /// Particles taken in since the system started, which numbers them.
+    serials: u32,
+    /// For a child riding along with its parent's particles: the ones it
+    /// rides with, and at most how many.
+    hosts: Vec<Host>,
+    ride_limit: usize,
+}
+
+/// One of a parent's particles a child rides along with.
+struct Host {
+    serial: u32,
+    at: [f32; 3],
+    /// What each emitter owes this host, as the emitters' own pair does.
+    owed: Vec<f32>,
 }
 
 /// Where a system's particles were born and where they died, in one step.
@@ -208,6 +227,8 @@ pub struct System {
 pub struct Events {
     pub born: Vec<[f32; 3]>,
     pub died: Vec<[f32; 3]>,
+    /// Every live particle by its number, after the step.
+    pub alive: Vec<(u32, [f32; 3])>,
 }
 
 impl System {
@@ -305,6 +326,9 @@ impl System {
             burst: false,
             waits: false,
             events: None,
+            serials: 0,
+            hosts: Vec::new(),
+            ride_limit: 0,
         }
     }
 
@@ -326,24 +350,105 @@ impl System {
     /// Lets out every emitter's all-at-once particles at `at`, which is in
     /// the system's own space.
     pub fn burst_at(&mut self, at: [f32; 3], sound: &Spectrum) {
+        self.burst(at, None, sound);
+    }
+
+    fn burst(&mut self, at: [f32; 3], host: Option<u32>, sound: &Spectrum) {
         let emitters = std::mem::take(&mut self.emitters);
         for (emitter, _) in &emitters {
-            let mut placed = emitter.clone();
-            placed.origin = std::array::from_fn(|i| emitter.origin[i] + at[i]);
             for _ in 0..emitter.instantaneous {
                 if self.live.len() >= self.maxcount {
                     break;
                 }
-                let particle = self.spawn(&placed, sound);
-                self.take_in(particle);
+                self.spawn_at(emitter, at, host, sound);
             }
         }
         self.emitters = emitters;
     }
 
+    /// A particle from `emitter` as if the emitter stood at `at`.
+    fn spawn_at(&mut self, emitter: &Emitter, at: [f32; 3], host: Option<u32>, sound: &Spectrum) {
+        let mut placed = emitter.clone();
+        placed.origin = std::array::from_fn(|i| emitter.origin[i] + at[i]);
+        let mut particle = self.spawn(&placed, sound);
+        particle.host = host;
+        self.take_in(particle);
+    }
+
+    /// Makes the system ride along with at most `limit` of its parent's
+    /// particles, emitting where each of them is and carried along by it.
+    pub fn ride_along(&mut self, limit: usize) {
+        self.waits = true;
+        self.ride_limit = limit;
+    }
+
+    /// Where the parent's particles are now, by number, in this system's own
+    /// space. Each particle riding with one is moved as far as its host
+    /// moved; one whose host has died goes with it; hosts not yet ridden are
+    /// taken up, to the limit, with the emitters' all-at-once particles; and
+    /// every host is emitted at as the emitters' rates say.
+    pub fn follow(&mut self, hosts: &[(u32, [f32; 3])], dt: f32, sound: &Spectrum) {
+        let now = |serial: u32| hosts.iter().find(|(s, _)| *s == serial).map(|(_, at)| *at);
+        let mut riding = std::mem::take(&mut self.hosts);
+        for particle in &mut self.live {
+            let Some(serial) = particle.host else {
+                continue;
+            };
+            let then = riding.iter().find(|h| h.serial == serial).map(|h| h.at);
+            match (now(serial), then) {
+                (Some(now), Some(then)) => {
+                    for axis in 0..3 {
+                        particle.position[axis] += now[axis] - then[axis];
+                    }
+                }
+                (Some(_), None) => {}
+                (None, _) => particle.age = particle.lifetime,
+            }
+        }
+        riding.retain_mut(|host| match now(host.serial) {
+            Some(at) => {
+                host.at = at;
+                true
+            }
+            None => false,
+        });
+        for &(serial, at) in hosts {
+            if riding.len() >= self.ride_limit {
+                break;
+            }
+            if riding.iter().any(|h| h.serial == serial) {
+                continue;
+            }
+            riding.push(Host {
+                serial,
+                at,
+                owed: vec![0.0; self.emitters.len()],
+            });
+            self.burst(at, Some(serial), sound);
+        }
+
+        let emitters = std::mem::take(&mut self.emitters);
+        for host in &mut riding {
+            for ((emitter, _), owed) in emitters.iter().zip(&mut host.owed) {
+                *owed += emitter.rate * loudness(emitter.audio, sound) * dt;
+                while *owed >= 1.0 {
+                    *owed -= 1.0;
+                    if self.live.len() >= self.maxcount {
+                        break;
+                    }
+                    self.spawn_at(emitter, host.at, Some(host.serial), sound);
+                }
+            }
+        }
+        self.emitters = emitters;
+        self.hosts = riding;
+    }
+
     /// A new particle joins the live ones, and is noted for a child that
     /// answers to births.
-    fn take_in(&mut self, particle: Particle) {
+    fn take_in(&mut self, mut particle: Particle) {
+        particle.serial = self.serials;
+        self.serials = self.serials.wrapping_add(1);
         if let Some(events) = &mut self.events {
             events.born.push(particle.position);
         }
@@ -535,6 +640,10 @@ impl System {
             events.died.extend(dead.map(|p| p.position));
         }
         self.live.retain(|p| p.age < p.lifetime);
+        if let Some(events) = &mut self.events {
+            events.alive.clear();
+            events.alive.extend(self.live.iter().map(|p| (p.serial, p.position)));
+        }
         self.write_vertices();
     }
 
@@ -626,6 +735,9 @@ impl System {
             drift: self.rng.next_f32(),
             spin: self.rng.range3(self.start.angular),
             wobble: std::array::from_fn(|_| self.rng.next_f32()),
+            // Both filled in as it joins the live ones.
+            serial: 0,
+            host: None,
         }
     }
 
@@ -1202,6 +1314,41 @@ mod tests {
         child.burst_at(died[0], &Spectrum::SILENT);
         assert_eq!(child.count(), 20);
         assert!(child.live.iter().all(|p| p.position == [100.0, 50.0, 0.0]));
+    }
+
+    /// A shooting star's glow: born with the star, carried with it, gone when
+    /// it goes -- and only one star ridden when the link says one.
+    #[test]
+    fn a_rider_is_carried_by_its_host_and_leaves_with_it() {
+        let mut parent = system(
+            r#"{"maxcount":2,"emitter":[{"name":"sphererandom","rate":0,"instantaneous":2,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":1,"max":1},
+                               {"name":"velocityrandom","min":"100 0 0","max":"100 0 0"}],
+                "operator":[{"name":"movement","gravity":"0 0 0"}]}"#,
+        );
+        let mut child = system(
+            r#"{"maxcount":10,"emitter":[{"name":"sphererandom","rate":0,"instantaneous":1,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
+        );
+        parent.listen();
+        child.ride_along(1);
+        let step = 1.0 / 60.0;
+        let mut ride = |parent: &mut System, child: &mut System| {
+            parent.advance(step, &Spectrum::SILENT);
+            child.follow(&parent.events().unwrap().alive, step, &Spectrum::SILENT);
+            child.advance(step, &Spectrum::SILENT);
+        };
+        for _ in 0..30 {
+            ride(&mut parent, &mut child);
+        }
+        assert_eq!(child.count(), 1);
+        let host = parent.live[0].position[0];
+        assert!((child.live[0].position[0] - host).abs() < 1e-3, "{} against {host}", child.live[0].position[0]);
+        for _ in 0..40 {
+            ride(&mut parent, &mut child);
+        }
+        assert_eq!(parent.count(), 0);
+        assert_eq!(child.count(), 0);
     }
 
     #[test]
