@@ -8,23 +8,26 @@ from your Steam workshop folder and ships no assets of its own.
 
 ## Status
 
-Early, and not yet a usable program. It builds and opens an empty full-screen
-window. Finding the wallpapers in the Steam workshop folder is the next step,
-and nothing plays yet.
+Usable, and used daily on the machine it is written on. It sits in the
+panel as a tray icon; the icon opens a picker with every installed
+wallpaper, the Steam Workshop to browse and download from, playlists and a
+switch per screen. All three kinds of Wallpaper Engine wallpaper play --
+web, video and scene -- though scenes do not yet answer to music or to the
+mouse.
 
 ## How it works
 
 A Wallpaper Engine wallpaper of the web kind is HTML, CSS and JavaScript, and
 one of the video kind is an ordinary video file. A desktop already knows how
-to draw both, so WallFlux does not draw them itself: it hands web wallpapers
-to QtWebEngine, which is Chromium, and will hand video wallpapers to
-QtMultimedia. Web wallpapers come first, video after.
+to draw both, so WallFlux hands web wallpapers to QtWebEngine, which is
+Chromium, and video wallpapers to QtMultimedia.
 
-That is a deliberate change of direction. WallFlux began as a renderer of its
-own, written against OpenGL ES, that read Wallpaper Engine's packages and
-translated each wallpaper's shaders. It worked, but it meant owning a graphics
-engine to maintain forever. That work is kept on the branch
-`zaloha-puvodniho-pokusu-o-vlastni-engine` rather than thrown away.
+The scene kind is Wallpaper Engine's own: a package of images, particle
+systems, effects and shaders written in its own dialect. Nothing else draws
+those, so WallFlux has a renderer of its own for them, in Rust and OpenGL,
+under `crates/`. It reads the packages, translates the shaders and draws
+into the same window as the other two kinds, linked into the program rather
+than run beside it.
 
 ## Requirements
 
@@ -33,8 +36,10 @@ engine to maintain forever. That work is kept on the branch
 - layer-shell-qt, for its `org.kde.layershell` QML module. Needed at run
   time, not at build time: without it the window still opens, but as an
   ordinary one rather than as a wallpaper.
-- zlib and lz4
-- CMake 3.21 or newer, and a C++17 compiler
+- CMake 3.21 or newer, a C++20 compiler, and Rust with `cargo` to build
+  the scene renderer
+- For the Steam Workshop tab, Valve's Steamworks SDK -- on Arch,
+  `steamworks-sdk` from the AUR
 
 ## Build
 
@@ -56,7 +61,9 @@ silenced by default; `QT_LOGGING_RULES=js=true` brings it back.
 WallFlux is inspired by [linux-wallpaperengine][lwe] by Almamu, which has been
 playing Wallpaper Engine wallpapers on Linux for years and is the reason this
 seemed worth attempting at all. It is a separate project, under the same
-licence as this one, and nothing here is taken from it so far.
+licence as this one. Its code is read where Wallpaper Engine's own
+behaviour is not on the disk to be read -- the way a scene moves with the
+mouse follows the formula it arrived at -- and none of it is copied.
 
 Wallpaper Engine is a product of Wallpaper Engine Team and is not affiliated
 with this project.

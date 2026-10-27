@@ -6,6 +6,58 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-27
+
+### Added
+
+- **Scene wallpapers play.** Forty-one of the fifty-three wallpapers on the
+  development machine are Wallpaper Engine's own packed scene format, and
+  until now the picker listed them dimmed. They are drawn by WallFlux's own
+  renderer -- Rust and OpenGL, under `crates/`, linked into the program --
+  on the same surface as web and video wallpapers, so transitions, the
+  pause under a covering window and every ticked screen work the same.
+  Forty of the forty-one draw. The one that does not, Diablo IV Lilith, is
+  a single 3D model, and the program says so rather than showing black.
+- **What a scene is made of:** images, sprite sheets, particles with their
+  emitters, operators, ribbons and trails, effects chained pass after
+  pass, the composition and post-processing layers that put an effect over
+  everything drawn before them, and the values a wallpaper's own
+  `project.json` gives its settings -- which differ from the copy in the
+  scene for 205 of 365 of them.
+- **The renderer knows where the mouse is**, for the particles that clear
+  around the pointer and the scenes whose layers move with it. Nothing in
+  the program hands it the mouse yet; see below.
+
+### Fixed in the renderer, found while bringing it back
+
+- Effects whose second texture is something the renderer cannot make were
+  drawn against white instead of left out, which whitened eight
+  wallpapers -- Kratos's pauldrons and the Rainbow Six shields among them.
+- Every object with effects now has buffers of its own size, as Wallpaper
+  Engine gives every layer. Shared, screen-sized buffers put any effect
+  that names a place in the picture somewhere else, and cut the top off
+  some objects.
+- Shaders that declare a texture below the include that samples it, and
+  vertex shaders half a component narrower than their fragment shader,
+  both compile now -- Direct3D takes either and OpenGL takes neither.
+- A wallpaper whose settings are animated loads, instead of failing over
+  the curve.
+
+### Not yet
+
+- **Scenes are silent and blind to the mouse.** The renderer answers to the
+  music and the pointer, and nothing in the program hands it either yet.
+- Lighting and reflection are drawn flat. One wallpaper in the library
+  asks for them.
+
+### Changed
+
+- **Building needs `cargo`**, which compiles the renderer into the binary.
+  Running needs nothing new.
+- **The renderer is under the project's licence**, GPL-3.0-or-later with
+  the Steamworks linking exception. Its `Cargo.toml` said MIT, left over
+  from when it lived on a branch of its own.
+
 ## [0.11.0] — 2026-10-23
 
 ### Added
@@ -590,7 +642,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.8.0...v0.9.0
