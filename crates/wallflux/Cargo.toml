@@ -6,6 +6,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# A static library as well as the crate, for the Qt program to link: one file
+# to build into the binary, and nothing to install beside it.
+[lib]
+crate-type = ["rlib", "staticlib"]
+
 [dependencies]
 glow = "0.18.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }

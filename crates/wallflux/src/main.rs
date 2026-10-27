@@ -20,10 +20,8 @@
 
 mod audio;
 mod gpu;
-mod particles;
-mod render;
-mod texture;
-mod transform;
+
+use wallflux::render;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
