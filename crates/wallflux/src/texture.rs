@@ -42,6 +42,11 @@ pub struct Texture {
 }
 
 impl Texture {
+    /// The GL name, for giving back a texture this program made itself.
+    pub fn raw(&self) -> glow::Texture {
+        self.id
+    }
+
     /// Uploads one of a texture's images.
     ///
     /// A sprite sheet too big for one image is stored as several, and a frame

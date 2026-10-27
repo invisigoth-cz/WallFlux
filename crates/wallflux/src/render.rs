@@ -267,9 +267,9 @@ pub struct Scene {
     particles: Option<Buffers>,
     /// Stands in for a texture slot a pass leaves empty.
     white: Texture,
-    /// Made when a scene has an object with effects, and remade if the output
-    /// changes shape.
-    canvas: Option<Canvas>,
+    /// One per object, in the same order, made for those with effects and
+    /// remade when the object's size on screen changes.
+    canvases: Vec<Option<Canvas>>,
     /// The buffers this scene's effects ask for by name, and what to divide
     /// the output by for each.
     buffers: BTreeMap<String, u32>,
@@ -287,10 +287,19 @@ pub struct Scene {
 /// The pair of offscreen pictures an object with effects is drawn through.
 ///
 /// One holds what the object looks like, the next holds what an effect made of
-/// it, and they take turns. Both are the size of the output and an object uses
-/// only the corner of them it needs, which is why the quad's texture
-/// coordinates stop where the object does -- the same trick a texture stored
-/// with padding needs.
+/// it, and they take turns. Both are the size the object covers on screen, so
+/// an effect's texture coordinates run from nought to one across the object
+/// and nowhere else.
+///
+/// They used to be the size of the output and shared, with each object using
+/// the corner it needed and its coordinates stopping where it did. Any shader
+/// that works relative to where it is reading -- a blur, a tint -- could not
+/// tell. One that names a place -- `t2` turning about a centre of (0.16, 0.26),
+/// and the stock `spin`, `twirl`, `iris` and `godrays` -- found that place
+/// somewhere else in the object, read past its edge, and smeared what it
+/// found there into a rectangle. Wallpaper Engine gives every layer buffers
+/// of its own, which its names say: `_rt_imageLayerComposite_151_a` is layer
+/// 151's.
 ///
 /// Beside the pair are the buffers the effects asked for by name, which is
 /// where a chain of passes does its working out: a blur reads a quarter-sized
@@ -310,6 +319,25 @@ impl Target {
     /// The whole picture, which is more than the part of it an object uses.
     fn size(&self) -> (u32, u32) {
         (self.texture.width, self.texture.height)
+    }
+
+    unsafe fn free(&self, gl: &glow::Context) {
+        unsafe {
+            gl.delete_framebuffer(self.frame);
+            gl.delete_texture(self.texture.raw());
+        }
+    }
+}
+
+impl Canvas {
+    /// There is one of these per object with effects now, rather than one per
+    /// scene, so the old ones are worth giving back when they are remade.
+    unsafe fn free(&self, gl: &glow::Context) {
+        unsafe {
+            for target in self.targets.iter().chain(self.named.values()) {
+                target.free(gl);
+            }
+        }
     }
 }
 
@@ -541,7 +569,7 @@ impl Scene {
             buffer,
             particles,
             white: Texture::white(gl)?,
-            canvas: None,
+            canvases: Vec::new(),
             buffers,
             simulated: 0.0,
             sound: Spectrum::SILENT,
@@ -607,10 +635,19 @@ impl Scene {
             std::num::NonZeroU32::new(gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING) as u32)
                 .map(glow::NativeFramebuffer)
         };
-        if self.objects.iter().any(|o| !o.effects.is_empty())
-            && self.canvas.as_ref().is_none_or(|c| c.size != output)
-        {
-            self.canvas = unsafe { make_canvas(gl, output, &self.buffers) }.ok();
+        self.canvases.resize_with(self.objects.len(), || None);
+        for (object, canvas) in self.objects.iter().zip(&mut self.canvases) {
+            if object.effects.is_empty() {
+                continue;
+            }
+            let size = object.on_screen(&projection, output, output);
+            if canvas.as_ref().is_some_and(|c| c.size == size) {
+                continue;
+            }
+            if let Some(old) = canvas.take() {
+                unsafe { old.free(gl) };
+            }
+            *canvas = unsafe { make_canvas(gl, size, &self.buffers) }.ok();
         }
 
         unsafe {
@@ -625,13 +662,13 @@ impl Scene {
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::CULL_FACE);
         }
-        for object in &self.objects {
+        for (object, canvas) in self.objects.iter().zip(&self.canvases) {
             let model = transform::model(object.origin, object.size, object.scale, object.angles);
             let mvp = transform::multiply(&projection, &model);
             match (&object.drawing, &self.particles) {
                 (Drawing::Image, _) => unsafe {
                     gl.bind_vertex_array(Some(self.quad));
-                    match (&self.canvas, object.effects.is_empty()) {
+                    match (canvas, object.effects.is_empty()) {
                         (Some(canvas), false) => draw_through_effects(
                             gl,
                             object,
