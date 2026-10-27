@@ -349,6 +349,10 @@ pub struct Object {
     /// Set where the sound waits to be started by something else -- a
     /// script, in Wallpaper Engine -- rather than playing from the start.
     pub startsilent: bool,
+    /// What the scene changes about the particle system it places here. 462
+    /// objects in the library carry one -- the snow storm dimmed to half,
+    /// a fire made to burn twice as fast.
+    pub instanceoverride: Option<InstanceOverride>,
 
     // The naming fields. Read through `kind()` rather than directly.
     #[serde(rename = "image")]
@@ -366,6 +370,55 @@ pub struct Object {
 enum SoundField {
     One(String),
     Many(Vec<String>),
+}
+
+/// What a scene changes about one particle system it places, each a
+/// multiplier on what the system's own file says. Read the way Almamu's
+/// renderer reads them, which is the only account of them there is.
+///
+/// The colour is written two ways: `colorn` from nought to one, and `color`
+/// out of 255 in older scenes. Seventy objects say the one, seventeen the
+/// other, and not one says both -- so they are the same thing.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct InstanceOverride {
+    pub alpha: Bound<f32>,
+    pub size: Bound<f32>,
+    pub lifetime: Bound<f32>,
+    /// Particles per second.
+    pub rate: Bound<f32>,
+    /// How fast particles start out.
+    pub speed: Bound<f32>,
+    /// How many may be alive at once.
+    pub count: Bound<f32>,
+    pub colorn: Bound<Vector<3>>,
+    pub color: Option<Bound<Vector<3>>>,
+}
+
+impl InstanceOverride {
+    /// What the particles' colour is multiplied by, whichever way it was
+    /// written.
+    pub fn tint(&self) -> [f32; 3] {
+        match &self.color {
+            Some(color) => color.value.0.map(|c| c / 255.0),
+            None => self.colorn.value.0,
+        }
+    }
+}
+
+impl Default for InstanceOverride {
+    fn default() -> Self {
+        Self {
+            alpha: Bound::plain(1.0),
+            size: Bound::plain(1.0),
+            lifetime: Bound::plain(1.0),
+            rate: Bound::plain(1.0),
+            speed: Bound::plain(1.0),
+            count: Bound::plain(1.0),
+            colorn: Bound::plain(Vector([1.0; 3])),
+            color: None,
+        }
+    }
 }
 
 impl Default for Object {
@@ -392,6 +445,7 @@ impl Default for Object {
             mintime: 1.0,
             maxtime: 5.0,
             startsilent: false,
+            instanceoverride: None,
             image_field: None,
             particle_field: None,
             sound_field: None,
@@ -663,6 +717,27 @@ mod tests {
             }]
         }"#;
         assert_eq!(count_scripts(json).unwrap(), 4);
+    }
+
+    #[test]
+    fn an_instance_override_changes_only_what_it_names() {
+        let s = Scene::parse(
+            br#"{"objects":[
+                {"instanceoverride": {"alpha": 0.5, "colorn": "0.75 0.75 0.75", "id": 46}},
+                {"instanceoverride": null}
+            ]}"#,
+        )
+        .unwrap();
+        let o = s.objects[0].instanceoverride.as_ref().unwrap();
+        assert_eq!(o.alpha.value, 0.5);
+        assert_eq!(o.colorn.value.0, [0.75; 3]);
+        assert_eq!((o.size.value, o.rate.value, o.count.value), (1.0, 1.0, 1.0));
+        assert!(s.objects[1].instanceoverride.is_none());
+        assert_eq!(o.tint(), [0.75; 3]);
+
+        let old = Scene::parse(br#"{"objects":[{"instanceoverride": {"color": "255 51 0"}}]}"#)
+            .unwrap();
+        assert_eq!(old.objects[0].instanceoverride.as_ref().unwrap().tint(), [1.0, 0.2, 0.0]);
     }
 
     #[test]

@@ -23,6 +23,7 @@ use wpe_format::particle::{
     Animation, AudioResponse, Emitter, Initializer, Operator, Oscillation, ParticleSystem, Range,
     Shape, Spectrum, Turbulent, Vortex,
 };
+use wpe_format::scene::InstanceOverride;
 
 /// What a step's own strength is multiplied by, given what is playing.
 ///
@@ -195,7 +196,9 @@ pub struct System {
 }
 
 impl System {
-    pub fn new(definition: &ParticleSystem, seed: u32) -> Self {
+    /// A system as its file describes it, changed by what the scene says
+    /// about this one instance of it.
+    pub fn new(definition: &ParticleSystem, over: &InstanceOverride, seed: u32) -> Self {
         let mut start = Start::default();
         for initializer in &definition.initializers {
             match *initializer {
@@ -213,6 +216,33 @@ impl System {
                 Initializer::AlongControlPoints { .. } => {}
             }
         }
+        // On the ranges rather than on each particle, so a system the file
+        // gives no alpha or colour at all is changed too.
+        let times = |r: Range<f32>, by: f32| Range { min: r.min * by, max: r.max * by };
+        let times3 = |r: Range<[f32; 3]>, by: [f32; 3]| Range {
+            min: std::array::from_fn(|i| r.min[i] * by[i]),
+            max: std::array::from_fn(|i| r.max[i] * by[i]),
+        };
+        let speed = over.speed.value;
+        start.alpha = times(start.alpha, over.alpha.value);
+        start.size = times(start.size, over.size.value);
+        start.lifetime = times(start.lifetime, over.lifetime.value);
+        start.color = times3(start.color, over.tint());
+        start.velocity = times3(start.velocity, [speed; 3]);
+        if let Some(field) = &mut start.turbulent {
+            field.speed = times(field.speed, speed);
+        }
+        let emitters = definition
+            .emitters
+            .iter()
+            .cloned()
+            .map(|mut e| {
+                e.rate *= over.rate.value;
+                e.speed = times(e.speed, speed);
+                (e, 0.0)
+            })
+            .collect();
+        let maxcount = (definition.maxcount as f32 * over.count.value.max(0.0)).round() as usize;
         // The line runs between the first two control points. A system naming
         // the step without having them keeps the emitter's own placing.
         let line = definition
@@ -244,16 +274,11 @@ impl System {
                 },
                 _ => Ribbon::None,
             },
-            emitters: definition
-                .emitters
-                .iter()
-                .cloned()
-                .map(|e| (e, 0.0))
-                .collect(),
+            emitters,
             start,
             operators: definition.operators.clone(),
             animation: definition.animation,
-            maxcount: definition.maxcount,
+            maxcount,
             starttime: definition.starttime,
             live: Vec::new(),
             elapsed: 0.0,
@@ -886,7 +911,7 @@ mod tests {
 
     fn system(json: &str) -> System {
         let definition = ParticleSystem::parse(json.as_bytes()).unwrap();
-        System::new(&definition, 12345)
+        System::new(&definition, &InstanceOverride::default(), 12345)
     }
 
     /// Silence is the quiet end of what the step stated, never nothing: a
@@ -1046,6 +1071,27 @@ mod tests {
         run(&mut s, 1.0, 1.0 / 60.0);
         assert_eq!(s.count(), 5);
         assert_eq!(s.vertices().len(), 5 * 4 * FLOATS_PER_VERTEX);
+    }
+
+    /// The snow storm a scene dims to half, and a fire it doubles: what the
+    /// scene says multiplies what the file says, a system with no alpha of
+    /// its own included.
+    #[test]
+    fn the_scenes_override_multiplies_what_the_file_says() {
+        let definition = ParticleSystem::parse(
+            br#"{"maxcount":4,"emitter":[{"name":"sphererandom","rate":10,"distancemax":1}],
+                 "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
+        )
+        .unwrap();
+        let mut over = InstanceOverride::default();
+        over.alpha.value = 0.5;
+        over.rate.value = 2.0;
+        over.count.value = 2.0;
+        let mut s = System::new(&definition, &over, 12345);
+        run(&mut s, 0.5, 1.0 / 60.0);
+        // Twenty a second for half a second is ten, and the pool is eight.
+        assert_eq!(s.count(), 8);
+        assert!(s.live.iter().all(|p| p.alpha == 0.5));
     }
 
     #[test]
