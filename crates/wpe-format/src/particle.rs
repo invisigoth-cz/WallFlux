@@ -339,6 +339,32 @@ pub struct ParticleSystem {
     pub control_points: Vec<[f32; 3]>,
     /// Named steps this reader does not handle yet.
     pub unsupported: Vec<String>,
+    /// Other systems this one brings with it.
+    pub children: Vec<Child>,
+}
+
+/// A system another one brings with it, named by its file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Child {
+    pub kind: ChildKind,
+    pub file: String,
+    /// Where the child sits, how big and how turned, in its parent's space.
+    pub origin: [f32; 3],
+    pub scale: [f32; 3],
+    pub angles: [f32; 3],
+}
+
+/// When a child system runs. Only `Static` says nothing in the file.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChildKind {
+    /// Alongside its parent, all the time, as a system of its own.
+    Static,
+    /// A burst wherever a particle of the parent is born.
+    EventSpawn,
+    /// Riding along with each particle of the parent.
+    EventFollow,
+    /// A burst wherever a particle of the parent dies.
+    EventDeath,
 }
 
 impl ParticleSystem {
@@ -545,6 +571,30 @@ impl ParticleSystem {
             None => None,
         };
 
+        let mut children = Vec::new();
+        for child in array(&root, "children") {
+            let Some(file) = child.get("name").and_then(Value::as_str) else {
+                continue;
+            };
+            let kind = match child.get("type").and_then(Value::as_str) {
+                None | Some("static") => ChildKind::Static,
+                Some("eventspawn") => ChildKind::EventSpawn,
+                Some("eventfollow") => ChildKind::EventFollow,
+                Some("eventdeath") => ChildKind::EventDeath,
+                Some(other) => {
+                    unsupported.push(format!("child {other}"));
+                    continue;
+                }
+            };
+            children.push(Child {
+                kind,
+                file: file.to_owned(),
+                origin: vector(child, "origin", [0.0; 3]),
+                scale: vector(child, "scale", [1.0; 3]),
+                angles: vector(child, "angles", [0.0; 3]),
+            });
+        }
+
         Ok(Self {
             material: root
                 .get("material")
@@ -559,6 +609,7 @@ impl ParticleSystem {
             operators,
             renderer,
             animation,
+            children,
             unsupported,
         })
     }
@@ -957,6 +1008,36 @@ mod tests {
         // Nothing stated means the whole spectrum rather than one band.
         assert_eq!(audio.bands, (0, 15));
         assert_eq!(audio.exponent, 1.0);
+    }
+
+    #[test]
+    fn a_child_without_a_type_runs_alongside_its_parent() {
+        let p = ParticleSystem::parse(
+            br#"{"children": [
+                {"name": "particles/presets/snowstormfog.json", "origin": "0 650 0"},
+                {"name": "particles/presets/sparktrails.json", "type": "eventspawn", "scale": "2 2 2"}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            p.children,
+            [
+                Child {
+                    kind: ChildKind::Static,
+                    file: "particles/presets/snowstormfog.json".into(),
+                    origin: [0.0, 650.0, 0.0],
+                    scale: [1.0; 3],
+                    angles: [0.0; 3],
+                },
+                Child {
+                    kind: ChildKind::EventSpawn,
+                    file: "particles/presets/sparktrails.json".into(),
+                    origin: [0.0; 3],
+                    scale: [2.0; 3],
+                    angles: [0.0; 3],
+                },
+            ]
+        );
     }
 
     #[test]

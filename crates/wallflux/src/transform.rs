@@ -127,8 +127,8 @@ pub fn unapply_flat(m: &Matrix, to: [f32; 2]) -> Option<[f32; 2]> {
     Some([(x * m[5] - y * m[4]) / det, (y * m[0] - x * m[1]) / det])
 }
 
-/// Where a point lands after a transform, for checking one without a GPU.
-#[cfg(test)]
+/// Where a point lands after a transform: a child particle system's place in
+/// the scene, and a check of one without a GPU.
 pub fn apply(m: &Matrix, p: [f32; 3]) -> [f32; 3] {
     let mut out = [0.0; 3];
     for (row, slot) in out.iter_mut().enumerate() {

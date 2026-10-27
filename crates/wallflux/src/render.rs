@@ -12,6 +12,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use glow::HasContext;
+use wpe_format::particle::ChildKind;
 use wpe_format::particle::Renderer as ParticleRenderer;
 use wpe_format::particle::Spectrum;
 use wpe_format::scene::ObjectKind;
@@ -580,10 +581,7 @@ impl Scene {
             }
             match object.kind() {
                 ObjectKind::Particle(file) => {
-                    match load_particles(gl, &resolve, object, &file, &mut skipped) {
-                        Some(built) => objects.push(built),
-                        None => continue,
-                    }
+                    load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped);
                     continue;
                 }
                 ObjectKind::Image(_) => {}
@@ -970,21 +968,75 @@ impl Scene {
 
 /// Builds the particle object a scene names, or nothing if this renderer
 /// cannot draw it yet.
+/// A particle system and the systems it brings with it, each an object of its
+/// own: the parent first, then its children in the order the file lists them.
+///
+/// A child is loaded as its parent would be, with the parent's place in the
+/// scene and its own place inside the parent added together. The parent may
+/// draw nothing itself -- some exist only to carry their children -- and the
+/// children still come.
 fn load_particles(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
     object: &wpe_format::scene::Object,
     path: &str,
+    depth: u32,
+    objects: &mut Vec<Object>,
     skipped: &mut Vec<String>,
-) -> Option<Object> {
-    let bytes = resolve.get(path)?;
+) {
+    let Some(bytes) = resolve.get(path) else {
+        return;
+    };
     let definition = match ParticleSystem::parse(&bytes) {
         Ok(d) => d,
         Err(e) => {
             skipped.push(format!("{}: {path}: {e}", object.name));
-            return None;
+            return;
         }
     };
+    if let Some(built) = build_particles(gl, resolve, object, &definition, skipped) {
+        objects.push(built);
+    }
+
+    let parent = transform::model(
+        object.origin.value.0,
+        [1.0, 1.0],
+        object.scale.value.0,
+        object.angles.value.0,
+    );
+    for (index, child) in definition.children.iter().enumerate() {
+        if child.kind != ChildKind::Static {
+            skipped.push(format!(
+                "{}: {:?} child {} is not run yet",
+                object.name, child.kind, child.file
+            ));
+            continue;
+        }
+        // Nothing in the library goes deeper than a child of a child, and a
+        // file that named itself would otherwise load for ever.
+        if depth >= 4 {
+            skipped.push(format!("{}: children nested too deep at {}", object.name, child.file));
+            continue;
+        }
+        let mut placed = object.clone();
+        // A number of its own, since a system is seeded from it: with its
+        // parent's, a child and its siblings would all emit in step.
+        placed.id = object.id.wrapping_mul(1_000_003).wrapping_add(index as i64 + 1);
+        placed.origin.value.0 = transform::apply(&parent, child.origin);
+        placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
+        placed.angles.value.0 = std::array::from_fn(|i| object.angles.value.0[i] + child.angles[i]);
+        load_particles(gl, resolve, &placed, &child.file, depth + 1, objects, skipped);
+    }
+}
+
+/// One particle system as an object, or None if it cannot be drawn.
+fn build_particles(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    object: &wpe_format::scene::Object,
+    definition: &ParticleSystem,
+    skipped: &mut Vec<String>,
+) -> Option<Object> {
     let mut trail = None;
     let form = match definition.renderer {
         ParticleRenderer::Sprite => Form::Sprite,
