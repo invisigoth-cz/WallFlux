@@ -6,6 +6,14 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A scene's own music plays.** Nineteen of the forty-one scenes carry
+  theirs inside `scene.pkg`; it is unpacked into the cache and played the
+  way the scene asks -- round and round, shuffled with a pause between
+  tracks, or once -- quiet when anything else is playing, paused under a
+  covering window, and once for the program rather than once per screen.
+
 ## [0.12.0] — 2026-10-27
 
 ### Added

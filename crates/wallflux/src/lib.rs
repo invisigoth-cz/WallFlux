@@ -10,5 +10,6 @@
 pub mod ffi;
 pub mod particles;
 pub mod render;
+pub mod sounds;
 pub mod texture;
 pub mod transform;

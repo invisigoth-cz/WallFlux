@@ -7,6 +7,7 @@
 #include <QQmlEngine>
 #include <QQuickFramebufferObject>
 #include <QUrl>
+#include <QVariantList>
 
 /// A scene wallpaper, drawn by the renderer under crates/.
 ///
@@ -55,3 +56,29 @@ private:
     bool m_running = true;
     QString m_error;
 };
+
+/// The music a scene wallpaper plays.
+///
+/// A scene keeps its sound inside `scene.pkg`, where a media player cannot
+/// reach it. The renderer reads the package and writes the files out to the
+/// cache; playing them is QML's, with the player video wallpapers use, and
+/// once for the program rather than once per screen.
+class SceneSounds : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+
+public:
+    explicit SceneSounds(QObject *parent = nullptr);
+
+    /// What the scene at `source` -- its `scene.pkg` -- plays: a list of
+    /// `{ files, mode, volume, mintime, maxtime, startsilent }`, one per
+    /// sound object, with `files` as URLs. Empty for a scene with no sound,
+    /// or one that cannot be read.
+    ///
+    /// Writes the files out the first time, which for a wallpaper carrying
+    /// an album is a moment's work on this thread.
+    Q_INVOKABLE QVariantList of(const QUrl &source) const;
+};
+

@@ -6,7 +6,11 @@
 
 #include "wallflux_scene.h"
 
+#include <QDir>
 #include <QElapsedTimer>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFileInfo>
 #include <QLoggingCategory>
 #include <QOpenGLContext>
@@ -14,6 +18,7 @@
 #include <QOpenGLFunctions>
 #include <QPointer>
 #include <QQuickOpenGLUtils>
+#include <QStandardPaths>
 
 #include <utility>
 
@@ -180,3 +185,44 @@ void SceneView::setError(const QString &error)
     m_error = error;
     emit errorChanged();
 }
+
+SceneSounds::SceneSounds(QObject *parent)
+    : QObject(parent)
+{
+}
+
+QVariantList SceneSounds::of(const QUrl &source) const
+{
+    if (!source.isLocalFile())
+        return {};
+    const QFileInfo package(source.toLocalFile());
+    const QByteArray folder = package.absolutePath().toUtf8();
+    // A folder per wallpaper, so that two scenes that both call their music
+    // sounds/theme.mp3 do not write over each other.
+    const QByteArray cache = (QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                              + QStringLiteral("/scenes/") + package.dir().dirName())
+                                 .toUtf8();
+
+    QByteArray json(4096, '\0');
+    size_t needed = wallflux_scene_sounds(folder.constData(), cache.constData(), json.data(),
+                                          size_t(json.size()));
+    if (needed >= size_t(json.size())) {
+        json.resize(qsizetype(needed) + 1);
+        needed = wallflux_scene_sounds(folder.constData(), cache.constData(), json.data(),
+                                       size_t(json.size()));
+    }
+    json.truncate(qsizetype(needed));
+
+    QVariantList sounds;
+    for (const QJsonValue &one : QJsonDocument::fromJson(json).array()) {
+        QVariantMap sound = one.toObject().toVariantMap();
+        QVariantList files;
+        for (const QVariant &file : sound.value(QStringLiteral("files")).toList())
+            files.append(QUrl::fromLocalFile(file.toString()));
+        sound.insert(QStringLiteral("files"), files);
+        sounds.append(sound);
+    }
+    qCInfo(lcScene) << "playing" << sounds.size() << "sounds of" << package.dir().dirName();
+    return sounds;
+}
+

@@ -340,6 +340,15 @@ pub struct Object {
     pub copybackground: bool,
     pub alignment: String,
     pub volume: Bound<f32>,
+    /// How a sound object plays its files: `loop` goes through them in
+    /// order and round again, `random` picks one, waits between `mintime`
+    /// and `maxtime` seconds after it and picks again, `single` plays once.
+    pub playbackmode: String,
+    pub mintime: f32,
+    pub maxtime: f32,
+    /// Set where the sound waits to be started by something else -- a
+    /// script, in Wallpaper Engine -- rather than playing from the start.
+    pub startsilent: bool,
 
     // The naming fields. Read through `kind()` rather than directly.
     #[serde(rename = "image")]
@@ -379,6 +388,10 @@ impl Default for Object {
             copybackground: false,
             alignment: String::from("center"),
             volume: Bound::plain(1.0),
+            playbackmode: String::from("loop"),
+            mintime: 1.0,
+            maxtime: 5.0,
+            startsilent: false,
             image_field: None,
             particle_field: None,
             sound_field: None,

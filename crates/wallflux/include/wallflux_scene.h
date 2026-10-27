@@ -25,6 +25,7 @@ bool wallflux_scene_draw(WallfluxScene *scene, uint32_t width, uint32_t height, 
 void wallflux_scene_point_at(WallfluxScene *scene, bool inside, float x, float y,
                              uint32_t width, uint32_t height);
 void wallflux_scene_free(WallfluxScene *scene);
+size_t wallflux_scene_sounds(const char *folder, const char *cache, char *out, size_t out_len);
 
 #ifdef __cplusplus
 }

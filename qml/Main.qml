@@ -112,6 +112,27 @@ Item {
         }
     }
 
+    // A scene's own music, once for the program rather than once per screen:
+    // a player on every surface would play it as many times over as there
+    // are monitors.
+    Repeater {
+        model: root.showingScene ? SceneSounds.of(Wallpapers.current.source) : []
+
+        delegate: SceneSound {
+            required property var modelData
+
+            files: modelData.files
+            mode: modelData.mode
+            volume: modelData.volume
+            mintime: modelData.mintime
+            maxtime: modelData.maxtime
+            startsilent: modelData.startsilent
+            silent: root.silent
+            covered: root.covered
+            loudness: picker.volume
+        }
+    }
+
     // Nothing is chosen at startup, by design: the program comes up as an
     // icon in the panel and the desktop keeps the wallpaper it already had
     // until somebody picks one from the grid.

@@ -13,6 +13,7 @@
 #include <QOpenGLFramebufferObject>
 #include <QQuickWindow>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTest>
 
 #include <cstdio>
@@ -139,6 +140,27 @@ private slots:
                  qPrintable(QStringLiteral("%1 from the direct drawing, %2 from it upside down")
                                 .arg(same)
                                 .arg(flipped)));
+    }
+
+    /// A scene's music is inside its package, out of a media player's
+    /// reach, and has to come out to be played. Arkham Knight carries one
+    /// track and loops it.
+    void unpacksTheMusicOfAScene()
+    {
+        const QUrl source = scenes().value(QStringLiteral("1562429365"));
+        if (source.isEmpty())
+            QSKIP("Arkham Knight is not on this machine");
+        QStandardPaths::setTestModeEnabled(true);
+
+        const QVariantList sounds = SceneSounds().of(source);
+        QCOMPARE(sounds.size(), 1);
+        const QVariantMap sound = sounds.first().toMap();
+        QCOMPARE(sound.value(QStringLiteral("mode")).toString(), QStringLiteral("loop"));
+        const QVariantList files = sound.value(QStringLiteral("files")).toList();
+        QCOMPARE(files.size(), 1);
+        const QFileInfo file(files.first().toUrl().toLocalFile());
+        QVERIFY2(file.exists() && file.size() > 1'000'000, qPrintable(file.filePath()));
+        QVERIFY(file.filePath().endsWith(QStringLiteral(".mp3")));
     }
 
     /// A scene with nothing in it the renderer can draw says why, rather

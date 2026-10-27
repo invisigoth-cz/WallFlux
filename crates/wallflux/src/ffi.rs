@@ -171,3 +171,54 @@ pub unsafe extern "C" fn wallflux_scene_free(scene: *mut WallfluxScene) {
         drop(unsafe { Box::from_raw(scene) });
     }
 }
+
+/// Writes the sounds the scene in `folder` plays into `cache`, and describes
+/// them as JSON in `out`: a list of `{files, mode, volume, mintime, maxtime,
+/// startsilent}`. Needs no OpenGL and may be called from any thread.
+///
+/// Returns the length the JSON needs, without its closing nought. Where that
+/// is not less than `out_len` nothing is written and the caller asks again
+/// with room enough. A scene that cannot be read plays nothing, which is
+/// `[]`, and says why on stderr.
+///
+/// # Safety
+/// `folder` and `cache` must be NUL-terminated paths, and `out` must hold
+/// `out_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wallflux_scene_sounds(
+    folder: *const c_char,
+    cache: *const c_char,
+    out: *mut c_char,
+    out_len: usize,
+) -> usize {
+    if folder.is_null() || cache.is_null() {
+        return 0;
+    }
+    // SAFETY: the caller said both are NUL-terminated.
+    let (folder, cache) = unsafe {
+        (
+            CStr::from_ptr(folder).to_string_lossy().into_owned(),
+            CStr::from_ptr(cache).to_string_lossy().into_owned(),
+        )
+    };
+    let json = catch_unwind(|| {
+        match crate::sounds::unpack(std::path::Path::new(&folder), std::path::Path::new(&cache)) {
+            Ok(sounds) => crate::sounds::to_json(&sounds),
+            Err(reason) => {
+                eprintln!("wallflux scene {folder}: no sound -- {reason}");
+                "[]".to_owned()
+            }
+        }
+    })
+    .unwrap_or_else(|_| "[]".to_owned());
+    let bytes = json.as_bytes();
+    if !out.is_null() && bytes.len() < out_len {
+        // SAFETY: the caller said `out` holds `out_len` bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), bytes.len());
+            *out.add(bytes.len()) = 0;
+        }
+    }
+    bytes.len()
+}
+

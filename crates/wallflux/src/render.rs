@@ -2369,7 +2369,7 @@ fn set_json(gl: &glow::Context, p: glow::Program, name: &str, value: &serde_json
     }
 }
 
-fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
+pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let mut found: Vec<_> = std::fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
         .flatten()

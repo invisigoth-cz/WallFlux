@@ -22,8 +22,12 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **Scene wallpapers** -- Wallpaper Engine's own packed format -- drawn by
   the renderer under `crates/`, into a `SceneView` on the same surface as
   the other two: transitions, pausing under a cover and every screen work
-  the same. Silent so far, and blind to the mouse: the renderer answers to
-  both, and nothing in the program hands it either yet.
+  the same. A scene's own music plays -- unpacked from its `scene.pkg`
+  into the cache by the renderer and played by `SceneSound`, once for the
+  program and not once per screen, in the scene's own `loop`, `random` or
+  `single` manner. What a scene does not do yet is answer to the music or
+  to the mouse: the renderer can, and nothing in the program hands it
+  either.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
   covers the screen; both come back on their own. Neither is a setting. The
@@ -225,7 +229,8 @@ nothing.
 src/main.cpp          WebEngine init and the single-copy lock
 src/desktop.h         Desktop: turning a window into a wallpaper
 src/desktop.cpp       the layer-shell settings, asked for per window
-src/sceneview.h       SceneView: a scene wallpaper as a QML item
+src/sceneview.h       SceneView: a scene wallpaper as a QML item, and
+                      SceneSounds: the music it carries, unpacked
 src/sceneview.cpp     the renderer driven from Qt's render thread
 src/wallpapercore.h   WallpaperKind::Kind, Wallpaper (Q_GADGET), WallpaperCore
 src/wallpapercore.cpp scanning Steam's folders, reading project.json
@@ -243,6 +248,7 @@ src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
 qml/Main.qml          the program: the tray icon, the picker, one surface
                       per screen, and the transitions they share
+qml/SceneSound.qml    one sound object of a scene, played as it asks
 qml/WallpaperSurface.qml  one screen's wallpaper: the layer-shell window,
                       the web view, the player, and what a transition
                       holds over them
@@ -1258,11 +1264,14 @@ the file. Everything after it should.
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-3. **Scene wallpapers: sound and the mouse.** Both reach the renderer
-   through calls that exist (`Scene::hear`, `wallflux_scene_point_at`) and
-   that nothing in the program makes yet: the spectrum has to come from
-   the speakers, and the mouse over a surface that takes no input has to
-   come from the compositor. Then the user properties the Settings tab
+3. **Scene wallpapers, in the order agreed on 27 October:** particle
+   systems that run child systems of their own (every one of the eight
+   scenes reported that day has them, 23 of 42 in the library), then the
+   music the scene answers to and the mouse. Both of the last two reach
+   the renderer through calls that exist (`Scene::hear`,
+   `wallflux_scene_point_at`) and that nothing in the program makes yet:
+   the spectrum has to come from the speakers, and the mouse over a
+   surface that takes no input has to come from the compositor. Then the user properties the Settings tab
    is for -- their starting values are already read from `project.json`.
 
 ### Small things seen and left
