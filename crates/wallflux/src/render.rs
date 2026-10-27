@@ -1273,7 +1273,7 @@ unsafe fn draw_through_effects(
     }
 }
 
-/// Builds every pass of every effect hung on an object, or none of them.
+/// Builds every pass of every effect hung on an object.
 ///
 /// An effect is a small chain: each pass draws the picture so far through a
 /// material of its own, into a buffer the effect names, and the last pass lands
@@ -1282,8 +1282,11 @@ unsafe fn draw_through_effects(
 /// every pass calls the picture it was handed -- is whichever of the pair holds
 /// what came in.
 ///
-/// Anything that will not build takes the whole object's effects with it, since
-/// half a chain looks worse than none.
+/// An effect that will not build is left out and the rest still run. It used
+/// to take the whole object's effects with it, on the theory that half a chain
+/// looks worse than none -- and Arkham Knight stood stock still, because one
+/// blur out of five wanted a buffer the renderer does not make, and took the
+/// sway and the electricity down with it.
 fn build_effects(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
@@ -1291,88 +1294,42 @@ fn build_effects(
     buffers: &mut BTreeMap<String, u32>,
     skipped: &mut Vec<String>,
 ) -> Vec<Step> {
-    let wanted: Vec<_> = object
+    // Built against two stand-ins -- the first of the pair for what comes in,
+    // the scene for where it goes -- because which buffers those really are
+    // depends on how many of the effects survive.
+    let (incoming, outgoing) = (Buffer::Canvas(0), Buffer::Screen);
+    let built: Vec<Vec<Step>> = object
         .effects
         .iter()
         .filter(|effect| effect.visible.value)
+        .filter_map(|effect| {
+            build_effect(gl, resolve, effect, &incoming, &outgoing, buffers)
+                .map_err(|e| skipped.push(format!("{}: effect {}: {e}", object.name, effect_name(effect))))
+                .ok()
+        })
         .collect();
+
+    let count = built.len();
     let mut steps = Vec::new();
-    for (index, effect) in wanted.iter().copied().enumerate() {
-        let name = effect_name(effect);
-        let Some(parsed) = resolve
-            .get(&effect.file)
-            .and_then(|bytes| wpe_format::Effect::parse(&bytes).ok())
-        else {
-            skipped.push(format!("{}: effect {name} could not be read", object.name));
-            return Vec::new();
-        };
+    for (index, effect) in built.into_iter().enumerate() {
         // Which of the pair this effect reads, and where it leaves its result:
         // the other one, or the scene itself if nothing follows it.
         let input = Buffer::Canvas(index % 2);
-        let output = match index + 1 == wanted.len() {
+        let output = match index + 1 == count {
             true => Buffer::Screen,
             false => Buffer::Canvas((index + 1) % 2),
         };
-        for fbo in &parsed.fbos {
-            let divisor = match fbo.scale >= 1.0 {
-                true => fbo.scale.round() as u32,
-                // One effect in the library states no scale at all. The names
-                // are the engine's own, and they say what they mean.
-                false => divisor_of(&fbo.name),
-            };
-            buffers.insert(fbo.name.clone(), divisor);
-        }
-        for (at, pass) in parsed.passes.iter().enumerate() {
-            let into = match pass.target.is_empty() {
-                true => output.clone(),
-                false => Buffer::Named(pass.target.clone()),
-            };
-            if pass.command == "copy" {
-                steps.push(Step {
-                    pass: None,
-                    into,
-                    reads: vec![(0, which_buffer(&pass.source, &input))],
-                });
-                continue;
+        let place = |buffer: Buffer| match buffer {
+            Buffer::Canvas(_) => input.clone(),
+            Buffer::Screen => output.clone(),
+            named => named,
+        };
+        for mut step in effect {
+            step.into = place(step.into);
+            for (_, from) in &mut step.reads {
+                *from = place(from.clone());
             }
-            if !pass.command.is_empty() {
-                skipped.push(format!(
-                    "{}: effect {name} asks for {}, which is not done",
-                    object.name, pass.command
-                ));
-                return Vec::new();
-            }
-            let mut reads: Vec<_> = pass
-                .bind
-                .iter()
-                .map(|bind| (bind.index as usize, which_buffer(&bind.name, &input)))
-                .collect();
-            // A pass that binds nothing to its first unit still draws what came
-            // in: that is what the engine had left bound there.
-            if !reads.iter().any(|(unit, _)| *unit == 0) {
-                reads.push((0, input.clone()));
-            }
-            // The scene's overrides line up with the effect's passes in order,
-            // commands counted among them, and may stop short of the last.
-            let built = resolve
-                .get(&pass.material)
-                .ok_or_else(|| format!("{} is missing", pass.material))
-                .and_then(|bytes| Material::parse(&bytes).map_err(|e| e.to_string()))
-                .and_then(|material| {
-                    let first = material.passes.first().ok_or("it has no passes")?;
-                    build_pass(gl, resolve, first, Kind::Effect, effect.passes.get(at))
-                });
-            match built {
-                Ok(built) => steps.push(Step {
-                    pass: Some(built),
-                    into,
-                    reads,
-                }),
-                Err(e) => {
-                    skipped.push(format!("{}: effect {name}: {e}", object.name));
-                    return Vec::new();
-                }
-            }
+            steps.push(step);
         }
     }
     // A buffer an effect binds without ever declaring it still has to exist,
@@ -1388,6 +1345,91 @@ fn build_effects(
         }
     }
     steps
+}
+
+/// Builds the passes of one effect, reading from `input` and ending in
+/// `output`, or says why it cannot be built.
+fn build_effect(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    effect: &wpe_format::scene::EffectRef,
+    input: &Buffer,
+    output: &Buffer,
+    buffers: &mut BTreeMap<String, u32>,
+) -> Result<Vec<Step>, String> {
+    let parsed = resolve
+        .get(&effect.file)
+        .and_then(|bytes| wpe_format::Effect::parse(&bytes).ok())
+        .ok_or("could not be read")?;
+    for fbo in &parsed.fbos {
+        let divisor = match fbo.scale >= 1.0 {
+            true => fbo.scale.round() as u32,
+            // One effect in the library states no scale at all. The names
+            // are the engine's own, and they say what they mean.
+            false => divisor_of(&fbo.name),
+        };
+        buffers.insert(fbo.name.clone(), divisor);
+    }
+    let mut steps = Vec::new();
+    for (at, pass) in parsed.passes.iter().enumerate() {
+        let into = match pass.target.is_empty() {
+            true => output.clone(),
+            false => Buffer::Named(pass.target.clone()),
+        };
+        if pass.command == "copy" {
+            steps.push(Step {
+                pass: None,
+                into,
+                reads: vec![(0, which_buffer(&pass.source, input))],
+            });
+            continue;
+        }
+        if !pass.command.is_empty() {
+            return Err(format!("asks for {}, which is not done", pass.command));
+        }
+        let mut reads: Vec<_> = pass
+            .bind
+            .iter()
+            .map(|bind| (bind.index as usize, which_buffer(&bind.name, input)))
+            .collect();
+        // A pass that binds nothing to its first unit still draws what came
+        // in: that is what the engine had left bound there.
+        if !reads.iter().any(|(unit, _)| *unit == 0) {
+            reads.push((0, input.clone()));
+        }
+        // The scene's overrides line up with the effect's passes in order,
+        // commands counted among them, and may stop short of the last.
+        //
+        // A slot the effect binds is the effect's, whatever the scene writes
+        // there. Arkham Knight's blur names `_rt_imageLayerComposite_12_a` in
+        // the slot its last pass binds `previous` to, and its godrays `_12_b`
+        // in theirs -- layer 12's own pair, the very one the bind already
+        // hands over -- and turning the effect down over a name for something
+        // it was getting anyway lost the blur and the rays.
+        let over = effect.passes.get(at).map(|over| {
+            let mut over = over.clone();
+            for bind in &pass.bind {
+                if let Some(slot) = over.textures.get_mut(bind.index as usize) {
+                    *slot = None;
+                }
+            }
+            over
+        });
+        let built = resolve
+            .get(&pass.material)
+            .ok_or_else(|| format!("{} is missing", pass.material))
+            .and_then(|bytes| Material::parse(&bytes).map_err(|e| e.to_string()))
+            .and_then(|material| {
+                let first = material.passes.first().ok_or("it has no passes")?;
+                build_pass(gl, resolve, first, Kind::Effect, over.as_ref())
+            })?;
+        steps.push(Step {
+            pass: Some(built),
+            into,
+            reads,
+        });
+    }
+    Ok(steps)
 }
 
 /// What a pass means by the buffer it names. `previous` is the picture the
