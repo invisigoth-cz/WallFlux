@@ -1,0 +1,182 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
+#include "sceneview.h"
+
+#include "wallflux_scene.h"
+
+#include <QElapsedTimer>
+#include <QFileInfo>
+#include <QLoggingCategory>
+#include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
+#include <QOpenGLFunctions>
+#include <QPointer>
+#include <QQuickOpenGLUtils>
+
+#include <utility>
+
+Q_LOGGING_CATEGORY(lcScene, "wallflux.scene")
+
+namespace {
+
+const void *lookUp(const char *name, void *)
+{
+    return reinterpret_cast<const void *>(QOpenGLContext::currentContext()->getProcAddress(name));
+}
+
+} // namespace
+
+/// Lives on the render thread and owns the scene there: loading it compiles
+/// shaders and uploads textures, which only the thread holding the context
+/// can do.
+class SceneRenderer : public QQuickFramebufferObject::Renderer
+{
+public:
+    ~SceneRenderer() override { wallflux_scene_free(m_scene); }
+
+    QOpenGLFramebufferObject *createFramebufferObject(const QSize &size) override
+    {
+        return new QOpenGLFramebufferObject(size);
+    }
+
+    /// The one moment both threads are still, so the only place the item is
+    /// read from.
+    void synchronize(QQuickFramebufferObject *item) override
+    {
+        auto *view = static_cast<SceneView *>(item);
+        m_view = view;
+
+        const QUrl source = view->m_source;
+        const QString folder = source.isLocalFile()
+                                   ? QFileInfo(source.toLocalFile()).absolutePath()
+                                   : QString();
+        if (folder != m_folder) {
+            m_folder = folder;
+            m_reload = true;
+        }
+        m_running = view->m_running;
+    }
+
+    void render() override
+    {
+        QOpenGLFunctions *gl = QOpenGLContext::currentContext()->functions();
+        if (m_reload)
+            load();
+
+        if (m_scene) {
+            // Seconds the scene has been running, which is not the same as
+            // seconds since it loaded: a covered screen stops its clock.
+            const qint64 since = m_clock.restart();
+            if (m_running)
+                m_seconds += since / 1000.0;
+            const QSize size = framebufferObject()->size();
+            if (!wallflux_scene_draw(m_scene, size.width(), size.height(), float(m_seconds))) {
+                // The renderer has said why on stderr already. One scene
+                // failing is not a reason to take the program down with it.
+                say(QStringLiteral("the renderer failed while drawing this wallpaper"));
+                wallflux_scene_free(std::exchange(m_scene, nullptr));
+            }
+        } else {
+            gl->glClearColor(0, 0, 0, 0);
+            gl->glClear(GL_COLOR_BUFFER_BIT);
+        }
+
+        // The renderer leaves its own buffers, programs and blending set,
+        // and the scene graph draws whatever comes next on the assumption
+        // that nobody touched them. Forgetting this shows up in the picker,
+        // not in the wallpaper.
+        QQuickOpenGLUtils::resetOpenGLState();
+
+        if (m_scene && m_running)
+            update();
+    }
+
+private:
+    void load()
+    {
+        m_reload = false;
+        wallflux_scene_free(std::exchange(m_scene, nullptr));
+        if (m_folder.isEmpty()) {
+            say({});
+            return;
+        }
+
+        char error[512] = {};
+        m_scene = wallflux_scene_load(m_folder.toUtf8().constData(), lookUp, nullptr, error,
+                                      sizeof error);
+        if (!m_scene) {
+            qCWarning(lcScene) << "cannot draw" << m_folder << "--" << error;
+            say(QString::fromUtf8(error));
+            return;
+        }
+        qCInfo(lcScene) << "drawing" << m_folder;
+        say({});
+        m_seconds = 0;
+        m_clock.start();
+    }
+
+    /// Hands the item why the scene cannot be drawn, or that it can.
+    ///
+    /// Through the item's own thread rather than in synchronize(): a
+    /// renderer asking to be drawn again is drawn again without being
+    /// synchronized first, so a reason left for synchronize() to pick up
+    /// waited for the next time somebody changed the item -- which, for a
+    /// wallpaper that failed, is never.
+    void say(const QString &error)
+    {
+        if (SceneView *view = m_view.data())
+            QMetaObject::invokeMethod(view, [view, error] { view->setError(error); },
+                                      Qt::QueuedConnection);
+    }
+
+    WallfluxScene *m_scene = nullptr;
+    /// The item, as of the last synchronize(); a queued call to a context
+    /// object that has gone is dropped rather than made.
+    QPointer<SceneView> m_view;
+    QString m_folder;
+    QElapsedTimer m_clock;
+    double m_seconds = 0;
+    bool m_reload = false;
+    bool m_running = true;
+};
+
+SceneView::SceneView(QQuickItem *parent)
+    : QQuickFramebufferObject(parent)
+{
+    // OpenGL draws from the bottom up, and Qt shows this framebuffer as it
+    // is: without this every scene came out upside down.
+    setMirrorVertically(true);
+}
+
+QQuickFramebufferObject::Renderer *SceneView::createRenderer() const
+{
+    return new SceneRenderer;
+}
+
+void SceneView::setSource(const QUrl &source)
+{
+    if (m_source == source)
+        return;
+    m_source = source;
+    emit sourceChanged();
+    update();
+}
+
+void SceneView::setRunning(bool running)
+{
+    if (m_running == running)
+        return;
+    m_running = running;
+    emit runningChanged();
+    update();
+}
+
+void SceneView::setError(const QString &error)
+{
+    if (m_error == error)
+        return;
+    m_error = error;
+    emit errorChanged();
+}

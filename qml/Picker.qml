@@ -608,7 +608,7 @@ Window {
     }
 
     /// Puts one on the desktop, which is what a second click means. Never
-    /// for a scene wallpaper: there is nothing here that can draw one.
+    /// for one that cannot be played -- a scene whose package is missing.
     ///
     /// The panel is left exactly as it was. A double click is not two
     /// clicks as far as the counting above is concerned: Qt delivers the

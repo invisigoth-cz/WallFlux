@@ -166,7 +166,10 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     // An untitled wallpaper is still worth listing, under its id.
     wallpaper.title = root.value(QLatin1StringView("title")).toString(wallpaper.id);
     wallpaper.kind = kind;
-    wallpaper.source = entryPoint(folder, root.value(QLatin1StringView("file")).toString());
+    // A scene's own file is inside scene.pkg; the package is what is drawn.
+    wallpaper.source = entryPoint(folder, wallpaper.kind == WallpaperKind::Scene
+                                              ? QStringLiteral("scene.pkg")
+                                              : root.value(QLatin1StringView("file")).toString());
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
 
     for (const QJsonValue &tag : root.value(QLatin1StringView("tags")).toArray())

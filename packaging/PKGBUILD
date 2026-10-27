@@ -41,7 +41,10 @@ depends=('breeze-icons' 'layer-shell-qt' 'libpulse' 'qt6-base'
          'steamworks-sdk')
 # qt6-tools is here for lrelease, which compiles the Czech catalogue into the
 # binary at build time. Nothing needs it afterwards.
-makedepends=('cmake' 'git' 'ninja' 'qt6-tools')
+#
+# cargo builds the scene renderer under crates/ into a static library that
+# goes inside the binary, so it is needed to build and never to run.
+makedepends=('cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
 
 # Not a dependency of running: WallFlux reads the folder Steam has already
 # filled and needs nothing of Steam's while it plays. It is a dependency of
@@ -60,10 +63,20 @@ optdepends=('steam: to install Wallpaper Engine and fetch wallpapers from its wo
 source=("$pkgname::git+file://$startdir/..")
 sha256sums=('SKIP')
 
+# The renderer's crates are fetched here, where makepkg allows the network,
+# so that the build itself can be held to exactly what Cargo.lock says.
+prepare() {
+    cd "$pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
 build() {
+    export RUSTUP_TOOLCHAIN=stable
     cmake -S "$pkgname" -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=None \
-        -DCMAKE_INSTALL_PREFIX=/usr
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DWALLFLUX_CARGO_FLAGS=--frozen
     cmake --build build
 }
 

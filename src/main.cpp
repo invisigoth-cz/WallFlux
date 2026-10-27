@@ -12,6 +12,7 @@
 #include <QNetworkDiskCache>
 #include <QQmlApplicationEngine>
 #include <QQmlNetworkAccessManagerFactory>
+#include <QQuickWindow>
 #include <QLoggingCategory>
 #include <QStandardPaths>
 #include <QtWebEngineQuick>
@@ -52,6 +53,12 @@ int main(int argc, char *argv[])
     // does. Called after QGuiApplication is built, this aborts at startup
     // instead of failing quietly, so it stays the first line of the program.
     QtWebEngineQuick::initialize();
+
+    // Scene wallpapers are drawn with OpenGL into the scene graph's own
+    // context, so the scene graph has to be OpenGL. It already is on the
+    // machine this was written on; said out loud, because Qt is free to pick
+    // Vulkan elsewhere, and the scenes would then draw nothing at all.
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
     // A wallpaper is somebody else's JavaScript, and its console is its own
     // business: one of the three here reports a WebGL complaint several

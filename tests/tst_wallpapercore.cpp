@@ -84,7 +84,8 @@ void TestWallpaperCore::readsWhatIsThere()
                   {QStringLiteral("index.html"), QStringLiteral("preview.jpg")});
     // The library spells the type both ways; both have to land as Scene.
     makeWallpaper(steam.path(), QStringLiteral("222"),
-                  R"({"title":"B capital scene","type":"Scene","file":"scene.json"})");
+                  R"({"title":"B capital scene","type":"Scene","file":"scene.json"})",
+                  {QStringLiteral("scene.pkg")});
     // No title: the id stands in rather than the entry being dropped.
     makeWallpaper(steam.path(), QStringLiteral("333"), R"({"type":"video","file":"a.mp4"})",
                   {QStringLiteral("a.mp4")});
@@ -121,10 +122,9 @@ void TestWallpaperCore::readsWhatIsThere()
 
     QCOMPARE(found[2].title, QStringLiteral("B capital scene"));
     QCOMPARE(found[2].kind, WallpaperKind::Scene);
-    // scene.json lives inside scene.pkg, so there is nothing to point at.
-    QVERIFY(found[2].source.isEmpty());
-    QVERIFY(!found[2].hasFile());
-    QVERIFY2(!found[2].playable(), "a scene wallpaper offered itself as playable");
+    // scene.json lives inside scene.pkg, so the package is what is drawn.
+    QVERIFY(found[2].source.toLocalFile().endsWith(QStringLiteral("/222/scene.pkg")));
+    QVERIFY(found[2].playable());
 }
 
 void TestWallpaperCore::refusesAFileOutsideTheWallpaper()

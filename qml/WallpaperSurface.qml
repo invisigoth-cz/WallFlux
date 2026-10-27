@@ -13,7 +13,7 @@ import WallFlux
 /// One screen's worth of wallpaper.
 ///
 /// A layer-shell surface anchored to the whole of one screen, with the
-/// drawers for the two kinds WallFlux can play and the two things a
+/// drawers for the three kinds WallFlux can play and the two things a
 /// transition is made of. There is one of these per screen the wallpaper
 /// is wanted on; they come and go as monitors do.
 ///
@@ -31,6 +31,7 @@ Window {
     /// What is on it, handed down rather than read here.
     required property bool showingWeb
     required property bool showingVideo
+    required property bool showingScene
     required property bool playing
     required property bool silent
     required property bool covered
@@ -264,6 +265,23 @@ Window {
 
         onErrorOccurred: (error, errorString) =>
             console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
+    }
+
+    // A scene is drawn by the renderer under crates/, into this item, on
+    // the scene graph's own thread. Covered, its clock stops and nothing is
+    // drawn, which is what a video's pause is for the player above.
+    SceneView {
+        id: scene
+
+        anchors.fill: parent
+        visible: surface.showingScene
+        source: surface.showingScene ? Wallpapers.current.source : ""
+        running: surface.showingScene && !surface.covered
+
+        onErrorChanged: {
+            if (scene.error !== "")
+                console.warn("wallflux: cannot draw", Wallpapers.current.title, "--", scene.error)
+        }
     }
 
     // The two things a transition is made of, over everything else and in

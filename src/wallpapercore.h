@@ -29,7 +29,7 @@ enum Kind {
              ///< while nothing is chosen.
     Web,     ///< HTML, CSS and JavaScript. QtWebEngine draws these.
     Video,   ///< A plain video file. QtMultimedia draws these.
-    Scene,   ///< Wallpaper Engine's own packed format. Nothing here draws it.
+    Scene,   ///< Wallpaper Engine's own packed format, drawn by the renderer under crates/.
     Application, ///< A program of its own, shipped as a wallpaper. Nothing
                  ///< here runs one, and none were installed on the machine
                  ///< this was written on -- it is listed so the filter can
@@ -71,11 +71,11 @@ public:
     WallpaperKind::Kind kind = WallpaperKind::Unknown;
 
     /// Absolute path to the file that *is* the wallpaper: index.html for a
-    /// web one, the video file for a video one.
-    ///
-    /// Empty when there is nothing to point at -- which is the normal case
-    /// for a scene wallpaper, whose entry file lives inside scene.pkg rather
+    /// web one, the video file for a video one, scene.pkg for a scene -- the
+    /// file project.json names for a scene lives inside that package rather
     /// than on disk.
+    ///
+    /// Empty when there is nothing to point at.
     QUrl source;
 
     /// The still or animated image Wallpaper Engine shows for this one in
@@ -119,8 +119,6 @@ public:
 
     /// Whether the file this wallpaper is made of was found on disk.
     ///
-    /// Not a promise that it can be drawn: a scene wallpaper keeps its own
-    /// format even when the file is there.
     bool hasFile() const { return !source.isEmpty(); }
 
     /// Whether this is one we can actually put on the screen today.
@@ -130,7 +128,9 @@ public:
     /// repeated in QML so there is one answer, not two that can drift.
     bool playable() const
     {
-        return hasFile() && (kind == WallpaperKind::Web || kind == WallpaperKind::Video);
+        return hasFile()
+               && (kind == WallpaperKind::Web || kind == WallpaperKind::Video
+                   || kind == WallpaperKind::Scene);
     }
 };
 

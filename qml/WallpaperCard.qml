@@ -21,8 +21,8 @@ Item {
     required property var wallpaper
 
     /// Asked for when this card is clicked, whether it can be played or
-    /// not: a scene wallpaper cannot be put on the desktop but can still
-    /// be read about and given back.
+    /// not: one that cannot be put on the desktop can still be read about
+    /// and given back.
     signal chose(string id)
 
     /// Asked for when it is clicked twice, which is what puts a wallpaper
@@ -46,12 +46,12 @@ Item {
     /// can be ticked without hunting for the box on each one.
     property bool showTick: false
 
-    /// Whether this is one a click can do something with. A scene wallpaper
+    /// Whether this is one a click can do something with. One that is not
     /// is listed and nothing more.
     readonly property bool usable: card.wallpaper.playable
 
-    // The whole card dims, not just the preview: a scene wallpaper is here
-    // to say it exists, not to be chosen.
+    // The whole card dims, not just the preview: a wallpaper that cannot be
+    // played is here to say it exists, not to be chosen.
     opacity: card.usable ? 1 : 0.4
 
     /// The colour of the band when the pointer is somewhere else.
@@ -76,7 +76,7 @@ Item {
         preview: card.wallpaper.preview
         label: card.wallpaper.title
         // The band says whether this one can be played: green for yes, amber
-        // for the scene wallpapers that are only listed. It replaces a dot in
+        // for the ones that are only listed. It replaces a dot in
         // the corner, which said the same thing in a place nobody looks.
         //
         // Blue instead while the arrow keys are on this one. The band
@@ -102,7 +102,7 @@ Item {
     ///
     /// Out of the way until the pointer is on the card, and then it stays
     /// as long as it is ticked. Only on a wallpaper that can be played: a
-    /// playlist of scene wallpapers would be a quarter of an hour of
+    /// playlist of ones that cannot would be a quarter of an hour of
     /// nothing happening.
     Rectangle {
         id: box

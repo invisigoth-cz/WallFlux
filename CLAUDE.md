@@ -2,9 +2,9 @@
 
 Plays the Wallpaper Engine wallpapers somebody already owns, on Linux and
 Wayland, without Windows and without Wallpaper Engine running. C++20, Qt 6,
-GPL-3.0-or-later, eighteen files and about two thousand lines -- plus,
-under `crates/`, a scene renderer in Rust that the program does not call
-yet. Target
+GPL-3.0-or-later -- plus, under `crates/`, the scene renderer in Rust,
+linked into the binary.
+Target
 machine is CachyOS with KDE Plasma 6.7 on Wayland, and that is where
 everything below was measured.
 
@@ -19,6 +19,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 
 - **Web wallpapers** (`index.html` + JavaScript) drawn by QtWebEngine.
 - **Video wallpapers** drawn by QtMultimedia, looping, with their sound on.
+- **Scene wallpapers** -- Wallpaper Engine's own packed format -- drawn by
+  the renderer under `crates/`, into a `SceneView` on the same surface as
+  the other two: transitions, pausing under a cover and every screen work
+  the same. Silent so far, and blind to the mouse: the renderer answers to
+  both, and nothing in the program hands it either yet.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
   covers the screen; both come back on their own. Neither is a setting. The
@@ -208,10 +213,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   entry that has been verified through a real logout and login.
 
 Of the wallpapers found on the development machine -- 53 at the last count,
-and the number grows as the workshop is used -- 12 play: web and video. The other 41 are Wallpaper Engine's own packed **scene** format,
-which the program cannot play yet. They are listed in the picker, dimmed,
-and a click does nothing. The renderer under `crates/` draws 40 of them
-from the command line -- see the decision below.
+and the number grows as the workshop is used -- 12 are web and video and
+41 are **scene**, and all of them play but one: Diablo IV Lilith, whose
+only picture is a 3D model, which the renderer turns down with a reason.
+A scene whose `scene.pkg` is missing is listed, dimmed, and a click does
+nothing.
 
 ## Layout
 
@@ -219,6 +225,8 @@ from the command line -- see the decision below.
 src/main.cpp          WebEngine init and the single-copy lock
 src/desktop.h         Desktop: turning a window into a wallpaper
 src/desktop.cpp       the layer-shell settings, asked for per window
+src/sceneview.h       SceneView: a scene wallpaper as a QML item
+src/sceneview.cpp     the renderer driven from Qt's render thread
 src/wallpapercore.h   WallpaperKind::Kind, Wallpaper (Q_GADGET), WallpaperCore
 src/wallpapercore.cpp scanning Steam's folders, reading project.json
 src/language.h        Language: the EN/CZ switch, and what it has to call
@@ -269,6 +277,9 @@ tests/tst_playlists.cpp       what a playlist remembers and how long a
                               wallpaper stays -- five seconds of suite time
                               on purpose, see below
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
+tests/tst_sceneview.cpp       a scene drawn through the item, checked against
+                              the same scene drawn directly -- and the right
+                              way up
 i18n/wallflux_cs.ts   the Czech catalogue, compiled into the binary
 packaging/PKGBUILD    builds from this checkout's git history
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
@@ -276,7 +287,10 @@ Cargo.toml            the Rust workspace: the two crates below
 crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
                       materials, effects, particles, and the shader dialect
 crates/wallflux/      draws a scene with OpenGL; `examples/shot.rs` renders
-                      one wallpaper to a PNG, which is how it is checked
+                      one wallpaper to a PNG, which is how it is checked.
+                      `src/ffi.rs` and `include/wallflux_scene.h` are the
+                      four calls the program makes; `src/main.rs` is the
+                      old standalone viewer and is not part of the program
 tools/sweep.sh        `shot` over every scene wallpaper on the machine,
                       pictures and one log into the directory it is given
 ```
@@ -366,10 +380,19 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   renderer.** It is Rust with OpenGL, under `crates/`, and it was parked on
   the branch `zaloha-puvodniho-pokusu-o-vlastni-engine` from the day main
   was cleared for Qt until 27 October, when it came back into main by a
-  merge -- so `git log crates/` carries its whole history. **It is not
-  wired into the program yet.** The plan is to link it into the Qt
-  process rather than run it as a separate one; nothing of that is
-  written. CMake does not build it and the package does not carry it.
+  merge -- so `git log crates/` carries its whole history.
+
+  **It is linked into the program, not run beside it.** Cargo builds it
+  into a static library inside the CMake build tree, and `SceneView` -- a
+  `QQuickFramebufferObject` -- drives it on Qt's render thread with Qt's
+  own OpenGL context. Chosen over a separate process because a scene in
+  an item is one more thing on the one surface: the transitions grab it
+  the way they grab a video, and there are not two layer-shell surfaces
+  from two programs in the same layer. The price, said before it was
+  chosen: a renderer that crashes takes the tray icon and the picker with
+  it, which is why every call into it is behind `catch_unwind` and a scene
+  that panics is not drawn again. Building needs `cargo`; running needs
+  nothing more than before.
 - **Nothing plays at startup.** The program comes up as a tray icon and the
   desktop keeps the wallpaper it already had until somebody picks one. The
   choice is not remembered between runs, by design.
@@ -388,6 +411,32 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   used to write out.
 
 ## Traps, each one found the expensive way
+
+- **A `QQuickFramebufferObject` drawn with OpenGL comes out upside down.**
+  OpenGL draws from the bottom up and Qt 6 shows the framebuffer as it
+  is; `setMirrorVertically(true)` is what turns it over. Nothing about it
+  looks broken in code, and a scene upside down is still a scene, so
+  `tst_sceneview` draws the same wallpaper straight through the C
+  interface and checks the item against it: 0.86 apart the right way up,
+  47 apart the wrong way.
+
+- **A renderer that asks to be drawn again is drawn without being
+  synchronized.** `Renderer::update()` re-renders the framebuffer and
+  never calls `synchronize()`, so anything left there for the item to
+  pick up waits for somebody to change the item -- for a wallpaper that
+  failed to load, never. The reason goes to the item as a queued call.
+
+- **The scene graph has to be OpenGL, and is told so.** `main()` sets it
+  before any window exists. It is OpenGL on this machine without being
+  asked, which is exactly why it has to be said: elsewhere Qt is free to
+  pick Vulkan, and every scene would draw nothing with no error at all.
+
+- **A scene's bound values are written twice, and the scene's copy is
+  stale.** A value bound to a user property sits in `scene.json` beside
+  the binding and again in `project.json`, where the property is declared;
+  Wallpaper Engine plays the second. 205 of the 365 in this library
+  disagree -- one wallpaper's scene tints everything red at full
+  strength, and its project has the tint off.
 
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
@@ -1209,9 +1258,12 @@ the file. Everything after it should.
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-3. **Scene wallpapers**, the packed ones. The renderer is in `crates/` and
-   draws 40 of the 41 on this machine; what is left is in it, then the
-   bridge into the program.
+3. **Scene wallpapers: sound and the mouse.** Both reach the renderer
+   through calls that exist (`Scene::hear`, `wallflux_scene_point_at`) and
+   that nothing in the program makes yet: the spectrum has to come from
+   the speakers, and the mouse over a surface that takes no input has to
+   come from the compositor. Then the user properties the Settings tab
+   is for -- their starting values are already read from `project.json`.
 
 ### Small things seen and left
 

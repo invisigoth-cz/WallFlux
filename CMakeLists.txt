@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # speaks no other language and Wayland tells a window nothing about the ones
 # in front of it.
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core DBus Gui LinguistTools Multimedia Network Qml Quick WebEngineQuick Widgets)
+    Core DBus Gui LinguistTools Multimedia Network OpenGL Qml Quick WebEngineQuick Widgets)
 
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
@@ -90,6 +90,8 @@ qt_add_qml_module(wallflux
         src/screencover.cpp
         src/desktop.h
         src/desktop.cpp
+        src/sceneview.h
+        src/sceneview.cpp
         src/steamworks.h
         src/steamworks.cpp
         src/tags.h
@@ -105,6 +107,33 @@ qt_add_translations(wallflux TS_FILES i18n/wallflux_cs.ts)
 
 target_include_directories(wallflux PRIVATE src)
 
+# Scene wallpapers are drawn by the renderer under crates/, which cargo builds
+# into a static library inside this build tree: one file linked into the
+# binary, nothing installed beside it. Always in release -- a debug renderer
+# draws a heavy scene at a few frames a second, which is no way to judge one.
+# WALLFLUX_CARGO_FLAGS is where a package build says --frozen, and a machine
+# without the network says --offline.
+find_program(CARGO cargo REQUIRED)
+set(WALLFLUX_CARGO_FLAGS "--locked" CACHE STRING "Extra flags for cargo build")
+separate_arguments(wallflux_cargo_flags UNIX_COMMAND "${WALLFLUX_CARGO_FLAGS}")
+file(GLOB_RECURSE wallflux_rust_sources CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/crates/*.rs ${CMAKE_SOURCE_DIR}/crates/*/Cargo.toml)
+set(wallflux_scene_lib ${CMAKE_BINARY_DIR}/cargo/release/libwallflux.a)
+add_custom_command(
+    OUTPUT ${wallflux_scene_lib}
+    COMMAND ${CARGO} build --release --lib -p wallflux
+            --target-dir ${CMAKE_BINARY_DIR}/cargo ${wallflux_cargo_flags}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    DEPENDS ${wallflux_rust_sources} ${CMAKE_SOURCE_DIR}/Cargo.toml ${CMAKE_SOURCE_DIR}/Cargo.lock
+    COMMENT "Building the scene renderer with cargo"
+    USES_TERMINAL
+)
+add_custom_target(wallflux_scene_build DEPENDS ${wallflux_scene_lib})
+add_library(wallflux_scene STATIC IMPORTED)
+set_target_properties(wallflux_scene PROPERTIES IMPORTED_LOCATION ${wallflux_scene_lib})
+add_dependencies(wallflux_scene wallflux_scene_build)
+target_include_directories(wallflux PRIVATE crates/wallflux/include)
+
 # The number the footer's About icon shows, taken off project() above rather
 # than written out a third time: it already has to agree with the PKGBUILD's
 # pkgver, and two places is one too many as it is.
@@ -119,12 +148,18 @@ target_link_libraries(wallflux PRIVATE
     # The previews the workshop shows come off Steam's own servers, and
     # keeping them is what makes a page already looked at cost nothing.
     Qt6::Network
+    # The framebuffer a scene wallpaper is drawn into.
+    Qt6::OpenGL
     Qt6::Qml
     Qt6::Quick
     Qt6::WebEngineQuick
     # Only for the tray icon's fallback, which Qt.labs.platform needs linked
     # whether or not this desktop ends up using it.
     Qt6::Widgets
+    # The renderer, and what Rust's standard library wants from the system:
+    # `cargo rustc -- --print native-static-libs` is where this list is from.
+    wallflux_scene
+    gcc_s util rt pthread m dl
 )
 
 if(Qt6Test_FOUND)
@@ -163,6 +198,16 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_otheraudio PRIVATE src)
     target_link_libraries(tst_otheraudio PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME otheraudio COMMAND tst_otheraudio)
+
+    qt_add_executable(tst_sceneview
+        tests/tst_sceneview.cpp
+        src/sceneview.cpp
+        src/wallpapercore.cpp
+    )
+    target_include_directories(tst_sceneview PRIVATE src crates/wallflux/include)
+    target_link_libraries(tst_sceneview PRIVATE
+        Qt6::OpenGL Qt6::Qml Qt6::Quick Qt6::Test wallflux_scene gcc_s util rt pthread m dl)
+    add_test(NAME sceneview COMMAND tst_sceneview)
 
     qt_add_executable(tst_screencover
         tests/tst_screencover.cpp

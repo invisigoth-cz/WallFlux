@@ -20,15 +20,17 @@ import WallFlux
 Item {
     id: root
 
-    /// Which drawer the chosen wallpaper belongs to. Both want a file on
-    /// disk, so a kind alone is not enough to start on.
+    /// Which drawer the chosen wallpaper belongs to. All three want a file
+    /// on disk, so a kind alone is not enough to start on.
     readonly property bool showingWeb: Wallpapers.current.kind === WallpaperKind.Web
                                        && Wallpapers.current.hasFile
     readonly property bool showingVideo: Wallpapers.current.kind === WallpaperKind.Video
                                          && Wallpapers.current.hasFile
+    readonly property bool showingScene: Wallpapers.current.kind === WallpaperKind.Scene
+                                         && Wallpapers.current.hasFile
 
     /// Whether what is chosen is of a kind this program can draw today.
-    readonly property bool playing: root.showingWeb || root.showingVideo
+    readonly property bool playing: root.showingWeb || root.showingVideo || root.showingScene
 
     /// Whether the wallpaper should be making no sound.
     ///
@@ -101,6 +103,7 @@ Item {
             onScreen: modelData
             showingWeb: root.showingWeb
             showingVideo: root.showingVideo
+            showingScene: root.showingScene
             playing: root.playing
             silent: root.silent
             covered: root.covered
