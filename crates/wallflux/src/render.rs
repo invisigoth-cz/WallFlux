@@ -1611,6 +1611,12 @@ fn build_pass(
         }
         stages.push((stage, full));
     }
+    // The two stages have to agree on how wide a varying is before they can be
+    // linked, and a wallpaper's own shaders do not always say the same thing.
+    if let [(_, vertex), (_, fragment)] = stages.as_mut_slice() {
+        let fragment = fragment.clone();
+        wpe_format::shader::widen_varyings(vertex, &fragment);
+    }
     let program = unsafe { link(gl, &stages)? };
 
     // A uniform nobody sets reads as zero, so the defaults a shader declares

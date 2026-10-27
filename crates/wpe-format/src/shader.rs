@@ -380,6 +380,78 @@ fn expand(
     }
 }
 
+/// Makes the vertex stage write a varying as wide as the fragment stage reads
+/// it.
+///
+/// A wallpaper can ship a vertex shader declaring `varying vec2 v_TexCoord`
+/// against a fragment shader declaring `vec3` -- the component nobody reads is
+/// simply missing. Direct3D links that and leaves the odd component undefined;
+/// GLSL refuses the program outright, so an effect written that way draws
+/// nothing at all. Widening the declaration is the same bargain: the extra
+/// component is undefined, and the fragment shader never looks at it.
+///
+/// The vertex shader has to fill the varying through a swizzle for this to
+/// compile, which is what the ones in the wild do. Where it assigns the whole
+/// name, nothing is touched and the program fails to link as before.
+pub fn widen_varyings(vertex: &mut String, fragment: &str) {
+    let wanted: BTreeMap<&str, &str> = fragment
+        .lines()
+        .filter_map(varying_decl)
+        .map(|(ty, name)| (name, ty))
+        .collect();
+    if wanted.is_empty() {
+        return;
+    }
+    let mut out = String::with_capacity(vertex.len());
+    for line in vertex.lines() {
+        match varying_decl(line) {
+            Some((ty, name))
+                if wanted
+                    .get(name)
+                    .is_some_and(|wider| width(wider) > width(ty))
+                    && !assigns_whole(vertex, name) =>
+            {
+                out.push_str(&line.replacen(ty, wanted[name], 1));
+            }
+            _ => out.push_str(line),
+        }
+        out.push('\n');
+    }
+    *vertex = out;
+}
+
+/// The type and name a `varying vec2 v_TexCoord;` line declares.
+fn varying_decl(line: &str) -> Option<(&str, &str)> {
+    let rest = line.trim_start().strip_prefix("varying")?;
+    let (decl, _) = rest.split_once(';')?;
+    let mut words = decl.split_whitespace();
+    let (ty, name) = (words.next()?, words.next()?);
+    words.next().is_none().then_some((ty, name))
+}
+
+/// How many components a type carries, or nought for one this does not widen.
+fn width(ty: &str) -> usize {
+    match ty {
+        "float" => 1,
+        "vec2" => 2,
+        "vec3" => 3,
+        "vec4" => 4,
+        _ => 0,
+    }
+}
+
+/// Whether the shader ever writes the whole varying rather than a swizzle of
+/// it, which is what a wider declaration would stop compiling.
+fn assigns_whole(source: &str, name: &str) -> bool {
+    source.match_indices(name).any(|(at, _)| {
+        let before = source[..at].chars().next_back();
+        let after = source[at + name.len()..].trim_start();
+        before.is_none_or(|c| !c.is_alphanumeric() && c != '_' && c != '.')
+            && after.starts_with('=')
+            && !after.starts_with("==")
+    })
+}
+
 /// The file named by an `#include "..."` line, if the line is one.
 fn include_name(line: &str) -> Option<&str> {
     let rest = line.trim_start().strip_prefix("#include")?;
@@ -516,6 +588,26 @@ void main() {}",
         );
         assert!(!out.contains("#require"));
         assert!(out.contains("void main()"));
+    }
+
+    /// Three effects in the library ship a vertex shader half a component
+    /// narrower than the fragment shader that reads it. Direct3D links that
+    /// and GLSL does not, so the effect drew nothing until the declaration
+    /// was widened to match.
+    #[test]
+    fn the_vertex_stage_is_widened_to_what_the_fragment_stage_reads() {
+        let mut vert = "varying vec2 v_TexCoord;\nvoid main() { v_TexCoord.xy = a_TexCoord; }\n".to_owned();
+        widen_varyings(&mut vert, "varying vec3 v_TexCoord;\n");
+        assert!(vert.starts_with("varying vec3 v_TexCoord;"));
+    }
+
+    /// Widening a varying the vertex shader assigns whole would turn a link
+    /// error into a compile error, which says less about what is wrong.
+    #[test]
+    fn a_varying_written_whole_is_left_as_it_is() {
+        let mut vert = "varying vec2 v_TexCoord;\nvoid main() { v_TexCoord = a_TexCoord; }\n".to_owned();
+        widen_varyings(&mut vert, "varying vec3 v_TexCoord;\n");
+        assert!(vert.starts_with("varying vec2 v_TexCoord;"));
     }
 
     /// Every blur in the library samples `g_Texture0` from a function in
