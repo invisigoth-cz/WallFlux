@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Drawing a scene with the shaders the wallpaper brought with it.
 //!
 //! Each visible image object becomes a quad placed in the scene's own pixel

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Prints a preprocessed shader with line numbers, for reading an error log
 //! against the source the driver actually saw.
 //!

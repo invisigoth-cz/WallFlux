@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! An OpenGL ES context on a Wayland surface.
 //!
 //! Wallpaper Engine ships its shaders as GLSL, so the renderer speaks GL

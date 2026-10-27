@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Readers for the binary containers Wallpaper Engine ships its wallpapers in.
 //!
 //! The layouts here were derived from wallpaper files, not from any other

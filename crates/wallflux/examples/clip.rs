@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Renders a wallpaper to a video, driven by a piece of music, with that
 //! music on the soundtrack.
 //!

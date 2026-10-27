@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Simulating a particle system and laying it out the way its shaders read it.
 //!
 //! The particle shaders take no per-particle uniforms. Every value a particle

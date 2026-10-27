@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Draws a wallpaper on the background layer of a Wayland desktop.
 //!
 //! The surface is placed on the background layer, under everything the desktop

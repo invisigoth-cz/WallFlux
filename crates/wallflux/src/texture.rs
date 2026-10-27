@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Getting a wallpaper's textures onto the GPU.
 //!
 //! A `.tex` holds one of three things, and each takes a different road:

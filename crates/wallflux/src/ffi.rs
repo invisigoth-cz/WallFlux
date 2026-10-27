@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! The C interface the Qt program draws a scene through.
 //!
 //! Four calls, matching `include/wallflux_scene.h`: load a wallpaper, tell it

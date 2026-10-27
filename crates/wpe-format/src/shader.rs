@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Turning a wallpaper's shader into one a GLES 3 driver will accept.
 //!
 //! Wallpaper Engine's shaders are GLSL, which is why this renderer is built on

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! `effects/*/effect.json`: the post-processing chain applied to an object.
 //!
 //! An effect is a small render graph. Each pass draws a material into a render

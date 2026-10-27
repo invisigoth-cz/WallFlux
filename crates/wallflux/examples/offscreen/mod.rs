@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! A GL context with no window, for the tools that draw to a file.
 //!
 //! Shared by the tools rather than written out in each: what they render has

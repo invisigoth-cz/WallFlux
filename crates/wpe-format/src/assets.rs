@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 invisigoth
+// With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
+
 //! Finding the files a wallpaper refers to but does not contain.
 //!
 //! Scene wallpapers name shaders, models and materials that ship with Wallpaper

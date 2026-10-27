@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 invisigoth
 # Renders every scene wallpaper Steam has downloaded to a PNG and gathers what
 # the renderer said about each into one log. Two sweeps compared picture by
 # picture with `cmp` are how a change to the renderer is checked: whatever
