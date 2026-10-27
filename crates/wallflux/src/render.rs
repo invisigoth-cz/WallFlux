@@ -257,7 +257,36 @@ struct Object {
     /// order they are drawn. Empty unless all of them built, since half a
     /// chain looks worse than none.
     effects: Vec<Step>,
+    /// Set when the object draws what is already on the screen rather than a
+    /// picture of its own: a layer that exists to carry effects.
+    layer: Option<Layer>,
 }
+
+/// The three layers the editor offers for putting an effect over what is
+/// already drawn. Its own descriptions are the specification:
+///
+/// - *Post-processing Layer* (`fullscreenlayer`) "will always be aligned to
+///   the screen and will not move with the wallpaper". Its shader writes
+///   `a_Position` straight out as a clip-space position, so it is drawn with a
+///   quad that is already the whole screen and no matrix.
+/// - *Full Composition Layer* (`projectlayer`) covers the wallpaper, aligned
+///   to it rather than to the screen.
+/// - *Adjustable Composition Layer* (`composelayer`) is a rectangle of its own
+///   size.
+///
+/// The last two share `composelayer.vert`, which takes its position from the
+/// texture coordinate -- so it always fills whatever it is drawn into -- and
+/// uses the matrix only to work out where on the screen to read from. Put
+/// into an object's own buffers, that is the part of the screen under the
+/// layer, ready for its effects, which then land where the layer is placed.
+#[derive(Clone, Copy, PartialEq)]
+enum Layer {
+    Placed,
+    Screen,
+}
+
+/// The render target the layers read: everything drawn so far.
+const FULL_FRAME: &str = "_rt_FullFrameBuffer";
 
 pub struct Scene {
     objects: Vec<Object>,
@@ -270,6 +299,9 @@ pub struct Scene {
     /// One per object, in the same order, made for those with effects and
     /// remade when the object's size on screen changes.
     canvases: Vec<Option<Canvas>>,
+    /// What has been drawn so far, copied out for a layer to read. Made only
+    /// for a scene that has one, at the size of the output.
+    frame: Option<Target>,
     /// The buffers this scene's effects ask for by name, and what to divide
     /// the output by for each.
     buffers: BTreeMap<String, u32>,
@@ -530,6 +562,18 @@ impl Scene {
                     .map(|(w, h)| [w as f32, h as f32])
                     .unwrap_or([scene_size.0 as f32, scene_size.1 as f32]),
             };
+            let effects = build_effects(gl, &resolve, object, &mut buffers, &mut skipped);
+            let layer = match (model.passthrough, model.fullscreen) {
+                (false, _) => None,
+                (true, false) => Some(Layer::Placed),
+                (true, true) => Some(Layer::Screen),
+            };
+            // A layer with nothing on it would copy the screen back onto
+            // itself, and its shader cannot be drawn straight to the screen
+            // anyway: it fills whatever it is drawn into.
+            if layer.is_some() && effects.is_empty() {
+                continue;
+            }
             objects.push(Object {
                 name: object.name.clone(),
                 origin: object.origin.value.0,
@@ -542,7 +586,8 @@ impl Scene {
                 passes,
                 drawing: Drawing::Image,
                 trail: None,
-                effects: build_effects(gl, &resolve, object, &mut buffers, &mut skipped),
+                effects,
+                layer,
             });
         }
 
@@ -570,6 +615,7 @@ impl Scene {
             particles,
             white: Texture::white(gl)?,
             canvases: Vec::new(),
+            frame: None,
             buffers,
             simulated: 0.0,
             sound: Spectrum::SILENT,
@@ -635,6 +681,14 @@ impl Scene {
             std::num::NonZeroU32::new(gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING) as u32)
                 .map(glow::NativeFramebuffer)
         };
+        if self.objects.iter().any(|o| o.layer.is_some())
+            && self.frame.as_ref().is_none_or(|f| f.size() != output)
+        {
+            if let Some(old) = self.frame.take() {
+                unsafe { old.free(gl) };
+            }
+            self.frame = unsafe { make_target(gl, output) }.ok();
+        }
         self.canvases.resize_with(self.objects.len(), || None);
         for (object, canvas) in self.objects.iter().zip(&mut self.canvases) {
             if object.effects.is_empty() {
@@ -668,10 +722,20 @@ impl Scene {
             match (&object.drawing, &self.particles) {
                 (Drawing::Image, _) => unsafe {
                     gl.bind_vertex_array(Some(self.quad));
+                    // A layer reads everything drawn before it, so the
+                    // picture is taken now, not once a frame.
+                    let frame = match (object.layer, &self.frame) {
+                        (Some(_), Some(frame)) => {
+                            take_frame(gl, screen, frame, output);
+                            Some(&frame.texture)
+                        }
+                        _ => None,
+                    };
                     match (canvas, object.effects.is_empty()) {
                         (Some(canvas), false) => draw_through_effects(
                             gl,
                             object,
+                            frame,
                             canvas,
                             self.buffer,
                             &self.white,
@@ -839,6 +903,7 @@ fn load_particles(
         trail,
         // No particle system in the library carries one.
         effects: Vec::new(),
+        layer: None,
     })
 }
 
@@ -913,9 +978,26 @@ fn texture_slot(name: &str) -> Option<usize> {
 /// lands wherever the scene is being drawn, placed as the object always would
 /// have been.
 #[allow(clippy::too_many_arguments)]
+/// Copies what has been drawn so far into `frame`, for a layer to read.
+unsafe fn take_frame(
+    gl: &glow::Context,
+    screen: Option<glow::Framebuffer>,
+    frame: &Target,
+    output: (u32, u32),
+) {
+    unsafe {
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, screen);
+        gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(frame.frame));
+        let (w, h) = (output.0 as i32, output.1 as i32);
+        gl.blit_framebuffer(0, 0, w, h, 0, 0, w, h, glow::COLOR_BUFFER_BIT, glow::NEAREST);
+        gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
+    }
+}
+
 unsafe fn draw_through_effects(
     gl: &glow::Context,
     object: &Object,
+    frame: Option<&Texture>,
     canvas: &Canvas,
     buffer: glow::Buffer,
     white: &Texture,
@@ -961,8 +1043,18 @@ unsafe fn draw_through_effects(
         };
 
         into(&canvas.targets[0]);
+        // A layer draws the screen under it rather than a picture of its own.
+        // The placed kind's shader fills the buffer by itself and wants the
+        // real matrix, to know where on the screen it is; the screen kind's
+        // wants a quad that is already the whole buffer, and no matrix.
+        let handed: Vec<_> = frame.map(|f| (0, f)).into_iter().collect();
+        let (matrix, reach) = match object.layer {
+            None => (&FILL, 0.5),
+            Some(Layer::Placed) => (mvp, 0.5),
+            Some(Layer::Screen) => (&transform::IDENTITY, 1.0),
+        };
         for pass in &object.passes {
-            write_quad(gl, buffer, pass.covered, 0.5);
+            write_quad(gl, buffer, pass.covered, reach);
             // Straight onto an empty picture. Blending here would fold the
             // object's own alpha into its colour, and the effect that comes
             // after would fold it in a second time, which darkens everything
@@ -971,10 +1063,10 @@ unsafe fn draw_through_effects(
                 gl,
                 pass,
                 object,
-                &FILL,
+                matrix,
                 time,
                 white,
-                &[],
+                &handed,
                 sound,
                 Blending::Opaque,
             );
@@ -1028,12 +1120,18 @@ unsafe fn draw_through_effects(
                 None => {
                     gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
                     gl.viewport(0, 0, output.0 as i32, output.1 as i32);
-                    write_quad(gl, buffer, covered(read), 0.5);
+                    // A post-processing layer goes back over the whole
+                    // screen, wherever the scene put its origin.
+                    let (placed, reach) = match object.layer {
+                        Some(Layer::Screen) => (&transform::IDENTITY, 1.0),
+                        _ => (mvp, 0.5),
+                    };
+                    write_quad(gl, buffer, covered(read), reach);
                     draw_pass(
                         gl,
                         pass,
                         object,
-                        mvp,
+                        placed,
                         time,
                         white,
                         &bound,
@@ -1463,7 +1561,10 @@ fn build_pass(
         let Some(name) = name.as_deref().filter(|n| !n.is_empty()) else {
             continue;
         };
-        if wpe_format::effect::is_render_target(name) && (slot > 0 || kind != Kind::Effect) {
+        // The one target this renderer does make for an image: what is
+        // already on the screen, for a layer to read.
+        let frame = slot == 0 && kind == Kind::Image && name == FULL_FRAME;
+        if wpe_format::effect::is_render_target(name) && (slot > 0 || kind != Kind::Effect) && !frame {
             return Err(format!("needs the render target {name}"));
         }
     }
@@ -1495,6 +1596,8 @@ fn build_pass(
                 Some(texture) if texture.is_video() => {
                     return Err("its texture holds a video".into());
                 }
+                // The screen so far, which a layer is handed when it is drawn.
+                None if named == Some(FULL_FRAME) => {}
                 None if named.is_some() => {
                     return Err(format!("texture {} could not be read", named.unwrap()));
                 }
