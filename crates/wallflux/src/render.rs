@@ -1516,6 +1516,16 @@ fn build_pass(
             );
         }
     }
+    // Lighting and reflection are asked for by one wallpaper in the library and
+    // nothing here answers them: no light is uploaded, and the reflection path
+    // samples a mip-mapped copy of the frame that is never made. Left on, the
+    // shader multiplies the picture by lights that are all black and draws
+    // nothing at all. Turned off, it draws the picture -- which is what the
+    // wallpaper looks like without its shading, rather than a black screen.
+    if kind != Kind::Effect {
+        combos.insert("LIGHTING".into(), "0".into());
+        combos.insert("REFLECTION".into(), "0".into());
+    }
     // What was actually uploaded wins over anything the material says, since
     // this is the texture the shader will be sampling.
     for (slot, texture) in textures.iter().enumerate() {
