@@ -185,6 +185,9 @@ pub struct System {
     /// Particles born since the system started, which is the only thing that
     /// says where the next one goes on that line.
     born: u32,
+    /// Where the mouse is, in the system's own space, or nothing when there
+    /// is no mouse to follow -- a point hung on it then pulls nowhere.
+    pointer: Option<[f32; 3]>,
 }
 
 impl System {
@@ -254,7 +257,14 @@ impl System {
             vertices: Vec::new(),
             line,
             born: 0,
+            pointer: None,
         }
+    }
+
+    /// Says where the mouse is, in the system's own space, for the points that
+    /// follow it.
+    pub fn point_at(&mut self, pointer: Option<[f32; 3]>) {
+        self.pointer = pointer;
     }
 
     pub fn count(&self) -> usize {
@@ -317,6 +327,7 @@ impl System {
 
         let elapsed = self.elapsed;
         let ribbon = self.ribbon;
+        let pointer = self.pointer;
         for particle in &mut self.live {
             particle.age += dt;
             for operator in &self.operators {
@@ -369,9 +380,14 @@ impl System {
                         toward,
                         strength,
                         reach,
+                        pointer: follows,
                     } => {
-                        let away: [f32; 3] =
-                            std::array::from_fn(|i| particle.position[i] - toward[i]);
+                        let at = match (follows, pointer) {
+                            (false, _) => *toward,
+                            (true, Some(pointer)) => std::array::from_fn(|i| pointer[i] + toward[i]),
+                            (true, None) => continue,
+                        };
+                        let away: [f32; 3] = std::array::from_fn(|i| particle.position[i] - at[i]);
                         let distance =
                             (away[0] * away[0] + away[1] * away[1] + away[2] * away[2]).sqrt();
                         if distance > f32::EPSILON && distance < *reach {

@@ -234,12 +234,16 @@ pub enum Operator {
     },
     /// Swirls a particle about the system's origin.
     Vortex(Vortex),
-    /// Pulls a particle towards a fixed point, or pushes it away where the
+    /// Pulls a particle towards a point, or pushes it away where the
     /// strength is negative. Nothing past `reach` feels it.
     Attract {
+        /// Where the point is -- or, when it follows the pointer, how far
+        /// from the pointer.
         toward: [f32; 3],
         strength: f32,
         reach: f32,
+        /// The point rides on the mouse.
+        pointer: bool,
     },
     /// Beats a particle's alpha down and back up again.
     OscillateAlpha(Oscillation),
@@ -449,24 +453,20 @@ impl ParticleSystem {
                             .push("operator controlpointattract has no such control point".into());
                         continue;
                     };
-                    // The wallpaper hangs this point on the mouse, and there is
-                    // no mouse here yet. Pulling towards where it rests instead
-                    // would carve a hole through the middle of the object that
-                    // the wallpaper never asked for.
-                    if pointer {
-                        unsupported.push("operator controlpointattract follows the pointer".into());
-                        continue;
-                    }
                     let reach = num(step, "threshold", 0.0);
                     if reach <= 0.0 {
                         unsupported.push("operator controlpointattract states no reach".into());
                         continue;
                     }
                     let origin = vector(step, "origin", [0.0; 3]);
+                    // A point on the mouse is where the mouse is; its resting
+                    // offset is where the editor happened to leave it.
+                    let base = if pointer { [0.0; 3] } else { at };
                     Operator::Attract {
-                        toward: std::array::from_fn(|i| at[i] + origin[i]),
+                        toward: std::array::from_fn(|i| base[i] + origin[i]),
                         strength: num(step, "scale", 0.0),
                         reach,
+                        pointer,
                     }
                 }
                 "vortex" => Operator::Vortex(Vortex {
@@ -994,7 +994,7 @@ mod tests {
     /// the mouse, and most say so only in the flags. Pushing from where the
     /// mouse is not flattens whatever the push lands on.
     #[test]
-    fn attracting_to_a_point_the_mouse_carries_is_reported() {
+    fn a_point_the_mouse_carries_is_read_as_one() {
         for point in [
             r#"{"id":1,"offset":"0 0 0","locktopointer":true}"#,
             r#"{"id":1,"offset":"0 0 0","flags":1}"#,
@@ -1009,10 +1009,16 @@ mod tests {
                 }}"#
             );
             let p = ParticleSystem::parse(json.as_bytes()).unwrap();
-            assert!(p.operators.is_empty(), "{point} was applied");
+            assert!(p.unsupported.is_empty(), "{point}");
             assert_eq!(
-                p.unsupported,
-                ["operator controlpointattract follows the pointer"]
+                p.operators,
+                [Operator::Attract {
+                    toward: [0.0; 3],
+                    strength: -10000.0,
+                    reach: 128.0,
+                    pointer: true,
+                }],
+                "{point}"
             );
         }
     }
@@ -1046,7 +1052,8 @@ mod tests {
             [Operator::Attract {
                 toward: [100.0, 250.0, 0.0],
                 strength: -10000.0,
-                reach: 128.0
+                reach: 128.0,
+                pointer: false,
             }]
         );
         assert!(p.unsupported.is_empty());

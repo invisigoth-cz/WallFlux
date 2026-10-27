@@ -260,6 +260,30 @@ struct Object {
     /// Set when the object draws what is already on the screen rather than a
     /// picture of its own: a layer that exists to carry effects.
     layer: Option<Layer>,
+    /// How far the object moves with the mouse when the scene has parallax.
+    depth: [f32; 2],
+}
+
+/// The scene moving with the mouse, as `general` sets it up.
+///
+/// Wallpaper Engine's own formula is not on the disk. This is the one
+/// Almamu's linux-wallpaperengine arrived at (`CScene::renderFrame`,
+/// `CImage`, `CParticle::applyParallaxToModelMatrix`), which is the best
+/// reading available: the mouse's distance from the middle of the screen,
+/// times `amount` and `mouseinfluence`, eased towards at `delay` per second;
+/// each object moved by that times its own depth plus `amount`, in units of
+/// the scene's width.
+struct Parallax {
+    amount: f32,
+    delay: f32,
+    influence: f32,
+    /// Where the mouse is from the middle of the screen, as a fraction of it
+    /// along each of the scene's axes.
+    aim: [f32; 2],
+    /// How far the scene has eased towards that.
+    drift: [f32; 2],
+    /// When it last eased, so a frame that took longer eases further.
+    eased_at: f32,
 }
 
 /// The three layers the editor offers for putting an effect over what is
@@ -302,6 +326,8 @@ pub struct Scene {
     /// What has been drawn so far, copied out for a layer to read. Made only
     /// for a scene that has one, at the size of the output.
     frame: Option<Target>,
+    /// Set when the scene moves with the mouse.
+    parallax: Option<Parallax>,
     /// The buffers this scene's effects ask for by name, and what to divide
     /// the output by for each.
     buffers: BTreeMap<String, u32>,
@@ -590,6 +616,7 @@ impl Scene {
                 trail: None,
                 effects,
                 layer,
+                depth: object.parallax_depth.0,
             });
         }
 
@@ -618,6 +645,16 @@ impl Scene {
             white: Texture::white(gl)?,
             canvases: Vec::new(),
             frame: None,
+            parallax: (file.general.cameraparallax.value
+                && file.general.cameraparallaxmouseinfluence != 0.0)
+                .then_some(Parallax {
+                    amount: file.general.cameraparallaxamount,
+                    delay: file.general.cameraparallaxdelay,
+                    influence: file.general.cameraparallaxmouseinfluence,
+                    aim: [0.0; 2],
+                    drift: [0.0; 2],
+                    eased_at: 0.0,
+                }),
             buffers,
             simulated: 0.0,
             sound: Spectrum::SILENT,
@@ -631,6 +668,51 @@ impl Scene {
     /// anything leaves the scene running as it would in a silent room.
     pub fn hear(&mut self, sound: Spectrum) {
         self.sound = sound;
+    }
+
+    /// Says where the mouse is: a fraction of an output of size `output`
+    /// across and down from its top-left corner, or nothing when there is no
+    /// mouse over the wallpaper. Holds until it is said again.
+    ///
+    /// Eleven wallpapers here hang a particle force on the mouse -- most of
+    /// them a push that clears a hole wherever the pointer goes. Without one
+    /// that push is simply not applied: applied where the mouse rests in the
+    /// editor, it would carve a hole the wallpaper never asked for.
+    // Nothing on the screen passes a mouse yet; `shot` does, and the bridge
+    // into the Qt program will.
+    #[allow(dead_code)]
+    pub fn point_at(&mut self, pointer: Option<(f32, f32)>, output: (u32, u32)) {
+        let projection = transform::orthographic_cover(
+            (self.scene_size.0 as f32, self.scene_size.1 as f32),
+            (output.0 as f32, output.1 as f32),
+        );
+        // Clip space runs up the screen, the pointer down it.
+        let clip = pointer.map(|(x, y)| [x * 2.0 - 1.0, 1.0 - y * 2.0]);
+        if let Some(parallax) = &mut self.parallax {
+            // Worked out through the projection rather than by hand, so the
+            // sign of each axis is whatever the scene's own is.
+            let at = |c: [f32; 2]| transform::unapply_flat(&projection, c).unwrap_or([0.0; 2]);
+            let (middle, right, top) = (at([0.0, 0.0]), at([1.0, 0.0]), at([0.0, 1.0]));
+            let half = [(right[0] - middle[0]).abs(), (top[1] - middle[1]).abs()];
+            parallax.aim = match clip {
+                Some(c) => {
+                    let p = at(c);
+                    [
+                        (p[0] - middle[0]) / (2.0 * half[0]).max(f32::EPSILON),
+                        (p[1] - middle[1]) / (2.0 * half[1]).max(f32::EPSILON),
+                    ]
+                }
+                None => [0.0; 2],
+            };
+        }
+        for object in &mut self.objects {
+            if let Drawing::Particles(system) = &mut object.drawing {
+                let model = transform::model(object.origin, object.size, object.scale, object.angles);
+                let mvp = transform::multiply(&projection, &model);
+                let local = clip.and_then(|c| transform::unapply_flat(&mvp, c));
+                system.point_at(local.map(|[x, y]| [x, y, 0.0]));
+            }
+        }
     }
 
     pub fn object_names(&self) -> impl Iterator<Item = &str> {
@@ -718,8 +800,25 @@ impl Scene {
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::CULL_FACE);
         }
+        let drift = match &mut self.parallax {
+            Some(p) => {
+                let ease = (p.delay * (time - p.eased_at)).clamp(0.0, 1.0);
+                p.eased_at = time;
+                let goal = p.aim.map(|a| a * p.amount * p.influence);
+                p.drift = std::array::from_fn(|i| p.drift[i] + (goal[i] - p.drift[i]) * ease);
+                Some((p.drift, p.amount))
+            }
+            None => None,
+        };
+        let width = self.scene_size.0 as f32;
         for (object, canvas) in self.objects.iter().zip(&self.canvases) {
-            let model = transform::model(object.origin, object.size, object.scale, object.angles);
+            let mut origin = object.origin;
+            if let Some((drift, amount)) = drift {
+                for axis in 0..2 {
+                    origin[axis] += (object.depth[axis] + amount) * drift[axis] * width;
+                }
+            }
+            let model = transform::model(origin, object.size, object.scale, object.angles);
             let mvp = transform::multiply(&projection, &model);
             match (&object.drawing, &self.particles) {
                 (Drawing::Image, _) => unsafe {
@@ -906,6 +1005,12 @@ fn load_particles(
         // No particle system in the library carries one.
         effects: Vec::new(),
         layer: None,
+        // A particle system never stands still under the mouse, however deep
+        // it was put: the same floor Almamu's renderer puts under it.
+        depth: object
+            .parallax_depth
+            .0
+            .map(|d| if d.abs() < 0.65 { 0.65f32.copysign(d) } else { d }),
     })
 }
 

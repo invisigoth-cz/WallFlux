@@ -111,6 +111,18 @@ pub fn multiply(b: &Matrix, a: &Matrix) -> Matrix {
     out
 }
 
+/// The point a transform sends to `to`, in the plane it draws in -- which is
+/// all a mouse on a flat screen can say. None where the transform flattens
+/// that plane to a line.
+pub fn unapply_flat(m: &Matrix, to: [f32; 2]) -> Option<[f32; 2]> {
+    let det = m[0] * m[5] - m[4] * m[1];
+    if det.abs() < f32::EPSILON {
+        return None;
+    }
+    let (x, y) = (to[0] - m[12], to[1] - m[13]);
+    Some([(x * m[5] - y * m[4]) / det, (y * m[0] - x * m[1]) / det])
+}
+
 /// Where a point lands after a transform, for checking one without a GPU.
 #[cfg(test)]
 pub fn apply(m: &Matrix, p: [f32; 3]) -> [f32; 3] {
@@ -124,6 +136,17 @@ pub fn apply(m: &Matrix, p: [f32; 3]) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_point_comes_back_from_where_a_transform_sent_it() {
+        let m = multiply(
+            &orthographic_cover((1920.0, 1080.0), (640.0, 480.0)),
+            &model([300.0, 200.0, 0.0], [10.0, 10.0], [2.0, 3.0, 1.0], [0.0, 0.0, 30.0]),
+        );
+        let out = apply(&m, [0.25, -0.4, 0.0]);
+        let back = unapply_flat(&m, [out[0], out[1]]).unwrap();
+        assert!(close(back[0], 0.25) && close(back[1], -0.4), "{back:?}");
+    }
 
     fn close(a: f32, b: f32) -> bool {
         (a - b).abs() < 1e-4

@@ -14,6 +14,10 @@
 //! Left out, the scene is drawn in silence, which is what makes the same
 //! wallpaper give the same picture twice.
 //!
+//! `WALLFLUX_POINTER=x,y` puts the mouse over the wallpaper, as fractions of
+//! the picture across and down from its top-left corner. Left out, there is
+//! no mouse, for the same reason there is no sound.
+//!
 //! ```text
 //! cargo run -p wallflux --example shot -- <wallpaper-dir> <out.png> [width] [height] [seconds] [particle-budget] [frames] [loudness]
 //! ```
@@ -74,6 +78,16 @@ fn main() {
     let frames: usize = rest.get(4).and_then(|s| s.parse().ok()).unwrap_or(1);
     let loudness: f32 = rest.get(5).and_then(|s| s.parse().ok()).unwrap_or(0.0);
     let loudness = loudness.clamp(0.0, 1.0);
+    if let Ok(at) = std::env::var("WALLFLUX_POINTER") {
+        let parsed = at
+            .split_once(',')
+            .and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?)));
+        let Some(pointer) = parsed else {
+            eprintln!("WALLFLUX_POINTER wants x,y as fractions, got {at:?}");
+            std::process::exit(2);
+        };
+        scene.point_at(Some(pointer), (width, height));
+    }
     scene.hear(wpe_format::particle::Spectrum {
         left: [loudness; wpe_format::particle::AUDIO_BANDS],
         right: [loudness; wpe_format::particle::AUDIO_BANDS],
