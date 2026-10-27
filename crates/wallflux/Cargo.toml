@@ -1,0 +1,21 @@
+[package]
+name = "wallflux"
+description = "Live wallpapers for Linux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+glow = "0.18.0"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+libpulse-binding = "2.30.1"
+libpulse-simple-binding = "2.29.0"
+serde_json = "1.0.154"
+smithay-client-toolkit = "0.21.1"
+wayland-egl = "0.32.11"
+wpe-format = { version = "0.1.0", path = "../wpe-format" }
+
+[dev-dependencies]
+png = "0.18.1"

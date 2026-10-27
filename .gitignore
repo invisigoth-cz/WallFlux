@@ -6,3 +6,6 @@
 /packaging/src/
 /packaging/pkg/
 /packaging/*.pkg.tar.zst
+
+# The scene renderer, which cargo builds into here.
+/target/

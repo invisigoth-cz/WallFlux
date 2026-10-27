@@ -2,7 +2,9 @@
 
 Plays the Wallpaper Engine wallpapers somebody already owns, on Linux and
 Wayland, without Windows and without Wallpaper Engine running. C++20, Qt 6,
-GPL-3.0-or-later, eighteen files and about two thousand lines. Target
+GPL-3.0-or-later, eighteen files and about two thousand lines -- plus,
+under `crates/`, a scene renderer in Rust that the program does not call
+yet. Target
 machine is CachyOS with KDE Plasma 6.7 on Wayland, and that is where
 everything below was measured.
 
@@ -207,8 +209,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 
 Of the wallpapers found on the development machine -- 53 at the last count,
 and the number grows as the workshop is used -- 12 play: web and video. The other 41 are Wallpaper Engine's own packed **scene** format,
-which nothing here can read. They are listed in the picker, dimmed, and a
-click does nothing.
+which the program cannot play yet. They are listed in the picker, dimmed,
+and a click does nothing. The renderer under `crates/` draws 40 of them
+from the command line -- see the decision below.
 
 ## Layout
 
@@ -269,6 +272,11 @@ tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 i18n/wallflux_cs.ts   the Czech catalogue, compiled into the binary
 packaging/PKGBUILD    builds from this checkout's git history
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
+Cargo.toml            the Rust workspace: the two crates below
+crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
+                      materials, effects, particles, and the shader dialect
+crates/wallflux/      draws a scene with OpenGL; `examples/shot.rs` renders
+                      one wallpaper to a PNG, which is how it is checked
 ```
 
 `WallpaperCore` is a QML singleton named `Wallpapers`, declared with
@@ -352,10 +360,14 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   out loud before it was chosen: everyone who installs WallFlux gets
   Valve's SDK on disk whether they open the Steam tab or not.
 
-- **Qt draws the wallpapers. There is no renderer of our own.** An earlier
-  attempt wrote one in Rust with OpenGL; it is parked on the branch
-  `zaloha-puvodniho-pokusu-o-vlastni-engine` and only matters if scene
-  wallpapers are ever taken on.
+- **Qt draws web and video wallpapers; scene wallpapers are our own
+  renderer.** It is Rust with OpenGL, under `crates/`, and it was parked on
+  the branch `zaloha-puvodniho-pokusu-o-vlastni-engine` from the day main
+  was cleared for Qt until 27 October, when it came back into main by a
+  merge -- so `git log crates/` carries its whole history. **It is not
+  wired into the program yet.** The plan is to link it into the Qt
+  process rather than run it as a separate one; nothing of that is
+  written. CMake does not build it and the package does not carry it.
 - **Nothing plays at startup.** The program comes up as a tray icon and the
   desktop keeps the wallpaper it already had until somebody picks one. The
   choice is not remembered between runs, by design.
@@ -1106,6 +1118,7 @@ alone is enough and this problem does not exist.
 ```sh
 cmake --build build && ctest --test-dir build --output-on-failure
 /usr/lib/qt6/bin/qmllint -I build/ qml/Main.qml qml/Picker.qml
+cargo test --offline     # the scene renderer, when crates/ was touched
 ```
 
 Anything about stacking or what is on screen has to be measured, not
@@ -1187,8 +1200,9 @@ the file. Everything after it should.
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-3. **Scene wallpapers**, the packed ones. A direction to decide, not an
-   afternoon's work.
+3. **Scene wallpapers**, the packed ones. The renderer is in `crates/` and
+   draws 40 of the 41 on this machine; what is left is in it, then the
+   bridge into the program.
 
 ### Small things seen and left
 

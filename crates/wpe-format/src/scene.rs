@@ -1,0 +1,574 @@
+//! `scene.json`, the description of what a scene wallpaper draws.
+//!
+//! A scene is a camera, a block of global settings, and a flat list of objects.
+//! Each object is an image, a particle system, a sound or a text, and carries a
+//! transform plus an optional chain of post-processing effects. An image object
+//! names a model, which names a material, which names the textures and shader a
+//! pass needs — see [`crate::material`].
+//!
+//! Two shapes in this file would break a reader that assumed the obvious:
+//!
+//! - Vectors are **space-separated strings**, not arrays: `"1.00000 0.50000 0"`.
+//! - Almost any property may appear either as a plain value *or* as an object
+//!   carrying that value plus a binding. See [`Bound`].
+//!
+//! Fields absent from a file are not errors. Older wallpapers omit much of what
+//! newer ones write, and the `version` field is missing from more than half of
+//! them and inconsistent where present, so nothing branches on it.
+
+use serde::Deserialize;
+
+pub type Vec2 = [f32; 2];
+pub type Vec3 = [f32; 3];
+
+/// A property that may carry a binding alongside its value.
+///
+/// Wallpaper Engine lets a property be driven by a setting the viewer can change
+/// or by a JavaScript function. Both forms still store the plain value, so a
+/// reader that ignores the binding always has something correct to draw — across
+/// the wallpapers this was built from, not one binding lacked its value.
+#[derive(Debug, Clone, Default)]
+pub struct Bound<T> {
+    pub value: T,
+    /// The name of the user-facing setting driving this, if any.
+    pub user: Option<String>,
+    /// JavaScript driving this, if any. Holding it is not running it: until
+    /// there is a script engine, the value above is what gets drawn.
+    pub script: Option<String>,
+}
+
+impl<T> Bound<T> {
+    pub fn plain(value: T) -> Self {
+        Self {
+            value,
+            user: None,
+            script: None,
+        }
+    }
+
+    pub fn is_bound(&self) -> bool {
+        self.user.is_some() || self.script.is_some()
+    }
+}
+
+impl<'de, T> Deserialize<'de> for Bound<T>
+where
+    T: Deserialize<'de> + Default,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        /// `user` is usually a name, but may be a name plus a condition.
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum User {
+            Name(String),
+            Conditional { name: String },
+        }
+
+        // Option fields are already optional to serde; spelling out `default`
+        // here would make it demand `T: Default` from every caller.
+        #[derive(Deserialize)]
+        struct Wrapped<T> {
+            value: Option<T>,
+            user: Option<User>,
+            script: Option<String>,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Either<T> {
+            // The wrapped form must be tried first: a bare map would otherwise
+            // have to match T, and for string-encoded vectors it never would.
+            Wrapped(Wrapped<T>),
+            Plain(T),
+        }
+
+        Ok(match Either::<T>::deserialize(d)? {
+            Either::Plain(value) => Self::plain(value),
+            Either::Wrapped(w) => Self {
+                value: w.value.unwrap_or_default(),
+                user: w.user.map(|u| match u {
+                    User::Name(n) | User::Conditional { name: n } => n,
+                }),
+                script: w.script,
+            },
+        })
+    }
+}
+
+/// Deserializes the space-separated string form into a fixed-size array.
+///
+/// Numbers are accepted too, so a field written either way reads the same.
+mod vector {
+    use serde::de::{Deserialize, Deserializer, Error};
+
+    pub fn parse<const N: usize, E: Error>(s: &str) -> Result<[f32; N], E> {
+        let mut out = [0.0; N];
+        let mut parts = s.split_whitespace();
+        for (i, slot) in out.iter_mut().enumerate() {
+            let part = parts
+                .next()
+                .ok_or_else(|| E::custom(format!("vector {s:?} has fewer than {N} components")))?;
+            *slot = part
+                .parse()
+                .map_err(|_| E::custom(format!("component {i} of {s:?} is not a number")))?;
+        }
+        Ok(out)
+    }
+
+    pub fn de<'de, D: Deserializer<'de>, const N: usize>(d: D) -> Result<[f32; N], D::Error> {
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum Form {
+            Text(String),
+            Numbers(Vec<f32>),
+            Single(f32),
+            // An animated property keeps the curve the editor drew beside the
+            // value that plays without it. The curve is not read; dropping it
+            // leaves the property standing still, which is a wallpaper that
+            // draws rather than one that will not load at all.
+            Animated { value: serde_json::Value },
+        }
+        match Form::deserialize(d)? {
+            Form::Text(s) => parse(&s),
+            Form::Numbers(v) => {
+                let mut out = [0.0; N];
+                for (slot, got) in out.iter_mut().zip(v) {
+                    *slot = got;
+                }
+                Ok(out)
+            }
+            Form::Single(v) => Ok([v; N]),
+            Form::Animated { value } => de::<_, N>(value).map_err(D::Error::custom),
+        }
+    }
+}
+
+/// A vector written as `"x y z"`, usable anywhere a `[f32; N]` is wanted.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Vector<const N: usize>(pub [f32; N]);
+
+impl<const N: usize> Default for Vector<N> {
+    fn default() -> Self {
+        Self([0.0; N])
+    }
+}
+
+impl<'de, const N: usize> Deserialize<'de> for Vector<N> {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        vector::de::<D, N>(d).map(Self)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct Camera {
+    pub eye: Vector<3>,
+    pub center: Vector<3>,
+    pub up: Vector<3>,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            eye: Vector([0.0, 0.0, 1.0]),
+            center: Vector([0.0; 3]),
+            up: Vector([0.0, 1.0, 0.0]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct Projection {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Default for Projection {
+    fn default() -> Self {
+        Self {
+            width: 1920,
+            height: 1080,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, rename_all = "lowercase")]
+pub struct General {
+    pub clearcolor: Vector<3>,
+    pub clearenabled: Option<bool>,
+    pub ambientcolor: Vector<3>,
+    pub skylightcolor: Vector<3>,
+    pub orthogonalprojection: Projection,
+    pub fov: f32,
+    pub nearz: f32,
+    pub farz: f32,
+    pub zoom: f32,
+    pub bloom: Bound<bool>,
+    pub bloomstrength: Option<f32>,
+    pub bloomthreshold: Option<f32>,
+    pub hdr: Bound<bool>,
+    pub cameraparallax: Bound<bool>,
+    pub cameraparallaxamount: f32,
+    pub cameraparallaxdelay: f32,
+    pub cameraparallaxmouseinfluence: f32,
+    pub camerashake: Bound<bool>,
+    pub camerashakeamplitude: f32,
+    pub camerashakeroughness: f32,
+    pub camerashakespeed: f32,
+    pub camerafade: bool,
+    pub camerapreview: bool,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        Self {
+            clearcolor: Vector([0.0; 3]),
+            clearenabled: None,
+            ambientcolor: Vector([0.0; 3]),
+            skylightcolor: Vector([0.0; 3]),
+            orthogonalprojection: Projection::default(),
+            fov: 50.0,
+            nearz: 0.01,
+            farz: 10_000.0,
+            zoom: 1.0,
+            bloom: Bound::default(),
+            bloomstrength: None,
+            bloomthreshold: None,
+            hdr: Bound::default(),
+            cameraparallax: Bound::default(),
+            cameraparallaxamount: 0.5,
+            cameraparallaxdelay: 0.1,
+            cameraparallaxmouseinfluence: 0.5,
+            camerashake: Bound::default(),
+            camerashakeamplitude: 0.5,
+            camerashakeroughness: 1.0,
+            camerashakespeed: 3.0,
+            camerafade: true,
+            camerapreview: true,
+        }
+    }
+}
+
+/// A post-processing effect applied to an object.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct EffectRef {
+    pub file: String,
+    pub name: String,
+    pub id: i64,
+    pub visible: Bound<bool>,
+    /// Per-instance overrides of the effect's own passes, positionally matched.
+    ///
+    /// This is where a wallpaper turns an effect's options on, including audio
+    /// reactivity, so an effect read only from its own file looks inert.
+    pub passes: Vec<PassOverride>,
+}
+
+/// What a scene changes about one pass of an effect it uses.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct PassOverride {
+    pub id: i64,
+    pub combos: std::collections::BTreeMap<String, serde_json::Value>,
+    pub constantshadervalues: std::collections::BTreeMap<String, Bound<serde_json::Value>>,
+    pub textures: Vec<Option<String>>,
+}
+
+impl PassOverride {
+    /// Whether this override switches audio reactivity on. See
+    /// [`crate::material::Pass::combo`] for why case is ignored.
+    pub fn uses_audio(&self) -> bool {
+        self.combos
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("AUDIOPROCESSING"))
+            .is_some_and(|(_, v)| v != &serde_json::Value::from(0) && v != &serde_json::Value::Null)
+    }
+}
+
+impl Default for EffectRef {
+    fn default() -> Self {
+        Self {
+            file: String::new(),
+            name: String::new(),
+            id: 0,
+            visible: Bound::plain(true),
+            passes: Vec::new(),
+        }
+    }
+}
+
+/// What an object actually is. Exactly one of the naming fields is populated.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectKind {
+    /// Names a model under `models/`, which in turn names a material.
+    Image(String),
+    /// Names a particle definition under `particles/`.
+    Particle(String),
+    /// Names one or more audio files under `sounds/`.
+    Sound(Vec<String>),
+    Text,
+    /// Carries none of the known naming fields.
+    Empty,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct Object {
+    pub id: i64,
+    pub name: String,
+    pub origin: Bound<Vector<3>>,
+    pub angles: Bound<Vector<3>>,
+    pub scale: Bound<Vector<3>>,
+    pub size: Option<Vector<2>>,
+    pub color: Bound<Vector<3>>,
+    pub alpha: Bound<f32>,
+    pub brightness: f32,
+    pub visible: Bound<bool>,
+    /// How much this object lags the cursor. The most used feature in the
+    /// format, and what gives a scene its sense of depth.
+    #[serde(rename = "parallaxDepth")]
+    pub parallax_depth: Vector<2>,
+    pub effects: Vec<EffectRef>,
+    pub solid: bool,
+    pub perspective: bool,
+    pub copybackground: bool,
+    pub alignment: String,
+    pub volume: Bound<f32>,
+
+    // The naming fields. Read through `kind()` rather than directly.
+    #[serde(rename = "image")]
+    image_field: Option<String>,
+    #[serde(rename = "particle")]
+    particle_field: Option<String>,
+    #[serde(rename = "sound")]
+    sound_field: Option<SoundField>,
+    #[serde(rename = "text")]
+    text_field: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum SoundField {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl Default for Object {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            name: String::new(),
+            origin: Bound::default(),
+            angles: Bound::default(),
+            scale: Bound::plain(Vector([1.0; 3])),
+            size: None,
+            color: Bound::plain(Vector([1.0; 3])),
+            alpha: Bound::plain(1.0),
+            brightness: 1.0,
+            visible: Bound::plain(true),
+            parallax_depth: Vector([1.0; 2]),
+            effects: Vec::new(),
+            solid: false,
+            perspective: false,
+            copybackground: false,
+            alignment: String::from("center"),
+            volume: Bound::plain(1.0),
+            image_field: None,
+            particle_field: None,
+            sound_field: None,
+            text_field: None,
+        }
+    }
+}
+
+impl Object {
+    /// What this object draws or plays.
+    ///
+    /// The naming fields are present-but-null far more often than they are
+    /// absent, so emptiness is decided by the value rather than the key.
+    pub fn kind(&self) -> ObjectKind {
+        let named = |f: &Option<String>| f.as_deref().filter(|s| !s.is_empty()).map(str::to_owned);
+
+        if let Some(model) = named(&self.image_field) {
+            ObjectKind::Image(model)
+        } else if let Some(file) = named(&self.particle_field) {
+            ObjectKind::Particle(file)
+        } else if let Some(sound) = &self.sound_field {
+            let files = match sound {
+                SoundField::One(s) => vec![s.clone()],
+                SoundField::Many(v) => v.clone(),
+            };
+            let files: Vec<_> = files.into_iter().filter(|s| !s.is_empty()).collect();
+            if files.is_empty() {
+                ObjectKind::Empty
+            } else {
+                ObjectKind::Sound(files)
+            }
+        } else if self.text_field.is_some() {
+            ObjectKind::Text
+        } else {
+            ObjectKind::Empty
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct Scene {
+    pub camera: Camera,
+    pub general: General,
+    pub objects: Vec<Object>,
+}
+
+impl Scene {
+    pub fn parse(bytes: &[u8]) -> serde_json::Result<Self> {
+        serde_json::from_slice(bytes)
+    }
+}
+
+/// Counts the scripted properties in a scene, wherever they are.
+///
+/// Scripts turn up in at least fourteen distinct places: object transforms,
+/// particle instance overrides, text, the visibility of an effect and the
+/// constant shader values inside an effect pass. Listing those places would
+/// mean missing the fifteenth, so this walks the raw document for the key
+/// instead and stays right as wallpapers find new spots to put one.
+///
+/// Nothing here runs the scripts. The count says how much of a wallpaper will
+/// be drawn at a fixed value rather than animating.
+pub fn count_scripts(bytes: &[u8]) -> serde_json::Result<usize> {
+    fn walk(value: &serde_json::Value) -> usize {
+        match value {
+            serde_json::Value::Object(map) => {
+                let here = usize::from(map.contains_key("script"));
+                here + map
+                    .iter()
+                    .filter(|(k, _)| *k != "script")
+                    .map(|(_, v)| walk(v))
+                    .sum::<usize>()
+            }
+            serde_json::Value::Array(items) => items.iter().map(walk).sum(),
+            _ => 0,
+        }
+    }
+    Ok(walk(&serde_json::from_slice(bytes)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_string_encoded_vectors() {
+        let s = Scene::parse(br#"{"objects":[{"origin":"1 2 3","size":"640 480"}]}"#).unwrap();
+        assert_eq!(s.objects[0].origin.value.0, [1.0, 2.0, 3.0]);
+        assert_eq!(s.objects[0].size.unwrap().0, [640.0, 480.0]);
+    }
+
+    /// The same value is written both ways in the wild. Comparing the text
+    /// instead of the number once put the use of parallax out by a factor of
+    /// twelve, so this pins that they read as equal.
+    #[test]
+    fn differently_written_vectors_compare_equal() {
+        let a = Scene::parse(br#"{"objects":[{"parallaxDepth":"1.000 1.000"}]}"#).unwrap();
+        let b = Scene::parse(br#"{"objects":[{"parallaxDepth":"1.00000 1.00000"}]}"#).unwrap();
+        assert_eq!(a.objects[0].parallax_depth.0, b.objects[0].parallax_depth.0);
+        assert_eq!(a.objects[0].parallax_depth.0, [1.0, 1.0]);
+    }
+
+    /// One wallpaper writes an animated vector as the curve beside its value.
+    /// Reading only the three forms a static vector takes threw the whole
+    /// scene away over a colour that was never going to be looked at.
+    #[test]
+    fn an_animated_vector_reads_as_the_value_it_rests_at() {
+        let s = Scene::parse(
+            br#"{"objects":[{"origin":{"animation":{"c0":[{"frame":0,"value":0}]},"value":"1 2 3"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(s.objects[0].origin.value.0, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn a_property_may_be_plain_or_bound() {
+        let s = Scene::parse(
+            br#"{"objects":[
+                {"visible": false},
+                {"visible": {"value": true, "user": "toggle"}},
+                {"visible": {"value": false, "user": {"name": "cond", "condition": "0"}}}
+            ]}"#,
+        )
+        .unwrap();
+        assert!(!s.objects[0].visible.value && !s.objects[0].visible.is_bound());
+        assert!(s.objects[1].visible.value);
+        assert_eq!(s.objects[1].visible.user.as_deref(), Some("toggle"));
+        assert_eq!(s.objects[2].visible.user.as_deref(), Some("cond"));
+    }
+
+    #[test]
+    fn a_bound_property_still_yields_its_value() {
+        let s = Scene::parse(
+            br#"{"objects":[{"scale":{"script":"export function update(v){return v}","value":"2 2 2"}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(s.objects[0].scale.value.0, [2.0; 3]);
+        assert!(s.objects[0].scale.script.is_some());
+    }
+
+    #[test]
+    fn object_kind_ignores_present_but_empty_names() {
+        let s = Scene::parse(
+            br#"{"objects":[
+                {"image":"models/a.json","particle":null},
+                {"image":null,"particle":"particles/b.json"},
+                {"image":null,"particle":null},
+                {"sound":["sounds/a.mp3","sounds/b.mp3"]}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            s.objects[0].kind(),
+            ObjectKind::Image("models/a.json".into())
+        );
+        assert_eq!(
+            s.objects[1].kind(),
+            ObjectKind::Particle("particles/b.json".into())
+        );
+        assert_eq!(s.objects[2].kind(), ObjectKind::Empty);
+        assert!(matches!(s.objects[3].kind(), ObjectKind::Sound(f) if f.len() == 2));
+    }
+
+    #[test]
+    fn counts_scripts_wherever_they_hide() {
+        let json = br#"{
+            "general": {"bloom": {"script": "a", "value": true}},
+            "objects": [{
+                "scale": {"script": "b", "value": "1 1 1"},
+                "instanceoverride": {"rate": {"script": "c", "value": 1}},
+                "effects": [{"passes": [{"constantshadervalues": {"speed": {"script": "d", "value": 1}}}]}]
+            }]
+        }"#;
+        assert_eq!(count_scripts(json).unwrap(), 4);
+    }
+
+    #[test]
+    fn an_effect_reference_carries_its_overrides() {
+        let s = Scene::parse(
+            br#"{"objects":[{"effects":[{"file":"effects/pulse/effect.json",
+                 "passes":[{"combos":{"AUDIOPROCESSING":3},"textures":[null,"util/noise"]}]}]}]}"#,
+        )
+        .unwrap();
+        let p = &s.objects[0].effects[0].passes[0];
+        assert!(p.uses_audio());
+        assert_eq!(p.textures, vec![None, Some("util/noise".into())]);
+    }
+
+    #[test]
+    fn missing_fields_fall_back_to_defaults() {
+        let s = Scene::parse(b"{}").unwrap();
+        assert!(s.objects.is_empty());
+        assert_eq!(s.general.orthogonalprojection.width, 1920);
+        assert_eq!(s.camera.up.0, [0.0, 1.0, 0.0]);
+    }
+}
