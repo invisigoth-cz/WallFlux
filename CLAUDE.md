@@ -444,6 +444,30 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   disagree -- one wallpaper's scene tints everything red at full
   strength, and its project has the tint off.
 
+- **`_rt_imageLayerComposite_<id>_a` means two things, depending on who
+  says it.** Written by layer `<id>` itself, in a slot its effect already
+  binds `previous` to, it is only a name for what that bind hands over --
+  turning the effect down over it lost Arkham Knight's blur and godrays
+  and the motion blur in eight more wallpapers. Written by another layer,
+  it is that layer's *finished* picture, which the renderer keeps for any
+  layer somebody reads. Almamu's renderer reads whichever of the pair a
+  chain ended in, and its own TODO records a wallpaper getting the wrong
+  picture that way.
+
+  **And `g_TextureReductionScale` has to be set.** `blend` divides an
+  offset in the scene's pixels by it; left at nought, every blend placed
+  with `TRANSFORMUV` was thrown off to infinity and drew nothing. It is how
+  many scene pixels one pixel of the picture stands for -- `skew` says so
+  outright -- which for our buffers, made as big as the object is *on
+  screen*, is the object's size over the buffer's.
+
+  **The Space Marine's gun is steel, not brass.** It looked right gold
+  for days, and that was the texture drawn raw because its whole chain
+  had been dropped; the tint that greys it is the wallpaper's own, and the
+  warm light comes from the muzzle, through layer 151. The wallpaper's
+  `preview.gif` is what settled it. **When a picture moves, look at the
+  preview before deciding which of the two was right.**
+
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
   anything else in that layer — the wallpaper vanished and the system one

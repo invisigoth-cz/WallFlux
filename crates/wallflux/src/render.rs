@@ -9,7 +9,7 @@
 //! pass binds. Objects are drawn in the order the scene lists them, which is
 //! the order they are meant to stack.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use glow::HasContext;
 use wpe_format::particle::Renderer as ParticleRenderer;
@@ -257,10 +257,15 @@ struct Object {
     /// For a trailing particle system, the `length`, `max` and `min` its
     /// shader stretches each particle between.
     trail: Option<[f32; 3]>,
-    /// Every pass of every effect hung on this object, flattened into the
-    /// order they are drawn. Empty unless all of them built, since half a
-    /// chain looks worse than none.
+    /// Every pass of every effect hung on this object that could be built,
+    /// flattened into the order they are drawn.
     effects: Vec<Step>,
+    /// The scene's own number for the object, which is how another layer
+    /// names the picture it wants to read.
+    id: i64,
+    /// Whether another layer reads what this one finishes as, in which case
+    /// the last pass is drawn a second time into a picture that stays.
+    kept: bool,
     /// Set when the object draws what is already on the screen rather than a
     /// picture of its own: a layer that exists to carry effects.
     layer: Option<Layer>,
@@ -370,6 +375,9 @@ struct Canvas {
     size: (u32, u32),
     targets: [Target; 2],
     named: BTreeMap<String, Target>,
+    /// What the object finished as, for a layer that reads it. Only for an
+    /// object somebody reads.
+    kept: Option<Target>,
 }
 
 struct Target {
@@ -396,7 +404,7 @@ impl Canvas {
     /// scene, so the old ones are worth giving back when they are remade.
     unsafe fn free(&self, gl: &glow::Context) {
         unsafe {
-            for target in self.targets.iter().chain(self.named.values()) {
+            for target in self.targets.iter().chain(self.named.values()).chain(&self.kept) {
                 target.free(gl);
             }
         }
@@ -411,6 +419,12 @@ enum Buffer {
     Canvas(usize),
     /// A buffer an effect asked for by name, at whatever size it asked for.
     Named(String),
+    /// Another layer's finished picture, as it stood when that layer was
+    /// drawn. `_rt_imageLayerComposite_151_a` means this to anybody but layer
+    /// 151 itself: Almamu's renderer leaves a layer's result in whichever of
+    /// the pair its chain happened to end in, and its own notes record a
+    /// wallpaper reading `_a` and getting the wrong picture for it.
+    Layer(i64),
     /// Wherever the scene itself is being drawn, which only the last pass of
     /// the last effect writes to.
     Screen,
@@ -484,9 +498,14 @@ unsafe fn make_canvas(
     gl: &glow::Context,
     size: (u32, u32),
     wanted: &BTreeMap<String, u32>,
+    kept: bool,
 ) -> Result<Canvas, String> {
     unsafe {
         let targets = [make_target(gl, size)?, make_target(gl, size)?];
+        let kept = match kept {
+            true => Some(make_target(gl, size)?),
+            false => None,
+        };
         let mut named = BTreeMap::new();
         for (name, divisor) in wanted {
             // A buffer at a quarter of the output is a quarter of it each way,
@@ -498,6 +517,7 @@ unsafe fn make_canvas(
             size,
             targets,
             named,
+            kept,
         })
     }
 }
@@ -545,6 +565,15 @@ impl Scene {
         let mut objects = Vec::new();
         let mut skipped = Vec::new();
         let mut buffers = BTreeMap::new();
+        // The layers that finish as a picture another can read: those with
+        // effects. One without is either drawn straight onto the screen or,
+        // as a layer, not drawn at all.
+        let carriers: BTreeSet<i64> = file
+            .objects
+            .iter()
+            .filter(|o| o.visible.value && !o.effects.is_empty())
+            .map(|o| o.id)
+            .collect();
         for object in &file.objects {
             if !object.visible.value {
                 continue;
@@ -594,7 +623,7 @@ impl Scene {
                     .map(|(w, h)| [w as f32, h as f32])
                     .unwrap_or([scene_size.0 as f32, scene_size.1 as f32]),
             };
-            let effects = build_effects(gl, &resolve, object, &mut buffers, &mut skipped);
+            let effects = build_effects(gl, &resolve, object, &carriers, &mut buffers, &mut skipped);
             let layer = match (model.passthrough, model.fullscreen) {
                 (false, _) => None,
                 (true, false) => Some(Layer::Placed),
@@ -619,6 +648,8 @@ impl Scene {
                 drawing: Drawing::Image,
                 trail: None,
                 effects,
+                id: object.id,
+                kept: false,
                 layer,
                 depth: object.parallax_depth.0,
             });
@@ -626,6 +657,18 @@ impl Scene {
 
         if objects.is_empty() {
             return Err("nothing in this wallpaper could be drawn".into());
+        }
+        let read: BTreeSet<i64> = objects
+            .iter()
+            .flat_map(|o| &o.effects)
+            .flat_map(|step| &step.reads)
+            .filter_map(|(_, from)| match from {
+                Buffer::Layer(id) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        for object in &mut objects {
+            object.kept = read.contains(&object.id);
         }
         thin_particles(&mut objects, budget, &mut skipped);
 
@@ -789,7 +832,7 @@ impl Scene {
             if let Some(old) = canvas.take() {
                 unsafe { old.free(gl) };
             }
-            *canvas = unsafe { make_canvas(gl, size, &self.buffers) }.ok();
+            *canvas = unsafe { make_canvas(gl, size, &self.buffers, object.kept) }.ok();
         }
 
         unsafe {
@@ -815,6 +858,12 @@ impl Scene {
             None => None,
         };
         let width = self.scene_size.0 as f32;
+        let kept: BTreeMap<i64, &Target> = self
+            .objects
+            .iter()
+            .zip(&self.canvases)
+            .filter_map(|(object, canvas)| Some((object.id, canvas.as_ref()?.kept.as_ref()?)))
+            .collect();
         for (object, canvas) in self.objects.iter().zip(&self.canvases) {
             let mut origin = object.origin;
             if let Some((drift, amount)) = drift {
@@ -842,6 +891,7 @@ impl Scene {
                             object,
                             frame,
                             canvas,
+                            &kept,
                             self.buffer,
                             &self.white,
                             &mvp,
@@ -1008,6 +1058,8 @@ fn load_particles(
         trail,
         // No particle system in the library carries one.
         effects: Vec::new(),
+        id: object.id,
+        kept: false,
         layer: None,
         // A particle system never stands still under the mouse, however deep
         // it was put: the same floor Almamu's renderer puts under it.
@@ -1110,6 +1162,7 @@ unsafe fn draw_through_effects(
     object: &Object,
     frame: Option<&Texture>,
     canvas: &Canvas,
+    kept: &BTreeMap<i64, &Target>,
     buffer: glow::Buffer,
     white: &Texture,
     mvp: &Matrix,
@@ -1141,6 +1194,7 @@ unsafe fn draw_through_effects(
     let find = |which: &Buffer| match which {
         Buffer::Canvas(index) => Some(&canvas.targets[*index]),
         Buffer::Named(name) => canvas.named.get(name),
+        Buffer::Layer(id) => kept.get(id).copied(),
         Buffer::Screen => None,
     };
 
@@ -1184,8 +1238,10 @@ unsafe fn draw_through_effects(
         }
 
         for step in &object.effects {
-            // Unreachable: a buffer a step names is one the canvas was built
-            // with, since the canvas is built from the same list.
+            // A buffer a step names is one the canvas was built with, since
+            // the canvas is built from the same list -- or another layer's
+            // picture, missing only if that layer's effects all failed to
+            // build after all.
             let Some(sources) = step
                 .reads
                 .iter()
@@ -1229,6 +1285,24 @@ unsafe fn draw_through_effects(
             match find(&step.into) {
                 // Back into the scene, placed where the object belongs.
                 None => {
+                    // Kept first, as a pass in the middle of a chain would be
+                    // drawn: the screen bound last is what the next object
+                    // without effects of its own draws into.
+                    if let Some(target) = &canvas.kept {
+                        into(target);
+                        write_quad(gl, buffer, covered(read), 1.0);
+                        draw_pass(
+                            gl,
+                            pass,
+                            object,
+                            &transform::IDENTITY,
+                            time,
+                            white,
+                            &bound,
+                            sound,
+                            Blending::Opaque,
+                        );
+                    }
                     gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
                     gl.viewport(0, 0, output.0 as i32, output.1 as i32);
                     // A post-processing layer goes back over the whole
@@ -1291,6 +1365,7 @@ fn build_effects(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
     object: &wpe_format::scene::Object,
+    carriers: &BTreeSet<i64>,
     buffers: &mut BTreeMap<String, u32>,
     skipped: &mut Vec<String>,
 ) -> Vec<Step> {
@@ -1303,7 +1378,7 @@ fn build_effects(
         .iter()
         .filter(|effect| effect.visible.value)
         .filter_map(|effect| {
-            build_effect(gl, resolve, effect, &incoming, &outgoing, buffers)
+            build_effect(gl, resolve, effect, object.id, carriers, &incoming, &outgoing, buffers)
                 .map_err(|e| skipped.push(format!("{}: effect {}: {e}", object.name, effect_name(effect))))
                 .ok()
         })
@@ -1353,6 +1428,8 @@ fn build_effect(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
     effect: &wpe_format::scene::EffectRef,
+    own: i64,
+    carriers: &BTreeSet<i64>,
     input: &Buffer,
     output: &Buffer,
     buffers: &mut BTreeMap<String, u32>,
@@ -1406,15 +1483,27 @@ fn build_effect(
         // in theirs -- layer 12's own pair, the very one the bind already
         // hands over -- and turning the effect down over a name for something
         // it was getting anyway lost the blur and the rays.
-        let over = effect.passes.get(at).map(|over| {
-            let mut over = over.clone();
+        //
+        // Another layer's buffer is that layer's finished picture, read like
+        // any other buffer the pass binds.
+        let mut over = effect.passes.get(at).cloned();
+        if let Some(over) = &mut over {
             for bind in &pass.bind {
                 if let Some(slot) = over.textures.get_mut(bind.index as usize) {
                     *slot = None;
                 }
             }
-            over
-        });
+            for (slot, name) in over.textures.iter_mut().enumerate() {
+                let Some(id) = name.as_deref().and_then(other_layer).filter(|id| *id != own) else {
+                    continue;
+                };
+                if !carriers.contains(&id) {
+                    return Err(format!("reads layer {id}, which has no picture of its own"));
+                }
+                reads.push((slot, Buffer::Layer(id)));
+                *name = None;
+            }
+        }
         let built = resolve
             .get(&pass.material)
             .ok_or_else(|| format!("{} is missing", pass.material))
@@ -1430,6 +1519,15 @@ fn build_effect(
         });
     }
     Ok(steps)
+}
+
+/// The layer a `_rt_imageLayerComposite_<id>_a` belongs to. Only `_a`: what
+/// `_b` would mean to another layer nothing in the library asks.
+fn other_layer(name: &str) -> Option<i64> {
+    name.strip_prefix("_rt_imageLayerComposite_")?
+        .strip_suffix("_a")?
+        .parse()
+        .ok()
 }
 
 /// What a pass means by the buffer it names. `previous` is the picture the
@@ -1629,6 +1727,19 @@ unsafe fn set_common(
             };
             texture.bind(gl, unit as u32);
             set_int(gl, pass.program, &format!("g_Texture{unit}"), unit as i32);
+            // How many of the scene's pixels one of the picture's stands for.
+            // An object's own texture is drawn at its own size; a buffer of
+            // ours is the object as big as it is on screen, where Wallpaper
+            // Engine's is as big as it is in the scene. `blend` divides an
+            // offset given in the scene's pixels by this, and left at nought
+            // it threw the texture off to infinity and blended nothing.
+            if unit == 0 {
+                let reduction = match handed {
+                    Some(_) => object.size[0] / texture.image_size.0.max(1) as f32,
+                    None => 1.0,
+                };
+                set_float(gl, pass.program, "g_TextureReductionScale", reduction);
+            }
             // .xy is the texture, .zw the image inside it; shaders divide one
             // by the other to find the part that is not padding.
             set_vec4(
@@ -2427,7 +2538,7 @@ pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, 
 
 #[cfg(test)]
 mod tests {
-    use super::{coverage, divisor_of, showing};
+    use super::{coverage, divisor_of, other_layer, showing};
 
     /// Getting one of these wrong blurs at the wrong size: a half-sized buffer
     /// taken for a full-sized one reaches half as far across the picture.
@@ -2437,6 +2548,14 @@ mod tests {
         assert_eq!(divisor_of("_rt_HalfCompoBuffer2"), 2);
         assert_eq!(divisor_of("_rt_QuarterCompoBuffer1"), 4);
         assert_eq!(divisor_of("_rt_imageLayerComposite_12_a"), 1);
+    }
+
+    #[test]
+    fn another_layers_picture_is_known_by_its_number() {
+        assert_eq!(other_layer("_rt_imageLayerComposite_151_a"), Some(151));
+        assert_eq!(other_layer("_rt_imageLayerComposite_151_b"), None);
+        assert_eq!(other_layer("_rt_FullCompoBuffer1"), None);
+        assert_eq!(other_layer("masks/blend_mask_7be32257"), None);
     }
 
     #[test]
