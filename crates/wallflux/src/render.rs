@@ -1408,18 +1408,27 @@ fn build_pass(
     // A pass draws the texture in its first slot, so one that wants a render
     // target there is compositing something this renderer has not produced.
     // Drawing it anyway would put a full-screen rectangle of nothing over the
-    // scene; the later slots only modulate, and white leaves those alone. A
-    // pass of an effect is the exception: a render target is exactly what it is
-    // handed, and the chain it belongs to says which one.
-    if kind != Kind::Effect
-        && let Some(Some(name)) = over
-            .map(|o| &o.textures)
-            .filter(|t| !t.is_empty())
-            .unwrap_or(&pass.textures)
-            .first()
-        && wpe_format::effect::is_render_target(name)
-    {
-        return Err(format!("needs the render target {name}"));
+    // scene. A pass of an effect is the exception: a render target is exactly
+    // what it is handed, and the chain it belongs to says which one.
+    //
+    // The later slots were once let through on the grounds that they only
+    // modulate and an unbound one stands in as white. They do not: `blend`
+    // blends *towards* the texture in slot one, so a composite buffer nobody
+    // made turned a Space Marine's armour white at 57 per cent. Whatever the
+    // slot, a render target this renderer cannot produce means the pass cannot
+    // be drawn as it was meant, and not drawing it loses an effect rather than
+    // painting one over the wallpaper.
+    let asked = match over.map(|o| &o.textures) {
+        Some(theirs) if !theirs.is_empty() => theirs,
+        _ => &pass.textures,
+    };
+    for (slot, name) in asked.iter().enumerate() {
+        let Some(name) = name.as_deref().filter(|n| !n.is_empty()) else {
+            continue;
+        };
+        if wpe_format::effect::is_render_target(name) && (slot > 0 || kind != Kind::Effect) {
+            return Err(format!("needs the render target {name}"));
+        }
     }
 
     // Textures are loaded before the shaders are compiled, because whether
