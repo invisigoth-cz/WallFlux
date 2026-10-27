@@ -426,6 +426,82 @@ impl Scene {
     pub fn parse(bytes: &[u8]) -> serde_json::Result<Self> {
         serde_json::from_slice(bytes)
     }
+
+    /// Reads a scene with the values its `project.json` gives the user
+    /// properties standing over the copies written into the scene.
+    ///
+    /// A value bound to a property is written twice: once in the scene, beside
+    /// the binding, and once in `project.json`, where the property is
+    /// declared. Wallpaper Engine plays the second. The two disagree more
+    /// often than not -- 205 of the 365 bound values in this library -- since
+    /// the scene keeps whatever the author last had in the editor. One
+    /// wallpaper's scene says to tint everything red at full strength; its
+    /// project says the tint is off.
+    pub fn parse_with_properties(bytes: &[u8], project: Option<&[u8]>) -> serde_json::Result<Self> {
+        let mut scene: serde_json::Value = serde_json::from_slice(bytes)?;
+        let properties = project
+            .and_then(|p| serde_json::from_slice::<serde_json::Value>(p).ok())
+            .and_then(|p| p.pointer("/general/properties").cloned());
+        if let Some(serde_json::Value::Object(properties)) = properties {
+            bind_user_values(&mut scene, &properties);
+        }
+        serde_json::from_value(scene)
+    }
+}
+
+/// Puts each property's value from `project.json` wherever the scene binds
+/// it, leaving alone anything the project does not declare or gives a value
+/// of a different kind.
+fn bind_user_values(node: &mut serde_json::Value, properties: &serde_json::Map<String, serde_json::Value>) {
+    use serde_json::Value;
+    match node {
+        Value::Object(map) => {
+            if let (Some(user), Some(old)) = (map.get("user"), map.get("value"))
+                && let Some(new) = user_value(user, old, properties)
+            {
+                map.insert("value".into(), new);
+            }
+            for child in map.values_mut() {
+                bind_user_values(child, properties);
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                bind_user_values(child, properties);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn user_value(
+    user: &serde_json::Value,
+    old: &serde_json::Value,
+    properties: &serde_json::Map<String, serde_json::Value>,
+) -> Option<serde_json::Value> {
+    use serde_json::Value;
+    let (name, condition) = match user {
+        Value::String(name) => (name.as_str(), None),
+        Value::Object(o) => (o.get("name")?.as_str()?, o.get("condition")),
+        _ => return None,
+    };
+    let given = properties.get(name)?.get("value")?;
+    // A binding with a condition is true when a drop-down is on that row,
+    // which is how one choice shows one set of objects and hides another.
+    let text = |v: &Value| match v {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    if let Some(condition) = condition {
+        return Some(Value::Bool(text(given) == text(condition)));
+    }
+    match (old, given) {
+        (Value::Bool(_), Value::Number(n)) => Some(Value::Bool(n.as_f64() != Some(0.0))),
+        (Value::Bool(_), Value::Bool(_))
+        | (Value::Number(_), Value::Number(_))
+        | (Value::String(_), Value::String(_)) => Some(given.clone()),
+        _ => None,
+    }
 }
 
 /// Counts the scripted properties in a scene, wherever they are.
@@ -476,6 +552,26 @@ mod tests {
         let b = Scene::parse(br#"{"objects":[{"parallaxDepth":"1.00000 1.00000"}]}"#).unwrap();
         assert_eq!(a.objects[0].parallax_depth.0, b.objects[0].parallax_depth.0);
         assert_eq!(a.objects[0].parallax_depth.0, [1.0, 1.0]);
+    }
+
+    /// The scene keeps what the author last had in the editor; the project
+    /// says what the wallpaper plays with. Reading the first tinted one
+    /// wallpaper red all over where its project has the tint switched off.
+    #[test]
+    fn a_bound_value_comes_from_the_project() {
+        let scene = br#"{"objects":[
+            {"alpha": {"user": "level", "value": 1}},
+            {"visible": {"user": {"name": "style", "condition": "2"}, "value": false}},
+            {"visible": {"user": "missing", "value": false}}
+        ]}"#;
+        let project = br#"{"general":{"properties":{
+            "level": {"type": "slider", "value": 0.25},
+            "style": {"type": "combo", "value": "2"}
+        }}}"#;
+        let s = Scene::parse_with_properties(scene, Some(project)).unwrap();
+        assert_eq!(s.objects[0].alpha.value, 0.25);
+        assert!(s.objects[1].visible.value);
+        assert!(!s.objects[2].visible.value);
     }
 
     /// One wallpaper writes an animated vector as the curve beside its value.

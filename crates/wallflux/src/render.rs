@@ -504,7 +504,9 @@ impl Scene {
         let bytes = package
             .get("scene.json")
             .ok_or("no scene.json in this wallpaper")?;
-        let file = SceneFile::parse(bytes).map_err(|e| format!("scene.json: {e}"))?;
+        let project = std::fs::read(dir.join("project.json")).ok();
+        let file = SceneFile::parse_with_properties(bytes, project.as_deref())
+            .map_err(|e| format!("scene.json: {e}"))?;
         let scene_size = (
             file.general.orthogonalprojection.width,
             file.general.orthogonalprojection.height,
