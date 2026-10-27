@@ -277,6 +277,8 @@ crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
                       materials, effects, particles, and the shader dialect
 crates/wallflux/      draws a scene with OpenGL; `examples/shot.rs` renders
                       one wallpaper to a PNG, which is how it is checked
+tools/sweep.sh        `shot` over every scene wallpaper on the machine,
+                      pictures and one log into the directory it is given
 ```
 
 `WallpaperCore` is a QML singleton named `Wallpapers`, declared with
@@ -1120,6 +1122,13 @@ cmake --build build && ctest --test-dir build --output-on-failure
 /usr/lib/qt6/bin/qmllint -I build/ qml/Main.qml qml/Picker.qml
 cargo test --offline     # the scene renderer, when crates/ was touched
 ```
+
+A change to the renderer is checked against the whole library, not one
+wallpaper: `tools/sweep.sh <dir>` before and after, then `cmp` the two
+directories picture by picture. Every picture that moved has to be one
+the change meant to move -- and looked at, because "different" is not
+"better". Fixing a shader once turned a Space Marine's armour white.
+The sweeps so far are in `~/WallFlux-ukazky/<date>/`.
 
 Anything about stacking or what is on screen has to be measured, not
 reasoned about:
