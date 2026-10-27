@@ -25,9 +25,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   the same. A scene's own music plays -- unpacked from its `scene.pkg`
   into the cache by the renderer and played by `SceneSound`, once for the
   program and not once per screen, in the scene's own `loop`, `random` or
-  `single` manner. What a scene does not do yet is answer to the music or
-  to the mouse: the renderer can, and nothing in the program hands it
-  either.
+  `single` manner. Its particle systems bring their children -- running
+  alongside, bursting where a particle is born or dies, or riding along
+  with one -- and are set up as the scene says, not as their preset does.
+  What a scene does not do yet is answer to the music or to the mouse:
+  the renderer can, and nothing in the program hands it either.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
   covers the screen; both come back on their own. Neither is a setting. The
@@ -443,6 +445,24 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   Wallpaper Engine plays the second. 205 of the 365 in this library
   disagree -- one wallpaper's scene tints everything red at full
   strength, and its project has the tint off.
+
+- **A scene's `instanceoverride` multiplies the particle system it
+  places, and stays with that system.** 462 particle objects carry one
+  -- alpha, size, lifetime, rate, speed, count, and a colour written
+  either as `colorn` (0-1) or, in older scenes, `color` (0-255), never
+  both. Unread, every smoke kept its preset's colours, which is where the
+  pastel blobs in half the library came from. **A child system does not
+  inherit it:** handed down, Star Citizen's embers -- five times the rate
+  and the size -- took their glows with them and burned the sky white;
+  kept to the parent, the picture matches the wallpaper's preview. Both
+  were rendered before deciding.
+
+- **A sweep at six seconds misses what is brief or late.** A lightning
+  flash lives a tenth of a second and the Star Wars sparks start at ten,
+  so a change to bursts moved one picture out of forty. Check those at
+  the moment they happen -- the particle count `shot` prints is the
+  quickest way to find it: the Star Destroyer jumps by a thousand at
+  15.1 s.
 
 - **`_rt_imageLayerComposite_<id>_a` means two things, depending on who
   says it.** Written by layer `<id>` itself, in a slot its effect already
@@ -1288,10 +1308,9 @@ the file. Everything after it should.
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-3. **Scene wallpapers, in the order agreed on 27 October:** particle
-   systems that run child systems of their own (every one of the eight
-   scenes reported that day has them, 23 of 42 in the library), then the
-   music the scene answers to and the mouse. Both of the last two reach
+3. **Scene wallpapers, in the order agreed on 27 October:** the music the
+   scene answers to, then the mouse -- child particle systems, which came
+   first, run in all four of their kinds since the same evening. Both reach
    the renderer through calls that exist (`Scene::hear`,
    `wallflux_scene_point_at`) and that nothing in the program makes yet:
    the spectrum has to come from the speakers, and the mouse over a
