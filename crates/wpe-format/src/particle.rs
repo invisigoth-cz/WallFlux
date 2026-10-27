@@ -52,6 +52,9 @@ pub struct Emitter {
     pub distance: Range<f32>,
     /// Particles per second.
     pub rate: f32,
+    /// Particles all at once: when the system starts, or for a child that
+    /// answers to its parent, each time it is told to.
+    pub instantaneous: u32,
     /// Speed given along the spawn direction, on top of any velocity an
     /// initializer sets.
     pub speed: Range<f32>,
@@ -635,6 +638,7 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             max: num(step, "distancemax", 0.0),
         },
         rate: num(step, "rate", 0.0),
+        instantaneous: num(step, "instantaneous", 0.0).max(0.0) as u32,
         speed: Range {
             min: num(step, "speedmin", 0.0),
             max: num(step, "speedmax", 0.0),
@@ -840,6 +844,7 @@ mod tests {
                     max: 512.0
                 },
                 rate: 20.0,
+                instantaneous: 0,
                 speed: Range { min: 0.0, max: 0.0 },
                 audio: None,
             }]

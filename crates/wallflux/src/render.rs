@@ -267,11 +267,34 @@ struct Object {
     /// Whether another layer reads what this one finishes as, in which case
     /// the last pass is drawn a second time into a picture that stays.
     kept: bool,
+    /// For a particle system that emits only where its parent's particles
+    /// are born or die.
+    answers: Option<Answer>,
     /// Set when the object draws what is already on the screen rather than a
     /// picture of its own: a layer that exists to carry effects.
     layer: Option<Layer>,
     /// How far the object moves with the mouse when the scene has parallax.
     depth: [f32; 2],
+}
+
+/// A child system that bursts at its parent's particles: which object the
+/// parent is, which of its events it answers, and where the child sits
+/// inside it.
+struct Answer {
+    parent: usize,
+    kind: ChildKind,
+    origin: [f32; 3],
+    scale: [f32; 3],
+}
+
+impl Answer {
+    /// A place in the parent's space, in the child's.
+    fn inside(&self, at: [f32; 3]) -> [f32; 3] {
+        std::array::from_fn(|i| match self.scale[i] {
+            0.0 => 0.0,
+            scale => (at[i] - self.origin[i]) / scale,
+        })
+    }
 }
 
 /// The scene moving with the mouse, as `general` sets it up.
@@ -581,7 +604,7 @@ impl Scene {
             }
             match object.kind() {
                 ObjectKind::Particle(file) => {
-                    load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped);
+                    let _ = load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped);
                     continue;
                 }
                 ObjectKind::Image(_) => {}
@@ -648,6 +671,7 @@ impl Scene {
                 effects,
                 id: object.id,
                 kept: false,
+                answers: None,
                 layer,
                 depth: object.parallax_depth.0,
             });
@@ -956,25 +980,43 @@ impl Scene {
             steps = most;
         }
         for _ in 0..steps {
-            for object in &mut self.objects {
-                if let Drawing::Particles(system) = &mut object.drawing {
-                    system.advance(STEP, &sound);
+            for index in 0..self.objects.len() {
+                let (before, rest) = self.objects.split_at_mut(index);
+                let Object { drawing, answers, .. } = &mut rest[0];
+                let Drawing::Particles(system) = drawing else {
+                    continue;
+                };
+                // A parent is always loaded before its children, so it has
+                // already taken this step and what it says is this step's.
+                if let Some(answer) = answers
+                    && let Drawing::Particles(parent) = &before[answer.parent].drawing
+                    && let Some(events) = parent.events()
+                {
+                    let places = match answer.kind {
+                        ChildKind::EventSpawn => &events.born,
+                        _ => &events.died,
+                    };
+                    for &at in places {
+                        system.burst_at(answer.inside(at), &sound);
+                    }
                 }
+                system.advance(STEP, &sound);
             }
         }
         self.simulated += steps as f32 * STEP;
     }
 }
 
-/// Builds the particle object a scene names, or nothing if this renderer
-/// cannot draw it yet.
 /// A particle system and the systems it brings with it, each an object of its
 /// own: the parent first, then its children in the order the file lists them.
 ///
 /// A child is loaded as its parent would be, with the parent's place in the
 /// scene and its own place inside the parent added together. The parent may
 /// draw nothing itself -- some exist only to carry their children -- and the
-/// children still come.
+/// children still come. A child that bursts where its parent's particles are
+/// born or die is told which object its parent is.
+///
+/// Says which object is the system itself, if it could be drawn.
 fn load_particles(
     gl: &glow::Context,
     resolve: &Resolver<'_>,
@@ -983,20 +1025,20 @@ fn load_particles(
     depth: u32,
     objects: &mut Vec<Object>,
     skipped: &mut Vec<String>,
-) {
+) -> Option<usize> {
     let Some(bytes) = resolve.get(path) else {
-        return;
+        return None;
     };
     let definition = match ParticleSystem::parse(&bytes) {
         Ok(d) => d,
         Err(e) => {
             skipped.push(format!("{}: {path}: {e}", object.name));
-            return;
+            return None;
         }
     };
-    if let Some(built) = build_particles(gl, resolve, object, &definition, skipped) {
-        objects.push(built);
-    }
+    let built = build_particles(gl, resolve, object, &definition, skipped);
+    let drawn = built.is_some().then_some(objects.len());
+    objects.extend(built);
 
     let parent = transform::model(
         object.origin.value.0,
@@ -1005,13 +1047,22 @@ fn load_particles(
         object.angles.value.0,
     );
     for (index, child) in definition.children.iter().enumerate() {
-        if child.kind != ChildKind::Static {
-            skipped.push(format!(
-                "{}: {:?} child {} is not run yet",
-                object.name, child.kind, child.file
-            ));
-            continue;
-        }
+        // A burst at a particle needs particles: with no parent drawn there
+        // is nothing to burst at.
+        let answers = match (child.kind, drawn) {
+            (ChildKind::Static, _) => None,
+            (ChildKind::EventFollow, _) => {
+                skipped.push(format!("{}: EventFollow child {} is not run yet", object.name, child.file));
+                continue;
+            }
+            (_, None) => continue,
+            (kind, Some(parent)) => Some(Answer {
+                parent,
+                kind,
+                origin: child.origin,
+                scale: child.scale,
+            }),
+        };
         // Nothing in the library goes deeper than a child of a child, and a
         // file that named itself would otherwise load for ever.
         if depth >= 4 {
@@ -1030,8 +1081,19 @@ fn load_particles(
         placed.origin.value.0 = transform::apply(&parent, child.origin);
         placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
         placed.angles.value.0 = std::array::from_fn(|i| object.angles.value.0[i] + child.angles[i]);
-        load_particles(gl, resolve, &placed, &child.file, depth + 1, objects, skipped);
+        let made = load_particles(gl, resolve, &placed, &child.file, depth + 1, objects, skipped);
+        if let Some((answer, made)) = answers.zip(made) {
+            let parent = answer.parent;
+            if let Drawing::Particles(system) = &mut objects[made].drawing {
+                system.wait_for_parent();
+            }
+            objects[made].answers = Some(answer);
+            if let Drawing::Particles(system) = &mut objects[parent].drawing {
+                system.listen();
+            }
+        }
     }
+    drawn
 }
 
 /// One particle system as an object, or None if it cannot be drawn.
@@ -1118,6 +1180,7 @@ fn build_particles(
         effects: Vec::new(),
         id: object.id,
         kept: false,
+        answers: None,
         layer: None,
         // A particle system never stands still under the mouse, however deep
         // it was put: the same floor Almamu's renderer puts under it.

@@ -193,6 +193,21 @@ pub struct System {
     /// Where the mouse is, in the system's own space, or nothing when there
     /// is no mouse to follow -- a point hung on it then pulls nowhere.
     pointer: Option<[f32; 3]>,
+    /// Whether the emitters' all-at-once particles have been let out yet.
+    burst: bool,
+    /// Set for a child that emits only when its parent's particles are born
+    /// or die, and then where they were.
+    waits: bool,
+    /// Where particles were born and died in the last step, kept only for a
+    /// system with a child listening.
+    events: Option<Events>,
+}
+
+/// Where a system's particles were born and where they died, in one step.
+#[derive(Default)]
+pub struct Events {
+    pub born: Vec<[f32; 3]>,
+    pub died: Vec<[f32; 3]>,
 }
 
 impl System {
@@ -287,7 +302,52 @@ impl System {
             line,
             born: 0,
             pointer: None,
+            burst: false,
+            waits: false,
+            events: None,
         }
+    }
+
+    /// Keeps where particles are born and die, for a child to answer to.
+    pub fn listen(&mut self) {
+        self.events = Some(Events::default());
+    }
+
+    /// What happened in the last step, for a system that is listened to.
+    pub fn events(&self) -> Option<&Events> {
+        self.events.as_ref()
+    }
+
+    /// Stops the system emitting on its own: it waits to be told where.
+    pub fn wait_for_parent(&mut self) {
+        self.waits = true;
+    }
+
+    /// Lets out every emitter's all-at-once particles at `at`, which is in
+    /// the system's own space.
+    pub fn burst_at(&mut self, at: [f32; 3], sound: &Spectrum) {
+        let emitters = std::mem::take(&mut self.emitters);
+        for (emitter, _) in &emitters {
+            let mut placed = emitter.clone();
+            placed.origin = std::array::from_fn(|i| emitter.origin[i] + at[i]);
+            for _ in 0..emitter.instantaneous {
+                if self.live.len() >= self.maxcount {
+                    break;
+                }
+                let particle = self.spawn(&placed, sound);
+                self.take_in(particle);
+            }
+        }
+        self.emitters = emitters;
+    }
+
+    /// A new particle joins the live ones, and is noted for a child that
+    /// answers to births.
+    fn take_in(&mut self, particle: Particle) {
+        if let Some(events) = &mut self.events {
+            events.born.push(particle.position);
+        }
+        self.live.push(particle);
     }
 
     /// Says where the mouse is, in the system's own space, for the points that
@@ -349,8 +409,16 @@ impl System {
     pub fn advance(&mut self, dt: f32, sound: &Spectrum) {
         let dt = dt.clamp(0.0, MAX_STEP);
         self.elapsed += dt;
+        if let Some(events) = &mut self.events {
+            events.born.clear();
+            events.died.clear();
+        }
 
-        if self.elapsed >= self.starttime {
+        if self.elapsed >= self.starttime && !self.waits {
+            if !self.burst {
+                self.burst = true;
+                self.burst_at([0.0; 3], sound);
+            }
             self.emit(dt, sound);
         }
 
@@ -462,6 +530,10 @@ impl System {
                 }
             }
         }
+        if let Some(events) = &mut self.events {
+            let dead = self.live.iter().filter(|p| p.age >= p.lifetime);
+            events.died.extend(dead.map(|p| p.position));
+        }
         self.live.retain(|p| p.age < p.lifetime);
         self.write_vertices();
     }
@@ -478,7 +550,7 @@ impl System {
                     break;
                 }
                 let particle = self.spawn(emitter, sound);
-                self.live.push(particle);
+                self.take_in(particle);
             }
         }
         self.emitters = emitters;
@@ -1092,6 +1164,44 @@ mod tests {
         // Twenty a second for half a second is ten, and the pool is eight.
         assert_eq!(s.count(), 8);
         assert!(s.live.iter().all(|p| p.alpha == 0.5));
+    }
+
+    #[test]
+    fn the_all_at_once_particles_come_once_when_the_system_starts() {
+        let mut s = system(
+            r#"{"maxcount":100,"emitter":[{"name":"sphererandom","rate":0,"instantaneous":5,"distancemax":1}],
+                "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
+        );
+        run(&mut s, 1.0, 1.0 / 60.0);
+        assert_eq!(s.count(), 5);
+    }
+
+    /// A firework's parent dies and the child bursts where it was, and not
+    /// before: a child that waits lets nothing out on its own.
+    #[test]
+    fn a_waiting_child_bursts_where_it_is_told_and_nowhere_else() {
+        let mut parent = system(
+            r#"{"maxcount":1,"emitter":[{"name":"sphererandom","rate":0,"instantaneous":1,
+                 "origin":"100 50 0","distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":0.5,"max":0.5}]}"#,
+        );
+        let mut child = system(
+            r#"{"maxcount":100,"emitter":[{"name":"sphererandom","rate":0,"instantaneous":20,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
+        );
+        parent.listen();
+        child.wait_for_parent();
+        let mut died = Vec::new();
+        for _ in 0..60 {
+            parent.advance(1.0 / 60.0, &Spectrum::SILENT);
+            died.extend(parent.events().unwrap().died.iter().copied());
+            child.advance(1.0 / 60.0, &Spectrum::SILENT);
+        }
+        assert_eq!(child.count(), 0);
+        assert_eq!(died, [[100.0, 50.0, 0.0]]);
+        child.burst_at(died[0], &Spectrum::SILENT);
+        assert_eq!(child.count(), 20);
+        assert!(child.live.iter().all(|p| p.position == [100.0, 50.0, 0.0]));
     }
 
     #[test]
