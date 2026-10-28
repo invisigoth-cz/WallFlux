@@ -1413,11 +1413,20 @@ the file. Everything after it should.
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
 
-3. **Scene wallpapers, in the order agreed on 27 October:** the music the
-   scene answers to, its JavaScript and the mouse are all done. Next are
-   the user properties the Settings tab is for -- their starting values
-   are already read from `project.json`, and a script declares more of
-   them with `createScriptProperties`.
+3. **Scene wallpapers that look like their preview -- first, before
+   anything else, decided on 28 October.** The music, the JavaScript and
+   the mouse are done, and still not one scene looks like the preview in
+   the grid once it is put together: the pieces are there and the
+   composition is not. That comes before the user properties of the
+   Settings tab, which wait behind it. Check each against its preview,
+   whole library, `tools/sweep.sh` before and after.
+
+   **And Alien Romulus and Space Marine 2 -- Honor and Glory move with
+   the mouse where they should not.** Measured as following it (1 760 and
+   1 125 apart with the mouse left and right in `shot`); seen on the
+   desktop to be wrong -- they are meant to move by their own particles,
+   smoke and shaders. Find what in them is answering the pointer before
+   deciding which half is mistaken.
 
 ### Small things seen and left
 
