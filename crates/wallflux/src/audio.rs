@@ -17,9 +17,17 @@
 //! Nothing here is required: a machine with no sound server, or one where the
 //! connection drops, leaves the bands at zero, and a wallpaper reads that as
 //! silence and runs at the quiet end of what it stated.
+//!
+//! **Listening is only done while somebody is asking.** Plasma counts a
+//! recording of the speakers as using the microphone and puts its microphone
+//! icon in the tray for as long as one is open -- measured. It hides only the
+//! volume mixers' own meters, by name. So the stream is closed once the bands
+//! have gone unread for `QUIET`, which is what a wallpaper under a window, a
+//! scene that answers to nothing, and no scene at all look like from here.
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 use libpulse_binding::sample::{Format, Spec};
 use libpulse_binding::stream::Direction;
@@ -58,10 +66,20 @@ const FALL: f32 = 0.12;
 /// dividing this by 1.2 squared.
 const LOUD: f32 = 0.02 / (1.2 * 1.2);
 
+/// How long the bands may go unread before the stream is closed.
+const QUIET: Duration = Duration::from_secs(1);
+
+/// How often a closed stream looks to see whether it is wanted again, and
+/// how long one that could not be opened waits before trying once more.
+const IDLE: Duration = Duration::from_millis(50);
+const RETRY: Duration = Duration::from_secs(1);
+
 /// The sound the speakers are playing, split into bands.
 pub struct Audio {
     bands: &'static Mutex<Spectrum>,
-    listening: &'static AtomicBool,
+    /// When the bands were last read, in milliseconds after `epoch`.
+    asked: &'static AtomicU64,
+    epoch: Instant,
 }
 
 impl Audio {
@@ -71,25 +89,28 @@ impl Audio {
         // Leaked rather than shared through an Arc: there is one of these for
         // the life of the process, and the thread outlives any handle to it.
         let bands: &'static Mutex<Spectrum> = Box::leak(Box::new(Mutex::new(Spectrum::SILENT)));
-        let listening: &'static AtomicBool = Box::leak(Box::new(AtomicBool::new(true)));
+        let asked: &'static AtomicU64 = Box::leak(Box::new(AtomicU64::new(0)));
+        let epoch = Instant::now();
 
         let stream = connect()?;
         std::thread::Builder::new()
             .name("wallflux-audio".into())
-            .spawn(move || listen(stream, bands, listening))
+            .spawn(move || listen(stream, bands, asked, epoch))
             .ok()?;
-        Some(Self { bands, listening })
+        Some(Self { bands, asked, epoch })
     }
 
     /// The loudness of each band in each ear, zero to one. Silence where the
     /// sound stopped being readable, which is what a wallpaper reads as a
-    /// quiet room.
+    /// quiet room. Asking is what keeps the stream open.
     pub fn bands(&self) -> Spectrum {
-        match self.listening.load(Ordering::Relaxed) {
-            true => self.bands.lock().map(|b| *b).unwrap_or(Spectrum::SILENT),
-            false => Spectrum::SILENT,
-        }
+        self.asked.store(since(self.epoch), Ordering::Relaxed);
+        self.bands.lock().map(|b| *b).unwrap_or(Spectrum::SILENT)
     }
+}
+
+fn since(epoch: Instant) -> u64 {
+    epoch.elapsed().as_millis() as u64
 }
 
 fn connect() -> Option<Simple> {
@@ -194,19 +215,43 @@ impl Default for Ears {
     }
 }
 
-fn listen(stream: Simple, bands: &Mutex<Spectrum>, listening: &AtomicBool) {
+fn listen(stream: Simple, bands: &Mutex<Spectrum>, asked: &AtomicU64, epoch: Instant) {
+    let mut stream = Some(stream);
     let mut ears = Ears::new();
+    let silence = || {
+        if let Ok(mut out) = bands.lock() {
+            *out = Spectrum::SILENT;
+        }
+    };
     // The two channels arrive woven together, a sample of each in turn.
     let mut woven = [0f32; READ * 2];
     loop {
+        let unread = since(epoch).saturating_sub(asked.load(Ordering::Relaxed));
+        if unread > QUIET.as_millis() as u64 {
+            if stream.take().is_some() {
+                silence();
+            }
+            std::thread::sleep(IDLE);
+            continue;
+        }
+        let Some(open) = &stream else {
+            stream = connect();
+            ears = Ears::new();
+            if stream.is_none() {
+                std::thread::sleep(RETRY);
+            }
+            continue;
+        };
         let raw: &mut [u8] = unsafe {
             std::slice::from_raw_parts_mut(woven.as_mut_ptr() as *mut u8, size_of_val(&woven))
         };
-        if stream.read(raw).is_err() {
-            // The server went away or the device changed under us. Saying so
-            // is better than a wallpaper silently freezing at its last beat.
-            listening.store(false, Ordering::Relaxed);
-            return;
+        if open.read(raw).is_err() {
+            // The server went away or the device changed under us: silence
+            // rather than a wallpaper frozen at its last beat, and another
+            // try on the next turn.
+            stream = None;
+            silence();
+            continue;
         }
         let measured = ears.feed(&woven);
         if let Ok(mut out) = bands.lock() {

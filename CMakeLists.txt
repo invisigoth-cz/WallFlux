@@ -132,7 +132,13 @@ add_custom_command(
 )
 add_custom_target(wallflux_scene_build DEPENDS ${wallflux_scene_lib})
 add_library(wallflux_scene STATIC IMPORTED)
-set_target_properties(wallflux_scene PROPERTIES IMPORTED_LOCATION ${wallflux_scene_lib})
+# What the renderer wants from the system -- PulseAudio, to hear what the
+# speakers are playing, and what Rust's standard library needs -- goes with
+# it to whatever links it. `cargo rustc -- --print native-static-libs` is
+# where this list is from.
+set_target_properties(wallflux_scene PROPERTIES
+    IMPORTED_LOCATION ${wallflux_scene_lib}
+    INTERFACE_LINK_LIBRARIES "pulse-simple;pulse;gcc_s;util;rt;pthread;m;dl")
 add_dependencies(wallflux_scene wallflux_scene_build)
 target_include_directories(wallflux PRIVATE crates/wallflux/include)
 
@@ -158,10 +164,8 @@ target_link_libraries(wallflux PRIVATE
     # Only for the tray icon's fallback, which Qt.labs.platform needs linked
     # whether or not this desktop ends up using it.
     Qt6::Widgets
-    # The renderer, and what Rust's standard library wants from the system:
-    # `cargo rustc -- --print native-static-libs` is where this list is from.
+    # The scene renderer.
     wallflux_scene
-    gcc_s util rt pthread m dl
 )
 
 if(Qt6Test_FOUND)
@@ -208,7 +212,7 @@ if(Qt6Test_FOUND)
     )
     target_include_directories(tst_sceneview PRIVATE src crates/wallflux/include)
     target_link_libraries(tst_sceneview PRIVATE
-        Qt6::OpenGL Qt6::Qml Qt6::Quick Qt6::Test wallflux_scene gcc_s util rt pthread m dl)
+        Qt6::OpenGL Qt6::Qml Qt6::Quick Qt6::Test wallflux_scene)
     add_test(NAME sceneview COMMAND tst_sceneview)
 
     qt_add_executable(tst_screencover

@@ -4,7 +4,7 @@
 
 //! The C interface the Qt program draws a scene through.
 //!
-//! Four calls, matching `include/wallflux_scene.h`: load a wallpaper, tell it
+//! The calls in `include/wallflux_scene.h`: load a wallpaper, tell it
 //! where the mouse is, draw it, let it go. Every one of them is made on Qt's
 //! render thread with Qt's OpenGL context current, and none of them may let
 //! a panic out -- unwinding across `extern "C"` is undefined behaviour, and
@@ -13,7 +13,9 @@
 
 use std::ffi::{CStr, c_char, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::OnceLock;
 
+use crate::audio::Audio;
 use crate::render::{DEFAULT_BUDGET, Scene};
 use glow::HasContext;
 
@@ -24,6 +26,12 @@ pub struct WallfluxScene {
     /// Set once the scene has panicked, after which it is left alone.
     broken: bool,
 }
+
+/// What the speakers are playing, listened to once for every scene on every
+/// screen, and only while a scene that follows the sound is being drawn --
+/// see `audio` for why. `None` where there is no sound server, and the
+/// scenes run as they would in a silent room.
+static EARS: OnceLock<Option<Audio>> = OnceLock::new();
 
 /// Looks up an OpenGL function by name, as Qt's context does.
 pub type Loader = unsafe extern "C" fn(name: *const c_char, user: *mut c_void) -> *const c_void;
@@ -117,6 +125,11 @@ pub unsafe extern "C" fn wallflux_scene_draw(
     };
     if this.broken {
         return false;
+    }
+    if this.scene.listens()
+        && let Some(ears) = EARS.get_or_init(Audio::start)
+    {
+        this.scene.hear(ears.bands());
     }
     let drawn = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: the context is current, as the caller promised.

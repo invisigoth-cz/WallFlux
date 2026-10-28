@@ -347,6 +347,17 @@ impl System {
         self.waits = true;
     }
 
+    /// Whether anything about the system follows the sound.
+    pub fn listens(&self) -> bool {
+        self.emitters.iter().any(|(emitter, _)| emitter.audio.is_some())
+            || self.start.turbulent.is_some_and(|field| field.audio.is_some())
+            || self.operators.iter().any(|operator| match operator {
+                Operator::Turbulence { field, .. } => field.audio.is_some(),
+                Operator::Vortex(vortex) => vortex.audio.is_some(),
+                _ => false,
+            })
+    }
+
     /// Lets out every emitter's all-at-once particles at `at`, which is in
     /// the system's own space.
     pub fn burst_at(&mut self, at: [f32; 3], sound: &Spectrum) {

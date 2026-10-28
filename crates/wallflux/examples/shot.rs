@@ -69,10 +69,11 @@ fn main() {
         std::process::exit(1);
     });
     println!(
-        "scene {}x{}, {} objects: {}",
+        "scene {}x{}, {} objects{}: {}",
         scene.scene_size.0,
         scene.scene_size.1,
         scene.len(),
+        if scene.listens() { ", follows the sound" } else { "" },
         scene.object_names().collect::<Vec<_>>().join(", ")
     );
     for skipped in &scene.skipped {

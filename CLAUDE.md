@@ -28,8 +28,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   `single` manner. Its particle systems bring their children -- running
   alongside, bursting where a particle is born or dies, or riding along
   with one -- and are set up as the scene says, not as their preset does.
-  What a scene does not do yet is answer to the music or to the mouse:
-  the renderer can, and nothing in the program hands it either.
+  A scene that answers to the music hears what the speakers are playing
+  -- 7 of the 40 here do -- read off the default output's monitor by the
+  renderer itself, once for every screen. What a scene does not do yet is
+  answer to the mouse: the renderer can, and nothing in the program hands
+  it one.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
   covers the screen; both come back on their own. Neither is a setting. The
@@ -487,6 +490,19 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   warm light comes from the muzzle, through layer 151. The wallpaper's
   `preview.gif` is what settled it. **When a picture moves, look at the
   preview before deciding which of the two was right.**
+
+- **Plasma calls listening to the speakers using the microphone.** A
+  record stream on a sink's monitor puts `plasmashell_microphone` -- the
+  microphone icon -- in the tray for as long as it is open. Measured by
+  reading `RegisteredStatusNotifierItems` with and without one. The only
+  streams it hides are four volume mixers' meters, matched by
+  `application.id` in `libKF6PulseAudioQt` -- passing for one of them would
+  be lying. So the renderer listens only while it is asked: `Scene::listens()`
+  says at load whether a shader reads `g_AudioSpectrum16*` or a particle
+  system's rate, field or swirl follows the sound, only such a scene asks,
+  and `audio.rs` closes the stream once the bands have gone a second
+  unread. A wallpaper under a window is not drawn and so does not ask, and
+  the icon goes with it.
 
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
@@ -1309,12 +1325,10 @@ the file. Everything after it should.
    from the icon theme. A drawn one has been asked for, without any hurry.
 
 3. **Scene wallpapers, in the order agreed on 27 October:** the music the
-   scene answers to, then the mouse -- child particle systems, which came
-   first, run in all four of their kinds since the same evening. Both reach
-   the renderer through calls that exist (`Scene::hear`,
-   `wallflux_scene_point_at`) and that nothing in the program makes yet:
-   the spectrum has to come from the speakers, and the mouse over a
-   surface that takes no input has to come from the compositor. Then the user properties the Settings tab
+   scene answers to, which is done, then the mouse. It reaches the
+   renderer through a call that exists (`wallflux_scene_point_at`) and
+   that nothing in the program makes yet: the mouse over a surface that
+   takes no input has to come from the compositor. Then the user properties the Settings tab
    is for -- their starting values are already read from `project.json`.
 
 ### Small things seen and left

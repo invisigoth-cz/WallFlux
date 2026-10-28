@@ -112,6 +112,9 @@ struct Pass {
     /// corner to corner samples the empty part, which clamping then smears
     /// across the object.
     covered: [f32; 2],
+    /// Whether the shader reads the spectrum, which it declares only behind
+    /// the switch that turns its audio response on.
+    hears: bool,
 }
 
 /// A sprite sheet played by an image object, frame by frame.
@@ -737,6 +740,18 @@ impl Scene {
     /// anything leaves the scene running as it would in a silent room.
     pub fn hear(&mut self, sound: Spectrum) {
         self.sound = sound;
+    }
+
+    /// Whether anything in the scene follows the sound: a shader that reads
+    /// the spectrum, or a particle system whose rate, field or swirl does. A
+    /// scene that does not is never handed the sound, so nothing listens to
+    /// the speakers on its behalf.
+    pub fn listens(&self) -> bool {
+        self.objects.iter().any(|object| {
+            object.passes.iter().any(|pass| pass.hears)
+                || object.effects.iter().filter_map(|step| step.pass.as_ref()).any(|pass| pass.hears)
+                || matches!(&object.drawing, Drawing::Particles(system) if system.listens())
+        })
     }
 
     /// Says where the mouse is: a fraction of an output of size `output`
@@ -2173,6 +2188,10 @@ fn build_pass(
         wpe_format::shader::widen_varyings(vertex, &fragment);
     }
     let program = unsafe { link(gl, &stages)? };
+    let hears = ["g_AudioSpectrum16Left", "g_AudioSpectrum16Right"].iter().any(|name| unsafe {
+        gl.get_uniform_location(program, name).is_some()
+            || gl.get_uniform_location(program, &format!("{name}[0]")).is_some()
+    });
 
     // A uniform nobody sets reads as zero, so the defaults a shader declares
     // for itself go in first and the material's own values over them.
@@ -2244,6 +2263,7 @@ fn build_pass(
         sheet,
         film,
         covered,
+        hears,
     })
 }
 
