@@ -20,6 +20,7 @@ use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
 
 use crate::particles::{self, FLOATS_PER_ROPE_VERTEX, FLOATS_PER_VERTEX};
+use crate::script::{Drives, Scripts};
 use crate::texture::Texture;
 use crate::transform::{self, Matrix};
 
@@ -115,6 +116,9 @@ struct Pass {
     /// Whether the shader reads the spectrum, which it declares only behind
     /// the switch that turns its audio response on.
     hears: bool,
+    /// Uniform by the label a material names it with, for a script that
+    /// names a constant the same way.
+    labels: BTreeMap<String, String>,
 }
 
 /// A sprite sheet played by an image object, frame by frame.
@@ -278,6 +282,12 @@ struct Object {
     layer: Option<Layer>,
     /// How far the object moves with the mouse when the scene has parallax.
     depth: [f32; 2],
+    /// Set on the objects scene.json places itself, as against the systems a
+    /// particle system brings along -- which a script moving the object by
+    /// its id does not mean.
+    from_scene: bool,
+    /// Whether to draw it, which a script may change while the scene runs.
+    shown: bool,
 }
 
 /// A child system that answers to its parent's particles -- bursting where
@@ -373,6 +383,9 @@ pub struct Scene {
     /// Silence until a caller says otherwise, which is what a tool drawing
     /// to a file wants: the same wallpaper twice gives the same picture.
     sound: Spectrum,
+    /// The scene's JavaScript, where it has any, and the time it last ran.
+    scripts: Option<Scripts>,
+    scripted_at: Option<f32>,
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
@@ -465,6 +478,9 @@ struct Step {
     /// Texture unit to buffer, as the effect asked. Always covers unit zero,
     /// because a pass that names nothing there still draws what came in.
     reads: Vec<(usize, Buffer)>,
+    /// Which of the object's effects in scene.json this is a pass of, and
+    /// which pass, which is how a script names the constant it drives.
+    scene_pass: (usize, usize),
 }
 
 /// Maps an object's own quad onto the whole of whatever it is drawn into,
@@ -607,7 +623,9 @@ impl Scene {
             }
             match object.kind() {
                 ObjectKind::Particle(file) => {
-                    let _ = load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped);
+                    if let Some(system) = load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped) {
+                        objects[system].from_scene = true;
+                    }
                     continue;
                 }
                 ObjectKind::Image(_) => {}
@@ -677,6 +695,8 @@ impl Scene {
                 answers: None,
                 layer,
                 depth: object.parallax_depth.0,
+                from_scene: true,
+                shown: true,
             });
         }
 
@@ -696,6 +716,10 @@ impl Scene {
             object.kept = read.contains(&object.id);
         }
         thin_particles(&mut objects, budget, &mut skipped);
+        let scripts = Scripts::load(&file, project.as_deref());
+        if let Some(scripts) = &scripts {
+            skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
+        }
 
         let (quad, buffer) = unsafe { make_quad(gl)? };
         let widest = objects
@@ -730,6 +754,8 @@ impl Scene {
             buffers,
             simulated: 0.0,
             sound: Spectrum::SILENT,
+            scripts,
+            scripted_at: None,
             scene_size,
             skipped,
         })
@@ -751,7 +777,7 @@ impl Scene {
             object.passes.iter().any(|pass| pass.hears)
                 || object.effects.iter().filter_map(|step| step.pass.as_ref()).any(|pass| pass.hears)
                 || matches!(&object.drawing, Drawing::Particles(system) if system.listens())
-        })
+        }) || self.scripts.as_ref().is_some_and(Scripts::listens)
     }
 
     /// Says where the mouse is: a fraction of an output of size `output`
@@ -838,6 +864,7 @@ impl Scene {
     /// may jump straight to a moment and the particle systems still arrive
     /// there the same way they would have by running.
     pub fn draw(&mut self, gl: &glow::Context, output: (u32, u32), time: f32) {
+        self.run_scripts(time);
         self.advance_to(time, STEPS_PER_FRAME);
         let projection = transform::orthographic_cover(
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
@@ -902,6 +929,9 @@ impl Scene {
             .filter_map(|(object, canvas)| Some((object.id, canvas.as_ref()?.kept.as_ref()?)))
             .collect();
         for (object, canvas) in self.objects.iter().zip(&self.canvases) {
+            if !object.shown {
+                continue;
+            }
             let mut origin = object.origin;
             if let Some((drift, amount)) = drift {
                 for axis in 0..2 {
@@ -987,6 +1017,72 @@ impl Scene {
     /// here went from 14 ms a frame to 1.6 seconds within twelve frames, which
     /// is a slideshow and then a standstill. Capping the steps turns that into
     /// something that merely runs slow.
+    /// Runs the scene's scripts for a frame at `time` and puts what they
+    /// leave where the drawing reads it.
+    fn run_scripts(&mut self, time: f32) {
+        let Some(scripts) = &mut self.scripts else {
+            return;
+        };
+        // The first frame catches up from the start in steps no longer than
+        // a thirtieth of a second, as the particles do, so a scene first
+        // drawn some seconds in -- which is what a picture of one is -- has
+        // had its scripts run up to that moment: most of them ease towards
+        // the music by `engine.frametime`. After that it is one step a
+        // frame, and a frame after a long pause -- a covered screen -- is
+        // told no more than a few steps' worth of time went by, rather than
+        // spending a quarter of a second replaying what nobody saw.
+        let (from, steps) = match self.scripted_at {
+            None => (0.0, ((time / SCRIPT_STEP).ceil()).clamp(1.0, MOST_SCRIPT_STEPS) as usize),
+            Some(at) => ((time - 3.0 * SCRIPT_STEP).max(at).min(time), 1),
+        };
+        let frametime = (time - from) / steps as f32;
+        self.scripted_at = Some(time);
+        let mut last = None;
+        for step in 1..=steps {
+            last = scripts.run(frametime, from + frametime * step as f32, &self.sound);
+        }
+        let Some(frame) = last else {
+            return;
+        };
+        let placed = |objects: &mut Vec<Object>, id: i64| -> Vec<usize> {
+            (0..objects.len()).filter(|&i| objects[i].from_scene && objects[i].id == id).collect()
+        };
+        for (id, layer) in frame.layers {
+            for index in placed(&mut self.objects, id) {
+                let object = &mut self.objects[index];
+                object.origin = layer.origin;
+                object.angles = layer.angles;
+                object.scale = layer.scale;
+                object.alpha = layer.alpha;
+                object.shown = layer.visible;
+            }
+        }
+        for (target, value) in frame.values {
+            match target {
+                Drives::Layer => {}
+                Drives::Rate { id } => {
+                    let Some(rate) = value.as_f64() else { continue };
+                    for index in placed(&mut self.objects, *id) {
+                        if let Drawing::Particles(system) = &mut self.objects[index].drawing {
+                            system.set_rate(rate as f32);
+                        }
+                    }
+                }
+                Drives::Constant { id, effect, pass, name } => {
+                    for index in placed(&mut self.objects, *id) {
+                        let steps = self.objects[index].effects.iter_mut();
+                        for step in steps.filter(|s| s.scene_pass == (*effect, *pass)) {
+                            if let Some(pass) = &mut step.pass {
+                                let uniform = pass.labels.get(name).unwrap_or(name).clone();
+                                pass.constants.insert(uniform, value.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn advance_to(&mut self, time: f32, most: usize) {
         let sound = self.sound;
         let mut steps = ((time - self.simulated).max(0.0) / STEP) as usize;
@@ -1214,8 +1310,19 @@ fn build_particles(
             .parallax_depth
             .0
             .map(|d| if d.abs() < 0.65 { 0.65f32.copysign(d) } else { d }),
+        from_scene: false,
+        shown: true,
     })
 }
+
+/// The longest step a scene's scripts are run in, and the most steps the
+/// first frame catches up by: ten seconds, after which the scripts jump.
+///
+/// ponytail: a step costs Dark Core, the most scripted scene here, about
+/// 0.8 ms -- 43 scripts, and every layer handed back as JSON. Hand back only
+/// the layers a script touched if a scene with hundreds of objects shows up.
+const SCRIPT_STEP: f32 = 1.0 / 30.0;
+const MOST_SCRIPT_STEPS: f32 = 300.0;
 
 /// How many particles a scene may keep alive at once before it is thinned.
 ///
@@ -1523,9 +1630,16 @@ fn build_effects(
     let built: Vec<Vec<Step>> = object
         .effects
         .iter()
-        .filter(|effect| effect.visible.value)
-        .filter_map(|effect| {
+        .enumerate()
+        .filter(|(_, effect)| effect.visible.value)
+        .filter_map(|(index, effect)| {
             build_effect(gl, resolve, effect, object.id, carriers, &incoming, &outgoing, buffers)
+                .map(|mut steps| {
+                    for step in &mut steps {
+                        step.scene_pass.0 = index;
+                    }
+                    steps
+                })
                 .map_err(|e| skipped.push(format!("{}: effect {}: {e}", object.name, effect_name(effect))))
                 .ok()
         })
@@ -1605,6 +1719,7 @@ fn build_effect(
                 pass: None,
                 into,
                 reads: vec![(0, which_buffer(&pass.source, input))],
+                scene_pass: (0, at),
             });
             continue;
         }
@@ -1663,6 +1778,7 @@ fn build_effect(
             pass: Some(built),
             into,
             reads,
+            scene_pass: (0, at),
         });
     }
     Ok(steps)
@@ -2264,6 +2380,7 @@ fn build_pass(
         film,
         covered,
         hears,
+        labels: named_by,
     })
 }
 

@@ -118,8 +118,10 @@ target_include_directories(wallflux PRIVATE src)
 find_program(CARGO cargo REQUIRED)
 set(WALLFLUX_CARGO_FLAGS "--locked" CACHE STRING "Extra flags for cargo build")
 separate_arguments(wallflux_cargo_flags UNIX_COMMAND "${WALLFLUX_CARGO_FLAGS}")
+# The .js is the scripting host, which the renderer takes in with include_str!.
 file(GLOB_RECURSE wallflux_rust_sources CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/crates/*.rs ${CMAKE_SOURCE_DIR}/crates/*/Cargo.toml)
+    ${CMAKE_SOURCE_DIR}/crates/*.rs ${CMAKE_SOURCE_DIR}/crates/*.js
+    ${CMAKE_SOURCE_DIR}/crates/*/Cargo.toml)
 set(wallflux_scene_lib ${CMAKE_BINARY_DIR}/cargo/release/libwallflux.a)
 add_custom_command(
     OUTPUT ${wallflux_scene_lib}

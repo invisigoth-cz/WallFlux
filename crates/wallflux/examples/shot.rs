@@ -36,6 +36,8 @@ mod offscreen;
 mod particles;
 #[path = "../src/render.rs"]
 mod render;
+#[path = "../src/script.rs"]
+mod script;
 #[path = "../src/texture.rs"]
 mod texture;
 #[path = "../src/transform.rs"]

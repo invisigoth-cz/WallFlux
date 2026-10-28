@@ -181,6 +181,9 @@ pub struct System {
     ribbon: Ribbon,
     /// Each emitter with the fraction of a particle it is owed.
     emitters: Vec<(Emitter, f32)>,
+    /// What every emitter's rate is multiplied by: the scene's override,
+    /// and after it whatever a script on that override says.
+    rate: f32,
     start: Start,
     operators: Vec<Operator>,
     animation: Option<Animation>,
@@ -273,7 +276,6 @@ impl System {
             .iter()
             .cloned()
             .map(|mut e| {
-                e.rate *= over.rate.value;
                 e.speed = times(e.speed, speed);
                 (e, 0.0)
             })
@@ -311,6 +313,7 @@ impl System {
                 _ => Ribbon::None,
             },
             emitters,
+            rate: over.rate.value,
             start,
             operators: definition.operators.clone(),
             animation: definition.animation,
@@ -345,6 +348,12 @@ impl System {
     /// Stops the system emitting on its own: it waits to be told where.
     pub fn wait_for_parent(&mut self) {
         self.waits = true;
+    }
+
+    /// Sets what the emitters' rates are multiplied by, as the scene's
+    /// override would.
+    pub fn set_rate(&mut self, rate: f32) {
+        self.rate = rate.max(0.0);
     }
 
     /// Whether anything about the system follows the sound.
@@ -441,7 +450,7 @@ impl System {
         let emitters = std::mem::take(&mut self.emitters);
         for host in &mut riding {
             for ((emitter, _), owed) in emitters.iter().zip(&mut host.owed) {
-                *owed += emitter.rate * loudness(emitter.audio, sound) * dt;
+                *owed += emitter.rate * self.rate * loudness(emitter.audio, sound) * dt;
                 while *owed >= 1.0 {
                     *owed -= 1.0;
                     if self.live.len() >= self.maxcount {
@@ -663,7 +672,7 @@ impl System {
         // system while a particle is being built.
         let mut emitters = std::mem::take(&mut self.emitters);
         for (emitter, owed) in &mut emitters {
-            *owed += emitter.rate * loudness(emitter.audio, sound) * dt;
+            *owed += emitter.rate * self.rate * loudness(emitter.audio, sound) * dt;
             while *owed >= 1.0 {
                 *owed -= 1.0;
                 if self.live.len() >= self.maxcount {

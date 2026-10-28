@@ -36,9 +36,12 @@ pub struct Bound<T> {
     pub value: T,
     /// The name of the user-facing setting driving this, if any.
     pub user: Option<String>,
-    /// JavaScript driving this, if any. Holding it is not running it: until
-    /// there is a script engine, the value above is what gets drawn.
+    /// JavaScript driving this, if any: an ES module whose `update` is
+    /// handed the value and answers with the next one, every frame.
     pub script: Option<String>,
+    /// What the viewer set the script's own settings to, by name -- the
+    /// values a `scriptProperties` export declares are its defaults.
+    pub scriptproperties: Option<serde_json::Value>,
 }
 
 impl<T> Bound<T> {
@@ -47,6 +50,7 @@ impl<T> Bound<T> {
             value,
             user: None,
             script: None,
+            scriptproperties: None,
         }
     }
 
@@ -75,6 +79,7 @@ where
             value: Option<T>,
             user: Option<User>,
             script: Option<String>,
+            scriptproperties: Option<serde_json::Value>,
         }
 
         #[derive(Deserialize)]
@@ -94,6 +99,7 @@ where
                     User::Name(n) | User::Conditional { name: n } => n,
                 }),
                 script: w.script,
+                scriptproperties: w.scriptproperties,
             },
         })
     }
@@ -459,6 +465,12 @@ impl Object {
     ///
     /// The naming fields are present-but-null far more often than they are
     /// absent, so emptiness is decided by the value rather than the key.
+    /// Whether a script writes the object's text, which is how a scene
+    /// draws a clock.
+    pub fn has_scripted_text(&self) -> bool {
+        self.text_field.as_ref().is_some_and(|t| t.get("script").is_some())
+    }
+
     pub fn kind(&self) -> ObjectKind {
         let named = |f: &Option<String>| f.as_deref().filter(|s| !s.is_empty()).map(str::to_owned);
 

@@ -30,9 +30,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   with one -- and are set up as the scene says, not as their preset does.
   A scene that answers to the music hears what the speakers are playing
   -- 7 of the 40 here do -- read off the default output's monitor by the
-  renderer itself, once for every screen. What a scene does not do yet is
-  answer to the mouse: the renderer can, and nothing in the program hands
-  it one.
+  renderer itself, once for every screen. A scene's JavaScript runs --
+  82 of the 93 scripts in 7 packages, under QuickJS: what turns a clock's
+  hands, swells a ring with the bass and keeps a particle system's rate on
+  the beat. The other eleven write text, which is not drawn yet, or switch
+  an effect or a particle override other than the rate. What a scene does
+  not do yet is answer to the mouse: the renderer can, and nothing in the
+  program hands it one.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
   covers the screen; both come back on their own. Neither is a setting. The
@@ -297,6 +301,9 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 Cargo.toml            the Rust workspace: the two crates below
 crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
                       materials, effects, particles, and the shader dialect
+crates/wallflux/src/script.rs  a scene's JavaScript, run with rquickjs, and
+                      `script/host.js`, the globals a script finds -- ours,
+                      written from what the library's scripts use
 crates/wallflux/      draws a scene with OpenGL; `examples/shot.rs` renders
                       one wallpaper to a PNG, which is how it is checked.
                       `src/ffi.rs` and `include/wallflux_scene.h` are the
@@ -504,6 +511,43 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   and `audio.rs` closes the stream once the bands have gone a second
   unread. A wallpaper under a window is not drawn and so does not ask, and
   the icon goes with it.
+
+- **A scene's scripts are ES modules inside scene.json, on the value they
+  drive**, and every object is a layer to them whether it is drawn or not:
+  Ender Spartan turns an invisible `SharedNoise` with one script and reads
+  its angles from ten others. So `script/host.js` keeps a layer for every
+  object in the file, and the layers are where place, turn, size, alpha and
+  visibility live while a scene with scripts runs -- `render.rs` copies
+  them onto the objects scene.json placed itself (`from_scene`), never onto
+  the children a particle system brought.
+
+  **Angles are degrees to a script and radians in the file.** Dark Core's
+  clock turns its hands with `* WEMath.rad2deg`; handed radians, its hour
+  hand read -122 and spun.
+
+  **A picture drawn at six seconds has to have run six seconds of
+  scripts.** Most of them ease towards the music by `engine.frametime`, and
+  one frame at t=6 is one call with a frametime of nought -- Dark Core's
+  ring stayed dark however loud `shot` was told the room was. The first
+  frame catches up in thirtieths of a second; every later frame is one step,
+  told at most a tenth of a second went by, because 300 steps of Dark Core
+  is a quarter of a second of render thread after a window uncovers it.
+
+  **And a scene that reads the clock is never the same picture twice.**
+  Eleven of Dark Core's scripts call `new Date()`. In a sweep, a scripted
+  clock that moved is not a regression.
+
+  **Every call has a deadline and a script that misses it is stopped.**
+  A script runs on Qt's render thread; one that loops for ever would stop
+  the desktop being drawn. QuickJS's interrupt handler ends any call past
+  20 ms, a script that throws or is interrupted is not run again, and the
+  value it drove stays where it was -- tested for both in `script.rs`.
+
+  **Almamu's renderer has no `engine.registerAudioBuffers`**, which 39 of
+  the 93 call: his scenes stay at the quiet end of what they say. Ours
+  hands the sixteen bands it measures, each spread over the 32 or 64
+  entries a script may ask for. Asking for them is what makes a scene
+  listen, so the microphone rule above holds for scripts too.
 
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
@@ -1340,13 +1384,20 @@ the file. Everything after it should.
    from the icon theme. A drawn one has been asked for, without any hurry.
 
 3. **Scene wallpapers, in the order agreed on 27 October:** the music the
-   scene answers to, which is done, then the mouse. It reaches the
+   scene answers to and its JavaScript, both done, then the mouse. It reaches the
    renderer through a call that exists (`wallflux_scene_point_at`) and
    that nothing in the program makes yet: the mouse over a surface that
    takes no input has to come from the compositor. Then the user properties the Settings tab
    is for -- their starting values are already read from `project.json`.
 
 ### Small things seen and left
+
+- What a scene's scripts do not reach yet: text (11 scripts -- the
+  clocks in Future Clock, Time Reactor and Dark Core; text is not drawn at
+  all), an effect switched on and off, a particle override other than the
+  rate, an object hidden in scene.json that a script would show -- it is
+  never loaded -- and the children of a particle system whose parent a
+  script moves, which were placed once from where the parent started.
 
 - A saved playlist still cannot be renamed. Saving under a name that is
   taken replaces it, which covers changing one; Load is where one is thrown
