@@ -62,6 +62,21 @@ public:
             m_reload = true;
         }
         m_running = view->m_running;
+
+        // As a fraction of the item, which is what the renderer wants and
+        // what stays true of a framebuffer drawn at another size.
+        std::optional<QPointF> pointer;
+        const QSizeF size = view->size();
+        if (view->m_pointer && size.width() > 0 && size.height() > 0) {
+            const QPointF at(view->m_pointer->x() / size.width(),
+                             view->m_pointer->y() / size.height());
+            if (at.x() >= 0 && at.x() < 1 && at.y() >= 0 && at.y() < 1)
+                pointer = at;
+        }
+        if (pointer != m_pointer) {
+            m_pointer = pointer;
+            m_pointed = false;
+        }
     }
 
     void render() override
@@ -69,6 +84,15 @@ public:
         QOpenGLFunctions *gl = QOpenGLContext::currentContext()->functions();
         if (m_reload)
             load();
+
+        if (m_scene && !m_pointed) {
+            const QSize size = framebufferObject()->size();
+            wallflux_scene_point_at(m_scene, m_pointer.has_value(),
+                                    float(m_pointer.value_or(QPointF()).x()),
+                                    float(m_pointer.value_or(QPointF()).y()), size.width(),
+                                    size.height());
+            m_pointed = true;
+        }
 
         if (m_scene) {
             // Seconds the scene has been running, which is not the same as
@@ -118,6 +142,8 @@ private:
         }
         qCInfo(lcScene) << "drawing" << m_folder;
         say({});
+        // A new scene has been told nothing about the mouse yet.
+        m_pointed = false;
         m_seconds = 0;
         m_clock.start();
     }
@@ -145,6 +171,10 @@ private:
     double m_seconds = 0;
     bool m_reload = false;
     bool m_running = true;
+    /// Where the mouse is, as a fraction of the item, and whether the scene
+    /// has been told.
+    std::optional<QPointF> m_pointer;
+    bool m_pointed = false;
 };
 
 SceneView::SceneView(QQuickItem *parent)
@@ -175,6 +205,21 @@ void SceneView::setRunning(bool running)
         return;
     m_running = running;
     emit runningChanged();
+    update();
+}
+
+void SceneView::setPointer(const QVariant &pointer)
+{
+    const std::optional<QPointF> at = pointer.canConvert<QPointF>() && !pointer.isNull()
+                                          ? std::optional(pointer.toPointF())
+                                          : std::nullopt;
+    if (m_pointer == at)
+        return;
+    m_pointer = at;
+    emit pointerChanged();
+    // The renderer is only synchronized when the item asks to be drawn --
+    // asking to be drawn again from the render thread does not count -- so
+    // a mouse that moves has to ask, or the scene never hears of it.
     update();
 }
 

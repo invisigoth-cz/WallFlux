@@ -90,6 +90,10 @@ qt_add_qml_module(wallflux
         src/language.cpp
         src/screencover.h
         src/screencover.cpp
+        src/kwinscript.h
+        src/kwinscript.cpp
+        src/pointer.h
+        src/pointer.cpp
         src/desktop.h
         src/desktop.cpp
         src/sceneview.h
@@ -222,6 +226,7 @@ if(Qt6Test_FOUND)
     qt_add_executable(tst_screencover
         tests/tst_screencover.cpp
         src/screencover.cpp
+        src/kwinscript.cpp
     )
     target_include_directories(tst_screencover PRIVATE src)
     target_link_libraries(tst_screencover PRIVATE Qt6::DBus Qt6::Qml Qt6::Test)
@@ -229,6 +234,17 @@ if(Qt6Test_FOUND)
     # Pointed at a bus that is not there, so building ScreenCover in a test
     # cannot load a script into the compositor of whoever runs the tests.
     set_tests_properties(screencover PROPERTIES
+        ENVIRONMENT "DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/wallflux-no-bus")
+
+    qt_add_executable(tst_pointer
+        tests/tst_pointer.cpp
+        src/pointer.cpp
+        src/kwinscript.cpp
+    )
+    target_include_directories(tst_pointer PRIVATE src)
+    target_link_libraries(tst_pointer PRIVATE Qt6::DBus Qt6::Qml Qt6::Test)
+    add_test(NAME pointer COMMAND tst_pointer)
+    set_tests_properties(pointer PROPERTIES
         ENVIRONMENT "DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/wallflux-no-bus")
 endif()
 

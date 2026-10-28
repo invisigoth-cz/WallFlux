@@ -4,10 +4,13 @@
 
 #pragma once
 
+#include <QPointF>
 #include <QQmlEngine>
 #include <QQuickFramebufferObject>
 #include <QUrl>
 #include <QVariantList>
+
+#include <optional>
 
 /// A scene wallpaper, drawn by the renderer under crates/.
 ///
@@ -31,6 +34,11 @@ class SceneView : public QQuickFramebufferObject
     Q_PROPERTY(bool running READ running WRITE setRunning NOTIFY runningChanged)
     /// Why the last scene could not be drawn, or empty.
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
+    /// Where the mouse is over this item, in its own pixels, or undefined
+    /// where it is not over it or nobody knows. What the scene does with it
+    /// is its own: a layer that leans away, a particle force that clears a
+    /// hole round the pointer.
+    Q_PROPERTY(QVariant pointer READ pointer WRITE setPointer NOTIFY pointerChanged)
 
 public:
     explicit SceneView(QQuickItem *parent = nullptr);
@@ -43,10 +51,14 @@ public:
     void setRunning(bool running);
     QString error() const { return m_error; }
 
+    QVariant pointer() const { return m_pointer ? QVariant(*m_pointer) : QVariant(); }
+    void setPointer(const QVariant &pointer);
+
 signals:
     void sourceChanged();
     void runningChanged();
     void errorChanged();
+    void pointerChanged();
 
 private:
     friend class SceneRenderer;
@@ -55,6 +67,7 @@ private:
     QUrl m_source;
     bool m_running = true;
     QString m_error;
+    std::optional<QPointF> m_pointer;
 };
 
 /// The music a scene wallpaper plays.

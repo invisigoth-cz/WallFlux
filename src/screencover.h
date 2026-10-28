@@ -4,10 +4,11 @@
 
 #pragma once
 
+#include "kwinscript.h"
+
 #include <QDBusConnection>
 #include <QObject>
 #include <QQmlEngine>
-#include <QTemporaryFile>
 
 /// Says whether an ordinary window is covering the screen.
 ///
@@ -54,15 +55,13 @@ signals:
     void coveredChanged();
 
 private:
-    void loadIntoKWin();
     void watchShowDesktop(QDBusConnection &bus);
     /// Works out what QML is told, and says nothing where that has not
     /// changed: handing the players a change that is not one stops them.
     void settle();
 
-    /// KWin loads a script from a path, so the script has to be a real file.
-    /// It lives as long as this object does.
-    QTemporaryFile m_script;
+    /// The script that watches the windows, for as long as this lives.
+    KWinScript m_script{QStringLiteral("wallflux-screencover")};
     /// What the two sources say, and the answer the two of them make.
     bool m_windowCovers = false;
     bool m_showingDesktop = false;

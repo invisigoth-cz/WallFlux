@@ -277,6 +277,12 @@ Window {
         visible: surface.showingScene
         source: surface.showingScene ? Wallpapers.current.source : ""
         running: surface.showingScene && !surface.covered
+        // The desktop's coordinates less where this screen starts on it,
+        // which is this item's own: it fills a surface that fills the screen.
+        pointer: Pointer.known && surface.onScreen
+                 ? Qt.point(Pointer.position.x - surface.onScreen.virtualX,
+                            Pointer.position.y - surface.onScreen.virtualY)
+                 : undefined
 
         onErrorChanged: {
             if (scene.error !== "")

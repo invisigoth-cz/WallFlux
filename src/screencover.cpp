@@ -6,8 +6,6 @@
 
 #include <QDBusConnection>
 #include <QDBusInterface>
-#include <QDBusReply>
-#include <QDir>
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(lcCover, "wallflux.cover")
@@ -15,8 +13,6 @@ Q_LOGGING_CATEGORY(lcCover, "wallflux.cover")
 namespace {
 
 constexpr auto ObjectPath = "/ScreenCover";
-/// What KWin files the script under. Ours alone, and the same every run.
-constexpr auto PluginName = "wallflux-screencover";
 
 /// The script KWin runs on our behalf.
 ///
@@ -114,18 +110,8 @@ ScreenCover::ScreenCover(QObject *parent)
         return;
     }
 
-    m_script.setFileTemplate(QDir::tempPath() + QStringLiteral("/wallflux-cover-XXXXXX.js"));
-    if (!m_script.open()) {
-        qCWarning(lcCover) << "cannot write the compositor script:" << m_script.errorString();
-        return;
-    }
-    m_script.write(scriptFor(bus.baseService()).toUtf8());
-    // KWin reads the file when it is asked to load it, so what is written has
-    // to be on disk by then rather than sitting in a buffer. The file stays
-    // open so it is not swept away under the script that is running from it.
-    m_script.flush();
-
-    loadIntoKWin();
+    if (m_script.load(scriptFor(bus.baseService())))
+        qCInfo(lcCover) << "watching for windows that cover the wallpaper";
     watchShowDesktop(bus);
 }
 
@@ -147,49 +133,7 @@ void ScreenCover::watchShowDesktop(QDBusConnection &bus)
         setShowingDesktop(showing.toBool());
 }
 
-void ScreenCover::loadIntoKWin()
-{
-    QDBusInterface scripting(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"),
-                             QStringLiteral("org.kde.kwin.Scripting"),
-                             QDBusConnection::sessionBus());
-    if (!scripting.isValid()) {
-        qCInfo(lcCover) << "no KWin to ask, so nothing will be said about windows covering the"
-                        << "wallpaper (on wlroots compositors this is expected)";
-        return;
-    }
-
-    // Unloaded first, every time. Asked to load a script it already has under
-    // this name, KWin hands back the one that is loaded and reads nothing --
-    // and after a restart of this program that would be a script still
-    // calling the bus name of the copy that is gone.
-    scripting.call(QStringLiteral("unloadScript"), QLatin1StringView(PluginName));
-
-    const QDBusReply<int> loaded = scripting.call(QStringLiteral("loadScript"),
-                                                  m_script.fileName(),
-                                                  QLatin1StringView(PluginName));
-    if (!loaded.isValid()) {
-        qCWarning(lcCover) << "KWin would not take the script:" << loaded.error().message();
-        return;
-    }
-
-    // ponytail: the script is not reloaded if KWin restarts. On Wayland a
-    // KWin that goes away takes the session with it, so there is nothing to
-    // come back to. Watch the service here if that ever stops being true.
-    const QDBusReply<void> started = scripting.call(QStringLiteral("start"));
-    if (!started.isValid())
-        qCWarning(lcCover) << "KWin would not start the script:" << started.error().message();
-    else
-        qCInfo(lcCover) << "watching for windows that cover the wallpaper";
-}
-
-ScreenCover::~ScreenCover()
-{
-    QDBusInterface scripting(QStringLiteral("org.kde.KWin"), QStringLiteral("/Scripting"),
-                             QStringLiteral("org.kde.kwin.Scripting"),
-                             QDBusConnection::sessionBus());
-    if (scripting.isValid())
-        scripting.call(QStringLiteral("unloadScript"), QLatin1StringView(PluginName));
-}
+ScreenCover::~ScreenCover() = default;
 
 void ScreenCover::setCovered(bool covered)
 {

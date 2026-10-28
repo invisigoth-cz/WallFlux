@@ -16,6 +16,9 @@
 #include <QStandardPaths>
 #include <QTest>
 
+#include <memory>
+#include <vector>
+
 #include <cstdio>
 
 /// The renderer drawn the way the program draws it: into a SceneView, on
@@ -161,6 +164,53 @@ private slots:
         const QFileInfo file(files.first().toUrl().toLocalFile());
         QVERIFY2(file.exists() && file.size() > 1'000'000, qPrintable(file.filePath()));
         QVERIFY(file.filePath().endsWith(QStringLiteral(".mp3")));
+    }
+
+    /// Where the mouse is reaches the scene. Three of Blue Dawn side by
+    /// side, running together: the outer two with the mouse on the left,
+    /// which have to agree, and the middle one with it on the right, which
+    /// has to differ from them by much more -- the layers lean away from the
+    /// pointer. Blue Dawn because it draws the same picture twice, which
+    /// Warhammer does not, and leans a long way. The two that agree are the two loaded furthest apart, so
+    /// whatever the moments between the loads change counts against the
+    /// test rather than for it. The trap
+    /// it is there for: a running renderer draws itself again without being
+    /// synchronized, so a mouse that only changed the item was never heard.
+    void hearsWhereTheMouseIs()
+    {
+        const QUrl source = scenes().value(QStringLiteral("2149578679"));
+        if (source.isEmpty())
+            QSKIP("Blue Dawn is not on this machine");
+
+        const QSize one(320, 180);
+        QQuickWindow window;
+        window.resize(one.width() * 3, one.height());
+        std::vector<std::unique_ptr<SceneView>> views;
+        for (int i = 0; i < 3; ++i) {
+            auto view = std::make_unique<SceneView>(window.contentItem());
+            view->setSize(one);
+            view->setX(i * one.width());
+            view->setSource(source);
+            views.push_back(std::move(view));
+        }
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        // Set once the scenes are running, which is when the trap bites.
+        QTest::qWait(300);
+        views[0]->setPointer(QPointF(one.width() * 0.05, one.height() / 2));
+        views[1]->setPointer(QPointF(one.width() * 0.95, one.height() / 2));
+        views[2]->setPointer(QPointF(one.width() * 0.05, one.height() / 2));
+        QTest::qWait(2000);
+
+        const QImage all = window.grabWindow().convertToFormat(QImage::Format_RGB32);
+        const QSize grabbed(all.width() / 3, all.height());
+        const auto part = [&](int i) { return all.copy(QRect(QPoint(i * grabbed.width(), 0), grabbed)); };
+        const double together = apart(part(0), part(2));
+        const double moved = apart(part(0), part(1));
+        QVERIFY2(moved > 3 * together && moved > 2,
+                 qPrintable(QStringLiteral("%1 apart with the mouse elsewhere, %2 with it in the same place")
+                                .arg(moved)
+                                .arg(together)));
     }
 
     /// A scene with nothing in it the renderer can draw says why, rather

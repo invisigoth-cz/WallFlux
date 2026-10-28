@@ -69,6 +69,14 @@ Item {
 
     onHoldingThePlaylistChanged: Playlists.hold(root.holdingThePlaylist)
 
+    // The mouse is asked after only while a scene is on show and in view:
+    // nothing else here follows it, and every move is a call over the bus.
+    Binding {
+        target: Pointer
+        property: "watching"
+        value: root.showingScene && !root.covered
+    }
+
     function showPicker() {
         picker.show();
         picker.raise();

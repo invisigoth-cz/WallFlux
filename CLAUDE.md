@@ -34,9 +34,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   82 of the 93 scripts in 7 packages, under QuickJS: what turns a clock's
   hands, swells a ring with the bass and keeps a particle system's rate on
   the beat. The other eleven write text, which is not drawn yet, or switch
-  an effect or a particle override other than the rate. What a scene does
-  not do yet is answer to the mouse: the renderer can, and nothing in the
-  program hands it one.
+  an effect or a particle override other than the rate. And a scene
+  follows the mouse -- layers that lean away from it, particles pushed
+  aside -- with the position asked of KWin, since the wallpaper's surfaces
+  take no input and must not.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
   covers the screen; both come back on their own. Neither is a setting. The
@@ -255,6 +256,10 @@ src/tags.h            Tags: what a workshop tag is called, and the genres
 src/tags.cpp          reads Wallpaper Engine's locale/, 36 languages
 src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
+src/pointer.h         Pointer: where the mouse is, for the scenes
+src/pointer.cpp       another KWin script, loaded only while it is watched
+src/kwinscript.h      KWinScript: a script run inside KWin, shared by both
+src/kwinscript.cpp    written to a file, unloaded first, loaded, started
 qml/Main.qml          the program: the tray icon, the picker, one surface
                       per screen, and the transitions they share
 qml/SceneSound.qml    one sound object of a scene, played as it asks
@@ -288,6 +293,7 @@ qml/RoundedTool.qml   the same corners for an icon on its own
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
+tests/tst_pointer.cpp         known only while watched, the same way
 tests/tst_playlists.cpp       what a playlist remembers and how long a
                               wallpaper stays -- five seconds of suite time
                               on purpose, see below
@@ -366,6 +372,11 @@ this program that remembers anything between runs:
   `Wallpapers.select()`, the same place a click on a card goes
 - the file is `playlists.json` under `QStandardPaths::AppConfigLocation`,
   which on this machine is `~/.config/WallFlux/wallflux/`
+
+`Pointer` is one more: `position` in the desktop's coordinates, `known`,
+and `watching`, which `Main.qml` binds to a scene being on show and in
+view. Each screen's `SceneView` is handed `pointer` -- the position less
+`Screen.virtualX/Y`, or undefined -- and passes it on as a fraction.
 
 `OtherAudio` and `ScreenCover` are singletons of the same module, each with
 one property -- `playing` and `covered` -- and no business of their own in
@@ -548,6 +559,25 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   hands the sixteen bands it measures, each spread over the 32 or 64
   entries a script may ask for. Asking for them is what makes a scene
   listen, so the microphone rule above holds for scripts too.
+
+- **The mouse comes from KWin, and the surfaces never take input.** A
+  click on the desktop belongs to Plasma's desktop underneath ours; a
+  wallpaper with an input region would swallow it. `workspace.cursorPos`
+  and `cursorPosChanged` were measured on KWin 6 first, and so was what
+  `callDBus` makes of two JS numbers -- **`int32`**, read off
+  `dbus-monitor`. A slot taking doubles would never have been called, and
+  D-Bus says nothing about a call whose signature matches no slot. The
+  script sends at most every 16 ms and is loaded only while a scene is
+  showing and uncovered; asked to stop, it is unloaded.
+
+  **And a mouse that changes only the item is a mouse the scene never
+  hears of** -- the framebuffer trap above, again: `setPointer` calls
+  `update()`. `tst_sceneview` lays three Blue Dawns side by side with the
+  mouse left, right and left, and fails with the `update()` taken out
+  (measured: 0.006 apart either way) while the outer two agree and the
+  middle one leans. Blue Dawn because Warhammer, the first choice, does
+  not draw the same picture twice -- 900 apart with the mouse in one place
+  -- and its "follows the mouse" had been that noise all along.
 
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
@@ -1384,11 +1414,10 @@ the file. Everything after it should.
    from the icon theme. A drawn one has been asked for, without any hurry.
 
 3. **Scene wallpapers, in the order agreed on 27 October:** the music the
-   scene answers to and its JavaScript, both done, then the mouse. It reaches the
-   renderer through a call that exists (`wallflux_scene_point_at`) and
-   that nothing in the program makes yet: the mouse over a surface that
-   takes no input has to come from the compositor. Then the user properties the Settings tab
-   is for -- their starting values are already read from `project.json`.
+   scene answers to, its JavaScript and the mouse are all done. Next are
+   the user properties the Settings tab is for -- their starting values
+   are already read from `project.json`, and a script declares more of
+   them with `createScriptProperties`.
 
 ### Small things seen and left
 
