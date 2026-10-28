@@ -177,7 +177,8 @@ if(Qt6Test_FOUND)
         src/wallpapercore.cpp
     )
     target_include_directories(tst_wallpapercore PRIVATE src)
-    target_link_libraries(tst_wallpapercore PRIVATE Qt6::Qml Qt6::Test)
+    target_include_directories(tst_wallpapercore PRIVATE crates/wallflux/include)
+    target_link_libraries(tst_wallpapercore PRIVATE Qt6::Qml Qt6::Test wallflux_scene)
     add_test(NAME wallpapercore COMMAND tst_wallpapercore)
 
     qt_add_executable(tst_playlists
@@ -194,7 +195,8 @@ if(Qt6Test_FOUND)
         src/wallpapercore.cpp
     )
     target_include_directories(tst_tags PRIVATE src)
-    target_link_libraries(tst_tags PRIVATE Qt6::Qml Qt6::Test)
+    target_include_directories(tst_tags PRIVATE crates/wallflux/include)
+    target_link_libraries(tst_tags PRIVATE Qt6::Qml Qt6::Test wallflux_scene)
     add_test(NAME tags COMMAND tst_tags)
 
     qt_add_executable(tst_otheraudio

@@ -24,36 +24,87 @@ pub struct Package {
     entries: BTreeMap<String, Range<usize>>,
 }
 
-impl Package {
-    pub fn parse(bytes: Vec<u8>) -> Result<Self> {
-        let mut r = Reader::new(&bytes);
-        let version = r.pstr(MAX_NAME_LEN)?;
-        if !version.starts_with("PKGV") {
-            return Err(Error::UnknownTag {
-                tag: version,
-                at: 0,
+/// What the front of a package says: its version, each entry's name, offset
+/// and size, and where the payload the offsets count from begins. `bytes`
+/// needs to hold no more than the table.
+type Table = (String, Vec<(String, usize, usize)>, usize);
+
+fn table(bytes: &[u8]) -> Result<Table> {
+    let mut r = Reader::new(bytes);
+    let version = r.pstr(MAX_NAME_LEN)?;
+    if !version.starts_with("PKGV") {
+        return Err(Error::UnknownTag {
+            tag: version,
+            at: 0,
+        });
+    }
+
+    let count = r.count("package entry count", MAX_ENTRIES)?;
+    let mut table = Vec::with_capacity(count.min(1024));
+    for _ in 0..count {
+        let name = r.pstr(MAX_NAME_LEN)?;
+        let at = r.pos();
+        let offset = r.i32()?;
+        let size = r.i32()?;
+        if offset < 0 || size < 0 {
+            return Err(Error::Absurd {
+                what: "entry extent",
+                value: offset as i64,
+                at,
             });
         }
+        table.push((name, offset as usize, size as usize));
+    }
+    // Offsets are relative to here.
+    Ok((version, table, r.pos()))
+}
 
-        let count = r.count("package entry count", MAX_ENTRIES)?;
-        let mut table = Vec::with_capacity(count.min(1024));
-        for _ in 0..count {
-            let name = r.pstr(MAX_NAME_LEN)?;
-            let at = r.pos();
-            let offset = r.i32()?;
-            let size = r.i32()?;
-            if offset < 0 || size < 0 {
-                return Err(Error::Absurd {
-                    what: "entry extent",
-                    value: offset as i64,
-                    at,
-                });
-            }
-            table.push((name, offset as usize, size as usize));
+/// One entry of the package at `path`, read without the rest of it, or
+/// nothing where the package has no such entry.
+///
+/// A scene's package runs to a few hundred megabytes -- 277 MB for the
+/// largest here -- and asking whether it carries a sound needs only its
+/// scene.json, so the table is read off the front, a quarter of a megabyte
+/// at a time until it is all there, and then the one entry.
+pub fn read_entry(path: impl AsRef<std::path::Path>, name: &str) -> std::io::Result<Option<Vec<u8>>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let invalid = |e: Error| std::io::Error::new(std::io::ErrorKind::InvalidData, e);
+
+    let mut file = std::fs::File::open(path)?;
+    let length = file.metadata()?.len();
+    let mut front = Vec::new();
+    let mut wanted: u64 = 256 * 1024;
+    let (table, base) = loop {
+        front.clear();
+        file.seek(SeekFrom::Start(0))?;
+        (&mut file).take(wanted).read_to_end(&mut front)?;
+        match table(&front) {
+            Ok((_, table, base)) => break (table, base),
+            Err(Error::Eof { .. }) if wanted < length => wanted *= 4,
+            Err(e) => return Err(invalid(e)),
         }
+    };
+    let Some(&(_, offset, size)) = table.iter().find(|(entry, _, _)| entry == name) else {
+        return Ok(None);
+    };
+    let start = (base + offset) as u64;
+    if start + size as u64 > length {
+        return Err(invalid(Error::Eof {
+            need: base + offset + size,
+            have: length as usize,
+            at: base,
+        }));
+    }
+    file.seek(SeekFrom::Start(start))?;
+    let mut entry = vec![0; size];
+    file.read_exact(&mut entry)?;
+    Ok(Some(entry))
+}
 
-        // Offsets are relative to here, so the payload is whatever is left.
-        let base = r.pos();
+impl Package {
+    pub fn parse(bytes: Vec<u8>) -> Result<Self> {
+        let (version, table, base) = table(&bytes)?;
+        // The payload is whatever is left after the table.
         let payload = bytes.len() - base;
 
         let mut entries = BTreeMap::new();
@@ -136,6 +187,40 @@ mod tests {
         let n = v.len();
         v[n - 6..n - 2].copy_from_slice(&99i32.to_le_bytes()); // size 99, payload 2
         assert!(matches!(Package::parse(v), Err(Error::Eof { .. })));
+    }
+
+    /// The table is read a piece at a time, so one longer than the first
+    /// piece has to be read whole before the entry is found -- and the entry
+    /// has to be the same bytes a whole read of the package finds.
+    #[test]
+    fn reads_one_entry_past_a_table_longer_than_the_first_read() {
+        let names: Vec<String> = (0..4000).map(|i| format!("materials/{i:0>90}.json")).collect();
+        let mut v = Vec::new();
+        v.extend_from_slice(&8i32.to_le_bytes());
+        v.extend_from_slice(b"PKGV0019");
+        v.extend_from_slice(&(names.len() as i32).to_le_bytes());
+        for (i, name) in names.iter().enumerate() {
+            v.extend_from_slice(&(name.len() as i32).to_le_bytes());
+            v.extend_from_slice(name.as_bytes());
+            v.extend_from_slice(&(i as i32 * 2).to_le_bytes());
+            v.extend_from_slice(&2i32.to_le_bytes());
+        }
+        assert!(v.len() > 256 * 1024);
+        for i in 0..names.len() {
+            v.extend_from_slice(&(i as u16).to_le_bytes());
+        }
+        let path = std::env::temp_dir().join(format!("wpe-format-{}.pkg", std::process::id()));
+        std::fs::write(&path, &v).unwrap();
+
+        let last = names.last().unwrap();
+        let read = read_entry(&path, last).unwrap();
+        let absent = read_entry(&path, "scene.json").unwrap();
+        std::fs::remove_file(&path).unwrap();
+
+        let whole = Package::parse(v).unwrap();
+        assert_eq!(read.as_deref(), whole.get(last));
+        assert_eq!(read.as_deref(), Some(&3999u16.to_le_bytes()[..]));
+        assert_eq!(absent, None);
     }
 
     #[test]

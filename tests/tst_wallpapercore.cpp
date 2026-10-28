@@ -34,6 +34,31 @@ void makeWallpaper(const QString &root, const QString &id, const QByteArray &pro
     }
 }
 
+/// Writes a scene.pkg holding the one scene.json, laid out as Wallpaper
+/// Engine lays its packages out: a version, a count, a table of names with
+/// offsets and sizes, and the payload after it.
+void writePackage(const QString &file, const QByteArray &sceneJson)
+{
+    QByteArray bytes;
+    const auto number = [&bytes](qint32 n) {
+        bytes.append(reinterpret_cast<const char *>(&n), sizeof n);
+    };
+    const auto text = [&](const QByteArray &s) {
+        number(qint32(s.size()));
+        bytes.append(s);
+    };
+    text("PKGV0019");
+    number(1);
+    text("scene.json");
+    number(0);
+    number(qint32(sceneJson.size()));
+    bytes.append(sceneJson);
+
+    QFile out(file);
+    QVERIFY(out.open(QIODevice::WriteOnly));
+    QCOMPARE(out.write(bytes), bytes.size());
+}
+
 } // namespace
 
 class TestWallpaperCore : public QObject
@@ -67,6 +92,10 @@ private slots:
     /// A wallpaper that appears on disk is noticed without being asked for,
     /// which is what makes a download in Steam turn up here by itself.
     void noticesAWallpaperArriving();
+
+    /// Whether a wallpaper plays a sound of its own, which is what the panel
+    /// says beside "follows the music" so that the two are not read as one.
+    void saysWhetherItHasASoundOfItsOwn();
 
     /// Giving a wallpaper back takes its folder with it -- and anything
     /// that is not that folder is left alone.
@@ -332,6 +361,45 @@ void TestWallpaperCore::takesOneOffTheDisk()
              "the wrong folder went");
     QCOMPARE(core.wallpapers().size(), 1);
     QCOMPARE(core.wallpapers().constFirst().id, QStringLiteral("222"));
+}
+
+void TestWallpaperCore::saysWhetherItHasASoundOfItsOwn()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+    const QString content = steam.path() + QStringLiteral("/steamapps/workshop/content/431960/");
+
+    makeWallpaper(steam.path(), QStringLiteral("111"),
+                  R"({"title":"A web one","type":"web","file":"index.html"})",
+                  {QStringLiteral("index.html")});
+    makeWallpaper(steam.path(), QStringLiteral("222"),
+                  R"({"title":"B scene with music","type":"scene","file":"scene.json"})");
+    writePackage(content + QStringLiteral("222/scene.pkg"),
+                 R"({"objects":[{"name":"music","sound":["sounds/a.mp3"]}]})");
+    // A sound object switched off is not a sound the wallpaper plays.
+    makeWallpaper(steam.path(), QStringLiteral("333"),
+                  R"({"title":"C quiet scene","type":"scene","file":"scene.json"})");
+    writePackage(content + QStringLiteral("333/scene.pkg"),
+                 R"({"objects":[{"name":"off","sound":["sounds/a.mp3"],"visible":false}]})");
+
+    const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
+    QCOMPARE(found.size(), 3);
+    // A web page can start a sound whenever it likes; nothing says.
+    QVERIFY(!found[0].soundKnown);
+    QVERIFY(found[1].soundKnown);
+    QVERIFY(found[1].hasSound);
+    QVERIFY(found[2].soundKnown);
+    QVERIFY(!found[2].hasSound);
+
+    // A video is answered by ffprobe, a line a stream, in either order.
+    const Probed both = probedFrom("audio\nvideo,1920,1080\n");
+    QVERIFY(both.answered);
+    QVERIFY(both.sound);
+    QCOMPARE(both.resolution, QStringLiteral("1920x1080"));
+    const Probed silent = probedFrom("video,3840,2160\n");
+    QVERIFY(!silent.sound);
+    QCOMPARE(silent.resolution, QStringLiteral("3840x2160"));
+    QVERIFY(!probedFrom("").answered);
 }
 
 #include "tst_wallpapercore.moc"

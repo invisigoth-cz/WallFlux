@@ -317,7 +317,8 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
   read off the disk when the picker shows one card and kept afterwards)
 - static: `scan(roots)`, `steamRoots()`
 - `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `tags`, `rating`,
-  `resolution`, `sizeOnDisk`, `added`, `bytes`, `hasFile`, `playable`
+  `resolution`, `sizeOnDisk`, `added`, `bytes`, `soundKnown`, `hasSound`,
+  `hasFile`, `playable`
 - also on the singleton: `recent` (ids chosen in this run, newest first)
 
 `Steamworks` and `Tags` are singletons of the same module:
@@ -566,6 +567,20 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   **And whatever the chips are built from, the grid has to match on.**
   The filter offering a tag that the predicate cannot see is a chip that
   finds nothing, which looks exactly like a library with nothing in it.
+
+- **"Audio responsive" is not "has a sound".** The tag means the
+  wallpaper follows the music somebody else is playing -- right for all
+  seven scenes here whose renderer says they listen -- and it was read as
+  whether the wallpaper makes a sound at all: "not stated" over a
+  wallpaper playing its own soundtrack. Valve's Czech for the tag,
+  "Reaguje na zvuk", invites exactly that. So the panel has two rows,
+  *Follows the music* off the tag and *Sound of its own* off the
+  wallpaper: a scene's scene.json, read during the scan by
+  `wallflux_scene_has_sound` -- the package's table and that one entry,
+  45 ms for all 41 packages where reading them whole is hundreds of
+  megabytes -- and a video's streams from the ffprobe that already asks
+  its size. Six of ten videos and 19 of 41 scenes carry one. A web page
+  is left without the row: it plays what it likes.
 
 - **Who made an installed wallpaper takes two questions, not one.**
   project.json has no author in it at all -- the keys are `title`, `type`,

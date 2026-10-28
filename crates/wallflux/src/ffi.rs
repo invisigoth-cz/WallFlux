@@ -235,3 +235,24 @@ pub unsafe extern "C" fn wallflux_scene_sounds(
     bytes.len()
 }
 
+/// Whether the scene in `folder` plays a sound of its own. Reads scene.json
+/// and nothing else of the package, needs no OpenGL and may be called from
+/// any thread. A scene that cannot be read is said to play nothing, and why
+/// goes to stderr.
+///
+/// # Safety
+/// `folder` must be a NUL-terminated path.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wallflux_scene_has_sound(folder: *const c_char) -> bool {
+    if folder.is_null() {
+        return false;
+    }
+    // SAFETY: the caller said it is NUL-terminated.
+    let folder = unsafe { CStr::from_ptr(folder) }.to_string_lossy().into_owned();
+    catch_unwind(|| crate::sounds::carries_sound(std::path::Path::new(&folder)))
+        .unwrap_or_else(|_| Err("the renderer failed while reading it".to_owned()))
+        .unwrap_or_else(|reason| {
+            eprintln!("wallflux scene {folder}: cannot tell whether it has sound -- {reason}");
+            false
+        })
+}

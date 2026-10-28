@@ -384,9 +384,18 @@ Window {
         // The workshop's list, not project.json's -- the tag is never on
         // the disk, so reading it there said "not stated" about a
         // wallpaper whose own chips underneath said otherwise.
-        told.push({ label: qsTr("Audio responsive"), icon: "audio-volume-high",
+        //
+        // That is following the music somebody else plays, and it was read
+        // as having a sound at all -- "not stated" over a wallpaper with its
+        // own soundtrack. So the two are two rows, the second measured off
+        // the wallpaper rather than taken from its author, and left out
+        // where nothing can say: a web page plays what it likes.
+        told.push({ label: qsTr("Follows the music"), icon: "view-media-visualization",
                     value: picker.rawTagsOf(one).indexOf("Audio responsive") >= 0
                                ? qsTr("Yes") : qsTr("Not stated") });
+        if (one.soundKnown)
+            told.push({ label: qsTr("Sound of its own"), icon: "audio-volume-high",
+                        value: one.hasSound ? qsTr("Yes") : qsTr("No") });
         told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: one.id });
         return told;
     }

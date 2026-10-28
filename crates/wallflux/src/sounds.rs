@@ -83,6 +83,22 @@ pub fn unpack(folder: &Path, cache: &Path) -> Result<Vec<Sound>, String> {
     Ok(sounds)
 }
 
+/// Whether the scene in `folder` plays a sound of its own -- what `unpack`
+/// would find, asked without reading the package whole or writing anything.
+pub fn carries_sound(folder: &Path) -> Result<bool, String> {
+    let package = crate::render::find_package(folder)?;
+    let scene = wpe_format::pkg::read_entry(&package, "scene.json")
+        .map_err(|e| format!("reading package: {e}"))?
+        .ok_or("no scene.json in this wallpaper")?;
+    let project = std::fs::read(folder.join("project.json")).ok();
+    let scene = SceneFile::parse_with_properties(&scene, project.as_deref())
+        .map_err(|e| format!("scene.json: {e}"))?;
+    Ok(scene.objects.iter().any(|object| {
+        object.visible.value
+            && matches!(object.kind(), ObjectKind::Sound(names) if !names.is_empty())
+    }))
+}
+
 /// Where `name` goes under `cache`, or nothing if it would go anywhere else.
 ///
 /// The names come out of somebody's package off the internet; one written

@@ -251,7 +251,7 @@ Item {
         if (rating)
             told.push({ label: qsTr("Age rating"), icon: "flag", value: rating });
 
-        told.push({ label: qsTr("Audio responsive"), icon: "audio-volume-high",
+        told.push({ label: qsTr("Follows the music"), icon: "view-media-visualization",
                     value: item.tags.indexOf("Audio responsive") >= 0 ? qsTr("Yes")
                                                                       : qsTr("Not stated") });
 

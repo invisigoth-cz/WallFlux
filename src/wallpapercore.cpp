@@ -3,6 +3,7 @@
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
 #include "wallpapercore.h"
+#include "wallflux_scene.h"
 
 #include <QDir>
 #include <QFile>
@@ -47,28 +48,13 @@ WallpaperKind::Kind kindFromType(const QString &type)
     return WallpaperKind::Unknown;
 }
 
-/// The picture size in what ffprobe printed, as `1920x1080`, or nothing.
-///
-/// ffprobe rather than a decoder of our own: it is already on any machine
-/// whose Qt plays video, since that backend is ffmpeg too, and it answers in
-/// 53 milliseconds against these files -- measured. Nothing in project.json
-/// carries a resolution (checked across all 53) and the preview is a square
-/// thumbnail, so there is nowhere cheaper to ask.
-QString resolutionIn(const QByteArray &printed)
-{
-    // "1920x1080\n", and nothing else on success.
-    const QString answer = QString::fromLatin1(printed).trimmed();
-    static const QRegularExpression shape(QStringLiteral("^\\d+x\\d+$"));
-    return shape.match(answer).hasMatch() ? answer : QString{};
-}
 
 /// What to ask ffprobe for.
 QStringList probeArguments(const QString &file)
 {
     return {QStringLiteral("-v"),        QStringLiteral("error"),
-            QStringLiteral("-select_streams"), QStringLiteral("v:0"),
-            QStringLiteral("-show_entries"),   QStringLiteral("stream=width,height"),
-            QStringLiteral("-of"),       QStringLiteral("csv=p=0:s=x"),
+            QStringLiteral("-show_entries"),   QStringLiteral("stream=codec_type,width,height"),
+            QStringLiteral("-of"),       QStringLiteral("csv=p=0"),
             file};
 }
 
@@ -185,10 +171,40 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     if (wallpaper.bytes > 0)
         wallpaper.sizeOnDisk = QLocale().formattedDataSize(wallpaper.bytes);
 
+    if (wallpaper.kind == WallpaperKind::Scene && wallpaper.hasFile()) {
+        wallpaper.soundKnown = true;
+        wallpaper.hasSound = wallflux_scene_has_sound(QFile::encodeName(folder.absolutePath()).constData());
+    }
+
     return wallpaper;
 }
 
 } // namespace
+
+/// What ffprobe printed, read back.
+///
+/// ffprobe rather than a decoder of our own: it is already on any machine
+/// whose Qt plays video, since that backend is ffmpeg too, and it answers in
+/// 53 milliseconds against these files -- measured. Nothing in project.json
+/// carries a resolution (checked across all 53) and the preview is a square
+/// thumbnail, so there is nowhere cheaper to ask.
+Probed probedFrom(const QByteArray &printed)
+{
+    // A line a stream, in whatever order the file keeps them:
+    // "video,1920,1080" and "audio" -- the audio first in two of the ten
+    // here. Nothing at all where the file could not be read.
+    Probed told;
+    static const QRegularExpression video(QStringLiteral("^video,(\\d+),(\\d+)$"));
+    for (const QString &line : QString::fromLatin1(printed).split(u'\n')) {
+        const QString stream = line.trimmed();
+        told.answered = told.answered || !stream.isEmpty();
+        if (stream.startsWith(QLatin1StringView("audio")))
+            told.sound = true;
+        else if (const auto shape = video.match(stream); shape.hasMatch() && told.resolution.isEmpty())
+            told.resolution = shape.captured(1) + u'x' + shape.captured(2);
+    }
+    return told;
+}
 
 WallpaperCore::WallpaperCore(QObject *parent)
     : QObject(parent)
@@ -403,9 +419,9 @@ void WallpaperCore::readResolutions()
             m_probes.removeAll(probe);
             probe->deleteLater();
 
-            const QString shape = resolutionIn(probe->readAllStandardOutput());
-            if (shape.isEmpty()) {
-                qCInfo(lcScan) << "ffprobe said nothing about the size of" << id;
+            const Probed told = probedFrom(probe->readAllStandardOutput());
+            if (!told.answered) {
+                qCInfo(lcScan) << "ffprobe said nothing about" << id;
                 return;
             }
 
@@ -413,10 +429,16 @@ void WallpaperCore::readResolutions()
             if (match == m_wallpapers.end())
                 return;
 
-            match->resolution = shape;
+            const auto tell = [&told](Wallpaper &one) {
+                if (!told.resolution.isEmpty())
+                    one.resolution = told.resolution;
+                one.soundKnown = true;
+                one.hasSound = told.sound;
+            };
+            tell(*match);
             // The one that is playing carries its own copy.
             if (m_current.id == id)
-                m_current.resolution = shape;
+                tell(m_current);
             emit wallpapersChanged();
         });
         probe->start(QStringLiteral("ffprobe"), probeArguments(wallpaper.source.toLocalFile()));

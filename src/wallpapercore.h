@@ -56,6 +56,8 @@ class Wallpaper
     Q_PROPERTY(QStringList tags MEMBER tags CONSTANT)
     Q_PROPERTY(QString rating MEMBER rating CONSTANT)
     Q_PROPERTY(QString resolution MEMBER resolution CONSTANT)
+    Q_PROPERTY(bool soundKnown MEMBER soundKnown CONSTANT)
+    Q_PROPERTY(bool hasSound MEMBER hasSound CONSTANT)
     Q_PROPERTY(QString sizeOnDisk MEMBER sizeOnDisk CONSTANT)
     Q_PROPERTY(QDateTime added MEMBER added CONSTANT)
     Q_PROPERTY(qint64 bytes MEMBER bytes CONSTANT)
@@ -103,6 +105,19 @@ public:
     /// one answer and leaves this empty.
     QString resolution;
 
+    /// Whether the wallpaper plays a sound of its own, once it is known --
+    /// which is not the same question as the workshop's "Audio responsive",
+    /// a wallpaper that follows the music somebody else is playing. The two
+    /// were read as one: a panel saying "not stated" over a wallpaper with
+    /// its own soundtrack looked like a panel getting it wrong.
+    ///
+    /// A scene says so in its scene.json, read during the scan at about a
+    /// millisecond a package. A video says so to ffprobe, and is known when
+    /// that answers. A web page can start a sound whenever it likes, so
+    /// nothing short of playing it could say, and it is never known.
+    bool soundKnown = false;
+    bool hasSound = false;
+
     /// What the folder takes up, written out for a person to read.
     QString sizeOnDisk;
 
@@ -133,6 +148,21 @@ public:
                    || kind == WallpaperKind::Scene);
     }
 };
+
+/// What ffprobe said about a video's streams.
+struct Probed
+{
+    /// Whether it said anything at all.
+    bool answered = false;
+    /// The picture size as `1920x1080`, or empty.
+    QString resolution;
+    /// Whether there is a sound track. Six of the ten videos here carry one.
+    bool sound = false;
+};
+
+/// What `ffprobe -show_entries stream=codec_type,width,height -of csv=p=0`
+/// printed, read back.
+Probed probedFrom(const QByteArray &printed);
 
 /// Finds the Wallpaper Engine wallpapers installed by Steam and keeps the
 /// one that was chosen.
