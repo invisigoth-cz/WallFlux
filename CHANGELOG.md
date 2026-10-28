@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-28
+
 ### Added
 
 - **A scene's own music plays.** Nineteen of the forty-one scenes carry
@@ -13,6 +15,27 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   way the scene asks -- round and round, shuffled with a pause between
   tracks, or once -- quiet when anything else is playing, paused under a
   covering window, and once for the program rather than once per screen.
+- **A scene that follows the music hears it.** Seven of the forty scenes
+  answer to what the speakers are playing -- visualisers, and particles
+  whose rate or motion follows the beat. The renderer listens to the
+  default output itself, once for every screen, and only while such a
+  scene is on show: Plasma puts its microphone icon in the tray for as
+  long as anything listens to the speakers.
+- **Particle systems bring their children**, running alongside, bursting
+  where a parent's particle is born or dies, or riding along with one.
+- **A scene's settings for each particle system it places are read** --
+  alpha, size, lifetime, rate, speed, count and colour. Unread, every
+  smoke kept its preset's colours, which is where the pastel blobs in half
+  the library came from.
+
+### Fixed in the renderer
+
+- One effect that cannot be built no longer takes the rest of the object's
+  effects with it; Arkham Knight's blur and godrays and the motion blur in
+  eight more wallpapers are back.
+- A layer can read what another layer finished as, and blends placed in
+  the scene's own pixels land where they were meant to instead of at
+  infinity.
 
 ## [0.12.0] — 2026-10-27
 
@@ -650,7 +673,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.9.0...v0.10.0
