@@ -6,6 +6,43 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-10-29
+
+### Fixed in the renderer
+
+- **Scenes are composed the right way up.** A scene measures its y from
+  the bottom, and WallFlux measured it from the top: every layer that was
+  not centred was mirrored to the other half of the screen, and every
+  particle -- rain, snow, embers -- moved upside down. A scene that is
+  mostly a centred background looked almost right while it was wrong,
+  which is why not one of them looked like its preview.
+- **Turned objects are turned by as much as they say.** The scene stores
+  its angles in radians and they were read as degrees, so 308 objects in
+  28 wallpapers were turned a fifty-seventh of the way.
+- **A scene is opaque.** Where layers overlapped, the picture handed on
+  was partly transparent; smoke and lens flares showed whatever was behind
+  the wallpaper.
+
+### Added
+
+- **A layer's blend mode** -- lighten, screen, add and the rest of the
+  editor's list -- mixes it into what is under it, as Wallpaper Engine does,
+  instead of drawing it over the top.
+- **Bloom**, for the scenes that turn it on, drawn with Wallpaper Engine's
+  own shaders.
+- **Alignment**: a layer can hang from one of its edges rather than its
+  middle.
+- **A scene's JavaScript runs**, under QuickJS: what turns a clock's hands,
+  swells a ring with the bass and keeps a particle system's rate on the
+  beat. 82 of the 93 scripts here run; the rest write text, which is not
+  drawn yet.
+- **A scene follows the mouse** -- layers that lean away from it,
+  particles pushed aside -- with the position asked of KWin, since the
+  wallpaper's surfaces take no input and must not.
+- **The details panel says whether a wallpaper has a sound of its own**,
+  apart from whether it follows the music, which is what the workshop's
+  "Audio responsive" tag means.
+
 ## [0.13.0] — 2026-10-28
 
 ### Added
@@ -673,7 +710,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.10.0...v0.11.0
