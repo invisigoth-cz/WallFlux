@@ -223,12 +223,18 @@ pub enum Operator {
         gravity: [f32; 3],
         drag: f32,
     },
-    /// Fades in over the first seconds of life and out over the last.
+    /// Fades in until `fade_in` of the way through its life and out from
+    /// `fade_out` of the way. Both are fractions of the lifetime, not seconds:
+    /// across 510 uses no value is above one, lifetimes of twenty seconds
+    /// included, and the usual pairs are 0.1 and 0.9. Missing, each is 0.5 --
+    /// Wallpaper Engine's own default, read out of `wallpaper64.exe`.
     AlphaFade {
         fade_in: f32,
         fade_out: f32,
     },
     SizeChange(Ramp),
+    /// Drives a particle's alpha over its life, the same way.
+    AlphaChange(Ramp),
     /// Drives a particle's colour from one to another over its life.
     ///
     /// **These colours are 0 to 1**, unlike the 0 to 255 that `colorrandom`
@@ -464,24 +470,20 @@ impl ParticleSystem {
                     drag: num(step, "drag", 0.0),
                 },
                 "alphafade" => Operator::AlphaFade {
-                    fade_in: num(step, "fadeintime", 0.0),
-                    fade_out: num(step, "fadeouttime", 0.0),
+                    fade_in: num(step, "fadeintime", 0.5),
+                    fade_out: num(step, "fadeouttime", 0.5),
                 },
-                "sizechange" => Operator::SizeChange(Ramp {
-                    time: Range {
-                        min: num(step, "starttime", 0.0),
-                        max: num(step, "endtime", 1.0),
-                    },
-                    from: num(step, "startvalue", 1.0),
-                    to: num(step, "endvalue", 1.0),
-                }),
+                // A ramp that leaves its end out runs down to nothing, as
+                // Wallpaper Engine's defaults have it.
+                "sizechange" => Operator::SizeChange(ramp(step)),
+                "alphachange" => Operator::AlphaChange(ramp(step)),
                 "colorchange" => Operator::ColorChange {
                     time: Range {
                         min: num(step, "starttime", 0.0),
                         max: num(step, "endtime", 1.0),
                     },
                     from: vector(step, "startvalue", [1.0; 3]),
-                    to: vector(step, "endvalue", [1.0; 3]),
+                    to: vector(step, "endvalue", [0.0; 3]),
                 },
                 "controlpointattract" => {
                     let which = num(step, "controlpoint", 0.0).max(0.0) as usize;
@@ -526,9 +528,20 @@ impl ParticleSystem {
                 "angularmovement" => Operator::AngularMovement {
                     force: vector(step, "force", [0.0; 3]),
                 },
+                // The engine's defaults for the operator, which differ from
+                // the initializer's of the same name: flat, and fast. Its
+                // scale and time scale are left as they were -- the engine
+                // and Almamu's renderer disagree about both.
+                // ponytail: settle scale/timescale once a scene that omits them is compared with WPE
                 "turbulence" => Operator::Turbulence {
-                    field: turbulent(step, 0.002),
-                    mask: vector(step, "mask", [1.0; 3]),
+                    field: Turbulent {
+                        speed: Range {
+                            min: num(step, "speedmin", 500.0),
+                            max: num(step, "speedmax", 1000.0),
+                        },
+                        ..turbulent(step, 0.002)
+                    },
+                    mask: vector(step, "mask", [1.0, 1.0, 0.0]),
                 },
                 other => {
                     unsupported.push(format!("operator {other}"));
@@ -750,6 +763,20 @@ fn oscillation(step: &Value) -> Oscillation {
 /// `default_scale` is what the library's systems state, used for the rare one
 /// that leaves it out: a field with no scale at all would push every particle
 /// the same way and stop being turbulence.
+/// A value driven from `startvalue` to `endvalue` between `starttime` and
+/// `endtime` of a particle's life: one to nought across the whole of it where
+/// the file says nothing, which is what `wallpaper64.exe` fills in.
+fn ramp(step: &Value) -> Ramp {
+    Ramp {
+        time: Range {
+            min: num(step, "starttime", 0.0),
+            max: num(step, "endtime", 1.0),
+        },
+        from: num(step, "startvalue", 1.0),
+        to: num(step, "endvalue", 0.0),
+    }
+}
+
 fn turbulent(step: &Value, default_scale: f32) -> Turbulent {
     Turbulent {
         speed: Range {
@@ -862,7 +889,7 @@ mod tests {
             p.operators[1],
             Operator::AlphaFade {
                 fade_in: 0.5,
-                fade_out: 0.0
+                fade_out: 0.5
             }
         );
     }

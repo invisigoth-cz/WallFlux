@@ -631,6 +631,7 @@ impl System {
                     // These change nothing that carries over to the next step,
                     // so they are applied as the buffer is written.
                     Operator::AlphaFade { .. }
+                    | Operator::AlphaChange(_)
                     | Operator::SizeChange(_)
                     | Operator::ColorChange { .. }
                     | Operator::OscillateAlpha(_)
@@ -963,18 +964,32 @@ fn turned(point: [f32; 3], axis: [f32; 3], degrees: f32) -> [f32; 3] {
     std::array::from_fn(|i| point[i] * cos + cross[i] * sin + axis[i] * dot * (1.0 - cos))
 }
 
-/// What `alphafade` leaves of a particle's alpha: in over its first seconds,
-/// out over its last.
+/// What `alphafade` and `alphachange` leave of a particle's alpha.
+///
+/// The fade's two times are points on the particle's life, as fractions of
+/// it: in until the first, out from the second to the end. They were read as
+/// seconds, with no fade out unless one was stated -- so smoke stayed at its
+/// full alpha for all of its life and vanished at once, where Wallpaper
+/// Engine has it thin out from halfway: the dense, hard-edged clouds.
 fn fade(operators: &[Operator], age: f32, lifetime: f32) -> f32 {
+    let life = match lifetime > 0.0 {
+        true => (age / lifetime).clamp(0.0, 1.0),
+        false => 1.0,
+    };
     let mut out = 1.0;
     for operator in operators {
-        if let Operator::AlphaFade { fade_in, fade_out } = *operator {
-            if fade_in > 0.0 {
-                out *= (age / fade_in).min(1.0);
+        match *operator {
+            Operator::AlphaFade { fade_in, fade_out } => {
+                if life <= fade_in && fade_in > 0.0 {
+                    out *= life / fade_in;
+                } else if life > fade_out && fade_out < 1.0 {
+                    out *= 1.0 - (life - fade_out) / (1.0 - fade_out);
+                }
             }
-            if fade_out > 0.0 {
-                out *= ((lifetime - age) / fade_out).clamp(0.0, 1.0);
+            Operator::AlphaChange(ramp) => {
+                out *= (ramp.from + (ramp.to - ramp.from) * along(ramp.time, life)).max(0.0);
             }
+            _ => {}
         }
     }
     out
@@ -1446,14 +1461,46 @@ mod tests {
             r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10},
                                {"name":"alpharandom","min":1,"max":1}],
-                "operator":[{"name":"alphafade","fadeintime":1}]}"#,
+                "operator":[{"name":"alphafade","fadeintime":0.1,"fadeouttime":1}]}"#,
         );
         s.advance(1.0 / 60.0, &Spectrum::SILENT);
         assert_eq!(s.count(), 1);
         let early = written_alpha(&s);
         assert!(early < 0.1, "born at {early} instead of nearly nothing");
+        // A tenth of a ten-second life.
         run(&mut s, 1.0, 1.0 / 60.0);
         assert!((written_alpha(&s) - 1.0).abs() < 0.01);
+    }
+
+    /// Smoke states how it comes in and nothing about going: it thins out
+    /// from halfway through its life, which is the engine's default, rather
+    /// than holding its full alpha and vanishing at the end.
+    #[test]
+    fn alphafade_without_a_fade_out_thins_from_halfway() {
+        let mut s = system(
+            r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":4,"max":4},
+                               {"name":"alpharandom","min":1,"max":1}],
+                "operator":[{"name":"alphafade","fadeintime":0.1}]}"#,
+        );
+        run(&mut s, 2.0, 1.0 / 60.0);
+        assert!(written_alpha(&s) > 0.95, "{}", written_alpha(&s));
+        run(&mut s, 1.0, 1.0 / 60.0);
+        let three_quarters = written_alpha(&s);
+        assert!((three_quarters - 0.5).abs() < 0.05, "{three_quarters}");
+    }
+
+    #[test]
+    fn a_ramp_with_no_end_runs_down_to_nothing() {
+        let mut s = system(
+            r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":2,"max":2},
+                               {"name":"alpharandom","min":1,"max":1}],
+                "operator":[{"name":"alphachange"}]}"#,
+        );
+        run(&mut s, 1.0, 1.0 / 60.0);
+        let halfway = written_alpha(&s);
+        assert!((halfway - 0.5).abs() < 0.05, "{halfway}");
     }
 
     #[test]

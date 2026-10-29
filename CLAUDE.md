@@ -536,6 +536,26 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   have no `registerAudioBuffers` -- the same reason his blue ring is lit
   and ours is dark until something plays.
 
+- **A particle operator's missing values are Wallpaper Engine's, and they
+  are in `wallpaper64.exe`.** Each operator has a small function that fills
+  in what the file leaves out -- found by the key's string and its
+  references (REA, Ghidra), and read as doubles: `0x3fe0000000000000` is
+  0.5. Guessed instead, smoke was the worst of it. `alphafade`'s two times
+  are **fractions of the particle's life**, in until the first and out from
+  the second, 0.5 each when missing -- they were read as seconds with no
+  fade out, so smoke held its full alpha all its life and vanished at once.
+  `sizechange` and `alphachange` run from 1 to **0**, `colorchange` from
+  "1 1 1" to **"0 0 0"** (Almamu's renderer has 1 1 1 there, and is wrong),
+  the `turbulence` operator's mask is "1 1 0" at 500 to 1000. The data
+  agrees: 510 fades in the library and the engine's presets, lifetimes up
+  to twenty seconds, and no value above one. Smoke that is white is often
+  meant to be: `genericparticle` multiplies by `g_Overbright`, and Pyramid
+  Spaceships' smoke asks for 5.
+
+- **A scene's file is the one project.json names**, `gifscene.json` in
+  `gifscene.pkg` for SCP Terminal Lockdown, not always `scene.json` in
+  `scene.pkg` -- `WallpaperCore` and the renderer both take it from `file`.
+
 - **A sweep at six seconds misses what is brief or late.** A lightning
   flash lives a tenth of a second and the Star Wars sparks start at ten,
   so a change to bursts moved one picture out of forty. Check those at
@@ -1493,7 +1513,10 @@ the file. Everything after it should.
    fifty-seventh -- with blend modes, bloom, alignment and an opaque
    alpha besides; see the traps. What is still visibly off: the smoke of Pyramid
    Spaceships, Arkham Knight and the clone in Star wars is too strong;
-   Augmentation's iris; red specks in Star Citizen; a black square under
+   Augmentation's iris; red specks in Star Citizen; SCP Terminal
+   Lockdown's chromatic aberration, a workshop shader that leans on HLSL
+   truncating types (a `vec4` into a `vec3`, a `vec2` into a `float`, a
+   `vec4` as texture coordinates) and needs a translation that knows types; a black square under
    Alien Romulus's mouth; Alien Isolation, which wants its 2D lights.
 
    **And Alien Romulus and Space Marine 2 -- Honor and Glory move with
