@@ -6,6 +6,18 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-10-29
+
+### Fixed in the renderer
+
+- **Particles are drawn on the desktop.** Smoke, sparks, fog and every
+  other particle system showed for one frame and were then drawn without
+  the indices that make up their shapes, which left nothing to see. Qt
+  puts its own OpenGL state back after each frame, and on the way it took
+  the indices off the particles, which were still bound. Pictures made
+  with `shot` reset nothing and were right all along, which is why this
+  went unseen. The renderer now leaves nothing bound when it is done.
+
 ## [0.16.0] — 2026-10-29
 
 ### Fixed in the renderer
@@ -740,7 +752,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.13.0...v0.14.0
