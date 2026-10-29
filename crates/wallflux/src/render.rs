@@ -23,6 +23,7 @@ use crate::particles::{self, FLOATS_PER_ROPE_VERTEX, FLOATS_PER_VERTEX};
 use crate::script::{Drives, Scripts};
 use crate::texture::Texture;
 use crate::transform::{self, Matrix};
+use crate::video::Video;
 
 /// How a pass combines with what is already drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +127,9 @@ struct Pass {
     /// Uniform by the label a material names it with, for a script that
     /// names a constant the same way.
     labels: BTreeMap<String, String>,
+    /// Set when the first texture is a video: its name, for the scene to
+    /// play it into the first slot.
+    video: Option<String>,
 }
 
 /// A sprite sheet played by an image object, frame by frame.
@@ -388,6 +392,9 @@ pub struct Scene {
     parallax: Option<Parallax>,
     /// Set when the scene turns on its glow.
     bloom: Option<Bloom>,
+    /// The videos the scene's images play, one player for each, however
+    /// many layers show it.
+    videos: BTreeMap<String, Video>,
     /// The buffers this scene's effects ask for by name, and what to divide
     /// the output by for each.
     buffers: BTreeMap<String, u32>,
@@ -624,6 +631,7 @@ impl Scene {
 
         let mut objects = Vec::new();
         let mut skipped = Vec::new();
+        let mut videos = BTreeMap::new();
         let mut buffers = BTreeMap::new();
         // The layers that finish as a picture another can read: those with
         // effects. One without is either drawn straight onto the screen or,
@@ -664,8 +672,12 @@ impl Scene {
                 continue;
             };
 
-            let passes = build_passes(gl, &resolve, &material, Kind::Image, object, &mut skipped);
+            let mut passes = build_passes(gl, &resolve, &material, Kind::Image, object, &mut skipped);
             if passes.is_empty() {
+                continue;
+            }
+            if let Err(e) = play_videos(gl, &resolve, &mut passes, &mut videos, &video_cache(dir)) {
+                skipped.push(format!("{}: {e}", object.name));
                 continue;
             }
 
@@ -766,6 +778,7 @@ impl Scene {
             canvases: Vec::new(),
             frame: None,
             bloom,
+            videos,
             parallax: (file.general.cameraparallax.value
                 && file.general.cameraparallaxmouseinfluence != 0.0)
                 .then_some(Parallax {
@@ -891,6 +904,9 @@ impl Scene {
     pub fn draw(&mut self, gl: &glow::Context, output: (u32, u32), time: f32) {
         self.run_scripts(time);
         self.advance_to(time, STEPS_PER_FRAME);
+        for video in self.videos.values_mut() {
+            video.show(gl, time);
+        }
         let projection = transform::orthographic_cover(
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
@@ -1853,6 +1869,53 @@ fn build_effect(
     Ok(steps)
 }
 
+/// Gives every pass whose first texture is a video the texture its player
+/// plays into, opening the player the first time a video is named.
+fn play_videos(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    passes: &mut [Pass],
+    videos: &mut BTreeMap<String, Video>,
+    cache: &std::path::Path,
+) -> Result<(), String> {
+    for pass in passes.iter_mut() {
+        let Some(name) = pass.video.clone() else { continue };
+        let header = resolve
+            .get(&format!("materials/{name}.tex"))
+            .and_then(|bytes| wpe_format::Texture::parse(&bytes).ok())
+            .ok_or_else(|| format!("video {name} could not be read"))?;
+        if !videos.contains_key(&name) {
+            let mp4 = header
+                .base()
+                .ok_or("the video has no surface")?
+                .decompress()
+                .map_err(|e| e.to_string())?;
+            videos.insert(name.clone(), Video::open(gl, &mp4, cache, &name)?);
+        }
+        // As big as the scene's author saw it, which is what an autosized
+        // layer takes its size from -- not the size it is decoded at.
+        let texture = videos[&name].texture(header.image_size);
+        match pass.textures.first_mut() {
+            Some(slot) => *slot = Some(texture),
+            None => pass.textures.push(Some(texture)),
+        }
+    }
+    Ok(())
+}
+
+/// Where a scene's videos are written out: beside the music the program
+/// unpacks into its own cache, `~/.cache/WallFlux/wallflux/scenes/<id>`,
+/// which is what Qt calls that program's cache location.
+fn video_cache(dir: &std::path::Path) -> std::path::PathBuf {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".cache")))
+        .unwrap_or_else(std::env::temp_dir);
+    let id = dir.file_name().map(|n| n.to_owned()).unwrap_or_default();
+    base.join("WallFlux/wallflux/scenes").join(id)
+}
+
 /// The glow a scene can turn on in its general settings, drawn the way
 /// Wallpaper Engine draws it with four shaders of its own: what is brighter
 /// than the threshold taken out at a quarter of the size, blurred down that
@@ -2338,6 +2401,7 @@ fn build_pass(
     let mut film = None;
     let mut padded = false;
     let mut covered = [1.0, 1.0];
+    let mut video = None;
     // What the scene says about this pass stands over what the material says.
     let named_textures = match over.map(|o| &o.textures) {
         Some(theirs) if !theirs.is_empty() => theirs,
@@ -2355,6 +2419,11 @@ fn build_pass(
         // scene's clothes, and there is nothing to draw for it yet.
         if slot == 0 {
             match &source {
+                // An image's video is played into the slot by the scene,
+                // which owns one player for every pass that names it.
+                Some(texture) if texture.is_video() && kind == Kind::Image => {
+                    video = named.map(str::to_owned);
+                }
                 Some(texture) if texture.is_video() => {
                     return Err("its texture holds a video".into());
                 }
@@ -2366,7 +2435,7 @@ fn build_pass(
                 _ => {}
             }
             // How much of the texture is image rather than padding.
-            if let Some(texture) = &source
+            if let Some(texture) = source.as_ref().filter(|t| !t.is_video())
                 && let Some(page) = texture.images.first().and_then(|mips| mips.first())
             {
                 covered = coverage(texture.image_size, (page.width, page.height));
@@ -2616,6 +2685,7 @@ fn build_pass(
         covered,
         hears,
         labels: named_by,
+        video,
     })
 }
 

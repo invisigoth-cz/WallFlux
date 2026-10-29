@@ -228,8 +228,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 
 Of the wallpapers found on the development machine -- 53 at the last count,
 and the number grows as the workshop is used -- 12 are web and video and
-41 are **scene**, and all of them play but one: Diablo IV Lilith, whose
-only picture is a 3D model, which the renderer turns down with a reason.
+41 are **scene**, and all of them play. Diablo IV Lilith was long taken
+for the one 3D model among them and turned down; its one image is a video,
+and it plays since scenes' videos do.
 A scene whose `scene.pkg` is missing is listed, dimmed, and a click does
 nothing.
 
@@ -307,6 +308,8 @@ wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 Cargo.toml            the Rust workspace: the two crates below
 crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
                       materials, effects, particles, and the shader dialect
+crates/wallflux/src/video.rs  a video a scene uses as a texture, decoded by
+                      ffmpeg run as a program, one player per clip
 crates/wallflux/src/script.rs  a scene's JavaScript, run with rquickjs, and
                       `script/host.js`, the globals a script finds -- ours,
                       written from what the library's scripts use
@@ -518,6 +521,20 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   is how the two traps above were found. **It does not draw a particle
   system's children at all**, so where those matter the preview is the
   only reference.
+
+- **A scene's video is an image whose `.tex` holds an MP4**, flagged as
+  video and carried whole as its one surface -- not a 3D model and not
+  something only a script asks for: Diablo IV Lilith is one such image and
+  nothing else, and Dark Core shows one clip on four layers. It is written
+  into the program's cache beside the music
+  (`~/.cache/WallFlux/wallflux/scenes/<id>/`), since an MP4 cannot be read
+  through a pipe, and `ffmpeg` decodes it to RGBA down one, a frame at most
+  1920 across, looping; a jump of more than two seconds starts it again
+  where the scene is. A full pipe is what stops a decoder that is ahead.
+  **The plexus panel in Dark Core shows blue in silence and Almamu's shows
+  an equaliser**: its alpha is a script on the music, and Almamu's scripts
+  have no `registerAudioBuffers` -- the same reason his blue ring is lit
+  and ours is dark until something plays.
 
 - **A sweep at six seconds misses what is brief or late.** A lightning
   flash lives a tenth of a second and the Star Wars sparks start at ten,
@@ -1474,8 +1491,7 @@ the file. Everything after it should.
 
    **29 October: most of it was the axes** -- y upside down, angles a
    fifty-seventh -- with blend modes, bloom, alignment and an opaque
-   alpha besides; see the traps. What is still visibly off: Dark Core's
-   blue ring is a video texture, which is not drawn; the smoke of Pyramid
+   alpha besides; see the traps. What is still visibly off: the smoke of Pyramid
    Spaceships, Arkham Knight and the clone in Star wars is too strong;
    Augmentation's iris; red specks in Star Citizen; a black square under
    Alien Romulus's mouth; Alien Isolation, which wants its 2D lights.

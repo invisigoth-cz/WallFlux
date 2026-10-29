@@ -40,6 +40,8 @@ mod script;
 mod texture;
 #[path = "../src/transform.rs"]
 mod transform;
+#[path = "../src/video.rs"]
+mod video;
 
 use render::Scene;
 

@@ -15,3 +15,4 @@ pub mod script;
 pub mod sounds;
 pub mod texture;
 pub mod transform;
+pub mod video;

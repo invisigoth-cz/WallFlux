@@ -6,6 +6,8 @@
 #include "wallflux_scene.h"
 #include "wallpapercore.h"
 
+#include <QDataStream>
+#include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QOffscreenSurface>
@@ -14,6 +16,7 @@
 #include <QQuickWindow>
 #include <QSignalSpy>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QTest>
 
 #include <memory>
@@ -215,11 +218,32 @@ private slots:
 
     /// A scene with nothing in it the renderer can draw says why, rather
     /// than leaving a black screen and no word about it.
+    ///
+    /// The scene is made here, a package holding a scene.json with no
+    /// objects. It used to be Diablo IV Lilith, taken for a 3D model, until
+    /// its one image turned out to be a video and began to play.
     void saysWhyASceneCannotBeDrawn()
     {
-        const QUrl source = scenes().value(QStringLiteral("1904095896"));
-        if (source.isEmpty())
-            QSKIP("Diablo IV Lilith, whose one image is a 3D model, is not on this machine");
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QByteArray scene = R"({"general": {}, "objects": []})";
+        QFile package(folder.filePath(QStringLiteral("scene.pkg")));
+        QVERIFY(package.open(QIODevice::WriteOnly));
+        QDataStream out(&package);
+        out.setByteOrder(QDataStream::LittleEndian);
+        const auto text = [&](const QByteArray &bytes) {
+            out << quint32(bytes.size());
+            out.writeRawData(bytes.constData(), int(bytes.size()));
+        };
+        // A package is its version, then each entry's name, offset and size,
+        // then the entries' bytes.
+        text("PKGV0001");
+        out << quint32(1);
+        text("scene.json");
+        out << quint32(0) << quint32(scene.size());
+        out.writeRawData(scene.constData(), int(scene.size()));
+        package.close();
+        const QUrl source = QUrl::fromLocalFile(package.fileName());
 
         QQuickWindow window;
         window.resize(320, 180);
