@@ -13,6 +13,7 @@
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
+#include <QQuickOpenGLUtils>
 #include <QQuickWindow>
 #include <QSignalSpy>
 #include <QStandardPaths>
@@ -146,6 +147,64 @@ private slots:
                  qPrintable(QStringLiteral("%1 from the direct drawing, %2 from it upside down")
                                 .arg(same)
                                 .arg(flipped)));
+    }
+
+    /// Particles drawn the second frame as they were the first, after Qt has
+    /// put its own state back between them -- which the item does after
+    /// every frame. Resetting binds no index buffer, and the bound vertex
+    /// array is what remembers which one it uses: the particles' array, left
+    /// bound by the frame before, lost its indices and every smoke in the
+    /// library was drawn without them on the desktop, while `shot`, which
+    /// resets nothing, drew them all. Arkham Knight because it is nothing but
+    /// a picture and five fogs.
+    void survivesQtPuttingItsStateBack()
+    {
+        const QUrl source = scenes().value(QStringLiteral("1562429365"));
+        if (source.isEmpty())
+            QSKIP("Arkham Knight is not on this machine");
+
+        const QSize size(480, 270);
+        const auto run = [&](bool reset) {
+            QOffscreenSurface surface;
+            surface.create();
+            QOpenGLContext context;
+            if (!context.create() || !context.makeCurrent(&surface))
+                return QImage();
+            QImage picture;
+            {
+                QOpenGLFramebufferObject frame(size);
+                frame.bind();
+                const auto lookUp = [](const char *name, void *) -> const void * {
+                    return reinterpret_cast<const void *>(
+                        QOpenGLContext::currentContext()->getProcAddress(name));
+                };
+                char error[256] = {};
+                WallfluxScene *scene = wallflux_scene_load(
+                    QFileInfo(source.toLocalFile()).absolutePath().toUtf8().constData(), lookUp,
+                    nullptr, error, sizeof error);
+                if (scene) {
+                    // Six seconds a frame at a time, which is when the fog
+                    // has filled in.
+                    for (int i = 0; i <= 360; ++i) {
+                        wallflux_scene_draw(scene, size.width(), size.height(), i / 60.0f);
+                        if (reset) {
+                            QQuickOpenGLUtils::resetOpenGLState();
+                            frame.bind();
+                        }
+                    }
+                    wallflux_scene_free(scene);
+                    picture = frame.toImage().convertToFormat(QImage::Format_RGB32);
+                }
+            }
+            context.doneCurrent();
+            return picture;
+        };
+        const QImage left = run(false);
+        const QImage reset = run(true);
+        QVERIFY(!left.isNull() && !reset.isNull());
+        const double apartBy = apart(left, reset);
+        QVERIFY2(apartBy < 0.5,
+                 qPrintable(QStringLiteral("%1 apart with Qt's state put back").arg(apartBy)));
     }
 
     /// A scene's music is inside its package, out of a media player's

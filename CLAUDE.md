@@ -459,6 +459,17 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   pick up waits for somebody to change the item -- for a wallpaper that
   failed to load, never. The reason goes to the item as a queued call.
 
+- **Qt putting its state back took the indices off the particles.**
+  `QQuickOpenGLUtils::resetOpenGLState()`, called after every frame,
+  binds no element buffer *before* it unbinds the vertex array -- and the
+  element buffer belongs to whichever array is bound, which was the
+  particles'. From the second frame on every particle system was drawn
+  without indices: no smoke anywhere on the desktop, while `shot`, which
+  resets nothing, drew all of it -- so every sweep looked right. `Scene::draw`
+  leaves no array bound; `survivesQtPuttingItsStateBack` fails without that
+  (10.4 apart). **A picture from `shot` says nothing about the desktop
+  where state between frames is concerned.**
+
 - **The scene graph has to be OpenGL, and is told so.** `main()` sets it
   before any window exists. It is OpenGL on this machine without being
   asked, which is exactly why it has to be said: elsewhere Qt is free to

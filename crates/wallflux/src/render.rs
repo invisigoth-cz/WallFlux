@@ -1075,6 +1075,12 @@ impl Scene {
             gl.clear_color(0.0, 0.0, 0.0, 1.0);
             gl.clear(glow::COLOR_BUFFER_BIT);
             gl.color_mask(true, true, true, true);
+            // Which index buffer is bound belongs to the bound vertex array,
+            // so a caller binding none afterwards -- Qt does, resetting its
+            // state -- took the indices off the particles' array and every
+            // particle after the first frame was drawn without them. None of
+            // ours is left bound for anybody to write into.
+            gl.bind_vertex_array(None);
         }
     }
 
