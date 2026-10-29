@@ -479,6 +479,46 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   kept to the parent, the picture matches the wallpaper's preview. Both
   were rendered before deciding.
 
+- **A scene's y runs up, and its angles are radians.** Origin in the
+  bottom-left corner: rain falls at a y of -10 000, snow at -50 to -90, a
+  torch's embers rise on +10, and Space Marine II's aliens -- cut out of
+  the picture behind them -- sit back in their holes only that way round.
+  Read from the top, which this renderer did until 29 October, every layer
+  that was not centred was mirrored to the other half of the screen and
+  every particle moved upside down; a scene that is mostly a centred
+  background looks almost right while it is wrong, which is how it lasted.
+  An image is turned over on its own quad (`-size[1]`) so its rows, which
+  run down, still stand up; a particle system is not. And `angles` is in
+  radians -- 308 objects in 28 wallpapers, the largest 3.142 -- where
+  `transform::model` read degrees and turned every one of them a
+  fifty-seventh of the way.
+
+- **A scene is opaque, and blending leaves rubbish in the alpha channel.**
+  The colours come out right; the alpha is each layer's alpha squared and
+  means nothing, and whatever shows the picture reads it -- Pyramid
+  Spaceships came out a quarter transparent where its smoke was, which in a
+  montage over white looked like white smoke. Wallpaper Engine and Almamu
+  mask alpha on the last pass; `Scene::draw` sets it to one at the end.
+
+- **A layer's `colorBlendMode` is a pass of its own, after its effects.**
+  `materials/util/effectpassthrough.json` with `BLENDMODE` set, reading
+  the scene so far at unit four -- `ApplyBlending`'s numbering in
+  `common_blending.h`, 31 being plain addition. Drawn as an ordinary layer,
+  Time Reactor's gold lines were grey and Augmentation's iris another
+  colour. **Bloom** is likewise the engine's own four shaders
+  (`downsample_quarter_bloom`, `blur_h_bloom`, `downsample_eighth_blur_v`,
+  `combine`) over the finished scene, `g_TexelSize` a texel of the scene.
+
+- **Almamu's renderer is the quickest second opinion, and it can be run
+  where nobody sees it**: inside `kwin_wayland --virtual --width 1920
+  --height 1080 --socket <name> "/usr/bin/linux-wallpaperengine --window
+  0x0x1920x1080 --silent --disable-mouse --screenshot <png>
+  --screenshot-delay 180 --assets-dir <WPE assets> <wallpaper dir>"`. It
+  does not quit after the screenshot. Preview, Almamu and ours side by side
+  is how the two traps above were found. **It does not draw a particle
+  system's children at all**, so where those matter the preview is the
+  only reference.
+
 - **A sweep at six seconds misses what is brief or late.** A lightning
   flash lives a tenth of a second and the Star Wars sparks start at ten,
   so a change to bursts moved one picture out of forty. Check those at
@@ -1329,7 +1369,9 @@ cargo test --offline     # the scene renderer, when crates/ was touched
 
 A change to the renderer is checked against the whole library, not one
 wallpaper: `tools/sweep.sh <dir>` before and after, then `cmp` the two
-directories picture by picture. Every picture that moved has to be one
+directories picture by picture. The sweep draws with a copy of `shot` made
+when it starts, so the source can be edited and built while it runs.
+Every picture that moved has to be one
 the change meant to move -- and looked at, because "different" is not
 "better". Fixing a shader once turned a Space Marine's armour white.
 The sweeps so far are in `~/WallFlux-ukazky/<date>/`.
@@ -1420,6 +1462,14 @@ the file. Everything after it should.
    composition is not. That comes before the user properties of the
    Settings tab, which wait behind it. Check each against its preview,
    whole library, `tools/sweep.sh` before and after.
+
+   **29 October: most of it was the axes** -- y upside down, angles a
+   fifty-seventh -- with blend modes, bloom, alignment and an opaque
+   alpha besides; see the traps. What is still visibly off: Dark Core's
+   blue ring is a video texture, which is not drawn; the smoke of Pyramid
+   Spaceships, Arkham Knight and the clone in Star wars is too strong;
+   Augmentation's iris; red specks in Star Citizen; a black square under
+   Alien Romulus's mouth; Alien Isolation, which wants its 2D lights.
 
    **And Alien Romulus and Space Marine 2 -- Honor and Glory move with
    the mouse where they should not.** Measured as following it (1 760 and

@@ -63,6 +63,13 @@ impl Blending {
 }
 
 impl Object {
+    /// Whether drawing this object needs a picture of the scene under it: a
+    /// layer draws that picture, a blend mode mixes into it.
+    fn reads_frame(&self) -> bool {
+        self.layer.is_some()
+            || self.effects.iter().any(|step| step.reads.iter().any(|(_, from)| matches!(from, Buffer::Frame)))
+    }
+
     /// How many pixels of the output this object covers, which is as much of
     /// the canvas as it needs. The projection carries the scale from the
     /// scene's own units to the output's.
@@ -282,6 +289,11 @@ struct Object {
     layer: Option<Layer>,
     /// How far the object moves with the mouse when the scene has parallax.
     depth: [f32; 2],
+    /// Where on the image its origin is, from the middle, in its own sizes:
+    /// `alignment` saying `bottom` puts the origin on the bottom edge, which
+    /// is half the image below the middle. Dark Core lines 23 parts up that
+    /// way; centred, every one of them hung half its height too low.
+    anchor: [f32; 2],
     /// Set on the objects scene.json places itself, as against the systems a
     /// particle system brings along -- which a script moving the object by
     /// its id does not mean.
@@ -374,6 +386,8 @@ pub struct Scene {
     frame: Option<Target>,
     /// Set when the scene moves with the mouse.
     parallax: Option<Parallax>,
+    /// Set when the scene turns on its glow.
+    bloom: Option<Bloom>,
     /// The buffers this scene's effects ask for by name, and what to divide
     /// the output by for each.
     buffers: BTreeMap<String, u32>,
@@ -465,6 +479,9 @@ enum Buffer {
     /// the pair its chain happened to end in, and its own notes record a
     /// wallpaper reading `_a` and getting the wrong picture for it.
     Layer(i64),
+    /// What the scene looked like just before this object, which a layer
+    /// with a blend mode mixes itself into.
+    Frame,
     /// Wherever the scene itself is being drawn, which only the last pass of
     /// the last effect writes to.
     Screen,
@@ -695,6 +712,7 @@ impl Scene {
                 answers: None,
                 layer,
                 depth: object.parallax_depth.0,
+                anchor: anchor_of(&object.alignment),
                 from_scene: true,
                 shown: true,
             });
@@ -733,6 +751,12 @@ impl Scene {
             Some(capacity) => Some(unsafe { make_particle_buffers(gl, capacity)? }),
             None => None,
         };
+        let bloom = match file.general.bloom.value {
+            false => None,
+            true => build_bloom(gl, &resolve, &file.general, scene_size)
+                .map_err(|e| skipped.push(format!("bloom: {e}")))
+                .ok(),
+        };
         Ok(Self {
             objects,
             quad,
@@ -741,6 +765,7 @@ impl Scene {
             white: Texture::white(gl)?,
             canvases: Vec::new(),
             frame: None,
+            bloom,
             parallax: (file.general.cameraparallax.value
                 && file.general.cameraparallaxmouseinfluence != 0.0)
                 .then_some(Parallax {
@@ -876,7 +901,7 @@ impl Scene {
             std::num::NonZeroU32::new(gl.get_parameter_i32(glow::DRAW_FRAMEBUFFER_BINDING) as u32)
                 .map(glow::NativeFramebuffer)
         };
-        if self.objects.iter().any(|o| o.layer.is_some())
+        if (self.bloom.is_some() || self.objects.iter().any(Object::reads_frame))
             && self.frame.as_ref().is_none_or(|f| f.size() != output)
         {
             if let Some(old) = self.frame.take() {
@@ -938,17 +963,27 @@ impl Scene {
                     origin[axis] += (object.depth[axis] + amount) * drift[axis] * width;
                 }
             }
-            let model = transform::model(origin, object.size, object.scale, object.angles);
+            // A scene's y runs up and a picture's rows run down, so an image
+            // is turned over on its quad to stand the right way up. A particle
+            // system is not: its particles live in the scene's own axes.
+            let size = match object.drawing {
+                Drawing::Image => [object.size[0], -object.size[1]],
+                Drawing::Particles(_) => object.size,
+            };
+            for axis in 0..2 {
+                origin[axis] -= object.anchor[axis] * object.size[axis] * object.scale[axis];
+            }
+            let model = transform::model(origin, size, object.scale, object.angles);
             let mvp = transform::multiply(&projection, &model);
             match (&object.drawing, &self.particles) {
                 (Drawing::Image, _) => unsafe {
                     gl.bind_vertex_array(Some(self.quad));
                     // A layer reads everything drawn before it, so the
                     // picture is taken now, not once a frame.
-                    let frame = match (object.layer, &self.frame) {
-                        (Some(_), Some(frame)) => {
+                    let frame = match (object.reads_frame(), &self.frame) {
+                        (true, Some(frame)) => {
                             take_frame(gl, screen, frame, output);
-                            Some(&frame.texture)
+                            Some(frame)
                         }
                         _ => None,
                     };
@@ -1002,6 +1037,27 @@ impl Scene {
                 // system survived loading.
                 (Drawing::Particles(_), None) => {}
             }
+        }
+        if let (Some(bloom), Some(frame)) = (&mut self.bloom, &self.frame) {
+            unsafe {
+                gl.bind_vertex_array(Some(self.quad));
+                bloom.draw(gl, frame, self.buffer, screen, output, time, &self.white, &self.sound);
+            }
+        }
+        // A scene is opaque. Its colours are blended right, but what blending
+        // leaves in the alpha channel is the square of each layer's alpha and
+        // means nothing -- and whatever shows the picture next reads it:
+        // Pyramid Spaceships came out a quarter transparent where its smoke
+        // was, and Blue Dawn nine tenths around its lens flare. Wallpaper
+        // Engine and Almamu's renderer both mask alpha on the last pass; this
+        // is the same thing done once.
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, screen);
+            gl.viewport(0, 0, output.0 as i32, output.1 as i32);
+            gl.color_mask(false, false, false, true);
+            gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+            gl.color_mask(true, true, true, true);
         }
     }
 
@@ -1310,6 +1366,7 @@ fn build_particles(
             .parallax_depth
             .0
             .map(|d| if d.abs() < 0.65 { 0.65f32.copysign(d) } else { d }),
+        anchor: [0.0; 2],
         from_scene: false,
         shown: true,
     })
@@ -1414,7 +1471,7 @@ unsafe fn take_frame(
 unsafe fn draw_through_effects(
     gl: &glow::Context,
     object: &Object,
-    frame: Option<&Texture>,
+    frame: Option<&Target>,
     canvas: &Canvas,
     kept: &BTreeMap<i64, &Target>,
     buffer: glow::Buffer,
@@ -1449,6 +1506,7 @@ unsafe fn draw_through_effects(
         Buffer::Canvas(index) => Some(&canvas.targets[*index]),
         Buffer::Named(name) => canvas.named.get(name),
         Buffer::Layer(id) => kept.get(id).copied(),
+        Buffer::Frame => frame,
         Buffer::Screen => None,
     };
 
@@ -1466,7 +1524,11 @@ unsafe fn draw_through_effects(
         // The placed kind's shader fills the buffer by itself and wants the
         // real matrix, to know where on the screen it is; the screen kind's
         // wants a quad that is already the whole buffer, and no matrix.
-        let handed: Vec<_> = frame.map(|f| (0, f)).into_iter().collect();
+        let handed: Vec<_> = frame
+            .filter(|_| object.layer.is_some())
+            .map(|f| (0, &f.texture))
+            .into_iter()
+            .collect();
         let (matrix, reach) = match object.layer {
             None => (&FILL, 0.5),
             Some(Layer::Placed) => (mvp, 0.5),
@@ -1627,7 +1689,7 @@ fn build_effects(
     // the scene for where it goes -- because which buffers those really are
     // depends on how many of the effects survive.
     let (incoming, outgoing) = (Buffer::Canvas(0), Buffer::Screen);
-    let built: Vec<Vec<Step>> = object
+    let mut built: Vec<Vec<Step>> = object
         .effects
         .iter()
         .enumerate()
@@ -1644,6 +1706,13 @@ fn build_effects(
                 .ok()
         })
         .collect();
+    match object.color_blend_mode.value {
+        0 => {}
+        mode => match build_blend(gl, resolve, mode, object.effects.len()) {
+            Ok(steps) => built.push(steps),
+            Err(e) => skipped.push(format!("{}: blend mode {mode}: {e}", object.name)),
+        },
+    }
 
     let count = built.len();
     let mut steps = Vec::new();
@@ -1782,6 +1851,172 @@ fn build_effect(
         });
     }
     Ok(steps)
+}
+
+/// The glow a scene can turn on in its general settings, drawn the way
+/// Wallpaper Engine draws it with four shaders of its own: what is brighter
+/// than the threshold taken out at a quarter of the size, blurred down that
+/// and then across at an eighth, and added back over the finished scene.
+/// Almamu's renderer does the same with effect files of its own; these are
+/// the engine's.
+struct Bloom {
+    /// `downsample_quarter_bloom`, `blur_h_bloom`, `downsample_eighth_blur_v`
+    /// and `combine`, in that order.
+    passes: Vec<Pass>,
+    /// The quarter, the quarter blurred, and the eighth, made with the output.
+    targets: Option<[Target; 3]>,
+    /// The passes are drawn for an object, and this one is nobody's.
+    carrier: Object,
+}
+
+fn build_bloom(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    general: &wpe_format::scene::General,
+    scene: (u32, u32),
+) -> Result<Bloom, String> {
+    // A texel of the scene, which is how far apart the blurs sample: they
+    // reach a fixed part of the picture whatever size it is drawn at.
+    let texel = format!("{} {}", 1.0 / scene.0.max(1) as f32, 1.0 / scene.1.max(1) as f32);
+    let mut passes = Vec::new();
+    for shader in ["downsample_quarter_bloom", "blur_h_bloom", "downsample_eighth_blur_v", "combine"] {
+        let material = wpe_format::material::Pass {
+            shader: shader.into(),
+            blending: "normal".into(),
+            ..Default::default()
+        };
+        let mut pass = build_pass(gl, resolve, &material, Kind::Effect, None)?;
+        pass.constants.insert("g_TexelSize".into(), texel.clone().into());
+        pass.constants.insert("g_BloomStrength".into(), general.bloomstrength.unwrap_or(2.0).into());
+        pass.constants.insert("g_BloomThreshold".into(), general.bloomthreshold.unwrap_or(0.65).into());
+        passes.push(pass);
+    }
+    Ok(Bloom {
+        passes,
+        targets: None,
+        carrier: Object {
+            name: "bloom".into(),
+            origin: [0.0; 3],
+            size: [1.0, 1.0],
+            scale: [1.0; 3],
+            angles: [0.0; 3],
+            alpha: 1.0,
+            brightness: 1.0,
+            color: [1.0; 3],
+            passes: Vec::new(),
+            drawing: Drawing::Image,
+            trail: None,
+            effects: Vec::new(),
+            id: -1,
+            kept: false,
+            answers: None,
+            layer: None,
+            depth: [0.0; 2],
+            anchor: [0.0; 2],
+            from_scene: false,
+            shown: false,
+        },
+    })
+}
+
+impl Bloom {
+    /// Draws the glow over everything on `screen`, with `frame` to copy it
+    /// into first.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn draw(
+        &mut self,
+        gl: &glow::Context,
+        frame: &Target,
+        buffer: glow::Buffer,
+        screen: Option<glow::Framebuffer>,
+        output: (u32, u32),
+        time: f32,
+        white: &Texture,
+        sound: &Spectrum,
+    ) {
+        let part = |by: u32| ((output.0 / by).max(1), (output.1 / by).max(1));
+        unsafe {
+            if self.targets.as_ref().is_none_or(|t| t[0].size() != part(4) || t[2].size() != part(8)) {
+                for old in self.targets.take().iter().flatten() {
+                    old.free(gl);
+                }
+                self.targets = (|| Some([
+                    make_target(gl, part(4)).ok()?,
+                    make_target(gl, part(4)).ok()?,
+                    make_target(gl, part(8)).ok()?,
+                ]))();
+            }
+            let Some([quarter, blurred, eighth]) = &self.targets else {
+                return;
+            };
+            take_frame(gl, screen, frame, output);
+            write_quad(gl, buffer, [1.0, 1.0], 1.0);
+            let steps: [(Option<&Target>, Vec<(usize, &Texture)>); 4] = [
+                (Some(quarter), vec![(0, &frame.texture)]),
+                (Some(blurred), vec![(0, &quarter.texture)]),
+                (Some(eighth), vec![(0, &blurred.texture)]),
+                (None, vec![(0, &frame.texture), (1, &eighth.texture)]),
+            ];
+            for (pass, (into, reads)) in self.passes.iter().zip(steps) {
+                let size = into.map_or(output, Target::size);
+                gl.bind_framebuffer(glow::FRAMEBUFFER, into.map_or(screen, |t| Some(t.frame)));
+                gl.viewport(0, 0, size.0 as i32, size.1 as i32);
+                draw_pass(gl, pass, &self.carrier, &transform::IDENTITY, time, white, &reads, sound, Blending::Opaque);
+            }
+        }
+    }
+}
+
+/// Where an `alignment` puts the origin on an image, from its middle and in
+/// its own sizes, y up. Almamu's renderer reads the words the same way.
+fn anchor_of(alignment: &str) -> [f32; 2] {
+    let x = match () {
+        _ if alignment.contains("left") => -0.5,
+        _ if alignment.contains("right") => 0.5,
+        _ => 0.0,
+    };
+    let y = match () {
+        _ if alignment.contains("top") => 0.5,
+        _ if alignment.contains("bottom") => -0.5,
+        _ => 0.0,
+    };
+    [x, y]
+}
+
+/// The pass a layer's blend mode adds after its effects: the finished layer
+/// mixed into the scene under it by `ApplyBlending`, and written over it.
+///
+/// It is what Wallpaper Engine's own `materials/util/effectpassthrough.json`
+/// is for -- `genericimage3` with `BLENDMODE` set, reading the screen so far
+/// at unit four -- and what Almamu's renderer adds in the same place. Drawn
+/// as an ordinary layer instead, a "lighten" layer that is mostly black
+/// blacked out everything under it: Space Marine II was outlines on a void.
+fn build_blend(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    mode: i64,
+    after: usize,
+) -> Result<Vec<Step>, String> {
+    let path = "materials/util/effectpassthrough.json";
+    let material = resolve
+        .get(path)
+        .ok_or_else(|| format!("{path} is missing"))
+        .and_then(|bytes| Material::parse(&bytes).map_err(|e| e.to_string()))?;
+    let first = material.passes.first().ok_or("it has no passes")?;
+    let over = wpe_format::scene::PassOverride {
+        combos: BTreeMap::from([("BLENDMODE".into(), mode.into())]),
+        ..Default::default()
+    };
+    let mut pass = build_pass(gl, resolve, first, Kind::Effect, Some(&over))?;
+    // The layer's colour and alpha went in with its first pass; the shader
+    // would multiply them in a second time.
+    pass.constants.insert("g_Color4".into(), "1 1 1 1".into());
+    Ok(vec![Step {
+        pass: Some(pass),
+        into: Buffer::Screen,
+        reads: vec![(0, Buffer::Canvas(0)), (4, Buffer::Frame)],
+        scene_pass: (after, 0),
+    }])
 }
 
 /// The layer a `_rt_imageLayerComposite_<id>_a` belongs to. Only `_a`: what
@@ -2807,7 +3042,17 @@ pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, 
 
 #[cfg(test)]
 mod tests {
-    use super::{coverage, divisor_of, other_layer, showing};
+    use super::{anchor_of, coverage, divisor_of, other_layer, showing};
+
+    /// The scene's y runs up, so an origin on the bottom edge has the middle
+    /// of the image above it -- half an image the other way from the top.
+    #[test]
+    fn an_alignment_puts_the_origin_on_that_edge() {
+        assert_eq!(anchor_of("center"), [0.0, 0.0]);
+        assert_eq!(anchor_of("bottom"), [0.0, -0.5]);
+        assert_eq!(anchor_of("topleft"), [-0.5, 0.5]);
+        assert_eq!(anchor_of("right"), [0.5, 0.0]);
+    }
 
     /// Getting one of these wrong blurs at the wrong size: a half-sized buffer
     /// taken for a full-sized one reaches half as far across the picture.

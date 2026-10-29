@@ -6,8 +6,16 @@
 //!
 //! A scene is flat and measured in pixels: an object's origin and size are
 //! given in the coordinates of the scene's own resolution, with the origin in
-//! the top-left corner and y increasing downwards, which is how an image at
+//! the bottom-left corner and y increasing upwards, which is how an image at
 //! `1280 720` lands in the middle of a 2560x1440 scene.
+//!
+//! Upwards because the data says so: rain falls at a y of -10 000, snow at
+//! -50 to -90, a torch's embers rise on a gravity of +10, and Space Marine
+//! II's aliens, cut out of the picture behind them, sit back in their holes
+//! only when their origins are read from the bottom. Read from the top --
+//! which this renderer did until 29 October -- every layer that was not
+//! centred was mirrored to the other half of the screen, and every particle
+//! moved the wrong way up.
 //!
 //! Matrices are plain arrays in column-major order, as GL wants them. The
 //! shaders multiply the other way round -- `mul(position, matrix)`, a row
@@ -60,7 +68,7 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
         0.0,
         0.0,
         0.0,
-        -2.0 / visible_h,
+        2.0 / visible_h,
         0.0,
         0.0,
         0.0,
@@ -68,7 +76,7 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
         -1.0 / depth,
         0.0,
         -1.0 - 2.0 * left / visible_w,
-        1.0 + 2.0 * top / visible_h,
+        -1.0 - 2.0 * top / visible_h,
         0.0,
         1.0,
     ]
@@ -76,11 +84,13 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
 
 /// Places a quad of `size` at `origin`, scaled and spun about its own centre.
 ///
-/// `angles` are degrees about x, y and z. Only z turns a flat image, but all
-/// three are carried because scenes set them.
+/// `angles` are radians about x, y and z, as scene.json stores them: 308
+/// objects here are turned and the largest turn is 3.142. Read as degrees,
+/// every one of them was turned a fifty-seventh of the way. Only z turns a
+/// flat image, but all three are carried because scenes set them.
 pub fn model(origin: [f32; 3], size: [f32; 2], scale: [f32; 3], angles: [f32; 3]) -> Matrix {
     let (sx, sy) = (size[0] * scale[0], size[1] * scale[1]);
-    let z = angles[2].to_radians();
+    let z = angles[2];
     let (sin, cos) = (z.sin(), z.cos());
 
     // Column-major: the quad is built around its own centre, turned, then moved.
@@ -145,7 +155,7 @@ mod tests {
     fn a_point_comes_back_from_where_a_transform_sent_it() {
         let m = multiply(
             &orthographic_cover((1920.0, 1080.0), (640.0, 480.0)),
-            &model([300.0, 200.0, 0.0], [10.0, 10.0], [2.0, 3.0, 1.0], [0.0, 0.0, 30.0]),
+            &model([300.0, 200.0, 0.0], [10.0, 10.0], [2.0, 3.0, 1.0], [0.0, 0.0, 0.5]),
         );
         let out = apply(&m, [0.25, -0.4, 0.0]);
         let back = unapply_flat(&m, [out[0], out[1]]).unwrap();
@@ -160,13 +170,14 @@ mod tests {
         apply(m, p)
     }
 
-    /// y grows downwards in a scene and upwards in clip space. Getting this
-    /// backwards gives a wallpaper that is right in every way but upside down.
+    /// y grows upwards in a scene, as it does in clip space. Getting this
+    /// backwards mirrors every layer that is not centred, and a scene made
+    /// mostly of a centred background looks almost right while it is wrong.
     #[test]
-    fn y_runs_the_other_way_in_clip_space() {
+    fn y_runs_up_the_screen() {
         let p = orthographic_cover((100.0, 100.0), (100.0, 100.0));
-        let higher_on_screen = at(&p, [50.0, 10.0, 0.0]);
-        let lower_on_screen = at(&p, [50.0, 90.0, 0.0]);
+        let higher_on_screen = at(&p, [50.0, 90.0, 0.0]);
+        let lower_on_screen = at(&p, [50.0, 10.0, 0.0]);
         assert!(higher_on_screen[1] > lower_on_screen[1]);
     }
 
@@ -178,10 +189,10 @@ mod tests {
             &model([1280.0, 720.0, 0.0], [2560.0, 1440.0], [1.0; 3], [0.0; 3]),
         );
         // The quad is built on -0.5..0.5, so its corners are its own extremes.
-        let tl = at(&mvp, [-0.5, -0.5, 0.0]);
-        let br = at(&mvp, [0.5, 0.5, 0.0]);
-        assert!(close(tl[0], -1.0) && close(tl[1], 1.0), "{tl:?}");
-        assert!(close(br[0], 1.0) && close(br[1], -1.0), "{br:?}");
+        let bl = at(&mvp, [-0.5, -0.5, 0.0]);
+        let tr = at(&mvp, [0.5, 0.5, 0.0]);
+        assert!(close(bl[0], -1.0) && close(bl[1], -1.0), "{bl:?}");
+        assert!(close(tr[0], 1.0) && close(tr[1], 1.0), "{tr:?}");
     }
 
     #[test]
@@ -213,7 +224,7 @@ mod tests {
 
     #[test]
     fn a_quarter_turn_swaps_the_axes() {
-        let turned = model([0.0, 0.0, 0.0], [100.0, 100.0], [1.0; 3], [0.0, 0.0, 90.0]);
+        let turned = model([0.0, 0.0, 0.0], [100.0, 100.0], [1.0; 3], [0.0, 0.0, std::f32::consts::FRAC_PI_2]);
         let moved = at(&turned, [0.5, 0.0, 0.0]);
         assert!(close(moved[0], 0.0) && close(moved[1], 50.0), "{moved:?}");
     }
@@ -221,10 +232,10 @@ mod tests {
     #[test]
     fn a_matching_shape_is_projected_whole() {
         let m = orthographic_cover((2560.0, 1440.0), (1280.0, 720.0));
-        let tl = at(&m, [0.0, 0.0, 0.0]);
-        let br = at(&m, [2560.0, 1440.0, 0.0]);
-        assert!(close(tl[0], -1.0) && close(tl[1], 1.0), "{tl:?}");
-        assert!(close(br[0], 1.0) && close(br[1], -1.0), "{br:?}");
+        let bl = at(&m, [0.0, 0.0, 0.0]);
+        let tr = at(&m, [2560.0, 1440.0, 0.0]);
+        assert!(close(bl[0], -1.0) && close(bl[1], -1.0), "{bl:?}");
+        assert!(close(tr[0], 1.0) && close(tr[1], 1.0), "{tr:?}");
     }
 
     /// A 16:9 scene on a square output shows a centred square of it, not the
@@ -244,9 +255,9 @@ mod tests {
     #[test]
     fn a_taller_scene_is_cropped_top_and_bottom() {
         let m = orthographic_cover((1920.0, 1200.0), (1920.0, 1080.0));
-        assert!(!close(at(&m, [0.0, 0.0, 0.0])[1], 1.0));
-        let top = at(&m, [0.0, (1200.0 - 1920.0 / (1920.0 / 1080.0)) / 2.0, 0.0]);
-        assert!(close(top[1], 1.0), "{top:?}");
+        assert!(!close(at(&m, [0.0, 0.0, 0.0])[1], -1.0));
+        let bottom = at(&m, [0.0, (1200.0 - 1920.0 / (1920.0 / 1080.0)) / 2.0, 0.0]);
+        assert!(close(bottom[1], -1.0), "{bottom:?}");
     }
 
     /// Whatever the two shapes, the scene is never stretched: a square in the

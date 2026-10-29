@@ -335,6 +335,11 @@ pub struct Object {
     pub color: Bound<Vector<3>>,
     pub alpha: Bound<f32>,
     pub brightness: f32,
+    /// How the finished layer mixes with what is under it -- the editor's
+    /// "blend mode", `ApplyBlending`'s numbering in `common_blending.h`:
+    /// 6 lighten, 7 screen, 9 add, 31 and so on. Nought is ordinary alpha.
+    #[serde(rename = "colorBlendMode")]
+    pub color_blend_mode: Bound<i64>,
     pub visible: Bound<bool>,
     /// How much this object lags the cursor. The most used feature in the
     /// format, and what gives a scene its sense of depth.
@@ -439,6 +444,7 @@ impl Default for Object {
             color: Bound::plain(Vector([1.0; 3])),
             alpha: Bound::plain(1.0),
             brightness: 1.0,
+            color_blend_mode: Bound::plain(0),
             visible: Bound::plain(true),
             parallax_depth: Vector([1.0; 2]),
             effects: Vec::new(),
