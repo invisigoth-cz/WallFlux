@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.2] — 2026-10-29
+
+### Fixed in the renderer
+
+- **Particles are their right size.** Every particle was drawn twice as
+  large as Wallpaper Engine draws it, which is why smoke covered the
+  figures it should drift around, Kratos sat in a haze and Arkham
+  Knight's fog reached the edge of the screen. Measured against
+  Wallpaper Engine on Windows: the light the smoke adds now comes out
+  within a few per cent of it, where it was two thirds more.
+
 ## [0.16.1] — 2026-10-29
 
 ### Fixed in the renderer
@@ -752,7 +763,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.14.0...v0.15.0
