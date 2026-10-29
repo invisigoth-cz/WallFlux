@@ -9,6 +9,11 @@ url='https://github.com/invisigoth-cz/WallFlux'
 # The exception is for the Steamworks SDK and is spelled out in
 # LICENSE-EXCEPTION, which package() installs beside the binary.
 license=('GPL-3.0-or-later' 'custom:Steamworks-SDK-linking-exception')
+# No LTO. makepkg's -flto reaches the C of QuickJS through CFLAGS, which
+# Cargo compiles into the renderer's static library as LTO objects the
+# final link cannot read: the build stops on `undefined reference to
+# JS_MarkValue`. A build outside makepkg never sees the flag.
+options=('!lto')
 
 # qt6-base brings Wayland and the widgets the tray icon falls back on, and
 # qt6-multimedia brings a playback backend through its own virtual
