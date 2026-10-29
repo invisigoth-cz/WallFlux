@@ -74,6 +74,11 @@ private slots:
     /// nicety.
     void refusesAFileOutsideTheWallpaper();
 
+    /// A scene's package is named after the scene file project.json names:
+    /// SCP Terminal Lockdown is gifscene.json in gifscene.pkg, and taking
+    /// scene.pkg for granted listed it dimmed with nothing to play.
+    void findsAScenePackageNamedAfterItsFile();
+
     /// Selecting is by id, and an id nobody has changes nothing.
     void selectsByIdAndRefusesUnknownOnes();
 
@@ -154,6 +159,20 @@ void TestWallpaperCore::readsWhatIsThere()
     // scene.json lives inside scene.pkg, so the package is what is drawn.
     QVERIFY(found[2].source.toLocalFile().endsWith(QStringLiteral("/222/scene.pkg")));
     QVERIFY(found[2].playable());
+}
+
+void TestWallpaperCore::findsAScenePackageNamedAfterItsFile()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+    makeWallpaper(steam.path(), QStringLiteral("666"),
+                  R"({"title":"Terminal","type":"scene","file":"gifscene.json"})",
+                  {QStringLiteral("gifscene.pkg")});
+
+    const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
+    QCOMPARE(found.size(), 1);
+    QVERIFY(found[0].hasFile());
+    QVERIFY(found[0].source.toLocalFile().endsWith(QStringLiteral("/666/gifscene.pkg")));
 }
 
 void TestWallpaperCore::refusesAFileOutsideTheWallpaper()

@@ -152,10 +152,14 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     // An untitled wallpaper is still worth listing, under its id.
     wallpaper.title = root.value(QLatin1StringView("title")).toString(wallpaper.id);
     wallpaper.kind = kind;
-    // A scene's own file is inside scene.pkg; the package is what is drawn.
-    wallpaper.source = entryPoint(folder, wallpaper.kind == WallpaperKind::Scene
-                                              ? QStringLiteral("scene.pkg")
-                                              : root.value(QLatin1StringView("file")).toString());
+    // A scene's own file is inside a package named after it -- scene.json in
+    // scene.pkg almost always, gifscene.json in gifscene.pkg once here -- and
+    // the package is what is drawn.
+    const QString named = root.value(QLatin1StringView("file")).toString();
+    const QString package = named.endsWith(QLatin1StringView(".json"))
+        ? named.chopped(5) + QLatin1StringView(".pkg")
+        : QStringLiteral("scene.pkg");
+    wallpaper.source = entryPoint(folder, wallpaper.kind == WallpaperKind::Scene ? package : named);
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
 
     for (const QJsonValue &tag : root.value(QLatin1StringView("tags")).toArray())

@@ -618,10 +618,11 @@ impl Scene {
         let assets = Assets::locate();
         let resolve = Resolver::new(&package, assets.as_ref());
 
-        let bytes = package
-            .get("scene.json")
-            .ok_or("no scene.json in this wallpaper")?;
         let project = std::fs::read(dir.join("project.json")).ok();
+        let entry = scene_entry(project.as_deref());
+        let bytes = package
+            .get(&entry)
+            .ok_or_else(|| format!("no {entry} in this wallpaper"))?;
         let file = SceneFile::parse_with_properties(bytes, project.as_deref())
             .map_err(|e| format!("scene.json: {e}"))?;
         let scene_size = (
@@ -3096,6 +3097,17 @@ fn set_json(gl: &glow::Context, p: glow::Program, name: &str, value: &serde_json
     }
 }
 
+/// The file inside the package that is the scene: what `project.json` names
+/// as the wallpaper's `file`, which is `scene.json` almost always and not
+/// always -- SCP Terminal Lockdown is `gifscene.json` in `gifscene.pkg`.
+pub(crate) fn scene_entry(project: Option<&[u8]>) -> String {
+    project
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(bytes).ok())
+        .and_then(|json| json.get("file")?.as_str().map(str::to_owned))
+        .filter(|file| file.ends_with(".json"))
+        .unwrap_or_else(|| "scene.json".into())
+}
+
 pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let mut found: Vec<_> = std::fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
@@ -3112,7 +3124,15 @@ pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, 
 
 #[cfg(test)]
 mod tests {
-    use super::{anchor_of, coverage, divisor_of, other_layer, showing};
+    use super::{anchor_of, coverage, divisor_of, other_layer, scene_entry, showing};
+
+    #[test]
+    fn the_scene_is_the_file_the_project_names() {
+        assert_eq!(scene_entry(Some(br#"{"file":"gifscene.json","type":"scene"}"#)), "gifscene.json");
+        assert_eq!(scene_entry(Some(br#"{"type":"scene"}"#)), "scene.json");
+        assert_eq!(scene_entry(Some(b"not json")), "scene.json");
+        assert_eq!(scene_entry(None), "scene.json");
+    }
 
     /// The scene's y runs up, so an origin on the bottom edge has the middle
     /// of the image above it -- half an image the other way from the top.

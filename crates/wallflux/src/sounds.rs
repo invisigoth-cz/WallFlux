@@ -36,8 +36,9 @@ pub struct Sound {
 pub fn unpack(folder: &Path, cache: &Path) -> Result<Vec<Sound>, String> {
     let package = Package::read(crate::render::find_package(folder)?)
         .map_err(|e| format!("reading package: {e}"))?;
-    let scene = package.get("scene.json").ok_or("no scene.json in this wallpaper")?;
     let project = std::fs::read(folder.join("project.json")).ok();
+    let entry = crate::render::scene_entry(project.as_deref());
+    let scene = package.get(&entry).ok_or_else(|| format!("no {entry} in this wallpaper"))?;
     let scene = SceneFile::parse_with_properties(scene, project.as_deref())
         .map_err(|e| format!("scene.json: {e}"))?;
 
@@ -87,10 +88,11 @@ pub fn unpack(folder: &Path, cache: &Path) -> Result<Vec<Sound>, String> {
 /// would find, asked without reading the package whole or writing anything.
 pub fn carries_sound(folder: &Path) -> Result<bool, String> {
     let package = crate::render::find_package(folder)?;
-    let scene = wpe_format::pkg::read_entry(&package, "scene.json")
-        .map_err(|e| format!("reading package: {e}"))?
-        .ok_or("no scene.json in this wallpaper")?;
     let project = std::fs::read(folder.join("project.json")).ok();
+    let entry = crate::render::scene_entry(project.as_deref());
+    let scene = wpe_format::pkg::read_entry(&package, &entry)
+        .map_err(|e| format!("reading package: {e}"))?
+        .ok_or_else(|| format!("no {entry} in this wallpaper"))?;
     let scene = SceneFile::parse_with_properties(&scene, project.as_deref())
         .map_err(|e| format!("scene.json: {e}"))?;
     Ok(scene.objects.iter().any(|object| {
