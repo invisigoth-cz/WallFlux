@@ -6,6 +6,22 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-10-29
+
+### Added
+
+- **A scene's videos play.** A scene can give an image a video instead of
+  a picture, and those layers used to be left out. Diablo IV Lilith, which
+  is nothing but such an image and had been taken for a 3D model, now plays,
+  and so every scene on the development machine draws -- 41 of 41. The
+  clip is decoded by `ffmpeg`, once however many layers show it.
+
+### Changed
+
+- `ffmpeg` is a dependency of the package in its own right.
+- The package is built without LTO, which broke the link of the scene
+  scripts.
+
 ## [0.14.0] — 2026-10-29
 
 ### Fixed in the renderer
@@ -710,7 +726,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.11.0...v0.12.0
