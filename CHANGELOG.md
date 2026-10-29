@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-29
+
+### Fixed in the renderer
+
+- **Smoke thins out as it should.** The particle operators' missing values
+  are now Wallpaper Engine's own, read out of its player: a fade is a share
+  of the particle's life rather than seconds, and fades out from halfway
+  when the file says nothing, so smoke no longer holds its full strength
+  and vanishes at once. Changes of size and alpha run down to nothing, and
+  a change of colour ends at black, where nothing else is said.
+- **Fading alpha over a particle's life** (`alphachange`) is drawn.
+- **A scene whose file is not called scene.json plays** -- SCP Terminal
+  Lockdown, whose scene is gifscene.json in gifscene.pkg.
+
 ## [0.15.0] — 2026-10-29
 
 ### Added
@@ -726,7 +740,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.12.0...v0.13.0
