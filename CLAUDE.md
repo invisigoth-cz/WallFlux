@@ -748,6 +748,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **The PKGBUILD must not sit in the repository root.** `makepkg` works in
   `src/` and `pkg/` beside itself, and this project has a `src/` with the
   program in it: `makepkg -C` from the root would empty it.
+- **The package is built with `options=('!lto')`, and a changed option
+  wants `makepkg -fC`.** makepkg's `-flto=auto` reaches the C of QuickJS
+  through `CFLAGS`, Cargo compiles it into the renderer's static library as
+  LTO objects, and the final link stops on `undefined reference to
+  JS_MarkValue` -- a build outside makepkg never sees the flag. And
+  `makepkg -f` reuses `packaging/src/build`, whose CMakeCache keeps the
+  flags of the first configure: switching LTO off changed nothing until
+  `-C` cleaned it. (`-C` from `packaging/` cleans `packaging/src`, which is
+  the point of the PKGBUILD not being in the root.)
 - **`makepkg` builds from git, not from the working tree.** Commit first,
   then `makepkg -f`, then `pacman -U`, or the package carries old code.
 - **The wallpaper's own sound stream carries no pid.** Qt plays a video as a
