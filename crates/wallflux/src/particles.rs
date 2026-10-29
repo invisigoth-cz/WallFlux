@@ -76,6 +76,10 @@ struct Particle {
     /// Seconds since the last place was kept.
     since: f32,
     velocity: [f32; 3],
+    /// How fast `turbulence` carried it on the last step, which it does
+    /// without touching `velocity` -- and which a trail is as long as all
+    /// the same.
+    stir: [f32; 3],
     rotation: [f32; 3],
     size: f32,
     color: [f32; 3],
@@ -590,7 +594,8 @@ impl System {
                             + (field.speed.max - field.speed.min) * particle.drift)
                             * loudness(field.audio, sound);
                         for (axis, mask) in mask.iter().enumerate() {
-                            particle.position[axis] += along[axis] * mask * speed * dt;
+                            particle.stir[axis] = along[axis] * mask * speed;
+                            particle.position[axis] += particle.stir[axis] * dt;
                         }
                     }
                     // A spin only turns once something drives it, which is
@@ -699,7 +704,10 @@ impl System {
         let direction = self.rng.direction(emitter.directions);
         let position = match emitter.shape {
             Shape::Sphere => {
-                let distance = self.rng.range(emitter.distance);
+                let distance = self.rng.range(Range {
+                    min: emitter.distance.min[0],
+                    max: emitter.distance.max[0],
+                });
                 std::array::from_fn(|i| emitter.origin[i] + direction[i] * distance)
             }
             // A box is filled rather than shelled, so each axis is drawn
@@ -707,7 +715,7 @@ impl System {
             Shape::Box => std::array::from_fn(|i| {
                 emitter.origin[i]
                     + self.rng.signed()
-                        * emitter.distance.max
+                        * emitter.distance.max[i]
                         * emitter.directions[i].signum().abs()
             }),
         };
@@ -733,7 +741,7 @@ impl System {
         let turbulent = match self.start.turbulent {
             Some(field) => {
                 let along =
-                    field_direction(&field, position, phase * field.phase_max, self.elapsed);
+                    launch_direction(&field, position, phase * field.phase_max, self.elapsed);
                 let speed = self.rng.range(field.speed) * loudness(field.audio, sound);
                 along.map(|axis| axis * speed)
             }
@@ -754,6 +762,7 @@ impl System {
             // Only six systems in the library set both, so which of the two
             // wins is nearly moot; adding them keeps either on its own right.
             velocity: std::array::from_fn(|i| drawn[i] + direction[i] * speed + turbulent[i]),
+            stir: [0.0; 3],
             rotation: self.rng.range3(self.start.rotation),
             size: self.rng.range(self.start.size),
             color: self.rng.range3(self.start.color),
@@ -826,7 +835,12 @@ impl System {
                     .extend_from_slice(&[color[0], color[1], color[2], alpha]);
                 self.vertices
                     .extend_from_slice(&[particle.rotation[0], particle.rotation[1]]);
-                self.vertices.extend_from_slice(&particle.velocity);
+                // The speed a trail's length is worked out from. Stirred and
+                // otherwise still, Star wars' embers were drawn nought long
+                // -- not at all -- where Wallpaper Engine draws them round.
+                self.vertices.extend_from_slice(&std::array::from_fn::<f32, 3, _>(|i| {
+                    particle.velocity[i] + particle.stir[i]
+                }));
                 self.vertices.push(frame);
             }
         }
@@ -1032,6 +1046,51 @@ fn field_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32)
         return [0.0; 3];
     }
     centred.map(|axis| axis / length)
+}
+
+/// Which way `turbulentvelocityrandom` sends a particle off: a direction out
+/// of the noise, held within `scale` half turns of `forward`, then turned
+/// `offset` radians about `right`, and kept in the plane.
+///
+/// Its scale and offset are not the field's: the engine's defaults for it
+/// are a forward and a right, which only mean something read this way, and
+/// Almamu's renderer reads it so. Taken as a field, Star wars' embers --
+/// scale 0.1, offset -0.5 -- went every way at once, down and into the
+/// screen among them; held this way they rise to the left of where they
+/// are born, which is where Wallpaper Engine shows them. Which way the turn
+/// goes was settled by that picture, not by Almamu, whose y runs down.
+fn launch_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32) -> [f32; 3] {
+    let normalized = |v: [f32; 3]| {
+        let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        (length > 1e-4).then(|| v.map(|x| x / length))
+    };
+    let forward = normalized(field.forward).unwrap_or([0.0, 1.0, 0.0]);
+    let sampled = Turbulent {
+        scale: 0.1,
+        offset: -0.5,
+        ..*field
+    };
+    let mut along = normalized(field_direction(&sampled, position, phase, time)).unwrap_or(forward);
+
+    let most = field.scale / 2.0;
+    let dot = along.iter().zip(&forward).map(|(a, b)| a * b).sum::<f32>();
+    let angle = dot.clamp(-1.0, 1.0).acos() / std::f32::consts::PI;
+    if field.scale < 2.0 && most > 1e-4 && angle > most {
+        if let Some(axis) = normalized(cross(along, forward)) {
+            along = turned(along, axis, (angle - most) * 180.0);
+        }
+    }
+    along = turned(along, field.right, -field.offset.to_degrees());
+    along[2] = 0.0;
+    normalized(along).unwrap_or(forward)
+}
+
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 
 /// Three smooth fields, each from zero to one, sampled far enough apart to be
@@ -1408,6 +1467,23 @@ mod tests {
         assert!(s.count() > 0);
     }
 
+    /// The embers' box, wider than it is tall: "512 256 0" read as one
+    /// number was nought, and every ember was born at the same point.
+    #[test]
+    fn a_box_spreads_each_axis_as_far_as_it_says() {
+        let mut s = system(
+            r#"{"maxcount":200,"emitter":[{"name":"boxrandom","rate":1000,
+                 "directions":"1 0.1 0","distancemax":"512 256 0"}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
+        );
+        run(&mut s, 0.2, 1.0 / 60.0);
+        assert_eq!(s.count(), 200);
+        let widest = |axis: usize| s.live.iter().map(|p| p.position[axis].abs()).fold(0.0, f32::max);
+        assert!((400.0..=512.0).contains(&widest(0)), "{} across", widest(0));
+        assert!((200.0..=256.0).contains(&widest(1)), "{} up", widest(1));
+        assert_eq!(widest(2), 0.0);
+    }
+
     #[test]
     fn a_masked_axis_keeps_its_particles_in_the_plane() {
         let mut s = system(
@@ -1588,6 +1664,8 @@ mod tests {
             time_scale: 0.0,
             phase_max: 0.0,
             offset: -0.5,
+            forward: [0.0, 1.0, 0.0],
+            right: [0.0, 0.0, 1.0],
             audio: None,
         };
         let here = field_direction(&field, [0.0; 3], 0.0, 0.0);

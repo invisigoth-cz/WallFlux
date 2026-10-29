@@ -576,6 +576,32 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   scene is cropped at the sides and everything in it is larger than in a
   16:9 picture.
 
+- **A default that depends on whether the scene is flat is in
+  `wallpaper64.exe` twice.** Each defaults function there takes a flag --
+  bit 10 of a setting, picking pixels over metres -- and loads one of two
+  constants: `sizerandom` 5 to 50 against 0.001 to 1,
+  `turbulentvelocityrandom` 100 to 250 against 0.5 to 1. The flat ones are
+  ours. Every two-way default in the binary is found by `test dl,dl`
+  followed by two `movss` loads.
+
+- **`turbulentvelocityrandom` is a direction, not a field.** Its `scale`
+  is how far from `forward` (up) a start may stray, in half turns, and its
+  `offset` is radians it is turned about `right` (out of the screen) --
+  the engine's defaults name a forward and a right, which mean nothing
+  otherwise, and Almamu reads it so. Which way the turn goes was taken
+  from the Windows screenshot, since Almamu's y runs down. Read as a
+  field, with no speed of its own, Star wars' embers were born still and
+  drawn nought long.
+
+- **`distancemax` is a vector in forty boxes** -- "512 256 0" -- and read
+  as a number it was nought: every one of those boxes let all its
+  particles out at a single point. Pyramid Spaceships' exhaust and
+  StarCraft's rain came back with it.
+
+- **A trail is as long as the particle is fast, and `turbulence` makes it
+  fast without touching its velocity**, so the speed handed to the shader
+  includes what the operator carried it by on the last step.
+
 - **A scene's file is the one project.json names**, `gifscene.json` in
   `gifscene.pkg` for SCP Terminal Lockdown, not always `scene.json` in
   `scene.pkg` -- `WallpaperCore` and the renderer both take it from `file`.

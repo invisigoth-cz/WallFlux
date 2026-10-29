@@ -48,8 +48,9 @@ pub struct Emitter {
     /// Which axes the emitter spreads along. A zero component pins that axis,
     /// which is how a flat wallpaper keeps its particles in the plane.
     pub directions: [f32; 3],
-    /// How far from the origin a particle starts.
-    pub distance: Range<f32>,
+    /// How far from the origin a particle starts, along each axis: a box
+    /// may be wider than it is tall, and a sphere reads only the first.
+    pub distance: Range<[f32; 3]>,
     /// Particles per second.
     pub rate: f32,
     /// Particles all at once: when the system starts, or for a child that
@@ -177,8 +178,15 @@ pub struct Turbulent {
     pub time_scale: f32,
     /// A particle's own place in the field, drawn from zero to this.
     pub phase_max: f32,
-    /// Added to the field before it is used.
+    /// Added to the field before it is used. For `turbulentvelocityrandom`,
+    /// radians the start is turned about `right` instead -- and its `scale`
+    /// is how far from `forward` a start may stray, in half turns.
     pub offset: f32,
+    /// Which way `turbulentvelocityrandom` starts a particle, give or take
+    /// its `scale`: up, unless the file says otherwise.
+    pub forward: [f32; 3],
+    /// What its `offset` turns the start about: the axis out of the screen.
+    pub right: [f32; 3],
     /// Set where the field's speed follows the sound.
     pub audio: Option<AudioResponse>,
 }
@@ -409,7 +417,12 @@ impl ParticleSystem {
             let triple = |default| bounds3(step, "min", "max", default);
             initializers.push(match name_of(step) {
                 "lifetimerandom" => Initializer::Lifetime(scalar(1.0)),
-                "sizerandom" => Initializer::Size(scalar(0.0)),
+                // Five to fifty when the file says neither, as the engine
+                // fills it in for a flat scene; nought drew nothing.
+                "sizerandom" if step.get("min").is_none() && step.get("max").is_none() => {
+                    Initializer::Size(Range { min: 5.0, max: 50.0 })
+                }
+                "sizerandom" => Initializer::Size(scalar(5.0)),
                 "alpharandom" => Initializer::Alpha(scalar(1.0)),
                 "colorrandom" => {
                     // White on the scale the file states, so a colour nobody
@@ -421,7 +434,22 @@ impl ParticleSystem {
                     })
                 }
                 "velocityrandom" => Initializer::Velocity(triple(0.0)),
-                "turbulentvelocityrandom" => Initializer::TurbulentVelocity(turbulent(step, 0.1)),
+                // The engine's defaults for a flat scene, out of
+                // `wallpaper64.exe`, and Almamu's renderer has the same: a
+                // hundred to two hundred and fifty, a scale and a time scale
+                // of one, no offset. Read as nought, Star wars' embers were
+                // born still and never rose.
+                "turbulentvelocityrandom" => Initializer::TurbulentVelocity(Turbulent {
+                    speed: Range {
+                        min: num(step, "speedmin", 100.0),
+                        max: num(step, "speedmax", 250.0),
+                    },
+                    scale: num(step, "scale", 1.0),
+                    time_scale: num(step, "timescale", 1.0),
+                    phase_max: num(step, "phasemax", 0.1),
+                    offset: num(step, "offset", 0.0),
+                    ..turbulent(step, 1.0)
+                }),
                 "rotationrandom" => Initializer::Rotation(triple(0.0)),
                 "angularvelocityrandom" => Initializer::AngularVelocity(triple(0.0)),
                 // Mirroring is the only way back from the far end that the
@@ -651,9 +679,12 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
         // An emitter that named no axes would spawn every particle at one
         // point, so an absent mask means all three.
         directions: vector(step, "directions", [1.0; 3]),
+        // A number or, for forty boxes in the library, "512 256 0" -- which
+        // read as a number was nought, and every one of those boxes let all
+        // its particles out at a single point.
         distance: Range {
-            min: num(step, "distancemin", 0.0),
-            max: num(step, "distancemax", 0.0),
+            min: vector(step, "distancemin", [0.0; 3]),
+            max: vector(step, "distancemax", [0.0; 3]),
         },
         rate: num(step, "rate", 0.0),
         instantaneous: num(step, "instantaneous", 0.0).max(0.0) as u32,
@@ -787,6 +818,8 @@ fn turbulent(step: &Value, default_scale: f32) -> Turbulent {
         time_scale: num(step, "timescale", 0.0),
         phase_max: num(step, "phasemax", 0.0),
         offset: num(step, "offset", -0.5),
+        forward: vector(step, "forward", [0.0, 1.0, 0.0]),
+        right: vector(step, "right", [0.0, 0.0, 1.0]),
         audio: audio_response(step),
     }
 }
@@ -872,8 +905,8 @@ mod tests {
                 origin: [0.0; 3],
                 directions: [1.0, 1.0, 0.0],
                 distance: Range {
-                    min: 32.0,
-                    max: 512.0
+                    min: [32.0; 3],
+                    max: [512.0; 3]
                 },
                 rate: 20.0,
                 instantaneous: 0,
@@ -922,7 +955,18 @@ mod tests {
         let p = ParticleSystem::parse(json).unwrap();
         assert_eq!(p.maxcount, 0);
         assert_eq!(p.emitters[0].rate, 0.0);
-        assert_eq!(p.emitters[0].distance.max, 100.0);
+        // What the engine fills in for a flat scene when nothing is said.
+        let bare = ParticleSystem::parse(
+            br#"{"initializer":[{"name":"sizerandom"},
+                                {"name":"turbulentvelocityrandom"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(bare.initializers[0], Initializer::Size(Range { min: 5.0, max: 50.0 }));
+        let Initializer::TurbulentVelocity(field) = &bare.initializers[1] else {
+            panic!("{:?}", bare.initializers[1]);
+        };
+        assert_eq!(field.speed, Range { min: 100.0, max: 250.0 });
+        assert_eq!(p.emitters[0].distance.max, [100.0; 3]);
         // A null end is a missing end, and the stated one stands for both
         // rather than the range running down to nothing.
         assert_eq!(
@@ -1213,6 +1257,8 @@ mod turbulence_tests {
                 time_scale: 0.2,
                 phase_max: 2.0,
                 offset: -0.5,
+                forward: [0.0, 1.0, 0.0],
+                right: [0.0, 0.0, 1.0],
                 audio: None,
             })]
         );
