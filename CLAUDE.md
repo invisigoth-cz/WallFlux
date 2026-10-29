@@ -563,6 +563,19 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   meant to be: `genericparticle` multiplies by `g_Overbright`, and Pyramid
   Spaceships' smoke asks for 5.
 
+- **`sizerandom` is twice the size a particle is drawn.** The shader
+  draws a particle as wide as the size it is handed, and the file's number
+  is halved before that -- `wallpaper64.exe` stores min, range and exponent
+  unchanged, so the halving is somewhere after, and was not found there;
+  what settled it is measurement. Against Wallpaper Engine on Windows, at
+  the same size of window: Arkham Knight 21.7 whole, 12.7 halved, 13.0 in
+  Wallpaper Engine; Warhammer 89 / 73 / 74. Almamu's renderer halves it
+  too, and the moon in the snowy forest, a particle, is a tenth of the
+  picture high in its preview only that way. **Compare at the window's
+  own size**: the Windows screenshots are 2016x1408 and the like, so the
+  scene is cropped at the sides and everything in it is larger than in a
+  16:9 picture.
+
 - **A scene's file is the one project.json names**, `gifscene.json` in
   `gifscene.pkg` for SCP Terminal Lockdown, not always `scene.json` in
   `scene.pkg` -- `WallpaperCore` and the renderer both take it from `file`.
@@ -1522,9 +1535,13 @@ the file. Everything after it should.
 
    **29 October: most of it was the axes** -- y upside down, angles a
    fifty-seventh -- with blend modes, bloom, alignment and an opaque
-   alpha besides; see the traps. What is still visibly off: the smoke of Pyramid
-   Spaceships, Arkham Knight and the clone in Star wars is too strong;
-   Augmentation's iris; red specks in Star Citizen; SCP Terminal
+   alpha besides; see the traps. The smoke that was too strong was every
+   particle drawn twice its size. Screenshots of Wallpaper Engine on
+   Windows are in `~/WallFlux-ukazky/wpe-windows/` (Arkham Knight, Kratos,
+   Star wars, Warhammer) and still disagree in two places: Warhammer has
+   star-shaped flares all over that Wallpaper Engine draws only at the
+   muzzles, and Star wars lacks orange bokeh at the left. What is still
+   visibly off besides: Augmentation's iris; red specks in Star Citizen; SCP Terminal
    Lockdown's chromatic aberration, a workshop shader that leans on HLSL
    truncating types (a `vec4` into a `vec3`, a `vec2` into a `float`, a
    `vec4` as texture coordinates) and needs a translation that knows types; a black square under

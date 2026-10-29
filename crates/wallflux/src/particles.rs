@@ -242,7 +242,16 @@ impl System {
         for initializer in &definition.initializers {
             match *initializer {
                 Initializer::Lifetime(r) => start.lifetime = r,
-                Initializer::Size(r) => start.size = r,
+                // What `sizerandom` says is twice what the shader is handed,
+                // which draws a particle that size across. Taken whole,
+                // Arkham Knight's fog covered the knight and reached the left
+                // edge of the screen; halved, it measures as Wallpaper
+                // Engine's on Windows does (13.0 against 12.7, where whole
+                // was 21.7), and so does Warhammer's, and Almamu's renderer
+                // halves it too.
+                Initializer::Size(r) => {
+                    start.size = Range { min: r.min / 2.0, max: r.max / 2.0 }
+                }
                 Initializer::Alpha(r) => start.alpha = r,
                 Initializer::Color(r) => start.color = r,
                 Initializer::Velocity(r) => start.velocity = r,
@@ -1449,6 +1458,19 @@ mod tests {
         assert!(p.position[0] > 0.0);
     }
 
+    /// A particle of `sizerandom` 1000 is drawn 500 across.
+    #[test]
+    fn sizerandom_is_twice_the_size_drawn() {
+        let mut s = system(
+            r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"sizerandom","min":1000,"max":1000}]}"#,
+        );
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
+        assert_eq!(s.count(), 1);
+        assert_eq!(s.vertices()[3 + 3], 500.0);
+    }
+
     /// The alpha a particle is written to the buffer with, which is where the
     /// fade is applied.
     fn written_alpha(s: &System) -> f32 {
@@ -1527,9 +1549,10 @@ mod tests {
         );
         s.advance(1.0 / 60.0, &Spectrum::SILENT);
         let size = |s: &System| s.vertices()[3 + 3];
-        assert!((size(&s) - 100.0).abs() < 5.0, "started at {}", size(&s));
+        // Drawn half what `sizerandom` says, as every particle is.
+        assert!((size(&s) - 50.0).abs() < 2.5, "started at {}", size(&s));
         run(&mut s, 0.5, 1.0 / 60.0);
-        assert!((size(&s) - 200.0).abs() < 10.0, "halfway at {}", size(&s));
+        assert!((size(&s) - 100.0).abs() < 5.0, "halfway at {}", size(&s));
     }
 
     #[test]
