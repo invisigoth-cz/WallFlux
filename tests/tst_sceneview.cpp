@@ -2,6 +2,7 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+#include <clocale>
 #include "sceneview.h"
 #include "wallflux_scene.h"
 #include "wallpapercore.h"
@@ -98,6 +99,36 @@ private slots:
         QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
         if (scenes().isEmpty())
             QSKIP("no scene wallpapers on this machine");
+    }
+
+    /// Future Clock's red is a layer whose alpha a script's JSON carries,
+    /// which is nought wherever the C library reads a comma for a point.
+    /// Czech is what it was found on; any such locale does it.
+    void readsItsNumbersWhateverTheLocale()
+    {
+        const QUrl source = scenes().value(QStringLiteral("2127129941"));
+        if (source.isEmpty())
+            QSKIP("Future Clock is not on this machine");
+        if (!setlocale(LC_NUMERIC, "cs_CZ.UTF-8"))
+            QSKIP("no locale with a decimal comma on this machine");
+
+        QQuickWindow window;
+        window.resize(640, 360);
+        SceneView view(window.contentItem());
+        view.setSize(QSizeF(640, 360));
+        view.setRunning(false);
+        view.setSource(source);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const QImage picture = window.grabWindow();
+        int reddest = 0;
+        for (int y = 0; y < picture.height(); y += 2) {
+            for (int x = 0; x < picture.width(); x += 2) {
+                const QRgb pixel = picture.pixel(x, y);
+                reddest = qMax(reddest, qRed(pixel) - qGreen(pixel));
+            }
+        }
+        QVERIFY2(reddest > 100, qPrintable(QStringLiteral("reddest by %1").arg(reddest)));
     }
 
     /// Warhammer: effects, composition layers, a post-processing layer and

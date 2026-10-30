@@ -373,7 +373,22 @@ pub struct Object {
     #[serde(rename = "sound")]
     sound_field: Option<SoundField>,
     #[serde(rename = "text")]
-    text_field: Option<serde_json::Value>,
+    text_field: Option<Bound<serde_json::Value>>,
+
+    // What a text object says about its text; see `wallflux::text`.
+    pub font: String,
+    pub pointsize: Bound<f32>,
+    pub padding: Bound<f32>,
+    pub horizontalalign: Bound<String>,
+    pub verticalalign: Bound<String>,
+    pub limitwidth: Bound<bool>,
+    pub maxwidth: Bound<f32>,
+    pub limitrows: Bound<bool>,
+    pub maxrows: Bound<f32>,
+    pub limituseellipsis: Bound<bool>,
+    pub opaquebackground: Bound<bool>,
+    pub backgroundcolor: Bound<Vector<3>>,
+    pub backgroundbrightness: Bound<f32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -462,6 +477,19 @@ impl Default for Object {
             particle_field: None,
             sound_field: None,
             text_field: None,
+            font: String::new(),
+            pointsize: Bound::plain(32.0),
+            padding: Bound::plain(32.0),
+            horizontalalign: Bound::plain(String::from("center")),
+            verticalalign: Bound::plain(String::from("center")),
+            limitwidth: Bound::plain(false),
+            maxwidth: Bound::plain(0.0),
+            limitrows: Bound::plain(false),
+            maxrows: Bound::plain(1.0),
+            limituseellipsis: Bound::plain(false),
+            opaquebackground: Bound::plain(false),
+            backgroundcolor: Bound::default(),
+            backgroundbrightness: Bound::plain(1.0),
         }
     }
 }
@@ -471,16 +499,20 @@ impl Object {
     ///
     /// The naming fields are present-but-null far more often than they are
     /// absent, so emptiness is decided by the value rather than the key.
-    /// Whether a script writes the object's text, which is how a scene
-    /// draws a clock.
-    pub fn has_scripted_text(&self) -> bool {
-        self.text_field.as_ref().is_some_and(|t| t.get("script").is_some())
+    /// The object's text, its value and whatever writes it, which is how a
+    /// scene draws a clock. The field is there on objects that are not text,
+    /// and a text object can have a name left over in `image` or `particle`,
+    /// so what makes one is naming a font as well.
+    pub fn text(&self) -> Option<&Bound<serde_json::Value>> {
+        self.text_field.as_ref().filter(|_| !self.font.is_empty())
     }
 
     pub fn kind(&self) -> ObjectKind {
         let named = |f: &Option<String>| f.as_deref().filter(|s| !s.is_empty()).map(str::to_owned);
 
-        if let Some(model) = named(&self.image_field) {
+        if self.text().is_some() {
+            ObjectKind::Text
+        } else if let Some(model) = named(&self.image_field) {
             ObjectKind::Image(model)
         } else if let Some(file) = named(&self.particle_field) {
             ObjectKind::Particle(file)
@@ -495,8 +527,6 @@ impl Object {
             } else {
                 ObjectKind::Sound(files)
             }
-        } else if self.text_field.is_some() {
-            ObjectKind::Text
         } else {
             ObjectKind::Empty
         }

@@ -12,6 +12,7 @@ repository.workspace = true
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
+ab_glyph = "0.2.32"
 glow = "0.18.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }

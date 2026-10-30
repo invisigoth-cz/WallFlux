@@ -19,8 +19,9 @@ use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
 
-use crate::particles::{self, FLOATS_PER_ROPE_VERTEX, FLOATS_PER_VERTEX};
+use crate::particles::{self, FLOATS_PER_ROPE_VERTEX, FLOATS_PER_VERTEX, Snapshot};
 use crate::script::{Drives, Scripts};
+use crate::text::{Align, Face, Style};
 use crate::texture::Texture;
 use crate::transform::{self, Matrix};
 use crate::video::Video;
@@ -68,6 +69,7 @@ impl Object {
     /// layer draws that picture, a blend mode mixes into it.
     fn reads_frame(&self) -> bool {
         self.layer.is_some()
+            || self.passes.iter().any(|pass| !pass.screen_slots.is_empty())
             || self.effects.iter().any(|step| step.reads.iter().any(|(_, from)| matches!(from, Buffer::Frame)))
     }
 
@@ -97,6 +99,13 @@ impl Object {
 }
 
 impl Pass {
+    /// What this pass's samplers for the scene so far are to be handed.
+    fn screen_binds<'a>(&self, frame: Option<&'a Target>) -> Vec<(usize, &'a Texture)> {
+        frame
+            .map(|frame| self.screen_slots.iter().map(|slot| (*slot, &frame.texture)).collect())
+            .unwrap_or_default()
+    }
+
     /// The size of the first bound image, which is what an auto-sized object
     /// takes its own size from.
     fn first_image_size(&self) -> Option<(u32, u32)> {
@@ -130,6 +139,14 @@ struct Pass {
     /// Set when the first texture is a video: its name, for the scene to
     /// play it into the first slot.
     video: Option<String>,
+    /// Units whose sampler stands for the scene drawn so far, and which the
+    /// compiled shader really reads. Fire and smoke are made this way: a
+    /// particle whose material sets `REFRACT` multiplies itself by what is
+    /// behind it, so it burns on a lit hull and all but vanishes against a
+    /// dark sky. Thirteen wallpapers here ask for it. Left unbound, the
+    /// sampler read the particle's own texture instead, and Star Destroyer's
+    /// and DOOM's flames came out as yellow blobs hanging in the air.
+    screen_slots: Vec<usize>,
 }
 
 /// A sprite sheet played by an image object, frame by frame.
@@ -304,6 +321,82 @@ struct Object {
     from_scene: bool,
     /// Whether to draw it, which a script may change while the scene runs.
     shown: bool,
+    /// Set on a text object: its first pass draws the picture this keeps up.
+    text: Option<Box<TextBox>>,
+}
+
+/// A text object: how to draw it and what it last drew.
+struct TextBox {
+    face: Face,
+    style: Style,
+    shows: String,
+}
+
+impl TextBox {
+    /// Puts `words` into the object's picture, if they are not there already.
+    fn write(object: &mut Object, gl: &glow::Context, words: &str) {
+        let Some(text) = &mut object.text else { return };
+        if text.shows == words {
+            return;
+        }
+        let picture = text.face.draw(words, &text.style);
+        words.clone_into(&mut text.shows);
+        object.size = [picture.width as f32, picture.height as f32];
+        object.anchor = picture.anchor;
+        if let Some(Some(texture)) = object.passes.first_mut().and_then(|p| p.textures.first_mut()) {
+            texture.write_rgba(gl, picture.width, picture.height, &picture.rgba);
+        }
+    }
+}
+
+/// A text object, drawn as any image is once its picture exists. What it asks
+/// for is in `crate::text`.
+fn build_text(
+    gl: &glow::Context,
+    resolve: &Resolver<'_>,
+    object: &wpe_format::scene::Object,
+    skipped: &mut Vec<String>,
+) -> Option<(Vec<Pass>, Box<TextBox>, [f32; 2], [f32; 2])> {
+    let spare = resolve.get("fonts/NotoSans-Regular.ttf").map(|b| b.into_owned());
+    // A `systemfont_` name means one of Windows' own, which are not here.
+    let own = resolve.get(&object.font).map(|b| b.into_owned());
+    let Some(face) = Face::new(own, spare) else {
+        skipped.push(format!("{}: no font could be read for its text", object.name));
+        return None;
+    };
+    let material = resolve.get("materials/fonts/basefontrgba.json")?;
+    let material = Material::parse(&material).ok()?;
+    let mut passes = build_passes(gl, resolve, &material, Kind::Image, object, skipped);
+    let brighter = |color: [f32; 3], by: f32| color.map(|c| c * by);
+    let style = Style {
+        points: object.pointsize.value,
+        size: object.size.map(|s| s.0),
+        // Effect padding: nothing else has any room set aside for it.
+        padding: if object.effects.is_empty() { 0.0 } else { object.padding.value.max(0.0) },
+        across: Align::parse(&object.horizontalalign.value),
+        down: Align::parse(&object.verticalalign.value),
+        fill: brighter(object.color.value.0, object.brightness),
+        background: object
+            .opaquebackground
+            .value
+            .then(|| brighter(object.backgroundcolor.value.0, object.backgroundbrightness.value)),
+        max_width: object.limitwidth.value.then_some(object.maxwidth.value),
+        max_rows: object.limitrows.value.then_some(object.maxrows.value.max(1.0) as usize),
+        ellipsis: object.limituseellipsis.value,
+    };
+    let words = match object.text().map(|t| &t.value) {
+        Some(serde_json::Value::String(words)) => words.clone(),
+        Some(serde_json::Value::Null) | None => String::new(),
+        Some(other) => other.to_string(),
+    };
+    let picture = face.draw(&words, &style);
+    let texture = Texture::from_rgba(gl, picture.width, picture.height, &picture.rgba)
+        .map_err(|e| skipped.push(format!("{}: {e}", object.name)))
+        .ok()?;
+    passes.first_mut()?.textures = vec![Some(texture)];
+    let size = [picture.width as f32, picture.height as f32];
+    let anchor = picture.anchor;
+    Some((passes, Box::new(TextBox { face, style, shows: words }), size, anchor))
 }
 
 /// A child system that answers to its parent's particles -- bursting where
@@ -407,6 +500,8 @@ pub struct Scene {
     /// The scene's JavaScript, where it has any, and the time it last ran.
     scripts: Option<Scripts>,
     scripted_at: Option<f32>,
+    /// The camera's field of view, in degrees, for perspective particles.
+    fov: f32,
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
@@ -635,12 +730,20 @@ impl Scene {
         let mut videos = BTreeMap::new();
         let mut buffers = BTreeMap::new();
         // The layers that finish as a picture another can read: those with
-        // effects. One without is either drawn straight onto the screen or,
-        // as a layer, not drawn at all.
+        // effects, and those somebody asks to read even without any.
+        let asked_for: BTreeSet<i64> = file
+            .objects
+            .iter()
+            .flat_map(|o| &o.effects)
+            .flat_map(|e| &e.passes)
+            .flat_map(|p| &p.textures)
+            .flatten()
+            .filter_map(|name| other_layer(name))
+            .collect();
         let carriers: BTreeSet<i64> = file
             .objects
             .iter()
-            .filter(|o| o.visible.value && !o.effects.is_empty())
+            .filter(|o| o.visible.value && (!o.effects.is_empty() || asked_for.contains(&o.id)))
             .map(|o| o.id)
             .collect();
         for object in &file.objects {
@@ -652,6 +755,35 @@ impl Scene {
                     if let Some(system) = load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped) {
                         objects[system].from_scene = true;
                     }
+                    continue;
+                }
+                ObjectKind::Text => {
+                    let Some((passes, text, size, anchor)) = build_text(gl, &resolve, object, &mut skipped) else {
+                        continue;
+                    };
+                    objects.push(Object {
+                        name: object.name.clone(),
+                        origin: object.origin.value.0,
+                        size,
+                        scale: object.scale.value.0,
+                        angles: object.angles.value.0,
+                        alpha: object.alpha.value,
+                        brightness: 1.0,
+                        color: [1.0; 3],
+                        passes,
+                        drawing: Drawing::Image,
+                        trail: None,
+                        effects: build_effects(gl, &resolve, object, &carriers, &mut buffers, &mut skipped),
+                        id: object.id,
+                        kept: false,
+                        answers: None,
+                        layer: None,
+                        depth: object.parallax_depth.0,
+                        anchor,
+                        from_scene: true,
+                        shown: true,
+                        text: Some(text),
+                    });
                     continue;
                 }
                 ObjectKind::Image(_) => {}
@@ -728,6 +860,7 @@ impl Scene {
                 anchor: anchor_of(&object.alignment),
                 from_scene: true,
                 shown: true,
+                text: None,
             });
         }
 
@@ -747,6 +880,20 @@ impl Scene {
             object.kept = read.contains(&object.id);
         }
         thin_particles(&mut objects, budget, &mut skipped);
+        // Where the scene's edges are from where each system stands.
+        for object in &mut objects {
+            let inside = |edge: f32, axis: usize| match object.scale[axis] {
+                0.0 => 0.0,
+                scale => (edge - object.origin[axis]) / scale,
+            };
+            let scene = wpe_format::particle::Range {
+                min: [inside(0.0, 0), inside(0.0, 1), 0.0],
+                max: [inside(scene_size.0 as f32, 0), inside(scene_size.1 as f32, 1), 0.0],
+            };
+            if let Drawing::Particles(system) = &mut object.drawing {
+                system.bound_by(scene);
+            }
+        }
         let scripts = Scripts::load(&file, project.as_deref());
         if let Some(scripts) = &scripts {
             skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
@@ -795,6 +942,7 @@ impl Scene {
             sound: Spectrum::SILENT,
             scripts,
             scripted_at: None,
+            fov: file.general.fov,
             scene_size,
             skipped,
         })
@@ -903,7 +1051,7 @@ impl Scene {
     /// may jump straight to a moment and the particle systems still arrive
     /// there the same way they would have by running.
     pub fn draw(&mut self, gl: &glow::Context, output: (u32, u32), time: f32) {
-        self.run_scripts(time);
+        self.run_scripts(gl, time);
         self.advance_to(time, STEPS_PER_FRAME);
         for video in self.videos.values_mut() {
             video.show(gl, time);
@@ -911,6 +1059,11 @@ impl Scene {
         let projection = transform::orthographic_cover(
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
+        );
+        let camera = transform::perspective_cover(
+            (self.scene_size.0 as f32, self.scene_size.1 as f32),
+            (output.0 as f32, output.1 as f32),
+            self.fov,
         );
         // Whatever the caller was drawing into, which an effect leaves for a
         // moment and has to put back.
@@ -987,11 +1140,14 @@ impl Scene {
                 Drawing::Image => [object.size[0], -object.size[1]],
                 Drawing::Particles(_) => object.size,
             };
-            for axis in 0..2 {
-                origin[axis] -= object.anchor[axis] * object.size[axis] * object.scale[axis];
-            }
+            origin = middle_of(origin, object.anchor, object.size, object.scale, object.angles[2]);
             let model = transform::model(origin, size, object.scale, object.angles);
-            let mvp = transform::multiply(&projection, &model);
+            let mvp = match &object.drawing {
+                Drawing::Particles(system) if system.is_perspective() => {
+                    transform::multiply(&camera, &model)
+                }
+                _ => transform::multiply(&projection, &model),
+            };
             match (&object.drawing, &self.particles) {
                 (Drawing::Image, _) => unsafe {
                     gl.bind_vertex_array(Some(self.quad));
@@ -1030,7 +1186,7 @@ impl Scene {
                                     &mvp,
                                     time,
                                     &self.white,
-                                    &[],
+                                    &pass.screen_binds(frame),
                                     &self.sound,
                                     pass.blending,
                                 );
@@ -1039,6 +1195,17 @@ impl Scene {
                     }
                 },
                 (Drawing::Particles(system), Some(buffers)) => unsafe {
+                    // Taken for each system that wants it, since the one
+                    // before it is part of what it refracts.
+                    // ponytail: a whole-screen copy per such system; DOOM has a
+                    // dozen. Copy only the system's bounds if that ever shows.
+                    let frame = match (object.reads_frame(), &self.frame) {
+                        (true, Some(frame)) => {
+                            take_frame(gl, screen, frame, output);
+                            Some(frame)
+                        }
+                        _ => None,
+                    };
                     draw_particles(
                         gl,
                         object,
@@ -1048,6 +1215,7 @@ impl Scene {
                         time,
                         &self.white,
                         &self.sound,
+                        frame,
                     );
                 },
                 // Unreachable: the buffers are allocated whenever a particle
@@ -1098,7 +1266,7 @@ impl Scene {
     /// something that merely runs slow.
     /// Runs the scene's scripts for a frame at `time` and puts what they
     /// leave where the drawing reads it.
-    fn run_scripts(&mut self, time: f32) {
+    fn run_scripts(&mut self, gl: &glow::Context, time: f32) {
         let Some(scripts) = &mut self.scripts else {
             return;
         };
@@ -1134,6 +1302,11 @@ impl Scene {
                 object.scale = layer.scale;
                 object.alpha = layer.alpha;
                 object.shown = layer.visible;
+            }
+        }
+        for (id, words) in &frame.texts {
+            for index in placed(&mut self.objects, *id) {
+                TextBox::write(&mut self.objects[index], gl, words);
             }
         }
         for (target, value) in frame.values {
@@ -1187,7 +1360,9 @@ impl Scene {
                             let hosts: Vec<_> = events
                                 .alive
                                 .iter()
-                                .map(|&(serial, at)| (serial, answer.inside(at)))
+                                .map(|&(serial, from)| {
+                                    (serial, Snapshot { position: answer.inside(from.position), ..from })
+                                })
                                 .collect();
                             system.follow(&hosts, STEP, &sound);
                         }
@@ -1196,8 +1371,9 @@ impl Scene {
                                 ChildKind::EventSpawn => &events.born,
                                 _ => &events.died,
                             };
-                            for &at in places {
-                                system.burst_at(answer.inside(at), &sound);
+                            for &from in places {
+                                let position = answer.inside(from.position);
+                                system.burst_at(Snapshot { position, ..from }, &sound);
                             }
                         }
                     }
@@ -1392,6 +1568,7 @@ fn build_particles(
         anchor: [0.0; 2],
         from_scene: false,
         shown: true,
+        text: None,
     })
 }
 
@@ -1421,7 +1598,7 @@ fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<Strin
     let wanted: usize = objects
         .iter()
         .filter_map(|o| match &o.drawing {
-            Drawing::Particles(system) => Some(system.capacity()),
+            Drawing::Particles(system) => Some(system.expected()),
             Drawing::Image => None,
         })
         .sum();
@@ -1436,7 +1613,7 @@ fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<Strin
             // share is still one particle -- or two for a ribbon, which needs
             // a pair to have anything between them.
             let least = if system.is_rope() { 2 } else { 1 };
-            let kept = ((system.capacity() as f64 * share) as usize).max(least);
+            let kept = ((system.expected() as f64 * share) as usize).max(least);
             system.thin_to(kept);
         }
     }
@@ -1563,6 +1740,8 @@ unsafe fn draw_through_effects(
             // object's own alpha into its colour, and the effect that comes
             // after would fold it in a second time, which darkens everything
             // that is not fully opaque.
+            let mut handed = handed.clone();
+            handed.extend(pass.screen_binds(frame));
             draw_pass(
                 gl,
                 pass,
@@ -1660,7 +1839,15 @@ unsafe fn draw_through_effects(
                         white,
                         &bound,
                         sound,
-                        pass.blending,
+                        // A layer asked to be added to the scene still is
+                        // once its effects have been through it: the effect's
+                        // own material speaks only for its chain. Drawn with
+                        // that, a glow on a black picture came out as a black
+                        // rectangle with a glow on it.
+                        match object.passes.first().map(|p| p.blending) {
+                            Some(Blending::Additive) => Blending::Additive,
+                            _ => pass.blending,
+                        },
                     );
                 }
                 // A pass in the middle of a chain covers its whole buffer and
@@ -1730,6 +1917,14 @@ fn build_effects(
         })
         .collect();
     match object.color_blend_mode.value {
+        // Nothing to mix, but another layer reads this one: it goes through
+        // the plain pass, which is what gives it a picture to keep.
+        0 if built.is_empty() && carriers.contains(&object.id) => {
+            match build_blend(gl, resolve, 0, object.effects.len()) {
+                Ok(steps) => built.push(steps),
+                Err(e) => skipped.push(format!("{}: to be read: {e}", object.name)),
+            }
+        }
         0 => {}
         mode => match build_blend(gl, resolve, mode, object.effects.len()) {
             Ok(steps) => built.push(steps),
@@ -1866,6 +2061,7 @@ fn build_effect(
                 let first = material.passes.first().ok_or("it has no passes")?;
                 build_pass(gl, resolve, first, Kind::Effect, over.as_ref())
             })?;
+        reads.extend(built.screen_slots.iter().map(|slot| (*slot, Buffer::Frame)));
         steps.push(Step {
             pass: Some(built),
             into,
@@ -1985,6 +2181,7 @@ fn build_bloom(
             anchor: [0.0; 2],
             from_scene: false,
             shown: false,
+            text: None,
         },
     })
 }
@@ -2037,6 +2234,17 @@ impl Bloom {
     }
 }
 
+/// Where the middle of an object goes, given where its origin is. The origin
+/// is what it turns about, so the way from one to the other turns with it:
+/// Dark Core's hands are `bottom`, standing on the point they turn on. Moved
+/// straight down, they turned about their own middles and stood at twelve
+/// whatever the time.
+fn middle_of(origin: [f32; 3], anchor: [f32; 2], size: [f32; 2], scale: [f32; 3], turn: f32) -> [f32; 3] {
+    let (x, y) = (anchor[0] * size[0] * scale[0], anchor[1] * size[1] * scale[1]);
+    let (sin, cos) = turn.sin_cos();
+    [origin[0] - (x * cos - y * sin), origin[1] - (x * sin + y * cos), origin[2]]
+}
+
 /// Where an `alignment` puts the origin on an image, from its middle and in
 /// its own sizes, y up. Almamu's renderer reads the words the same way.
 fn anchor_of(alignment: &str) -> [f32; 2] {
@@ -2074,7 +2282,10 @@ fn build_blend(
         .and_then(|bytes| Material::parse(&bytes).map_err(|e| e.to_string()))?;
     let first = material.passes.first().ok_or("it has no passes")?;
     let over = wpe_format::scene::PassOverride {
-        combos: BTreeMap::from([("BLENDMODE".into(), mode.into())]),
+        combos: match mode {
+            0 => BTreeMap::new(),
+            mode => BTreeMap::from([("BLENDMODE".into(), mode.into())]),
+        },
         ..Default::default()
     };
     let mut pass = build_pass(gl, resolve, first, Kind::Effect, Some(&over))?;
@@ -2084,7 +2295,10 @@ fn build_blend(
     Ok(vec![Step {
         pass: Some(pass),
         into: Buffer::Screen,
-        reads: vec![(0, Buffer::Canvas(0)), (4, Buffer::Frame)],
+        reads: match mode {
+            0 => vec![(0, Buffer::Canvas(0))],
+            _ => vec![(0, Buffer::Canvas(0)), (4, Buffer::Frame)],
+        },
         scene_pass: (after, 0),
     }])
 }
@@ -2182,6 +2396,7 @@ unsafe fn draw_particles(
     time: f32,
     white: &Texture,
     sound: &Spectrum,
+    frame: Option<&Target>,
 ) {
     let vertices = system.vertices();
     if vertices.is_empty() {
@@ -2201,13 +2416,17 @@ unsafe fn draw_particles(
         gl.buffer_sub_data_u8_slice(glow::ARRAY_BUFFER, 0, bytes);
 
         for pass in &object.passes {
-            set_common(gl, pass, object, mvp, time, white, &[], sound);
+            set_common(gl, pass, object, mvp, time, white, &pass.screen_binds(frame), sound);
             pass.blending.apply(gl);
             // A flat wallpaper's particles face the screen, so the frame the
             // shader turns a particle in is the scene's own axes.
             set_vec3(gl, pass.program, "g_OrientationRight", [1.0, 0.0, 0.0]);
             set_vec3(gl, pass.program, "g_OrientationUp", [0.0, 1.0, 0.0]);
             set_vec3(gl, pass.program, "g_OrientationForward", [0.0, 0.0, 1.0]);
+            // Which way the screen's own axes lie, which a refraction's offset
+            // is worked out along.
+            set_vec3(gl, pass.program, "g_ViewRight", [1.0, 0.0, 0.0]);
+            set_vec3(gl, pass.program, "g_ViewUp", [0.0, 1.0, 0.0]);
             // A trail and a ribbon both turn to face the viewer, and both
             // work out which way that is from the eye. On a flat wallpaper it
             // is straight down z, so the eye is given in the object's own
@@ -2614,7 +2833,18 @@ fn build_pass(
         let fragment = fragment.clone();
         wpe_format::shader::widen_varyings(vertex, &fragment);
     }
-    let program = unsafe { link(gl, &stages)? };
+    // A workshop shader may lean on HLSL shortening a wider value to fit, which
+    // GLSL refuses. Those are written out and tried again, only for a shader
+    // that needs it, so one that compiles stays exactly as it was.
+    let program = match unsafe { link(gl, &stages) } {
+        Ok(program) => program,
+        Err(why) => {
+            for (_, source) in &mut stages {
+                *source = wpe_format::shader::spell_out_conversions(source);
+            }
+            unsafe { link(gl, &stages) }.map_err(|_| why)?
+        }
+    };
     let hears = ["g_AudioSpectrum16Left", "g_AudioSpectrum16Right"].iter().any(|name| unsafe {
         gl.get_uniform_location(program, name).is_some()
             || gl.get_uniform_location(program, &format!("{name}[0]")).is_some()
@@ -2648,7 +2878,14 @@ fn build_pass(
     }
 
     // Only where the material named nothing: what it states always wins.
+    let mut screen_slots = Vec::new();
     for (slot, path) in wanted_textures {
+        if path == FULL_FRAME
+            && textures.get(slot).is_none_or(Option::is_none)
+            && unsafe { gl.get_uniform_location(program, &format!("g_Texture{slot}")) }.is_some()
+        {
+            screen_slots.push(slot);
+        }
         if wpe_format::effect::is_render_target(&path) || path.starts_with("_alias_") {
             continue;
         }
@@ -2693,6 +2930,7 @@ fn build_pass(
         hears,
         labels: named_by,
         video,
+        screen_slots,
     })
 }
 
@@ -3130,7 +3368,7 @@ pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, 
 
 #[cfg(test)]
 mod tests {
-    use super::{anchor_of, coverage, divisor_of, other_layer, scene_entry, showing};
+    use super::{middle_of, anchor_of, coverage, divisor_of, other_layer, scene_entry, showing};
 
     #[test]
     fn the_scene_is_the_file_the_project_names() {
@@ -3142,6 +3380,20 @@ mod tests {
 
     /// The scene's y runs up, so an origin on the bottom edge has the middle
     /// of the image above it -- half an image the other way from the top.
+    /// A hand standing on its origin, turned a half turn, hangs below it.
+    #[test]
+    fn an_object_turns_about_its_origin() {
+        let anchor = anchor_of("bottom");
+        let upright = middle_of([100.0, 100.0, 0.0], anchor, [10.0, 40.0], [1.0; 3], 0.0);
+        assert_eq!(&upright[..2], &[100.0, 120.0]);
+        let turned =
+            middle_of([100.0, 100.0, 0.0], anchor, [10.0, 40.0], [1.0; 3], std::f32::consts::PI);
+        assert!((turned[0] - 100.0).abs() < 1e-3 && (turned[1] - 80.0).abs() < 1e-3, "{turned:?}");
+        let quarter =
+            middle_of([100.0, 100.0, 0.0], anchor, [10.0, 40.0], [1.0; 3], std::f32::consts::FRAC_PI_2);
+        assert!((quarter[0] - 80.0).abs() < 1e-3, "{quarter:?}");
+    }
+
     #[test]
     fn an_alignment_puts_the_origin_on_that_edge() {
         assert_eq!(anchor_of("center"), [0.0, 0.0]);

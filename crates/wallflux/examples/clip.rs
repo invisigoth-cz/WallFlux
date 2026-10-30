@@ -36,6 +36,8 @@ mod particles;
 mod render;
 #[path = "../src/script.rs"]
 mod script;
+#[path = "../src/text.rs"]
+mod text;
 #[path = "../src/texture.rs"]
 mod texture;
 #[path = "../src/transform.rs"]

@@ -45,9 +45,20 @@ pub enum Shape {
 pub struct Emitter {
     pub shape: Shape,
     pub origin: [f32; 3],
-    /// Which axes the emitter spreads along. A zero component pins that axis,
-    /// which is how a flat wallpaper keeps its particles in the plane.
+    /// What a place drawn in the emitter's shape is multiplied by, axis by
+    /// axis: "1 0.07 0" is a sphere pressed into a long thin ellipse, which
+    /// is how Wildfire lies along a burning hull. Zero pins an axis.
     pub directions: [f32; 3],
+    /// Keeps an axis to one side of the origin: above nought the positive
+    /// side, below it the negative, nought both. Sparks fly upwards this way.
+    pub sign: [f32; 3],
+    /// Seconds before it starts, and how long it then runs; nought is for ever.
+    pub delay: f32,
+    pub duration: f32,
+    /// Set where it comes and goes at random.
+    pub periodic: Option<Periodic>,
+    /// At most one particle a step, which keeps a ribbon from bunching up.
+    pub one_per_step: bool,
     /// How far from the origin a particle starts, along each axis: a box
     /// may be wider than it is tall, and a sphere reads only the first.
     pub distance: Range<[f32; 3]>,
@@ -63,9 +74,147 @@ pub struct Emitter {
     pub audio: Option<AudioResponse>,
 }
 
+/// How long an emitter runs for and rests between runs, in seconds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Periodic {
+    pub run: Range<f32>,
+    pub rest: Range<f32>,
+}
+
+/// How far each random start leans towards its minimum: what the draw from
+/// nought to one is raised to. Only 113 of the steps in the library and the
+/// stock presets say anything but one, and those are most of what looks wrong
+/// without it -- a shower of mostly small sparks with a few large ones.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Exponents {
+    pub lifetime: f32,
+    pub size: f32,
+    pub alpha: f32,
+    pub color: f32,
+}
+
+impl Default for Exponents {
+    fn default() -> Self {
+        Self { lifetime: 1.0, size: 1.0, alpha: 1.0, color: 1.0 }
+    }
+}
+
+/// A control point a step refers to: where it is, or, for one on the mouse,
+/// how far from the mouse.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Anchor {
+    pub at: [f32; 3],
+    pub pointer: bool,
+}
+
+/// What a remap reads, as the editor's list names it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RemapInput {
+    LifetimeFraction,
+    MaxLifetime,
+    Size,
+    Opacity,
+    Speed,
+    Rotation,
+    AngularSpeed,
+    DistanceToControlPoint,
+    PositionBetweenControlPoints,
+    /// Runtime, the system's time and the layer's are the one clock here.
+    Time,
+    TimeOfDay,
+    Color,
+    Position,
+    Velocity,
+    ControlPoint,
+    DeltaToControlPoint,
+    DirectionToControlPoint,
+    LayerOrigin,
+}
+
+/// What a remap writes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RemapOutput {
+    Lifetime,
+    Size,
+    Opacity,
+    Color,
+    Position,
+    Velocity,
+    Speed,
+    Rotation,
+    AngularSpeed,
+}
+
+/// How a remap's value meets what is there. `remap` is what the editor calls
+/// Assign.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemapOperation {
+    Assign,
+    Multiply,
+    Add,
+    Subtract,
+}
+
+/// The shape the fraction between the input's two ends is put through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemapTransform {
+    None,
+    Sine,
+    Square,
+    Saw,
+    Triangle,
+    Simplex,
+    Fbm,
+}
+
+/// Reads one value of a particle, maps it from one range to another and writes
+/// it into another. The defaults are the engine's, out of `wallpaper64.exe`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Remap {
+    pub operation: RemapOperation,
+    pub input: RemapInput,
+    /// One axis of a vector, or all of them.
+    pub input_component: Option<usize>,
+    pub output: RemapOutput,
+    pub output_component: Option<usize>,
+    pub input_range: Range<f32>,
+    pub output_range: Range<[f32; 3]>,
+    pub points: [Anchor; 2],
+    pub transform: RemapTransform,
+    pub transform_scale: f32,
+    pub transform_octaves: u32,
+    /// Fractions of the particle's life it comes in over and goes out over.
+    pub blend_in: Option<Range<f32>>,
+    pub blend_out: Option<Range<f32>>,
+    /// The bottom bit of `flags`: each particle has a noise of its own.
+    pub per_particle: bool,
+}
+
+/// What a child takes from the particle of its parent's that it answers to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Inherit {
+    Color { multiply: bool },
+    Opacity { multiply: bool },
+    ColorOpacity { multiply: bool },
+    Velocity { add: bool },
+    Size { multiply: bool },
+    Rotation { add: bool },
+    AngularVelocity { add: bool },
+}
+
 /// A starting value handed to each new particle.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Initializer {
+    /// Read, mapped and written once, as the particle is made.
+    Remap(Remap),
+    /// A share of how fast a control point is moving. Only one on the mouse
+    /// moves at all here.
+    InheritPointVelocity {
+        point: Anchor,
+        share: Range<f32>,
+    },
+    /// Taken from the parent's particle, as this one is made.
+    Inherit(Inherit),
     /// Seconds the particle lives for.
     Lifetime(Range<f32>),
     /// Width in the scene's own pixels.
@@ -82,6 +231,26 @@ pub enum Initializer {
     /// A direction taken from a noise field rather than drawn at random, so
     /// particles that start near each other set off together.
     TurbulentVelocity(Turbulent),
+    /// A colour drawn in hue, saturation and value, each nought to one, which
+    /// is how a system is made every colour without being any of them dull.
+    HsvColor {
+        hue: Range<f32>,
+        saturation: Range<f32>,
+        value: Range<f32>,
+    },
+    /// One of these colours, 0-1, picked at random.
+    ColorList(Vec<[f32; 3]>),
+    /// Nudged up to this far from where the emitter put it.
+    PositionOffset {
+        distance: f32,
+    },
+    /// Sent out around a control point, each one `1/count` of a turn on from
+    /// the last, at a speed drawn from the range.
+    AroundControlPoint {
+        point: [f32; 3],
+        count: f32,
+        speed: Range<[f32; 3]>,
+    },
     /// Strings each new particle onto the line between the system's first two
     /// control points instead of leaving it where the emitter put it.
     ///
@@ -91,6 +260,8 @@ pub enum Initializer {
     /// using this is the same discharge preset.
     AlongControlPoints {
         count: u32,
+        /// Back the way it came at the far end, or from the start again.
+        mirror: bool,
     },
 }
 
@@ -146,8 +317,7 @@ pub enum Channels {
 
 /// How a step follows the sound.
 ///
-/// What the step states is its loud end; the quiet end is `bounds.min` of it,
-/// never nothing, which is why a wallpaper still moves in silence.
+/// What the step states is its loud end.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioResponse {
     /// The bands to listen to, as the first and last index into the sixteen.
@@ -157,7 +327,8 @@ pub struct AudioResponse {
     /// What the loudness is raised to before it is mapped, which is how a
     /// wallpaper says whether it answers to quiet sounds or only to loud ones.
     pub exponent: f32,
-    /// What the step's own strength is multiplied by, from silence to loud.
+    /// The part of the loudness it answers to: silent below the first, flat
+    /// out above the second.
     pub bounds: Range<f32>,
 }
 
@@ -200,6 +371,45 @@ pub struct Ramp {
     pub to: f32,
 }
 
+/// How a flock behaves. The defaults are the engine's for a flat scene.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Boids {
+    pub neighbor_threshold: f32,
+    pub separation_threshold: f32,
+    pub max_speed: f32,
+    pub separation: f32,
+    pub alignment: f32,
+    pub cohesion: f32,
+}
+
+/// What a particle runs into.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CollisionShape {
+    /// Everything behind the plane is out of bounds.
+    Plane { normal: [f32; 3], distance: f32 },
+    Sphere { origin: [f32; 3], radius: f32 },
+    /// A plane of limited size, collided with only from in front.
+    Quad { origin: [f32; 3], size: [f32; 2], normal: [f32; 3] },
+    /// The edges of the scene.
+    Bounds,
+}
+
+/// What happens when it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollisionBehavior {
+    Bounce,
+    Slide,
+    Delete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Collision {
+    pub shape: CollisionShape,
+    pub behavior: CollisionBehavior,
+    /// How much of its speed into the surface it keeps, coming back.
+    pub bounce: f32,
+}
+
 /// A swirl about an axis through the system's origin.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vortex {
@@ -227,6 +437,25 @@ pub struct Oscillation {
 /// A change applied to every live particle each frame.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
+    /// Read, mapped and written every step.
+    Remap(Remap),
+    /// Taken from the parent's particle a child rides with, every step.
+    Inherit(Inherit),
+    /// Flocking, each particle answering to those near it.
+    Boids(Boids),
+    Collide(Collision),
+    /// Stays this far from a control point, at once where `strength` is
+    /// nought and at that rate a second otherwise.
+    MaintainDistance {
+        point: Anchor,
+        distance: f32,
+        strength: f32,
+    },
+    /// Stays on the line between two control points.
+    MaintainBetween {
+        from: Anchor,
+        to: Anchor,
+    },
     Movement {
         gravity: [f32; 3],
         drag: f32,
@@ -268,6 +497,19 @@ pub enum Operator {
     },
     /// Beats a particle's alpha down and back up again.
     OscillateAlpha(Oscillation),
+    /// Swells and shrinks a particle between the two ends of `scale`.
+    OscillateSize(Oscillation),
+    /// Holds a particle to this speed.
+    CapVelocity {
+        most: f32,
+    },
+    /// Takes the speed off a particle near a point: all the `reduction` it
+    /// says within `distance.min`, none past `distance.max`.
+    ReduceNear {
+        point: [f32; 3],
+        distance: Range<f32>,
+        reduction: Range<f32>,
+    },
     /// Sways a particle to and fro without moving where it came from.
     OscillatePosition {
         wave: Oscillation,
@@ -336,6 +578,8 @@ pub enum Animation {
         multiplier: f32,
     },
     RandomFrame,
+    /// Walks the sheet once over the particle's life and stops on the last.
+    Once,
 }
 
 #[derive(Debug, Clone)]
@@ -347,6 +591,9 @@ pub struct ParticleSystem {
     pub starttime: f32,
     pub emitters: Vec<Emitter>,
     pub initializers: Vec<Initializer>,
+    pub exponents: Exponents,
+    /// Particles live in a 3D space seen through a camera, not on the screen.
+    pub perspective: bool,
     pub operators: Vec<Operator>,
     pub renderer: Renderer,
     pub animation: Option<Animation>,
@@ -396,6 +643,7 @@ impl ParticleSystem {
         let mut emitters = Vec::new();
         let mut initializers = Vec::new();
         let mut operators = Vec::new();
+        let mut exponents = Exponents::default();
 
         for step in array(&root, "emitter") {
             match name_of(step) {
@@ -413,6 +661,14 @@ impl ParticleSystem {
             // both. Reading the missing one as zero fades those colours to
             // black, and where neither end is stated it makes the particles
             // invisible.
+            let exponent = num(step, "exponent", 1.0).max(f32::EPSILON);
+            match name_of(step) {
+                "lifetimerandom" => exponents.lifetime = exponent,
+                "sizerandom" => exponents.size = exponent,
+                "alpharandom" => exponents.alpha = exponent,
+                "colorrandom" => exponents.color = exponent,
+                _ => {}
+            }
             let scalar = |default| bounds(step, "min", "max", default);
             let triple = |default| bounds3(step, "min", "max", default);
             initializers.push(match name_of(step) {
@@ -450,18 +706,55 @@ impl ParticleSystem {
                     offset: num(step, "offset", 0.0),
                     ..turbulent(step, 1.0)
                 }),
+                "hsvcolorrandom" => Initializer::HsvColor {
+                    hue: match (step.get("huemin"), step.get("huemax")) {
+                        (None, None) => Range { min: 0.0, max: 1.0 },
+                        _ => bounds(step, "huemin", "huemax", 0.0),
+                    },
+                    saturation: bounds(step, "saturationmin", "saturationmax", 1.0),
+                    value: bounds(step, "valuemin", "valuemax", 1.0),
+                },
+                "colorlist" => Initializer::ColorList(
+                    array(step, "colors")
+                        .iter()
+                        .filter_map(|c| serde_json::from_value::<Vector<3>>((*c).clone()).ok())
+                        .map(|c| c.0)
+                        .collect(),
+                ),
+                "positionoffsetrandom" => Initializer::PositionOffset {
+                    distance: num(step, "distance", 0.0),
+                },
+                "mapsequencearoundcontrolpoint" => Initializer::AroundControlPoint {
+                    point: points_of(&root)
+                        .get(num(step, "controlpoint", 0.0).max(0.0) as usize)
+                        .map_or([0.0; 3], |point| point.0),
+                    count: num(step, "count", 1.0).max(f32::EPSILON),
+                    speed: bounds3(step, "speedmin", "speedmax", 0.0),
+                },
                 "rotationrandom" => Initializer::Rotation(triple(0.0)),
                 "angularvelocityrandom" => Initializer::AngularVelocity(triple(0.0)),
-                // Mirroring is the only way back from the far end that the
-                // library asks for, and the others would run the wrong way
-                // rather than not at all, so they are reported instead.
-                "mapsequencebetweencontrolpoints"
-                    if step.get("limitbehavior").and_then(Value::as_str) == Some("mirror") =>
-                {
-                    Initializer::AlongControlPoints {
-                        count: num(step, "count", 2.0).clamp(2.0, 4096.0) as u32,
+                "mapsequencebetweencontrolpoints" => Initializer::AlongControlPoints {
+                    count: num(step, "count", 2.0).clamp(2.0, 4096.0) as u32,
+                    mirror: step.get("limitbehavior").and_then(Value::as_str) == Some("mirror"),
+                },
+                "remapinitialvalue" => match remap(step, &points_of(&root)) {
+                    Ok(remap) => Initializer::Remap(remap),
+                    Err(why) => {
+                        unsupported.push(format!("initializer remapinitialvalue {why}"));
+                        continue;
                     }
-                }
+                },
+                "inheritcontrolpointvelocity" => Initializer::InheritPointVelocity {
+                    point: anchor(&points_of(&root), num(step, "controlpoint", 0.0)),
+                    share: bounds(step, "min", "max", 1.0),
+                },
+                "inheritinitialvaluefromevent" => match inherit(step) {
+                    Some(what) => Initializer::Inherit(what),
+                    None => {
+                        unsupported.push("initializer inheritinitialvaluefromevent".into());
+                        continue;
+                    }
+                },
                 other => {
                     unsupported.push(format!("initializer {other}"));
                     continue;
@@ -479,20 +772,67 @@ impl ParticleSystem {
         // forty of the forty-two in the library -- including the system called
         // "Mouse interactive wildfire" -- and a mouse's push applied where the
         // mouse is not flattens whatever it lands on.
-        let points: Vec<([f32; 3], bool)> = array(&root, "controlpoint")
-            .iter()
-            .map(|point| {
-                let flagged = num(point, "flags", 0.0) as u32 & FOLLOWS_POINTER != 0;
-                let said = point
-                    .get("locktopointer")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false);
-                (vector(point, "offset", [0.0; 3]), flagged || said)
-            })
-            .collect();
+        let points = points_of(&root);
 
         for step in array(&root, "operator") {
             operators.push(match name_of(step) {
+                "remapvalue" => match remap(step, &points) {
+                    Ok(remap) => Operator::Remap(remap),
+                    Err(why) => {
+                        unsupported.push(format!("operator remapvalue {why}"));
+                        continue;
+                    }
+                },
+                "inheritvaluefromevent" => match inherit(step) {
+                    Some(what) => Operator::Inherit(what),
+                    None => {
+                        unsupported.push("operator inheritvaluefromevent".into());
+                        continue;
+                    }
+                },
+                "boids" => Operator::Boids(Boids {
+                    neighbor_threshold: num(step, "neighborthreshold", 50.0),
+                    separation_threshold: num(step, "separationthreshold", 20.0),
+                    max_speed: num(step, "maxspeed", 500.0),
+                    separation: num(step, "separationfactor", 15.0),
+                    alignment: num(step, "alignmentfactor", 1.0),
+                    cohesion: num(step, "cohesionfactor", 2.0),
+                }),
+                "collisionplane" => collision(
+                    step,
+                    CollisionShape::Plane {
+                        normal: unit(vector(step, "plane", [0.0, 1.0, 0.0])),
+                        distance: num(step, "distance", 0.0),
+                    },
+                ),
+                "collisionsphere" => collision(
+                    step,
+                    CollisionShape::Sphere {
+                        origin: vector(step, "origin", [0.0, -200.0, 0.0]),
+                        radius: num(step, "radius", 50.0),
+                    },
+                ),
+                "collisionquad" => {
+                    let size = vector(step, "size", [200.0, 200.0, 0.0]);
+                    collision(
+                        step,
+                        CollisionShape::Quad {
+                            origin: vector(step, "origin", [0.0, -150.0, 0.0]),
+                            size: [size[0], size[1]],
+                            normal: unit(vector(step, "plane", [0.0, 1.0, 0.0])),
+                        },
+                    )
+                }
+                "collisionbounds" => collision(step, CollisionShape::Bounds),
+                "maintaindistancetocontrolpoint" => Operator::MaintainDistance {
+                    point: anchor(&points, num(step, "controlpoint", 0.0)),
+                    distance: num(step, "distance", 200.0),
+                    strength: num(step, "variablestrength", 0.0),
+                },
+                "maintaindistancebetweencontrolpoints" => Operator::MaintainBetween {
+                    from: anchor(&points, num(step, "controlpointstart", 0.0)),
+                    to: anchor(&points, num(step, "controlpointend", 1.0)),
+                },
                 "movement" => Operator::Movement {
                     gravity: vector(step, "gravity", [0.0; 3]),
                     drag: num(step, "drag", 0.0),
@@ -520,23 +860,21 @@ impl ParticleSystem {
                             .push("operator controlpointattract has no such control point".into());
                         continue;
                     };
-                    let reach = num(step, "threshold", 0.0);
-                    if reach <= 0.0 {
-                        unsupported.push("operator controlpointattract states no reach".into());
-                        continue;
-                    }
+                    // A thousand when the file says nothing, and a pull of a
+                    // hundred: Almamu's reading of the engine's defaults.
+                    let reach = num(step, "threshold", 1000.0);
                     let origin = vector(step, "origin", [0.0; 3]);
                     // A point on the mouse is where the mouse is; its resting
                     // offset is where the editor happened to leave it.
                     let base = if pointer { [0.0; 3] } else { at };
                     Operator::Attract {
                         toward: std::array::from_fn(|i| base[i] + origin[i]),
-                        strength: num(step, "scale", 0.0),
+                        strength: num(step, "scale", 100.0),
                         reach,
                         pointer,
                     }
                 }
-                "vortex" => Operator::Vortex(Vortex {
+                "vortex" | "vortex_v2" => Operator::Vortex(Vortex {
                     audio: audio_response(step),
                     axis: vector(step, "axis", [0.0, 0.0, 1.0]),
                     distance: Range {
@@ -549,6 +887,27 @@ impl ParticleSystem {
                     },
                 }),
                 "oscillatealpha" => Operator::OscillateAlpha(oscillation(step)),
+                // A file naming the step and nothing else leaves the size be.
+                "oscillatesize" => Operator::OscillateSize(Oscillation {
+                    scale: bounds(step, "scalemin", "scalemax", 1.0),
+                    ..oscillation(step)
+                }),
+                "capvelocity" => Operator::CapVelocity {
+                    most: num(step, "maxspeed", f32::MAX),
+                },
+                "reducemovementnearcontrolpoint" => Operator::ReduceNear {
+                    point: points
+                        .get(num(step, "controlpoint", 0.0).max(0.0) as usize)
+                        .map_or([0.0; 3], |point| point.0),
+                    distance: Range {
+                        min: num(step, "distanceinner", 0.0),
+                        max: num(step, "distanceouter", 100.0),
+                    },
+                    reduction: Range {
+                        min: num(step, "reductioninner", 1.0),
+                        max: num(step, "reductionouter", 0.0),
+                    },
+                },
                 "oscillateposition" => Operator::OscillatePosition {
                     wave: oscillation(step),
                     mask: vector(step, "mask", [1.0; 3]),
@@ -612,6 +971,7 @@ impl ParticleSystem {
                 multiplier: num(&root, "sequencemultiplier", 1.0).max(1.0),
             }),
             Some("randomframe") => Some(Animation::RandomFrame),
+            Some("once") => Some(Animation::Once),
             Some(other) => {
                 unsupported.push(format!("animationmode {other}"));
                 None
@@ -655,6 +1015,8 @@ impl ParticleSystem {
             starttime: num(&root, "starttime", 0.0),
             emitters,
             initializers,
+            exponents,
+            perspective: num(&root, "flags", 0.0) as u32 & PERSPECTIVE != 0,
             operators,
             renderer,
             animation,
@@ -666,25 +1028,192 @@ impl ParticleSystem {
 
 /// The bit of a control point's `flags` that hangs it on the mouse.
 const FOLLOWS_POINTER: u32 = 1;
+/// The bit of a system's `flags` that says it is seen through a camera.
+const PERSPECTIVE: u32 = 4;
+/// The bits of an emitter's `flags`, as the editor lists them.
+const ONE_PER_STEP: u32 = 2;
+const COMES_AND_GOES: u32 = 4;
 
 /// Cap on what a file may ask to be allocated for. The largest system in the
 /// library asks for 30 000; this leaves room above that without letting a
 /// malformed file size a buffer.
 const MAX_PARTICLES: usize = 100_000;
 
+/// A system's control points: where each is, and whether it rides the mouse.
+fn points_of(root: &Value) -> Vec<([f32; 3], bool)> {
+    array(root, "controlpoint")
+        .iter()
+        .map(|point| {
+            let flagged = num(point, "flags", 0.0) as u32 & FOLLOWS_POINTER != 0;
+            let said = point
+                .get("locktopointer")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            (vector(point, "offset", [0.0; 3]), flagged || said)
+        })
+        .collect()
+}
+
+/// A point by its number, or where the system itself is if it has no such one.
+fn anchor(points: &[([f32; 3], bool)], which: f32) -> Anchor {
+    match points.get(which.max(0.0) as usize) {
+        // A point on the mouse is where the mouse is; its resting offset is
+        // where the editor happened to leave it.
+        Some(&(_, true)) => Anchor { at: [0.0; 3], pointer: true },
+        Some(&(at, false)) => Anchor { at, pointer: false },
+        None => Anchor::default(),
+    }
+}
+
+fn unit(v: [f32; 3]) -> [f32; 3] {
+    let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    if length > f32::EPSILON { v.map(|c| c / length) } else { [0.0, 1.0, 0.0] }
+}
+
+fn collision(step: &Value, shape: CollisionShape) -> Operator {
+    Operator::Collide(Collision {
+        shape,
+        behavior: match step.get("collisionbehavior").and_then(Value::as_str) {
+            Some("slide") => CollisionBehavior::Slide,
+            Some("delete") => CollisionBehavior::Delete,
+            _ => CollisionBehavior::Bounce,
+        },
+        bounce: num(step, "bouncefactor", 0.5),
+    })
+}
+
+fn inherit(step: &Value) -> Option<Inherit> {
+    Some(match step.get("input").and_then(Value::as_str).unwrap_or("setcolor") {
+        "setcolor" => Inherit::Color { multiply: false },
+        "multiplycolor" => Inherit::Color { multiply: true },
+        "setopacity" => Inherit::Opacity { multiply: false },
+        "multiplyopacity" => Inherit::Opacity { multiply: true },
+        "setcoloropacity" => Inherit::ColorOpacity { multiply: false },
+        "multiplycoloropacity" => Inherit::ColorOpacity { multiply: true },
+        "setvelocity" => Inherit::Velocity { add: false },
+        "addvelocity" => Inherit::Velocity { add: true },
+        "setsize" => Inherit::Size { multiply: false },
+        "multiplysize" => Inherit::Size { multiply: true },
+        "setrotation" => Inherit::Rotation { add: false },
+        "addrotation" => Inherit::Rotation { add: true },
+        "setangularvelocity" => Inherit::AngularVelocity { add: false },
+        "addangularvelocity" => Inherit::AngularVelocity { add: true },
+        _ => return None,
+    })
+}
+
+fn remap(step: &Value, points: &[([f32; 3], bool)]) -> Result<Remap, String> {
+    let word = |key: &str, default: &'static str| -> String {
+        step.get(key).and_then(Value::as_str).unwrap_or(default).to_owned()
+    };
+    let component = |key: &str| match word(key, "all").as_str() {
+        "x" | "r" => Some(0),
+        "y" | "g" => Some(1),
+        "z" | "b" => Some(2),
+        _ => None,
+    };
+    // Only a blend the file states applies: a default would be a step that
+    // never quite takes effect at either end of a life.
+    let blend = |low: &str, high: &str| {
+        (step.get(low).is_some() || step.get(high).is_some()).then(|| Range {
+            min: num(step, low, 0.0),
+            max: num(step, high, 1.0),
+        })
+    };
+    Ok(Remap {
+        operation: match word("operation", "multiply").as_str() {
+            "remap" => RemapOperation::Assign,
+            "multiply" => RemapOperation::Multiply,
+            "add" => RemapOperation::Add,
+            "subtract" => RemapOperation::Subtract,
+            other => return Err(format!("operation {other}")),
+        },
+        input: match word("input", "lifetimefraction").as_str() {
+            "lifetimefraction" => RemapInput::LifetimeFraction,
+            "maxlifetime" => RemapInput::MaxLifetime,
+            "size" => RemapInput::Size,
+            "opacity" => RemapInput::Opacity,
+            "speed" => RemapInput::Speed,
+            "rotation" => RemapInput::Rotation,
+            "angularspeed" => RemapInput::AngularSpeed,
+            "distancetocontrolpoint" => RemapInput::DistanceToControlPoint,
+            "positionbetweentwocontrolpoints" => RemapInput::PositionBetweenControlPoints,
+            "runtime" | "particlesystemtime" | "layertime" => RemapInput::Time,
+            "timeofday" => RemapInput::TimeOfDay,
+            "color" => RemapInput::Color,
+            "position" => RemapInput::Position,
+            "velocity" => RemapInput::Velocity,
+            "controlpoint" => RemapInput::ControlPoint,
+            "deltatocontrolpoint" => RemapInput::DeltaToControlPoint,
+            "directiontocontrolpoint" => RemapInput::DirectionToControlPoint,
+            "layerorigin" => RemapInput::LayerOrigin,
+            other => return Err(format!("input {other}")),
+        },
+        input_component: component("inputcomponent"),
+        output: match word("output", "size").as_str() {
+            "maxlifetime" => RemapOutput::Lifetime,
+            "size" => RemapOutput::Size,
+            "opacity" => RemapOutput::Opacity,
+            "color" => RemapOutput::Color,
+            "position" => RemapOutput::Position,
+            "velocity" => RemapOutput::Velocity,
+            "speed" => RemapOutput::Speed,
+            "rotation" => RemapOutput::Rotation,
+            "angularspeed" => RemapOutput::AngularSpeed,
+            other => return Err(format!("output {other}")),
+        },
+        output_component: component("outputcomponent"),
+        input_range: Range {
+            min: num(step, "inputrangemin", 0.0),
+            max: num(step, "inputrangemax", 1.0),
+        },
+        output_range: Range {
+            min: vector(step, "outputrangemin", [0.0; 3]),
+            max: vector(step, "outputrangemax", [1.0; 3]),
+        },
+        points: [
+            anchor(points, num(step, "inputcontrolpoint0", 0.0)),
+            anchor(points, num(step, "inputcontrolpoint1", 1.0)),
+        ],
+        transform: match word("transformfunction", "none").as_str() {
+            "none" => RemapTransform::None,
+            "sine" => RemapTransform::Sine,
+            "square" => RemapTransform::Square,
+            "saw" => RemapTransform::Saw,
+            "triangle" => RemapTransform::Triangle,
+            "simplexnoise" => RemapTransform::Simplex,
+            "fbmnoise" => RemapTransform::Fbm,
+            other => return Err(format!("transform {other}")),
+        },
+        transform_scale: num(step, "transforminputscale", 2.0),
+        transform_octaves: num(step, "transformoctaves", 3.0).clamp(1.0, 8.0) as u32,
+        blend_in: blend("blendinstart", "blendinend"),
+        blend_out: blend("blendoutstart", "blendoutend"),
+        per_particle: num(step, "flags", 1.0) as u32 & 1 != 0,
+    })
+}
+
 fn emitter(step: &Value, shape: Shape) -> Emitter {
     Emitter {
         shape,
         origin: vector(step, "origin", [0.0; 3]),
-        // An emitter that named no axes would spawn every particle at one
-        // point, so an absent mask means all three.
-        directions: vector(step, "directions", [1.0; 3]),
+        // The flat scene's defaults, out of `wallpaper64.exe`: in the plane,
+        // and a radius of 256.
+        directions: vector(step, "directions", [1.0, 1.0, 0.0]),
+        sign: vector(step, "sign", [0.0; 3]),
+        delay: num(step, "delay", 0.0),
+        duration: num(step, "duration", 0.0),
+        periodic: (num(step, "flags", 0.0) as u32 & COMES_AND_GOES != 0).then(|| Periodic {
+            run: bounds(step, "minperiodicduration", "maxperiodicduration", 0.0),
+            rest: bounds(step, "minperiodicdelay", "maxperiodicdelay", 0.0),
+        }),
+        one_per_step: num(step, "flags", 0.0) as u32 & ONE_PER_STEP != 0,
         // A number or, for forty boxes in the library, "512 256 0" -- which
         // read as a number was nought, and every one of those boxes let all
         // its particles out at a single point.
         distance: Range {
             min: vector(step, "distancemin", [0.0; 3]),
-            max: vector(step, "distancemax", [0.0; 3]),
+            max: vector(step, "distancemax", [256.0; 3]),
         },
         rate: num(step, "rate", 0.0),
         instantaneous: num(step, "instantaneous", 0.0).max(0.0) as u32,
@@ -722,7 +1251,7 @@ fn audio_response(step: &Value) -> Option<AudioResponse> {
         ),
         ears,
         exponent: num(step, "audioprocessingexponent", 1.0).max(f32::EPSILON),
-        bounds: pair(step, "audioprocessingbounds", Range { min: 0.0, max: 1.0 }),
+        bounds: pair(step, "audioprocessingbounds", Range { min: 0.0, max: 1.5 }),
     })
 }
 
@@ -904,6 +1433,11 @@ mod tests {
                 shape: Shape::Sphere,
                 origin: [0.0; 3],
                 directions: [1.0, 1.0, 0.0],
+                sign: [0.0; 3],
+                delay: 0.0,
+                duration: 0.0,
+                periodic: None,
+                one_per_step: false,
                 distance: Range {
                     min: [32.0; 3],
                     max: [512.0; 3]
@@ -996,7 +1530,7 @@ mod tests {
         let json = br#"{
             "material": "m.json", "maxcount": 10,
             "emitter": [{"name":"newfangled"}],
-            "initializer": [{"name":"mapsequencearoundcontrolpoint"}],
+            "initializer": [{"name":"newfangled"}],
             "operator": [{"name":"controlpointattract"},{"name":"alphafade","fadeouttime":1}]
         }"#;
         let p = ParticleSystem::parse(json).unwrap();
@@ -1007,7 +1541,7 @@ mod tests {
             p.unsupported,
             [
                 "emitter newfangled",
-                "initializer mapsequencearoundcontrolpoint",
+                "initializer newfangled",
                 "operator controlpointattract has no such control point"
             ]
         );
@@ -1134,28 +1668,25 @@ mod tests {
         let p = ParticleSystem::parse(json).unwrap();
         assert_eq!(
             p.initializers,
-            [Initializer::AlongControlPoints { count: 10 }]
+            [Initializer::AlongControlPoints { count: 10, mirror: true }]
         );
         assert_eq!(p.control_points, [[0.0; 3], [512.0, 512.0, 0.0]]);
         assert!(p.unsupported.is_empty());
     }
 
-    /// Any other way back from the far end would run the sequence wrongly
-    /// rather than not at all, so it is reported instead of guessed at.
+    /// The default is to start again from the far end, which is what eight
+    /// of Valve's twelve presets using this leave unsaid.
     #[test]
-    fn a_sequence_that_does_not_mirror_is_reported() {
-        let json = br#"{
-            "material": "m.json", "maxcount": 10,
-            "controlpoint": [{"id":0},{"id":1,"offset":"512 512 0"}],
-            "initializer": [{"name":"mapsequencebetweencontrolpoints","count":10,
-                             "limitbehavior":"repeat"}]
-        }"#;
-        let p = ParticleSystem::parse(json).unwrap();
-        assert!(p.initializers.is_empty());
+    fn a_sequence_that_does_not_mirror_starts_again() {
+        let p = ParticleSystem::parse(
+            br#"{"initializer":[{"name":"mapsequencebetweencontrolpoints","count":3}]}"#,
+        )
+        .unwrap();
         assert_eq!(
-            p.unsupported,
-            ["initializer mapsequencebetweencontrolpoints"]
+            p.initializers,
+            [Initializer::AlongControlPoints { count: 3, mirror: false }]
         );
+        assert!(p.unsupported.is_empty());
     }
 
     /// All but two of the forty-two uses in the library hang their point on

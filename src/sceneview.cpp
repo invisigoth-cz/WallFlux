@@ -2,6 +2,7 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+#include <clocale>
 #include "sceneview.h"
 
 #include "wallflux_scene.h"
@@ -180,6 +181,15 @@ private:
 SceneView::SceneView(QQuickItem *parent)
     : QQuickFramebufferObject(parent)
 {
+    // A scene's scripts are read by QuickJS, whose JSON.parse goes through the
+    // C library's strtod -- and QCoreApplication has switched that to the
+    // user's locale, where "0.5" is nought and a comma is the decimal point.
+    // Every object's scale and alpha cross that way, so on a Czech desktop a
+    // layer at half its size was not drawn at all, and neither was anything
+    // whose alpha was under one. A program drawing to a file never calls
+    // setlocale and looks fine. Nothing here wants a locale's numbers from C.
+    setlocale(LC_NUMERIC, "C");
+
     // OpenGL draws from the bottom up, and Qt shows this framebuffer as it
     // is: without this every scene came out upside down.
     setMirrorVertically(true);

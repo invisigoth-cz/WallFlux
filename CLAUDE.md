@@ -17,6 +17,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 
 ## What works today
 
+- **Text in a scene**: its own font or Valve's, at the size and place the
+  file says, through the object's effects, rewritten when a script changes it.
+  A font it cannot read falls back to Noto Sans; Windows' `systemfont_` names
+  and colour emoji do not exist here.
 - **Web wallpapers** (`index.html` + JavaScript) drawn by QtWebEngine.
 - **Video wallpapers** drawn by QtMultimedia, looping, with their sound on.
 - **Scene wallpapers** -- Wallpaper Engine's own packed format -- drawn by
@@ -31,10 +35,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   A scene that answers to the music hears what the speakers are playing
   -- 7 of the 40 here do -- read off the default output's monitor by the
   renderer itself, once for every screen. A scene's JavaScript runs --
-  82 of the 93 scripts in 7 packages, under QuickJS: what turns a clock's
-  hands, swells a ring with the bass and keeps a particle system's rate on
-  the beat. The other eleven write text, which is not drawn yet, or switch
-  an effect or a particle override other than the rate. And a scene
+  90 of the 93 scripts in 7 packages, under QuickJS: what writes a clock's digits, turns
+  its hands, swells a ring with the bass and keeps a particle system's rate on
+  the beat. The other three switch an effect or drive a particle override other
+  than the rate, and are reported. And a scene
   follows the mouse -- layers that lean away from it, particles pushed
   aside -- with the position asked of KWin, since the wallpaper's surfaces
   take no input and must not.
@@ -310,6 +314,8 @@ crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
                       materials, effects, particles, and the shader dialect
 crates/wallflux/src/video.rs  a video a scene uses as a texture, decoded by
                       ffmpeg run as a program, one player per clip
+crates/wallflux/src/text.rs  a scene's text, laid out and drawn into a picture
+                      with ab_glyph, which the engine's font shader shows
 crates/wallflux/src/script.rs  a scene's JavaScript, run with rquickjs, and
                       `script/host.js`, the globals a script finds -- ours,
                       written from what the library's scripts use
@@ -562,6 +568,106 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   to twenty seconds, and no value above one. Smoke that is white is often
   meant to be: `genericparticle` multiplies by `g_Overbright`, and Pyramid
   Spaceships' smoke asks for 5.
+
+- **On a Czech desktop `strtod("0.5")` is nought, and QuickJS's `JSON.parse`
+  goes through `strtod`.** `QCoreApplication` calls `setlocale(LC_ALL, "")`, so
+  every object's scale and alpha, carried into a scene's scripts as JSON, lost
+  everything after the point and was written back each frame: a scene with any
+  script lost its layers at half size and every alpha under one. Future Clock's
+  red went grey and its scrolling code went away, Time Reactor's dials went
+  away. `SceneView`'s constructor puts `LC_NUMERIC` back to C;
+  `readsItsNumbersWhateverTheLocale` fails without it (reddest by 4). **`shot`
+  never calls `setlocale`, so a sweep cannot see this** -- which is the second
+  time the desktop and `shot` have disagreed. Found by the user's eyes: when
+  they do disagree, draw through `SceneView` in `kwin_wayland --virtual`.
+
+- **An object turns about its origin, not its middle.** `alignment` puts the
+  origin on an edge, and the way from there to the middle turns with the
+  object (`middle_of`). Moved straight, Dark Core's hands stood at twelve
+  whatever the time, and its second hand started from the wrong place.
+
+- **A `pointsize` is points at 300 dots an inch.** Read off the sizes the
+  editor wrote beside the text, over four fonts: the width less any padding is
+  the advance times the point size times 4.16. And `ab_glyph`'s `pt_to_px_scale`
+  assumes 96, which made everything a third too large and ran Future Clock's
+  digits off their tiles.
+
+- **A line's gap goes above it, and the baseline is a twentieth of an em lower
+  still.** Both measured against screenshots from Windows, on Future Clock, Time
+  Reactor and Dark Core: the same 0.05 em on three unrelated fonts, whose cause
+  was not found. Without them Future Clock's digits sit above the middle of the
+  lamps on their tiles.
+
+- **Text's `padding` is *effect padding*.** Only the objects with effects have
+  it inside their stored `size`, and the box is what those effects are stretched
+  over: Future Clock draws one clock four times, each behind a mask with one
+  digit's window in it, so a picture any other size looks in the wrong place.
+
+- **An alignment is about the origin, not the box.** `right` ends the text on
+  `origin`, `left` starts it there, only `center` straddles it. Worked out from
+  Future Clock's digits, which land within five scene pixels of their tiles that
+  way and hundreds off centred in the box; Dark Core's date stops running under
+  the panel beside it.
+
+- **The order a new particle draws its random numbers in is part of every
+  picture.** Moving `size` ahead of `rotation` changed nothing about how a
+  particle looks and moved 34 of 41 pictures in a sweep, which then says nothing
+  about what a change did. Back in order: 37 identical, and the four that moved
+  were three that gained text and **Ender Spartan, which calls `Math.random` nine
+  times** and is not the same picture twice from the same binary.
+
+- **A particle with `REFRACT` is multiplied by the scene behind it.**
+  `genericparticle.frag` does `color.rgb *= g_Texture3`, whose default is
+  `_rt_FullFrameBuffer`: fire burns on a lit hull and all but vanishes against
+  a dark sky. 13 packages here ask for it. Unbound, the sampler read the
+  particle's own texture -- the yellow blobs hanging over DOOM. Any sampler
+  defaulting to that target and surviving compilation is handed the scene as
+  it stands (`Pass::screen_slots`), copied before each such system.
+
+- **`audioprocessingbounds` is the part of the loudness a step hears, not a
+  range of strengths.** `CreateAudioResponse` in the stock shaders:
+  `smoothstep(bounds.x, bounds.y, level)`, then the exponent. So a step that
+  follows the sound stands still in silence. DOOM's video is silent (-64 dB)
+  and its torches and 15 000 sparks a second are not there; Star Destroyer's
+  Wildfire has no audio mode and burns. Read the other way round, DOOM ran
+  flat out in a silent room.
+
+- **`sphererandom` is an even disc times `directions`, not a direction and a
+  distance.** `directions` multiplies the place drawn; normalised after the
+  mask, "1 0.07 0" sent some of Star Destroyer's fire well off the hull it
+  lies along. Almamu's reading, and the video agrees. The defaults out of
+  `wallpaper64.exe` for a flat scene are "1 1 0" and a radius of 256; a box
+  draws min to max per axis with a random sign.
+
+- **`starttime` is how far ahead a system begins, not a delay.**
+  `magic_charge_rays` says 15 and its rays are there from the first frame.
+
+- **`colorchange` multiplies what the particle was born with.** Replacing it
+  threw away a scene's tint.
+
+- **`TEXB0001` exists**: no image format, and mipmaps of width, height, size
+  and bytes, never packed. `util/white` is one, and refusing the container lost
+  every particle system that named it.
+
+- **Some workshop shaders lean on HLSL shortening a value** -- `float x =
+  vec2`, `vec3 c = vec4`. A shader that fails to link is passed through
+  `spell_out_conversions` and tried once more, so nothing that compiles is
+  touched. SCP's `chromatic_aberration` still fails after that: it also writes
+  to a varying.
+
+- **Editor Extensions (DLC 1790230) holds no format knowledge.** It is all
+  `dlc/pymidas`: Python, PyTorch and MiDaS, the depth map generator for the
+  Depth Parallax effect. What the editor knows is in `ui/dist/scripts/scripts.js`,
+  `locale/ui_en-us.json` (2 163 `ui_editor_*` keys) and `assets/presets/`,
+  whose stock particle systems are the vocabulary to cover.
+
+- **Compare with the videos by time average, not by one frame.** Recordings
+  of Wallpaper Engine on Windows are in `~/WallFlux-ukazky/wpe-windows/`, BT.709
+  and 2560x1440; a single frame of moving fog says nothing about its strength.
+  Averaged over seven frames Warhammer's picture differs from the recording by
+  single digits in every region. **Before calling a layer wrong, sample it over
+  time**: DOOM's blood drips looked like a mask failing and are an animated
+  sheet caught at another moment.
 
 - **`sizerandom` is twice the size a particle is drawn.** The shader
   draws a particle as wide as the size it is handed, and the file's number
@@ -1573,6 +1679,21 @@ the file. Everything after it should.
    `vec4` as texture coordinates) and needs a translation that knows types; a black square under
    Alien Romulus's mouth; Alien Isolation, which wants its 2D lights.
 
+   **30 October, against the videos:** still open are Warhammer's flare,
+   whose core burns steadily in the recording and flickers here at `rate`
+   0.07 (setting the rate to one did not match either), Star wars' orange
+   bokeh. `turbulence` carries a particle where Almamu accelerates it; not yet
+   compared.
+
+   **30 October, the rest of the vocabulary:** `boids`, `collision*`, `remap*`,
+   `maintaindistance*`, `inherit*` and `once` are read and run. Their defaults
+   are out of `wallpaper64.exe`; **how they work is the editor's description of
+   them**, since the function holding the engine's update is 49 kB and the
+   decompiler gives up on it, and no wallpaper here uses one to compare with.
+   Stock rain (`rain_screen`), lightning (`thunderbolt`) and `dripping_water`
+   are the ones to look at first when one turns up. Not done: `collisionmodel`
+   (there are no models) and the `layerimage` emitter, both reported.
+
    **And Alien Romulus and Space Marine 2 -- Honor and Glory move with
    the mouse where they should not.** Measured as following it (1 760 and
    1 125 apart with the mouse left and right in `shot`); seen on the
@@ -1582,9 +1703,7 @@ the file. Everything after it should.
 
 ### Small things seen and left
 
-- What a scene's scripts do not reach yet: text (11 scripts -- the
-  clocks in Future Clock, Time Reactor and Dark Core; text is not drawn at
-  all), an effect switched on and off, a particle override other than the
+- What a scene's scripts do not reach yet: an effect switched on and off, a particle override other than the
   rate, an object hidden in scene.json that a script would show -- it is
   never loaded -- and the children of a particle system whose parent a
   script moves, which were placed once from where the parent started.

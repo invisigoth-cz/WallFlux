@@ -72,8 +72,8 @@ const PRELUDE: &str = r#"
 #define CAST2X2(x) mat2(x)
 #define CAST3X3(x) mat3(x)
 #define CAST4X4(x) mat4(x)
-#define texSample2D(s, uv) texture((s), (uv).xy)
-#define texSample2DLod(s, uv, lod) textureLod((s), (uv).xy, (lod))
+#define texSample2D(s, uv) texture((s), vec2(uv))
+#define texSample2DLod(s, uv, lod) textureLod((s), vec2(uv), (lod))
 #define texSample2DCompare(s, uvz) (texture((s), (uvz).xy).r < (uvz).z ? 0.0 : 1.0)
 #define texSample3D(s, uvw) texture((s), (uvw))
 #define texSample3DLod(s, uvw, lod) textureLod((s), (uvw), (lod))
@@ -464,9 +464,218 @@ fn include_name(line: &str) -> Option<&str> {
     rest.split('"').next().filter(|n| !n.is_empty())
 }
 
+/// Writes out the conversions HLSL makes by itself and GLSL will not: a `vec4`
+/// put into a `vec3`, a `vec2` into a `float`. Every initializer, assignment
+/// and `return` of a plain type gets a constructor of that type, which is a
+/// no-op where the types already agree and shortens or spreads where not --
+/// just what HLSL does.
+///
+/// A pass over statements rather than a parser: what it cannot read as one of
+/// those three it leaves alone, and the compiler says so.
+pub fn spell_out_conversions(source: &str) -> String {
+    let mut types: BTreeMap<String, &'static str> = BTreeMap::new();
+    let mut returns: Option<&'static str> = None;
+    let mut out = String::with_capacity(source.len() + source.len() / 8);
+    let mut rest = source;
+    while let Some(end) = next_mark(rest) {
+        let (statement, tail) = rest.split_at(end);
+        let mark = &tail[..1];
+        rest = &tail[1..];
+        // What comes first may be comments and directives, kept as they are.
+        let head = code_starts_at(statement);
+        out.push_str(&statement[..head]);
+        let code = &statement[head..];
+        match mark {
+            "{" => {
+                if let Some((kind, parameters)) = function_header(code) {
+                    returns = kind;
+                    for (name, kind) in parameters {
+                        types.insert(name, kind);
+                    }
+                }
+                out.push_str(code);
+            }
+            ";" => out.push_str(&convert_statement(code, &mut types, returns)),
+            _ => out.push_str(code),
+        }
+        out.push_str(mark);
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The next `;`, `{` or `}` that is not in a `//` comment.
+fn next_mark(text: &str) -> Option<usize> {
+    let mut at = 0;
+    while let Some(found) = text[at..].find([';', '{', '}', '/']) {
+        let mark = at + found;
+        if !text[mark..].starts_with('/') {
+            return Some(mark);
+        }
+        at = match text[mark..].starts_with("//") {
+            true => mark + text[mark..].find('\n')?,
+            false => mark + 1,
+        };
+    }
+    None
+}
+
+/// Where the code in a statement starts, past comments and `#` lines.
+fn code_starts_at(statement: &str) -> usize {
+    let mut at = 0;
+    loop {
+        let rest = &statement[at..];
+        let trimmed = rest.trim_start();
+        let skipped = rest.len() - trimmed.len();
+        if trimmed.starts_with('#') || trimmed.starts_with("//") {
+            match trimmed.find('\n') {
+                Some(line) => at += skipped + line + 1,
+                None => return statement.len(),
+            }
+        } else {
+            return at + skipped;
+        }
+    }
+}
+
+fn plain_type(word: &str) -> Option<&'static str> {
+    ["float", "vec2", "vec3", "vec4"].into_iter().find(|kind| *kind == word)
+}
+
+fn is_name(word: &str) -> bool {
+    !word.is_empty()
+        && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !word.starts_with(|c: char| c.is_ascii_digit())
+}
+
+/// `vec3 name(float a, in vec2 b)`: what it returns, and its parameters.
+#[allow(clippy::type_complexity)]
+fn function_header(code: &str) -> Option<(Option<&'static str>, Vec<(String, &'static str)>)> {
+    let (before, after) = code.split_once('(')?;
+    let mut words = before.split_whitespace();
+    let kind = words.next()?;
+    if !is_name(words.next()?) || matches!(kind, "if" | "for" | "while" | "else" | "switch") {
+        return None;
+    }
+    let parameters = after
+        .rsplit_once(')')?
+        .0
+        .split(',')
+        .filter_map(|parameter| {
+            let mut words = parameter.split_whitespace().rev();
+            let name = words.next()?;
+            Some((name.to_owned(), plain_type(words.next()?)?))
+        })
+        .collect();
+    Some((plain_type(kind), parameters))
+}
+
+/// Where the assignment is at the top of an expression, and how long its
+/// operator is.
+fn assignment(code: &str) -> Option<(usize, usize)> {
+    let bytes = code.as_bytes();
+    let mut depth = 0;
+    for (at, byte) in bytes.iter().enumerate() {
+        match byte {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth -= 1,
+            b'=' if depth == 0 => {
+                if bytes.get(at + 1) == Some(&b'=') {
+                    return None;
+                }
+                return match at.checked_sub(1).map(|before| bytes[before]) {
+                    Some(b'+' | b'-' | b'*' | b'/') => Some((at - 1, 2)),
+                    Some(b'<' | b'>' | b'!' | b'=') => None,
+                    _ => Some((at, 1)),
+                };
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn convert_statement(
+    code: &str,
+    types: &mut BTreeMap<String, &'static str>,
+    returns: Option<&'static str>,
+) -> String {
+    let wrap = |kind: &str, left: &str, value: &str| format!("{left} {kind}({})", value.trim());
+    if let Some(value) = code.strip_prefix("return").filter(|v| v.starts_with(char::is_whitespace))
+        && let Some(kind) = returns
+    {
+        return format!("return {kind}({})", value.trim());
+    }
+    let assigned = assignment(code);
+    let left = assigned.map_or(code, |(at, _)| &code[..at]);
+    let mut words: Vec<&str> = left.split_whitespace().collect();
+    while let Some(word) = words.first()
+        && matches!(*word, "const" | "uniform" | "varying" | "attribute" | "in" | "out" | "inout")
+    {
+        words.remove(0);
+    }
+    // A declaration, which is also how a name's type comes to be known.
+    if let [kind, name] = words.as_slice()
+        && let Some(kind) = plain_type(kind)
+        && is_name(name)
+    {
+        types.insert((*name).to_owned(), kind);
+        if let Some((at, width)) = assigned {
+            return wrap(kind, &code[..at + width], &code[at + width..]);
+        }
+        return code.to_owned();
+    }
+    // `float a, b;`, or one this does not follow: the names are still noted.
+    if let Some(first) = words.first().and_then(|word| plain_type(word)) {
+        for name in left.split(',').map(|part| part.split_whitespace().last().unwrap_or("")) {
+            if is_name(name) {
+                types.insert(name.to_owned(), first);
+            }
+        }
+        return code.to_owned();
+    }
+    let (Some((at, width)), [target]) = (assigned, words.as_slice()) else {
+        return code.to_owned();
+    };
+    let (name, swizzle) = target.split_once('.').unwrap_or((target, ""));
+    let Some(kind) = types.get(name) else {
+        return code.to_owned();
+    };
+    let kind = match swizzle.len() {
+        0 => kind,
+        _ if !swizzle.chars().all(|c| "xyzwrgba".contains(c)) => return code.to_owned(),
+        1 => "float",
+        2 => "vec2",
+        3 => "vec3",
+        4 => "vec4",
+        _ => return code.to_owned(),
+    };
+    wrap(kind, &code[..at + width], &code[at + width..])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_hlsl_shortens_by_itself_is_written_out() {
+        let out = spell_out_conversions(
+            "// a; comment\nuniform vec4 g_A;\nvec3 f(vec2 p) {\n  float x = p;\n  vec3 y;\n  y = g_A;\n  y.xy = g_A;\n  x *= p;\n  for (int i = 0; i < 2; ++i) { y += g_A; }\n  return g_A;\n}\n",
+        );
+        assert!(out.contains("float x = float(p);"), "{out}");
+        assert!(out.contains("y = vec3(g_A);"), "{out}");
+        assert!(out.contains("y.xy = vec2(g_A);"), "{out}");
+        assert!(out.contains("x *= float(p);"), "{out}");
+        assert!(out.contains("y += vec3(g_A);"), "{out}");
+        assert!(out.contains("return vec3(g_A);"), "{out}");
+        assert!(out.contains("// a; comment"), "{out}");
+    }
+
+    #[test]
+    fn what_it_cannot_follow_it_leaves_alone() {
+        let source = "mat3 m = mat3(1);\nint i = 2;\nbool b = i == 2;\nvoid main() { foo(1); }\n";
+        assert_eq!(spell_out_conversions(source), source);
+    }
 
     fn none(_: &str) -> Option<String> {
         None

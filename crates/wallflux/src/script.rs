@@ -82,6 +82,8 @@ pub struct Frame<'a> {
     pub layers: Vec<(i64, Layer)>,
     /// Each value a script drives that is not a layer's own.
     pub values: Vec<(&'a Drives, serde_json::Value)>,
+    /// Every text in the scene, by the id of its object.
+    pub texts: Vec<(i64, String)>,
 }
 
 pub struct Scripts {
@@ -261,7 +263,13 @@ impl Scripts {
             .filter(|(_, target)| **target != Drives::Layer)
             .map(|(value, target)| (target, value.clone()))
             .collect();
-        Some(Frame { layers, values })
+        let texts = state["texts"]
+            .as_array()?
+            .iter()
+            .zip(&self.ids)
+            .filter_map(|(text, id)| Some((*id, text.as_str()?.to_owned())))
+            .collect();
+        Some(Frame { layers, values, texts })
     }
 }
 
@@ -312,7 +320,7 @@ fn layers_json(file: &SceneFile) -> String {
         .objects
         .iter()
         .map(|o| {
-            serde_json::json!({
+            let mut layer = serde_json::json!({
                 "name": o.name,
                 "origin": o.origin.value.0,
                 "angles": o.angles.value.0,
@@ -320,7 +328,11 @@ fn layers_json(file: &SceneFile) -> String {
                 "size": o.size.map_or([0.0; 2], |s| s.0),
                 "alpha": o.alpha.value,
                 "visible": o.visible.value,
-            })
+            });
+            if let Some(text) = o.text() {
+                layer["text"] = text.value.clone();
+            }
+            layer
         })
         .collect();
     serde_json::Value::Array(layers).to_string()
@@ -452,8 +464,15 @@ fn find<'a>(file: &'a SceneFile, skipped: &mut Vec<String>) -> Vec<Found<'a>> {
                 }
             }
         }
-        if object.has_scripted_text() {
-            skipped.push(format!("{}/text: text is not drawn yet", object.name));
+        if let Some(text) = object.text() {
+            take(
+                Some("text"),
+                Drives::Layer,
+                "text",
+                &text.script,
+                text.value.clone(),
+                &text.scriptproperties,
+            );
         }
     }
     found
@@ -500,6 +519,23 @@ mod tests {
             frame.values,
             vec![(&Drives::Rate { id: 2 }, serde_json::json!(90))]
         );
+    }
+
+    /// A script answering with a number still leaves words: `date.getDate()`
+    /// is how Dark Core writes the day.
+    #[test]
+    fn a_script_writes_a_text_and_a_number_becomes_words() {
+        let date = script("export function update() { return 22; }");
+        let word = script("export function update() { return 'x'; }");
+        let file = scene(&format!(
+            r#"{{"id":1,"name":"a","font":"f.ttf","text":{{"script":{date},"value":"1"}}}},
+               {{"id":2,"name":"b","font":"f.ttf","text":{{"script":{word},"value":"y"}}}},
+               {{"id":3,"name":"c"}}"#
+        ));
+        let mut scripts = Scripts::load(&file, None).unwrap();
+        assert!(scripts.skipped.is_empty(), "{:?}", scripts.skipped);
+        let frame = scripts.run(0.0, 0.0, &SILENCE).unwrap();
+        assert_eq!(frame.texts, vec![(1, "22".to_owned()), (2, "x".to_owned())]);
     }
 
     /// A script that throws, or never stops, is set aside and the rest go

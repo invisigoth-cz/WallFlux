@@ -305,7 +305,8 @@ impl Texture {
         // The field count differs per version. Getting this wrong does not fail
         // here; it silently shifts every later read, so each version is explicit.
         let (has_free_image, extra_words) = match block_container.as_str() {
-            "TEXB0002" => (false, 0),
+            // The oldest: no image format, and mipmaps that are never packed.
+            "TEXB0001" | "TEXB0002" => (false, 0),
             "TEXB0003" => (true, 0),
             "TEXB0004" => (true, 1),
             _ => {
@@ -331,7 +332,7 @@ impl Texture {
             let mip_count = r.count("mipmap count", MAX_MIPS)?;
             let mut mips = Vec::with_capacity(mip_count.min(16));
             for _ in 0..mip_count {
-                mips.push(read_mipmap(&mut r, format, free_image)?);
+                mips.push(read_mipmap(&mut r, format, free_image, block_container != "TEXB0001")?);
             }
             images.push(mips);
         }
@@ -394,13 +395,18 @@ fn dim(r: &mut Reader<'_>) -> Result<u32> {
     Ok(v as u32)
 }
 
-fn read_mipmap(r: &mut Reader<'_>, format: PixelFormat, free: FreeImage) -> Result<Mipmap> {
+fn read_mipmap(
+    r: &mut Reader<'_>,
+    format: PixelFormat,
+    free: FreeImage,
+    packable: bool,
+) -> Result<Mipmap> {
     let width = dim(r)?;
     let height = dim(r)?;
-    let compressed = r.i32()? != 0;
+    let compressed = packable && r.i32()? != 0;
 
     let at = r.pos();
-    let declared = r.i32()?;
+    let declared = if packable { r.i32()? } else { 0 };
     if declared < 0 || declared as usize > MAX_DECOMPRESSED {
         return Err(Error::Absurd {
             what: "decompressed size",

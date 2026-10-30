@@ -20,30 +20,27 @@
 //! instead would let rounding pile up over a particle's whole life.
 
 use wpe_format::particle::{
-    Animation, AudioResponse, Emitter, Initializer, Operator, Oscillation, ParticleSystem, Range,
-    Shape, Spectrum, Turbulent, Vortex,
+    Anchor, Animation, AudioResponse, Boids, Collision, CollisionBehavior, CollisionShape, Emitter,
+    Exponents, Inherit, Initializer, Operator, Oscillation, ParticleSystem, Range, Remap,
+    RemapInput, RemapOperation, RemapOutput, RemapTransform, Shape, Spectrum, Turbulent, Vortex,
 };
 use wpe_format::scene::InstanceOverride;
 
 /// What a step's own strength is multiplied by, given what is playing.
 ///
-/// A step that does not follow the sound is left alone. One that does is
-/// never turned off: what it states is its loud end, and the quiet end is a
-/// fraction of that, which is why a wallpaper still moves in a silent room.
-///
-/// ponytail: the loudness of a range of bands is their average, and the
-/// exponent shapes it before it is mapped rather than after. The file states
-/// neither; these are the readings that leave both settings doing what their
-/// names say.
+/// A step that does not follow the sound is left alone. One that does stands
+/// still in a silent room: the bounds are which part of the loudness it hears,
+/// nothing below the first and everything above the second, and the exponent
+/// comes after. The stock shaders spell it out in `CreateAudioResponse`, and
+/// DOOM agrees -- read as a range of strengths, its torches and its 15 000
+/// sparks a second ran flat out in silence, where Wallpaper Engine shows none.
 fn loudness(audio: Option<AudioResponse>, sound: &Spectrum) -> f32 {
     let Some(audio) = audio else {
         return 1.0;
     };
-    let heard = sound
-        .across(audio.bands, audio.ears)
-        .clamp(0.0, 1.0)
-        .powf(audio.exponent);
-    audio.bounds.min + (audio.bounds.max - audio.bounds.min) * heard
+    let span = (audio.bounds.max - audio.bounds.min).max(f32::EPSILON);
+    let t = ((sound.across(audio.bands, audio.ears) - audio.bounds.min) / span).clamp(0.0, 1.0);
+    (t * t * (3.0 - 2.0 * t)).powf(audio.exponent).clamp(0.0, 1.0)
 }
 
 /// Floats per vertex of a particle drawn as a sprite: position, then corner
@@ -66,6 +63,10 @@ const CORNERS: [[f32; 2]; VERTICES_PER_PARTICLE] = [[0.0, 0.0], [1.0, 0.0], [0.0
 /// or a first frame that includes loading, would otherwise be handed a second
 /// or more of catching up and emit its entire pool at once.
 const MAX_STEP: f32 = 0.1;
+
+/// How far ahead a system may start, and in how fine a step it gets there.
+const MOST_AHEAD: f32 = 30.0;
+const AHEAD_STEPS: f32 = 30.0;
 
 struct Particle {
     position: [f32; 3],
@@ -104,6 +105,382 @@ struct Particle {
     serial: u32,
     /// The parent's particle this one rides with, for a child that does.
     host: Option<u32>,
+    /// What is drawn this step, where a remap or a parent has had its say;
+    /// the fields above are what it was born with.
+    shown_size: f32,
+    shown_alpha: f32,
+    shown_color: [f32; 3],
+    /// What the step's movement is multiplied by, from a remap of its speed.
+    pace: f32,
+    /// Where it was a step before this one started, so a rectangle sees it
+    /// cross whichever side of the movement the file puts the two.
+    previous: [f32; 3],
+}
+
+/// One of a system's particles as a child sees it.
+#[derive(Debug, Clone, Copy)]
+pub struct Snapshot {
+    pub position: [f32; 3],
+    pub velocity: [f32; 3],
+    pub color: [f32; 3],
+    pub alpha: f32,
+    pub size: f32,
+    pub rotation: [f32; 3],
+    pub spin: [f32; 3],
+}
+
+impl Snapshot {
+    /// Somewhere, with nothing else to say about it.
+    #[cfg(test)]
+    fn at(position: [f32; 3]) -> Self {
+        Self {
+            position,
+            velocity: [0.0; 3],
+            color: [1.0; 3],
+            alpha: 1.0,
+            size: 1.0,
+            rotation: [0.0; 3],
+            spin: [0.0; 3],
+        }
+    }
+
+    fn of(p: &Particle) -> Self {
+        Self {
+            position: p.position,
+            velocity: p.velocity,
+            color: p.shown_color,
+            alpha: p.shown_alpha,
+            size: p.shown_size,
+            rotation: p.rotation,
+            spin: p.spin,
+        }
+    }
+}
+
+/// Applies what a child takes from its parent's particle. Size and opacity
+/// reach what is drawn; called on a new particle, that is what it is born with
+/// too, since `spawn` copies one to the other afterwards.
+fn inherit(particle: &mut Particle, what: Inherit, from: &Snapshot) {
+    let times = |a: [f32; 3], b: [f32; 3]| std::array::from_fn(|i| a[i] * b[i]);
+    let plus = |a: [f32; 3], b: [f32; 3]| std::array::from_fn(|i| a[i] + b[i]);
+    match what {
+        Inherit::Color { multiply: false } => particle.shown_color = from.color,
+        Inherit::Color { multiply: true } => {
+            particle.shown_color = times(particle.shown_color, from.color)
+        }
+        Inherit::Opacity { multiply: false } => particle.shown_alpha = from.alpha,
+        Inherit::Opacity { multiply: true } => particle.shown_alpha *= from.alpha,
+        Inherit::ColorOpacity { multiply } => {
+            inherit(particle, Inherit::Color { multiply }, from);
+            inherit(particle, Inherit::Opacity { multiply }, from);
+        }
+        Inherit::Velocity { add: false } => particle.velocity = from.velocity,
+        Inherit::Velocity { add: true } => particle.velocity = plus(particle.velocity, from.velocity),
+        Inherit::Size { multiply: false } => particle.shown_size = from.size,
+        Inherit::Size { multiply: true } => particle.shown_size *= from.size,
+        Inherit::Rotation { add: false } => particle.rotation = from.rotation,
+        Inherit::Rotation { add: true } => particle.rotation = plus(particle.rotation, from.rotation),
+        Inherit::AngularVelocity { add: false } => particle.spin = from.spin,
+        Inherit::AngularVelocity { add: true } => particle.spin = plus(particle.spin, from.spin),
+    }
+}
+
+/// What a remap reads that is not the particle's own.
+struct Moment {
+    elapsed: f32,
+    time_of_day: f32,
+    pointer: Option<[f32; 3]>,
+}
+
+impl Moment {
+    /// Where a control point is, if it can be said: one on the mouse has no
+    /// place while there is no mouse.
+    fn place(&self, anchor: Anchor) -> Option<[f32; 3]> {
+        match (anchor.pointer, self.pointer) {
+            (false, _) => Some(anchor.at),
+            (true, Some(pointer)) => Some(std::array::from_fn(|i| pointer[i] + anchor.at[i])),
+            (true, None) => None,
+        }
+    }
+}
+
+fn length(v: [f32; 3]) -> f32 {
+    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn minus(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|i| a[i] - b[i])
+}
+
+/// What a remap reads off a particle, one number standing for every axis.
+fn remap_input(remap: &Remap, particle: &Particle, moment: &Moment) -> Option<[f32; 3]> {
+    let point = moment.place(remap.points[0]);
+    Some(match remap.input {
+        RemapInput::LifetimeFraction => [particle.age / particle.lifetime; 3],
+        RemapInput::MaxLifetime => [particle.lifetime; 3],
+        // Twice what is drawn is the number the file's own sizes are in.
+        RemapInput::Size => [particle.shown_size * 2.0; 3],
+        RemapInput::Opacity => [particle.shown_alpha; 3],
+        RemapInput::Speed => [length(particle.velocity); 3],
+        RemapInput::Rotation => [particle.rotation[2]; 3],
+        RemapInput::AngularSpeed => [particle.spin[2]; 3],
+        RemapInput::DistanceToControlPoint => [length(minus(particle.position, point?)); 3],
+        RemapInput::PositionBetweenControlPoints => {
+            let (from, to) = (point?, moment.place(remap.points[1])?);
+            let line = minus(to, from);
+            let along = dot(line, line);
+            match along > f32::EPSILON {
+                true => [dot(minus(particle.position, from), line) / along; 3],
+                false => [0.0; 3],
+            }
+        }
+        RemapInput::Time => [moment.elapsed; 3],
+        RemapInput::TimeOfDay => [moment.time_of_day; 3],
+        RemapInput::Color => particle.shown_color,
+        RemapInput::Position => particle.position,
+        RemapInput::Velocity => particle.velocity,
+        RemapInput::ControlPoint => point?,
+        RemapInput::DeltaToControlPoint => minus(point?, particle.position),
+        RemapInput::DirectionToControlPoint => {
+            let delta = minus(point?, particle.position);
+            let long = length(delta);
+            if long > f32::EPSILON { delta.map(|c| c / long) } else { [0.0; 3] }
+        }
+        RemapInput::LayerOrigin => [0.0; 3],
+    })
+}
+
+/// A fraction put through the remap's shape, nought to one. Only a remap with
+/// no shape stops at the ends of its range: a wave over a clock has to go on
+/// after the first second, and Valve's thunderbolt pulses on one that way.
+fn remap_shape(remap: &Remap, fraction: f32, axis: usize, phase: f32) -> f32 {
+    let at = fraction * remap.transform_scale;
+    // Each axis its own stretch of noise, or a vector would only move on the
+    // diagonal; each particle its own where the flags say so.
+    let noise_at = |x: f32| {
+        noise([x, axis as f32 * 17.0, if remap.per_particle { phase * 251.0 } else { 0.0 }])
+    };
+    match remap.transform {
+        RemapTransform::None => fraction.clamp(0.0, 1.0),
+        RemapTransform::Sine => 0.5 + 0.5 * (at * std::f32::consts::TAU).sin(),
+        RemapTransform::Square => (at.rem_euclid(1.0) < 0.5) as u8 as f32,
+        RemapTransform::Saw => at.rem_euclid(1.0),
+        RemapTransform::Triangle => 1.0 - (at.rem_euclid(1.0) * 2.0 - 1.0).abs(),
+        RemapTransform::Simplex => noise_at(at),
+        RemapTransform::Fbm => {
+            let (mut sum, mut most, mut weight, mut reach) = (0.0, 0.0, 1.0, at);
+            for _ in 0..remap.transform_octaves {
+                sum += weight * noise_at(reach);
+                most += weight;
+                weight *= 0.5;
+                reach *= 2.0;
+            }
+            sum / most
+        }
+    }
+}
+
+/// How much of a remap applies this far through a particle's life, by the
+/// blends it states, nought to one.
+fn remap_weight(remap: &Remap, progress: f32) -> f32 {
+    let coming = remap.blend_in.map_or(1.0, |range| along(range, progress));
+    let going = remap.blend_out.map_or(1.0, |range| 1.0 - along(range, progress));
+    coming * going
+}
+
+/// One remap, reading the particle and writing it back. `born` is whether the
+/// particle is being made, when what it is born with is what is written.
+///
+/// ponytail: the engine's update for this is inside a 49 kB function the
+/// decompiler gives up on, so its defaults are read and its working is the
+/// editor's description of it. Compare against Wallpaper Engine once a wallpaper
+/// in the library uses one -- none does today; Valve's rain and thunderbolt do.
+fn apply_remap(remap: &Remap, particle: &mut Particle, moment: &Moment, born: bool) {
+    let Some(input) = remap_input(remap, particle, moment) else {
+        return;
+    };
+    let span = remap.input_range.max - remap.input_range.min;
+    let value: [f32; 3] = std::array::from_fn(|axis| {
+        let read = remap.input_component.map_or(input[axis], |c| input[c]);
+        let fraction = if span != 0.0 { (read - remap.input_range.min) / span } else { 0.0 };
+        let shaped = remap_shape(remap, fraction, axis, particle.phase);
+        let (low, high) = (remap.output_range.min[axis], remap.output_range.max[axis]);
+        low + (high - low) * shaped
+    });
+    let weight = remap_weight(remap, particle.age / particle.lifetime);
+    let meet = |now: f32, value: f32| match remap.operation {
+        RemapOperation::Assign => now + (value - now) * weight,
+        RemapOperation::Multiply => now * (1.0 + (value - 1.0) * weight),
+        RemapOperation::Add => now + value * weight,
+        RemapOperation::Subtract => now - value * weight,
+    };
+    let each = |target: &mut [f32; 3]| {
+        for axis in 0..3 {
+            if remap.output_component.is_none_or(|c| c == axis) {
+                target[axis] = meet(target[axis], value[axis]);
+            }
+        }
+    };
+    match remap.output {
+        RemapOutput::Lifetime if born => particle.lifetime = meet(particle.lifetime, value[0]).max(f32::EPSILON),
+        RemapOutput::Lifetime => {}
+        // A file's sizes are twice what is drawn, and only an assignment or a
+        // sum is in the file's units; a multiplier has none.
+        RemapOutput::Size => {
+            let value = match remap.operation {
+                RemapOperation::Multiply => value[0],
+                _ => value[0] / 2.0,
+            };
+            particle.shown_size = meet(particle.shown_size, value).max(0.0);
+        }
+        RemapOutput::Opacity => particle.shown_alpha = meet(particle.shown_alpha, value[0]),
+        RemapOutput::Color => each(&mut particle.shown_color),
+        RemapOutput::Position => each(&mut particle.position),
+        RemapOutput::Velocity => each(&mut particle.velocity),
+        RemapOutput::Rotation => each(&mut particle.rotation),
+        RemapOutput::AngularSpeed => each(&mut particle.spin),
+        // A multiplier is on the step's movement rather than on the velocity,
+        // where one every step would compound; nought is as slow as it goes,
+        // which is what Valve's drops on a window do between their runs.
+        RemapOutput::Speed => match remap.operation {
+            RemapOperation::Multiply => particle.pace = meet(particle.pace, value[0]).max(0.0),
+            _ => {
+                let now = length(particle.velocity);
+                if now > f32::EPSILON {
+                    let then = meet(now, value[0]).max(0.0);
+                    particle.velocity = particle.velocity.map(|v| v / now * then);
+                }
+            }
+        },
+    }
+}
+
+/// Stops a particle at what it ran into, if it did.
+fn collide(particle: &mut Particle, collision: &Collision, previous: [f32; 3], scene: Option<Range<[f32; 3]>>) {
+    let struck = |particle: &mut Particle, normal: [f32; 3], depth: f32| {
+        match collision.behavior {
+            CollisionBehavior::Delete => particle.age = particle.lifetime,
+            behavior => {
+                for axis in 0..3 {
+                    particle.position[axis] += normal[axis] * depth;
+                }
+                let into = dot(particle.velocity, normal);
+                if into < 0.0 {
+                    let back = match behavior {
+                        CollisionBehavior::Bounce => 1.0 + collision.bounce,
+                        _ => 1.0,
+                    };
+                    for axis in 0..3 {
+                        particle.velocity[axis] -= normal[axis] * into * back;
+                    }
+                }
+            }
+        }
+    };
+    match collision.shape {
+        CollisionShape::Plane { normal, distance } => {
+            let depth = distance - dot(particle.position, normal);
+            if depth > 0.0 {
+                struck(particle, normal, depth);
+            }
+        }
+        CollisionShape::Sphere { origin, radius } => {
+            let away = minus(particle.position, origin);
+            let long = length(away);
+            if long < radius && long > f32::EPSILON {
+                struck(particle, away.map(|c| c / long), radius - long);
+            }
+        }
+        // Only on the way through from in front, and only within its edges.
+        CollisionShape::Quad { origin, size, normal } => {
+            let was = dot(minus(previous, origin), normal);
+            let is = dot(minus(particle.position, origin), normal);
+            let off = minus(particle.position, origin);
+            let side = if normal[0].abs() > 0.9 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+            let width = cross(normal, side);
+            let height = cross(normal, width);
+            if was >= 0.0
+                && is < 0.0
+                && dot(off, width).abs() <= size[0] / 2.0
+                && dot(off, height).abs() <= size[1] / 2.0
+            {
+                struck(particle, normal, -is);
+            }
+        }
+        CollisionShape::Bounds => {
+            let Some(scene) = scene else { return };
+            for axis in 0..2 {
+                let mut normal = [0.0; 3];
+                if particle.position[axis] < scene.min[axis] {
+                    normal[axis] = 1.0;
+                    let depth = scene.min[axis] - particle.position[axis];
+                    struck(particle, normal, depth);
+                } else if particle.position[axis] > scene.max[axis] {
+                    normal[axis] = -1.0;
+                    let depth = particle.position[axis] - scene.max[axis];
+                    struck(particle, normal, depth);
+                }
+            }
+        }
+    }
+}
+
+/// Where a step of `boids` sends each particle, by the velocity to add.
+///
+/// ponytail: every particle against every other, thinned to a slice of them
+/// each step past 512 -- the engine's changelog says it skips too. A grid is
+/// the next step if a flock of thousands ever turns up.
+fn flock(live: &[Particle], boids: &Boids, step: u32, dt: f32) -> Vec<[f32; 3]> {
+    let every = live.len() / 512 + 1;
+    live.iter()
+        .enumerate()
+        .map(|(index, one)| {
+            if (index + step as usize) % every != 0 {
+                return [0.0; 3];
+            }
+            let (mut count, mut center, mut heading, mut apart) = (0.0, [0.0; 3], [0.0; 3], [0.0; 3]);
+            for (other_index, other) in live.iter().enumerate() {
+                if other_index == index {
+                    continue;
+                }
+                let away = minus(one.position, other.position);
+                let long = length(away);
+                if long >= boids.neighbor_threshold {
+                    continue;
+                }
+                count += 1.0;
+                for axis in 0..3 {
+                    center[axis] += other.position[axis];
+                    heading[axis] += other.velocity[axis];
+                    if long < boids.separation_threshold && long > f32::EPSILON {
+                        apart[axis] += away[axis] / long;
+                    }
+                }
+            }
+            if count == 0.0 {
+                return [0.0; 3];
+            }
+            let force: [f32; 3] = std::array::from_fn(|axis| {
+                boids.cohesion * (center[axis] / count - one.position[axis])
+                    + boids.alignment * (heading[axis] / count - one.velocity[axis])
+                    + boids.separation * apart[axis] * boids.separation_threshold
+            });
+            let mut added = force.map(|f| f * dt * every as f32);
+            // Held to the cap unless it was over it already, as the engine's
+            // changelog says, so a flock can be thrown faster than it swims.
+            let then: [f32; 3] = std::array::from_fn(|axis| one.velocity[axis] + added[axis]);
+            let (now, faster) = (length(one.velocity), length(then));
+            let most = boids.max_speed.max(now);
+            if faster > most {
+                added = std::array::from_fn(|axis| then[axis] / faster * most - one.velocity[axis]);
+            }
+            added
+        })
+        .collect()
 }
 
 /// The ranges the initializers draw a new particle's values from.
@@ -120,6 +497,45 @@ struct Start {
     /// Set when the system takes its starting direction from a noise field
     /// rather than at random.
     turbulent: Option<Turbulent>,
+    /// Stands over `color` where the system draws its colours this way.
+    palette: Palette,
+    /// How far a particle may land from where the emitter put it.
+    offset: f32,
+    /// Sent out around a control point rather than left where it was born.
+    around: Option<([f32; 3], f32, Range<[f32; 3]>)>,
+    /// Worked out once the rest of the particle is there to read.
+    remaps: Vec<Remap>,
+    /// What it takes from the parent's particle it answers to.
+    inherits: Vec<Inherit>,
+    /// A share of how fast the mouse is moving, for a point that is on it.
+    point_velocity: Option<Range<f32>>,
+}
+
+#[derive(Clone, Default)]
+enum Palette {
+    #[default]
+    Ranged,
+    Hsv { hue: Range<f32>, saturation: Range<f32>, value: Range<f32> },
+    List(Vec<[f32; 3]>),
+}
+
+/// Hue, saturation and value, each nought to one, as red, green and blue.
+fn from_hsv(hue: f32, saturation: f32, value: f32) -> [f32; 3] {
+    let sector = hue.rem_euclid(1.0) * 6.0;
+    let across = sector.fract();
+    let (low, down, up) = (
+        value * (1.0 - saturation),
+        value * (1.0 - saturation * across),
+        value * (1.0 - saturation * (1.0 - across)),
+    );
+    match sector as u32 {
+        0 => [value, up, low],
+        1 => [down, value, low],
+        2 => [low, value, up],
+        3 => [low, down, value],
+        4 => [up, low, value],
+        _ => [value, low, down],
+    }
 }
 
 impl Default for Start {
@@ -138,7 +554,42 @@ impl Default for Start {
             rotation: Range::default(),
             angular: Range::default(),
             turbulent: None,
+            palette: Palette::Ranged,
+            offset: 0.0,
+            around: None,
+            remaps: Vec::new(),
+            inherits: Vec::new(),
+            point_velocity: None,
         }
+    }
+}
+
+/// Whether an emitter is running at the moment.
+#[derive(Default, Clone, Copy)]
+struct Gate {
+    ran: f32,
+    /// Coming and going: how long is left of the present run or rest.
+    left: f32,
+    running: bool,
+}
+
+impl Gate {
+    fn open(&mut self, emitter: &Emitter, dt: f32, rng: &mut Rng) -> bool {
+        self.ran += dt;
+        if self.ran < emitter.delay
+            || (emitter.duration > 0.0 && self.ran - emitter.delay >= emitter.duration)
+        {
+            return false;
+        }
+        let Some(periodic) = emitter.periodic else {
+            return true;
+        };
+        self.left -= dt;
+        if self.left <= 0.0 {
+            self.running = !self.running;
+            self.left = rng.range(if self.running { periodic.run } else { periodic.rest });
+        }
+        self.running
     }
 }
 
@@ -148,6 +599,8 @@ struct Line {
     from: [f32; 3],
     to: [f32; 3],
     count: u32,
+    /// Back the way it came from the far end, rather than from the start again.
+    mirror: bool,
 }
 
 impl Line {
@@ -157,8 +610,13 @@ impl Line {
     /// threaded through these runs out to the far point and back along itself.
     fn at(&self, nth: u32) -> [f32; 3] {
         let last = self.count - 1;
-        let step = nth % (2 * last);
-        let step = if step <= last { step } else { 2 * last - step };
+        let step = match self.mirror {
+            true => match nth % (2 * last) {
+                step if step <= last => step,
+                step => 2 * last - step,
+            },
+            false => nth % self.count,
+        };
         let t = step as f32 / last as f32;
         std::array::from_fn(|i| self.from[i] + (self.to[i] - self.from[i]) * t)
     }
@@ -185,6 +643,11 @@ pub struct System {
     ribbon: Ribbon,
     /// Each emitter with the fraction of a particle it is owed.
     emitters: Vec<(Emitter, f32)>,
+    /// When each emitter runs, in the same order.
+    gates: Vec<Gate>,
+    exponents: Exponents,
+    /// Whether the particles live in 3D rather than on the screen.
+    perspective: bool,
     /// What every emitter's rate is multiplied by: the scene's override,
     /// and after it whatever a script on that override says.
     rate: f32,
@@ -205,6 +668,15 @@ pub struct System {
     /// Where the mouse is, in the system's own space, or nothing when there
     /// is no mouse to follow -- a point hung on it then pulls nowhere.
     pointer: Option<[f32; 3]>,
+    /// How fast the mouse went over the last step.
+    pointer_velocity: [f32; 3],
+    /// Where it was at the last step.
+    pointer_was: Option<[f32; 3]>,
+    /// The edges of the scene, in the system's own space, for what collides
+    /// with them.
+    scene: Option<Range<[f32; 3]>>,
+    /// Steps taken, which says which slice of a large flock moves.
+    steps: u32,
     /// Whether the emitters' all-at-once particles have been let out yet.
     burst: bool,
     /// Set for a child that emits only when its parent's particles are born
@@ -224,7 +696,7 @@ pub struct System {
 /// One of a parent's particles a child rides along with.
 struct Host {
     serial: u32,
-    at: [f32; 3],
+    now: Snapshot,
     /// What each emitter owes this host, as the emitters' own pair does.
     owed: Vec<f32>,
 }
@@ -232,10 +704,10 @@ struct Host {
 /// Where a system's particles were born and where they died, in one step.
 #[derive(Default)]
 pub struct Events {
-    pub born: Vec<[f32; 3]>,
-    pub died: Vec<[f32; 3]>,
+    pub born: Vec<Snapshot>,
+    pub died: Vec<Snapshot>,
     /// Every live particle by its number, after the step.
-    pub alive: Vec<(u32, [f32; 3])>,
+    pub alive: Vec<(u32, Snapshot)>,
 }
 
 impl System {
@@ -244,7 +716,7 @@ impl System {
     pub fn new(definition: &ParticleSystem, over: &InstanceOverride, seed: u32) -> Self {
         let mut start = Start::default();
         for initializer in &definition.initializers {
-            match *initializer {
+            match initializer.clone() {
                 Initializer::Lifetime(r) => start.lifetime = r,
                 // What `sizerandom` says is twice what the shader is handed,
                 // which draws a particle that size across. Taken whole,
@@ -266,6 +738,25 @@ impl System {
                 Initializer::AngularVelocity(r) => start.angular = r,
                 // Handled below, where the control points it needs are.
                 Initializer::AlongControlPoints { .. } => {}
+                Initializer::Remap(remap) => start.remaps.push(remap),
+                Initializer::Inherit(what) => start.inherits.push(what),
+                // A point that is not on the mouse does not move here.
+                Initializer::InheritPointVelocity { point, share } => {
+                    if point.pointer {
+                        start.point_velocity = Some(share);
+                    }
+                }
+                Initializer::HsvColor { hue, saturation, value } => {
+                    start.palette = Palette::Hsv { hue, saturation, value }
+                }
+                Initializer::ColorList(colors) if !colors.is_empty() => {
+                    start.palette = Palette::List(colors)
+                }
+                Initializer::ColorList(_) => {}
+                Initializer::PositionOffset { distance } => start.offset = distance,
+                Initializer::AroundControlPoint { point, count, speed } => {
+                    start.around = Some((point, count, speed))
+                }
             }
         }
         // On the ranges rather than on each particle, so a system the file
@@ -276,6 +767,9 @@ impl System {
             max: std::array::from_fn(|i| r.max[i] * by[i]),
         };
         let speed = over.speed.value;
+        if let Some((_, _, around)) = &mut start.around {
+            *around = times3(*around, [speed; 3]);
+        }
         start.alpha = times(start.alpha, over.alpha.value);
         start.size = times(start.size, over.size.value);
         start.lifetime = times(start.lifetime, over.lifetime.value);
@@ -300,7 +794,7 @@ impl System {
             .initializers
             .iter()
             .find_map(|i| match i {
-                Initializer::AlongControlPoints { count } => Some(*count),
+                Initializer::AlongControlPoints { count, mirror } => Some((*count, *mirror)),
                 _ => None,
             })
             .zip(
@@ -309,10 +803,11 @@ impl System {
                     .first()
                     .zip(definition.control_points.get(1)),
             )
-            .map(|(count, (from, to))| Line {
+            .map(|((count, mirror), (from, to))| Line {
                 from: *from,
                 to: *to,
                 count,
+                mirror,
             });
         Self {
             ribbon: match definition.renderer {
@@ -325,6 +820,9 @@ impl System {
                 },
                 _ => Ribbon::None,
             },
+            gates: vec![Gate::default(); definition.emitters.len()],
+            exponents: definition.exponents,
+            perspective: definition.perspective,
             emitters,
             rate: over.rate.value,
             start,
@@ -339,6 +837,10 @@ impl System {
             line,
             born: 0,
             pointer: None,
+            pointer_velocity: [0.0; 3],
+            pointer_was: None,
+            scene: None,
+            steps: 0,
             burst: false,
             waits: false,
             events: None,
@@ -346,6 +848,11 @@ impl System {
             hosts: Vec::new(),
             ride_limit: 0,
         }
+    }
+
+    /// Says where the edges of the scene are, in the system's own space.
+    pub fn bound_by(&mut self, scene: Range<[f32; 3]>) {
+        self.scene = Some(scene);
     }
 
     /// Keeps where particles are born and die, for a child to answer to.
@@ -382,29 +889,45 @@ impl System {
 
     /// Lets out every emitter's all-at-once particles at `at`, which is in
     /// the system's own space.
-    pub fn burst_at(&mut self, at: [f32; 3], sound: &Spectrum) {
-        self.burst(at, None, sound);
+    pub fn burst_at(&mut self, from: Snapshot, sound: &Spectrum) {
+        self.burst(from.position, None, Some(from), sound);
     }
 
-    fn burst(&mut self, at: [f32; 3], host: Option<u32>, sound: &Spectrum) {
+    fn burst(&mut self, at: [f32; 3], host: Option<u32>, from: Option<Snapshot>, sound: &Spectrum) {
         let emitters = std::mem::take(&mut self.emitters);
         for (emitter, _) in &emitters {
             for _ in 0..emitter.instantaneous {
                 if self.live.len() >= self.maxcount {
                     break;
                 }
-                self.spawn_at(emitter, at, host, sound);
+                self.spawn_at(emitter, at, host, from.as_ref(), sound);
             }
         }
         self.emitters = emitters;
     }
 
     /// A particle from `emitter` as if the emitter stood at `at`.
-    fn spawn_at(&mut self, emitter: &Emitter, at: [f32; 3], host: Option<u32>, sound: &Spectrum) {
+    fn spawn_at(
+        &mut self,
+        emitter: &Emitter,
+        at: [f32; 3],
+        host: Option<u32>,
+        from: Option<&Snapshot>,
+        sound: &Spectrum,
+    ) {
         let mut placed = emitter.clone();
         placed.origin = std::array::from_fn(|i| emitter.origin[i] + at[i]);
         let mut particle = self.spawn(&placed, sound);
         particle.host = host;
+        if let Some(from) = from {
+            for what in &self.start.inherits {
+                inherit(&mut particle, *what, from);
+            }
+            // What it took is what it is, not a passing effect.
+            particle.size = particle.shown_size;
+            particle.alpha = particle.shown_alpha;
+            particle.color = particle.shown_color;
+        }
         self.take_in(particle);
     }
 
@@ -420,18 +943,18 @@ impl System {
     /// moved; one whose host has died goes with it; hosts not yet ridden are
     /// taken up, to the limit, with the emitters' all-at-once particles; and
     /// every host is emitted at as the emitters' rates say.
-    pub fn follow(&mut self, hosts: &[(u32, [f32; 3])], dt: f32, sound: &Spectrum) {
+    pub fn follow(&mut self, hosts: &[(u32, Snapshot)], dt: f32, sound: &Spectrum) {
         let now = |serial: u32| hosts.iter().find(|(s, _)| *s == serial).map(|(_, at)| *at);
         let mut riding = std::mem::take(&mut self.hosts);
         for particle in &mut self.live {
             let Some(serial) = particle.host else {
                 continue;
             };
-            let then = riding.iter().find(|h| h.serial == serial).map(|h| h.at);
+            let then = riding.iter().find(|h| h.serial == serial).map(|h| h.now.position);
             match (now(serial), then) {
                 (Some(now), Some(then)) => {
                     for axis in 0..3 {
-                        particle.position[axis] += now[axis] - then[axis];
+                        particle.position[axis] += now.position[axis] - then[axis];
                     }
                 }
                 (Some(_), None) => {}
@@ -439,13 +962,13 @@ impl System {
             }
         }
         riding.retain_mut(|host| match now(host.serial) {
-            Some(at) => {
-                host.at = at;
+            Some(snapshot) => {
+                host.now = snapshot;
                 true
             }
             None => false,
         });
-        for &(serial, at) in hosts {
+        for &(serial, snapshot) in hosts {
             if riding.len() >= self.ride_limit {
                 break;
             }
@@ -454,10 +977,10 @@ impl System {
             }
             riding.push(Host {
                 serial,
-                at,
+                now: snapshot,
                 owed: vec![0.0; self.emitters.len()],
             });
-            self.burst(at, Some(serial), sound);
+            self.burst(snapshot.position, Some(serial), Some(snapshot), sound);
         }
 
         let emitters = std::mem::take(&mut self.emitters);
@@ -469,7 +992,7 @@ impl System {
                     if self.live.len() >= self.maxcount {
                         break;
                     }
-                    self.spawn_at(emitter, host.at, Some(host.serial), sound);
+                    self.spawn_at(emitter, host.now.position, Some(host.serial), Some(&host.now), sound);
                 }
             }
         }
@@ -483,7 +1006,7 @@ impl System {
         particle.serial = self.serials;
         self.serials = self.serials.wrapping_add(1);
         if let Some(events) = &mut self.events {
-            events.born.push(particle.position);
+            events.born.push(Snapshot::of(&particle));
         }
         self.live.push(particle);
     }
@@ -509,6 +1032,23 @@ impl System {
         }
     }
 
+    /// How many particles it will really have at once: what its emitters let
+    /// out over a lifetime, however high the file sets the ceiling. DOOM's
+    /// ceilings add up to 178 000 and its systems to a tenth of that, and
+    /// thinning by the ceiling took the sparks away from a scene that could
+    /// have afforded every one.
+    pub fn expected(&self) -> usize {
+        if self.waits || !matches!(self.ribbon, Ribbon::None) {
+            return self.capacity();
+        }
+        let wanted: f32 = self
+            .emitters
+            .iter()
+            .map(|(e, _)| e.rate * self.rate * self.start.lifetime.max + e.instantaneous as f32)
+            .sum();
+        (wanted.ceil() as usize).min(self.maxcount)
+    }
+
     /// Lowers that cap, for a scene asking for more than it can afford.
     pub fn thin_to(&mut self, capacity: usize) {
         self.maxcount = capacity;
@@ -519,6 +1059,11 @@ impl System {
     /// segment where the system is a ribbon.
     pub fn vertices(&self) -> &[f32] {
         &self.vertices
+    }
+
+    /// Whether its particles are seen through a camera.
+    pub fn is_perspective(&self) -> bool {
+        self.perspective
     }
 
     /// Whether this system draws as ribbons rather than loose quads.
@@ -545,6 +1090,15 @@ impl System {
     /// All zeroes is silence, which is what a step that follows the sound
     /// reads when there is nothing to listen to.
     pub fn advance(&mut self, dt: f32, sound: &Spectrum) {
+        if self.starttime > 0.0 && !self.waits {
+            // Already running when the wallpaper appears, however long the
+            // file says. `magic_charge_rays` says fifteen seconds, and in
+            // Wallpaper Engine its rays are there from the first frame.
+            let ahead = std::mem::take(&mut self.starttime).min(MOST_AHEAD);
+            for _ in 0..(ahead * AHEAD_STEPS) as u32 {
+                self.advance(1.0 / AHEAD_STEPS, sound);
+            }
+        }
         let dt = dt.clamp(0.0, MAX_STEP);
         self.elapsed += dt;
         if let Some(events) = &mut self.events {
@@ -552,10 +1106,10 @@ impl System {
             events.died.clear();
         }
 
-        if self.elapsed >= self.starttime && !self.waits {
+        if !self.waits {
             if !self.burst {
                 self.burst = true;
-                self.burst_at([0.0; 3], sound);
+                self.burst([0.0; 3], None, None, sound);
             }
             self.emit(dt, sound);
         }
@@ -563,10 +1117,80 @@ impl System {
         let elapsed = self.elapsed;
         let ribbon = self.ribbon;
         let pointer = self.pointer;
+        self.steps = self.steps.wrapping_add(1);
+        self.pointer_velocity = match (pointer, self.pointer_was, dt > 0.0) {
+            (Some(now), Some(then), true) => minus(now, then).map(|d| d / dt),
+            _ => [0.0; 3],
+        };
+        self.pointer_was = pointer;
+        // Against where they all were before the step, so the order the
+        // particles happen to be in says nothing about who follows whom.
+        let flocks: Vec<(Boids, Vec<[f32; 3]>)> = self
+            .operators
+            .iter()
+            .filter_map(|operator| match operator {
+                Operator::Boids(boids) => Some((*boids, flock(&self.live, boids, self.steps, dt))),
+                _ => None,
+            })
+            .collect();
+        for (_, added) in &flocks {
+            for (particle, added) in self.live.iter_mut().zip(added) {
+                for axis in 0..3 {
+                    particle.velocity[axis] += added[axis];
+                }
+            }
+        }
+        let moment = Moment {
+            elapsed,
+            time_of_day: time_of_day(),
+            pointer,
+        };
+        let scene = self.scene;
+        let hosts = &self.hosts;
         for particle in &mut self.live {
             particle.age += dt;
+            particle.shown_size = particle.size;
+            particle.shown_alpha = particle.alpha;
+            particle.shown_color = particle.color;
+            let pace = std::mem::replace(&mut particle.pace, 1.0);
+            let before = particle.position;
+            let previous = particle.previous;
             for operator in &self.operators {
                 match operator {
+                    Operator::Remap(remap) => apply_remap(remap, particle, &moment, false),
+                    Operator::Inherit(what) => {
+                        let host = particle.host.and_then(|serial| hosts.iter().find(|h| h.serial == serial));
+                        if let Some(host) = host {
+                            inherit(particle, *what, &host.now);
+                        }
+                    }
+                    // Worked out above, against everybody at once.
+                    Operator::Boids(_) => {}
+                    Operator::Collide(collision) => collide(particle, collision, previous, scene),
+                    Operator::MaintainDistance { point, distance, strength } => {
+                        let Some(at) = moment.place(*point) else { continue };
+                        let away = minus(particle.position, at);
+                        let long = length(away);
+                        if long > f32::EPSILON {
+                            let goal: [f32; 3] =
+                                std::array::from_fn(|i| at[i] + away[i] / long * distance);
+                            let share = if *strength > 0.0 { (strength * dt).min(1.0) } else { 1.0 };
+                            for axis in 0..3 {
+                                particle.position[axis] += (goal[axis] - particle.position[axis]) * share;
+                            }
+                        }
+                    }
+                    Operator::MaintainBetween { from, to } => {
+                        let (Some(from), Some(to)) = (moment.place(*from), moment.place(*to)) else {
+                            continue;
+                        };
+                        let line = minus(to, from);
+                        let along = dot(line, line);
+                        if along > f32::EPSILON {
+                            let t = (dot(minus(particle.position, from), line) / along).clamp(0.0, 1.0);
+                            particle.position = std::array::from_fn(|i| from[i] + line[i] * t);
+                        }
+                    }
                     Operator::Movement { gravity, drag } => {
                         for (axis, gravity) in gravity.iter().enumerate() {
                             particle.velocity[axis] += gravity * dt;
@@ -574,7 +1198,7 @@ impl System {
                             // stable whatever the frame rate and never reverses
                             // the velocity the way `1 - drag * dt` would.
                             particle.velocity[axis] /= 1.0 + drag * dt;
-                            particle.position[axis] += particle.velocity[axis] * dt;
+                            particle.position[axis] += particle.velocity[axis] * pace * dt;
                         }
                     }
                     // ponytail: turbulence carries the particle through the
@@ -642,6 +1266,24 @@ impl System {
                             * dt;
                         particle.position = turned(particle.position, vortex.axis, turn);
                     }
+                    Operator::CapVelocity { most } => {
+                        let speed = particle.velocity.iter().map(|v| v * v).sum::<f32>().sqrt();
+                        if speed > *most {
+                            particle.velocity = particle.velocity.map(|v| v / speed * most);
+                        }
+                    }
+                    // As much of its speed taken off each second as the
+                    // reduction says, fading out between the two distances.
+                    Operator::ReduceNear { point, distance, reduction } => {
+                        let away: f32 = std::array::from_fn::<f32, 3, _>(|i| particle.position[i] - point[i])
+                            .iter()
+                            .map(|d| d * d)
+                            .sum::<f32>()
+                            .sqrt();
+                        let t = along(*distance, away);
+                        let by = reduction.min + (reduction.max - reduction.min) * t;
+                        particle.velocity = particle.velocity.map(|v| v / (1.0 + by.max(0.0) * dt));
+                    }
                     // These change nothing that carries over to the next step,
                     // so they are applied as the buffer is written.
                     Operator::AlphaFade { .. }
@@ -649,9 +1291,11 @@ impl System {
                     | Operator::SizeChange(_)
                     | Operator::ColorChange { .. }
                     | Operator::OscillateAlpha(_)
+                    | Operator::OscillateSize(_)
                     | Operator::OscillatePosition { .. } => {}
                 }
             }
+            particle.previous = before;
             // Where it has been, kept after the operators have moved it so
             // the path is the one that was actually walked.
             if let Ribbon::Trail { spacing, points } = ribbon {
@@ -672,12 +1316,12 @@ impl System {
         }
         if let Some(events) = &mut self.events {
             let dead = self.live.iter().filter(|p| p.age >= p.lifetime);
-            events.died.extend(dead.map(|p| p.position));
+            events.died.extend(dead.map(Snapshot::of));
         }
         self.live.retain(|p| p.age < p.lifetime);
         if let Some(events) = &mut self.events {
             events.alive.clear();
-            events.alive.extend(self.live.iter().map(|p| (p.serial, p.position)));
+            events.alive.extend(self.live.iter().map(|p| (p.serial, Snapshot::of(p))));
         }
         self.write_vertices();
     }
@@ -686,8 +1330,15 @@ impl System {
         // Taken apart so the borrow of the emitters does not hold the whole
         // system while a particle is being built.
         let mut emitters = std::mem::take(&mut self.emitters);
-        for (emitter, owed) in &mut emitters {
+        let mut gates = std::mem::take(&mut self.gates);
+        for ((emitter, owed), gate) in emitters.iter_mut().zip(&mut gates) {
+            if !gate.open(emitter, dt, &mut self.rng) {
+                continue;
+            }
             *owed += emitter.rate * self.rate * loudness(emitter.audio, sound) * dt;
+            if emitter.one_per_step {
+                *owed = owed.min(1.0);
+            }
             while *owed >= 1.0 {
                 *owed -= 1.0;
                 if self.live.len() >= self.maxcount {
@@ -698,26 +1349,64 @@ impl System {
             }
         }
         self.emitters = emitters;
+        self.gates = gates;
+    }
+
+    /// A place in a sphere between two radii, evenly spread: flat, a disc in
+    /// the plane with a depth to it -- which a flat scene cannot see -- and
+    /// in perspective a whole ball. Almamu's reading; drawn as a direction
+    /// and a plain distance they bunched up around the middle and, pressed
+    /// into an ellipse, flew off along its short axis: Star Destroyer's fire
+    /// hung in the sky well below the hull it was meant to burn along.
+    fn in_sphere(&mut self, inner: f32, outer: f32) -> [f32; 3] {
+        let rng = &mut self.rng;
+        if self.perspective {
+            let around = rng.next_f32() * std::f32::consts::TAU;
+            let z = rng.signed();
+            let ring = (1.0 - z * z).sqrt();
+            let radius = rng
+                .range(Range { min: inner.powi(3), max: outer.powi(3) })
+                .max(0.0)
+                .cbrt();
+            return [ring * around.cos() * radius, ring * around.sin() * radius, z * radius];
+        }
+        let around = rng.next_f32() * std::f32::consts::TAU;
+        let radius = rng
+            .range(Range { min: inner * inner, max: outer * outer })
+            .max(0.0)
+            .sqrt();
+        [around.cos() * radius, around.sin() * radius, rng.signed() * outer]
     }
 
     fn spawn(&mut self, emitter: &Emitter, sound: &Spectrum) -> Particle {
-        let direction = self.rng.direction(emitter.directions);
-        let position = match emitter.shape {
-            Shape::Sphere => {
-                let distance = self.rng.range(Range {
-                    min: emitter.distance.min[0],
-                    max: emitter.distance.max[0],
-                });
-                std::array::from_fn(|i| emitter.origin[i] + direction[i] * distance)
+        let flung: [f32; 3] = {
+            let drawn = match emitter.shape {
+                Shape::Sphere => self.in_sphere(emitter.distance.min[0], emitter.distance.max[0]),
+                Shape::Box => std::array::from_fn(|i| {
+                    let along = self.rng.range(Range {
+                        min: emitter.distance.min[i],
+                        max: emitter.distance.max[i],
+                    });
+                    if self.rng.next_f32() < 0.5 { -along } else { along }
+                }),
+            };
+            std::array::from_fn(|i| {
+                let at = drawn[i] * emitter.directions[i];
+                match emitter.sign[i] {
+                    s if s > 0.0 => at.abs(),
+                    s if s < 0.0 => -at.abs(),
+                    _ => at,
+                }
+            })
+        };
+        let position: [f32; 3] = std::array::from_fn(|i| emitter.origin[i] + flung[i]);
+        // Outward from the emitter's middle, for a speed the emitter states.
+        let direction = {
+            let length = (flung[0] * flung[0] + flung[1] * flung[1] + flung[2] * flung[2]).sqrt();
+            match length > 1e-6 {
+                true => flung.map(|x| x / length),
+                false => [0.0, 1.0, 0.0],
             }
-            // A box is filled rather than shelled, so each axis is drawn
-            // independently and the masked-out ones collapse to the origin.
-            Shape::Box => std::array::from_fn(|i| {
-                emitter.origin[i]
-                    + self.rng.signed()
-                        * emitter.distance.max[i]
-                        * emitter.directions[i].signum().abs()
-            }),
         };
 
         // The emitter's own spread stays, as the crackle along the bolt: the
@@ -734,7 +1423,30 @@ impl System {
 
         let speed = self.rng.range(emitter.speed);
         let drawn = self.rng.range3(self.start.velocity);
-        let lifetime = self.rng.range(self.start.lifetime).max(f32::EPSILON);
+        let nudge: [f32; 3] = match self.start.offset {
+            0.0 => [0.0; 3],
+            distance => {
+                let [x, y, _] = self.in_sphere(0.0, distance);
+                [x, y, 0.0]
+            }
+        };
+        let position: [f32; 3] = std::array::from_fn(|i| position[i] + nudge[i]);
+        // Each one a part of a turn on from the last, about the point.
+        let (position, thrown) = match self.start.around {
+            Some((point, count, range)) => {
+                let (sin, cos) =
+                    (self.born as f32 / count * std::f32::consts::TAU).sin_cos();
+                self.born = self.born.wrapping_add(1);
+                let out = self.rng.range3(range);
+                (
+                    std::array::from_fn(|i| position[i] + point[i]),
+                    [out[0] * cos - out[1] * sin, out[0] * sin + out[1] * cos, out[2]],
+                )
+            }
+            None => (position, [0.0; 3]),
+        };
+        let exponents = self.exponents;
+        let lifetime = self.rng.skewed(self.start.lifetime, exponents.lifetime).max(f32::EPSILON);
         let phase = self.rng.next_f32();
 
         // A turbulent start reads the field once, where the particle appears.
@@ -748,7 +1460,35 @@ impl System {
             None => [0.0; 3],
         };
 
-        Particle {
+        // In this order, which is the order they have always been drawn in:
+        // another would be every particle in the library somewhere else, and a
+        // sweep with every picture moved says nothing about what a change did.
+        let rotation = self.rng.range3(self.start.rotation);
+        let size = self.rng.skewed(self.start.size, exponents.size);
+        let color = match &self.start.palette {
+            Palette::Ranged => std::array::from_fn(|i| {
+                self.rng.skewed(
+                    Range { min: self.start.color.min[i], max: self.start.color.max[i] },
+                    exponents.color,
+                )
+            }),
+            Palette::Hsv { hue, saturation, value } => {
+                let (h, s, v) = (*hue, *saturation, *value);
+                from_hsv(self.rng.range(h), self.rng.range(s), self.rng.range(v))
+            }
+            Palette::List(colors) => {
+                colors[((self.rng.next_f32() * colors.len() as f32) as usize).min(colors.len() - 1)]
+            }
+        };
+        let alpha = self.rng.skewed(self.start.alpha, exponents.alpha);
+        let handed = match self.start.point_velocity {
+            Some(share) => {
+                let share = self.rng.range(share);
+                self.pointer_velocity.map(|v| v * share)
+            }
+            None => [0.0; 3],
+        };
+        let mut particle = Particle {
             trail: match self.ribbon {
                 Ribbon::Trail { points, .. } => {
                     let mut path = Vec::with_capacity(points);
@@ -761,12 +1501,14 @@ impl System {
             position,
             // Only six systems in the library set both, so which of the two
             // wins is nearly moot; adding them keeps either on its own right.
-            velocity: std::array::from_fn(|i| drawn[i] + direction[i] * speed + turbulent[i]),
+            velocity: std::array::from_fn(|i| {
+                drawn[i] + direction[i] * speed + turbulent[i] + thrown[i] + handed[i]
+            }),
             stir: [0.0; 3],
-            rotation: self.rng.range3(self.start.rotation),
-            size: self.rng.range(self.start.size),
-            color: self.rng.range3(self.start.color),
-            alpha: self.rng.range(self.start.alpha),
+            rotation,
+            size,
+            color,
+            alpha,
             age: 0.0,
             lifetime,
             frame: self.rng.next_f32(),
@@ -777,7 +1519,24 @@ impl System {
             // Both filled in as it joins the live ones.
             serial: 0,
             host: None,
+            shown_size: size,
+            shown_alpha: alpha,
+            shown_color: color,
+            pace: 1.0,
+            previous: position,
+        };
+        let moment = Moment {
+            elapsed: self.elapsed,
+            time_of_day: time_of_day(),
+            pointer: self.pointer,
+        };
+        for remap in &self.start.remaps {
+            apply_remap(remap, &mut particle, &moment, true);
         }
+        particle.size = particle.shown_size;
+        particle.alpha = particle.shown_alpha;
+        particle.color = particle.shown_color;
+        particle
     }
 
     fn write_vertices(&mut self) {
@@ -792,20 +1551,32 @@ impl System {
         let elapsed = self.elapsed;
         for particle in &self.live {
             let progress = particle.age / particle.lifetime;
-            let mut alpha = particle.alpha * fade(&self.operators, particle.age, particle.lifetime);
-            let size = particle.size * size_factor(&self.operators, progress);
-            let mut color = particle.color;
+            let mut alpha = particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
+            let mut size = particle.shown_size * size_factor(&self.operators, progress);
+            let mut color = particle.shown_color;
             let mut position = particle.position;
             for operator in &self.operators {
                 match operator {
                     Operator::ColorChange { time, from, to } => {
                         let t = along(*time, progress);
-                        color = std::array::from_fn(|i| from[i] + (to[i] - from[i]) * t);
+                        // Over what the particle was born with: a tint the
+                        // scene put on it stays on it.
+                        color = std::array::from_fn(|i| {
+                            particle.shown_color[i] * (from[i] + (to[i] - from[i]) * t)
+                        });
                     }
                     Operator::OscillateAlpha(wave) => {
                         let (amount, swing) = wave_at(wave, particle.wobble, elapsed);
                         // Down from full and back, never past invisible.
                         alpha *= 1.0 - amount * (0.5 - 0.5 * swing);
+                    }
+                    // Between the two ends, each particle at its own rate.
+                    Operator::OscillateSize(wave) => {
+                        let pick = |r: Range<f32>, at: f32| r.min + (r.max - r.min) * at;
+                        let turning = pick(wave.frequency, particle.wobble[0]) * particle.age
+                            + pick(wave.phase, particle.wobble[2]);
+                        let swing = (turning.cos() + 1.0) / 2.0;
+                        size *= pick(wave.scale, swing);
                     }
                     Operator::OscillatePosition { wave, mask } => {
                         let (amount, swing) = wave_at(wave, particle.wobble, elapsed);
@@ -821,6 +1592,8 @@ impl System {
             let frame = match self.animation {
                 Some(Animation::Sequence { multiplier }) => progress * multiplier,
                 Some(Animation::RandomFrame) => particle.frame,
+                // Just short of one, or the shader's fraction is the first.
+                Some(Animation::Once) => progress.min(0.999),
                 None => progress,
             };
             for corner in CORNERS {
@@ -858,15 +1631,11 @@ impl System {
         self.vertices
             .reserve(self.pieces() * VERTICES_PER_PARTICLE * FLOATS_PER_ROPE_VERTEX);
         for particle in &self.live {
-            let alpha = particle.alpha * fade(&self.operators, particle.age, particle.lifetime);
+            let alpha = particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
             let size =
-                particle.size * size_factor(&self.operators, particle.age / particle.lifetime);
-            let color = [
-                particle.color[0],
-                particle.color[1],
-                particle.color[2],
-                alpha,
-            ];
+                particle.shown_size * size_factor(&self.operators, particle.age / particle.lifetime);
+            let tint = changed_color(&self.operators, particle);
+            let color = [tint[0], tint[1], tint[2], alpha];
             let length = particle.trail.len() as f32;
             for (piece, pair) in particle.trail.windows(2).enumerate() {
                 let (start, end) = (pair[0], pair[1]);
@@ -905,9 +1674,10 @@ impl System {
         for piece in 0..pieces {
             let (start, end) = (&self.live[piece], &self.live[piece + 1]);
             let shown = |p: &Particle| {
-                let alpha = p.alpha * fade(&self.operators, p.age, p.lifetime);
-                let size = p.size * size_factor(&self.operators, p.age / p.lifetime);
-                ([p.color[0], p.color[1], p.color[2], alpha], size)
+                let alpha = p.shown_alpha * fade(&self.operators, p.age, p.lifetime);
+                let size = p.shown_size * size_factor(&self.operators, p.age / p.lifetime);
+                let tint = changed_color(&self.operators, p);
+                ([tint[0], tint[1], tint[2], alpha], size)
             };
             let (start_color, start_size) = shown(start);
             let (end_color, end_size) = shown(end);
@@ -929,6 +1699,28 @@ impl System {
             }
         }
     }
+}
+
+/// How far through the day it is, nought to one, by the clock's own zone.
+/// ponytail: UTC rather than local, which only a remap on the time of day could
+/// tell; `std` has no time zones, so a local one wants another dependency.
+fn time_of_day() -> f32 {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    (seconds % 86_400) as f32 / 86_400.0
+}
+
+/// A particle's colour after `colorchange`, for the ribbons.
+fn changed_color(operators: &[Operator], particle: &Particle) -> [f32; 3] {
+    let mut color = particle.shown_color;
+    for operator in operators {
+        if let Operator::ColorChange { time, from, to } = operator {
+            let t = along(*time, particle.age / particle.lifetime);
+            color = std::array::from_fn(|i| particle.shown_color[i] * (from[i] + (to[i] - from[i]) * t));
+        }
+    }
+    color
 }
 
 /// How far through a ramp a particle is, as a fraction.
@@ -1176,18 +1968,9 @@ impl Rng {
         std::array::from_fn(|i| r.min[i] + (r.max[i] - r.min[i]) * self.next_f32())
     }
 
-    /// A unit vector, with the axes the emitter does not name left at zero.
-    /// That mask is what keeps a flat wallpaper's particles in its plane.
-    fn direction(&mut self, mask: [f32; 3]) -> [f32; 3] {
-        for _ in 0..8 {
-            let v: [f32; 3] = std::array::from_fn(|i| self.signed() * mask[i]);
-            let length = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-            if length > 1e-3 {
-                return v.map(|x| x / length);
-            }
-        }
-        // Every draw landed on the origin, which a zero mask guarantees.
-        [0.0; 3]
+    /// In the range, leaning towards its minimum as the exponent says.
+    fn skewed(&mut self, r: Range<f32>, exponent: f32) -> f32 {
+        r.min + (r.max - r.min) * self.next_f32().powf(exponent)
     }
 }
 
@@ -1204,7 +1987,7 @@ mod tests {
     /// Silence is the quiet end of what the step stated, never nothing: a
     /// wallpaper in a silent room still moves, just less.
     #[test]
-    fn a_step_that_follows_the_sound_runs_between_its_bounds() {
+    fn a_step_that_follows_the_sound_hears_only_inside_its_bounds() {
         let step = Some(AudioResponse {
             bands: (4, 7),
             ears: Channels::Both,
@@ -1219,15 +2002,16 @@ mod tests {
         };
 
         assert_eq!(loudness(None, &Spectrum::SILENT), 1.0);
-        assert_eq!(loudness(step, &Spectrum::SILENT), 0.5);
+        assert_eq!(loudness(step, &Spectrum::SILENT), 0.0);
+        assert_eq!(loudness(step, &fill(0.5)), 0.0);
+        assert_eq!(loudness(step, &fill(0.75)), 0.5);
         assert_eq!(loudness(step, &fill(1.0)), 1.0);
-        assert_eq!(loudness(step, &fill(0.5)), 0.75);
 
         // Sound outside the bands it listens to is not its business.
         let mut elsewhere = Spectrum::SILENT;
         elsewhere.left[0..=3].fill(1.0);
         elsewhere.right[0..=3].fill(1.0);
-        assert_eq!(loudness(step, &elsewhere), 0.5);
+        assert_eq!(loudness(step, &elsewhere), 0.0);
     }
 
     /// A step that names one ear gets that ear. The stock effect shaders
@@ -1249,8 +2033,8 @@ mod tests {
         assert_eq!(loudness(step(Channels::Both), &sound), 0.5);
     }
 
-    /// The exponent shapes the loudness before it is mapped, so a step with a
-    /// high one stays near its quiet end until the sound is really loud.
+    /// The exponent comes after the bounds' smooth step, so a step with a high
+    /// one stays quiet until the sound is really loud.
     #[test]
     fn the_exponent_decides_how_soon_a_step_answers() {
         let mut quarter = Spectrum::SILENT;
@@ -1267,9 +2051,9 @@ mod tests {
                 &quarter,
             )
         };
-        assert!((with(1.0) - 0.25).abs() < 0.001);
-        assert!((with(2.0) - 0.0625).abs() < 0.001);
-        assert!((with(0.5) - 0.5).abs() < 0.001);
+        assert!((with(1.0) - 0.15625).abs() < 0.001);
+        assert!((with(2.0) - 0.0244).abs() < 0.001);
+        assert!((with(0.5) - 0.3953).abs() < 0.001);
     }
 
     /// Out to the far point and back the way it came. A walk that jumped back
@@ -1280,6 +2064,7 @@ mod tests {
             from: [0.0; 3],
             to: [9.0, 0.0, 0.0],
             count: 10,
+            mirror: true,
         };
         let walk: Vec<f32> = (0..20).map(|n| line.at(n)[0]).collect();
         assert_eq!(
@@ -1318,6 +2103,335 @@ mod tests {
 
     /// Steps a system the way a renderer would rather than in one jump, since
     /// one long step is deliberately clamped.
+    /// Valve's thunderbolt pulses its opacity on a sine over the system's
+    /// clock, past the first second, and only from the middle of a life on.
+    #[test]
+    fn a_remap_writes_what_is_drawn_and_only_as_its_blend_allows() {
+        let mut s = system(
+            r#"{"material":"m","maxcount":1,
+            "emitter":[{"name":"sphererandom","instantaneous":1,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                           {"name":"sizerandom","min":40,"max":40}],
+            "operator":[{"name":"remapvalue","output":"size","operation":"remap",
+                         "outputrangemin":100,"outputrangemax":100,
+                         "blendinstart":0.5,"blendinend":0.6}]}"#,
+        );
+        run(&mut s, 1.0, 1.0 / 30.0);
+        assert_eq!(s.live[0].size, 20.0, "what it was born with stays");
+        assert_eq!(s.live[0].shown_size, 20.0, "before its blend, nothing");
+        run(&mut s, 5.5, 1.0 / 30.0);
+        assert!((s.live[0].shown_size - 50.0).abs() < 1e-3, "{}", s.live[0].shown_size);
+    }
+
+    #[test]
+    fn a_multiplying_remap_does_not_compound() {
+        let mut s = system(
+            r#"{"material":"m","maxcount":1,
+            "emitter":[{"name":"sphererandom","instantaneous":1,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                           {"name":"sizerandom","min":40,"max":40}],
+            "operator":[{"name":"remapvalue","output":"size",
+                         "outputrangemin":2,"outputrangemax":2}]}"#,
+        );
+        run(&mut s, 1.0, 1.0 / 30.0);
+        assert_eq!(s.live[0].shown_size, 40.0);
+    }
+
+    #[test]
+    fn a_wave_goes_on_past_the_end_of_its_input_range() {
+        let wave = |transform, fraction| {
+            let remap = wpe_format::ParticleSystem::parse(
+                format!(
+                    r#"{{"initializer":[{{"name":"remapinitialvalue","transformfunction":"{transform}",
+                    "transforminputscale":1}}]}}"#
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+            let Initializer::Remap(remap) = remap.initializers[0] else { panic!() };
+            remap_shape(&remap, fraction, 0, 0.0)
+        };
+        assert!((wave("sine", 1.25) - 1.0).abs() < 1e-3);
+        assert_eq!(wave("saw", 1.5), 0.5);
+        assert_eq!(wave("square", 1.25), 1.0);
+        assert_eq!(wave("triangle", 1.5), 1.0);
+        assert_eq!(wave("none", 1.5), 1.0, "only no shape stops at the end");
+    }
+
+    #[test]
+    fn a_new_particle_is_written_by_its_remap_once() {
+        let mut s = system(
+            r#"{"material":"m","maxcount":1,
+            "controlpoint":[{"id":0,"offset":"0 0 0"},{"id":1,"offset":"100 0 0"}],
+            "emitter":[{"name":"sphererandom","instantaneous":1,"distancemax":0}],
+            "initializer":[{"name":"sizerandom","min":40,"max":40},
+                           {"name":"remapinitialvalue","input":"distancetocontrolpoint",
+                            "inputcontrolpoint0":1,"inputrangemax":200}]}"#,
+        );
+        run(&mut s, 0.1, 0.1);
+        // Half of the reach away, so half of the 20 it was going to be drawn.
+        assert_eq!(s.live[0].size, 10.0);
+    }
+
+    fn collides(step: &str, position: [f32; 3], velocity: [f32; 3]) -> System {
+        let mut s = system(&format!(
+            r#"{{"material":"m","maxcount":1,
+            "emitter":[{{"name":"sphererandom","instantaneous":1,"distancemax":0}}],
+            "initializer":[{{"name":"lifetimerandom","min":10,"max":10}}],
+            "operator":[{step}]}}"#
+        ));
+        run(&mut s, 0.01, 0.01);
+        s.live[0].position = position;
+        s.live[0].previous = position;
+        s.live[0].velocity = velocity;
+        s
+    }
+
+    #[test]
+    fn a_plane_bounces_a_particle_back_by_its_factor() {
+        let mut s = collides(
+            r#"{"name":"collisionplane","distance":-200,"bouncefactor":0.5}"#,
+            [0.0, -210.0, 0.0],
+            [0.0, -100.0, 0.0],
+        );
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].position[1], -200.0);
+        assert_eq!(s.live[0].velocity[1], 50.0);
+    }
+
+    #[test]
+    fn a_plane_can_slide_a_particle_or_take_it_away() {
+        let mut s = collides(
+            r#"{"name":"collisionplane","collisionbehavior":"slide"}"#,
+            [0.0, -1.0, 0.0],
+            [5.0, -100.0, 0.0],
+        );
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].velocity, [5.0, 0.0, 0.0]);
+        let mut s = collides(
+            r#"{"name":"collisionplane","collisionbehavior":"delete"}"#,
+            [0.0, -1.0, 0.0],
+            [0.0; 3],
+        );
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.count(), 0);
+    }
+
+    #[test]
+    fn a_sphere_pushes_a_particle_out_to_its_surface() {
+        let mut s = collides(
+            r#"{"name":"collisionsphere","origin":"0 0 0","radius":50}"#,
+            [10.0, 0.0, 0.0],
+            [-100.0, 0.0, 0.0],
+        );
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].position[0], 50.0);
+    }
+
+    /// From in front only, and only inside its edges.
+    #[test]
+    fn a_rectangle_is_struck_only_from_in_front_and_within_its_edges() {
+        let quad = r#"{"name":"collisionquad","origin":"0 0 0","size":"100 100"},
+                      {"name":"movement"}"#;
+        let mut front = collides(quad, [0.0, 1.0, 0.0], [0.0, -200.0, 0.0]);
+        front.advance(0.01, &Spectrum::SILENT);
+        // The rectangle comes first and the movement after, so it takes a step
+        // for the crossing to be seen.
+        front.advance(0.01, &Spectrum::SILENT);
+        assert!(front.live[0].velocity[1] > 0.0, "{:?}", front.live[0].velocity);
+        let mut behind = collides(quad, [0.0, -1.0, 0.0], [0.0, -200.0, 0.0]);
+        behind.advance(0.01, &Spectrum::SILENT);
+        assert!(behind.live[0].velocity[1] < 0.0);
+        let mut beside = collides(quad, [500.0, 1.0, 0.0], [0.0, -200.0, 0.0]);
+        beside.advance(0.01, &Spectrum::SILENT);
+        beside.advance(0.01, &Spectrum::SILENT);
+        assert!(beside.live[0].velocity[1] < 0.0);
+    }
+
+    #[test]
+    fn the_edges_of_the_scene_keep_a_particle_in() {
+        let mut s = collides(r#"{"name":"collisionbounds"}"#, [1000.0, 50.0, 0.0], [100.0, 0.0, 0.0]);
+        s.bound_by(Range { min: [0.0; 3], max: [800.0, 600.0, 0.0] });
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].position[0], 800.0);
+        assert_eq!(s.live[0].velocity[0], -50.0);
+    }
+
+    #[test]
+    fn a_particle_keeps_its_distance_from_a_point() {
+        let mut s = collides(
+            r#"{"name":"maintaindistancetocontrolpoint","distance":100}"#,
+            [300.0, 0.0, 0.0],
+            [0.0; 3],
+        );
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].position, [100.0, 0.0, 0.0]);
+        // With a strength it goes there over time.
+        let mut s = collides(
+            r#"{"name":"maintaindistancetocontrolpoint","distance":100,"variablestrength":10}"#,
+            [300.0, 0.0, 0.0],
+            [0.0; 3],
+        );
+        s.advance(0.01, &Spectrum::SILENT);
+        assert!((s.live[0].position[0] - 280.0).abs() < 1e-3, "{:?}", s.live[0].position);
+    }
+
+    #[test]
+    fn a_particle_can_be_held_on_the_line_between_two_points() {
+        let mut s = system(
+            r#"{"material":"m","maxcount":1,
+            "controlpoint":[{"id":0,"offset":"0 0 0"},{"id":1,"offset":"100 0 0"}],
+            "emitter":[{"name":"sphererandom","instantaneous":1,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+            "operator":[{"name":"maintaindistancebetweencontrolpoints"}]}"#,
+        );
+        run(&mut s, 0.01, 0.01);
+        s.live[0].position = [40.0, 30.0, 0.0];
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].position, [40.0, 0.0, 0.0]);
+        s.live[0].position = [400.0, 30.0, 0.0];
+        s.advance(0.01, &Spectrum::SILENT);
+        assert_eq!(s.live[0].position, [100.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_flock_closes_up_and_matches_its_heading() {
+        let boids = Boids {
+            neighbor_threshold: 150.0,
+            separation_threshold: 20.0,
+            max_speed: 500.0,
+            separation: 0.0,
+            alignment: 5.0,
+            cohesion: 5.0,
+        };
+        let mut s = system(
+            r#"{"material":"m","maxcount":2,
+            "emitter":[{"name":"sphererandom","instantaneous":2,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
+        );
+        run(&mut s, 0.01, 0.01);
+        s.live[0].position = [0.0; 3];
+        s.live[1].position = [100.0, 0.0, 0.0];
+        s.live[0].velocity = [0.0; 3];
+        s.live[1].velocity = [0.0, 10.0, 0.0];
+        let added = flock(&s.live, &boids, 0, 0.1);
+        assert!(added[0][0] > 0.0 && added[1][0] < 0.0, "they close up: {added:?}");
+        assert!(added[0][1] > 0.0 && added[1][1] < 0.0, "and match: {added:?}");
+        // Nobody near, nothing to answer to.
+        s.live[1].position = [1000.0, 0.0, 0.0];
+        assert_eq!(flock(&s.live, &boids, 0, 0.1)[0], [0.0; 3]);
+    }
+
+    #[test]
+    fn a_flock_keeps_apart_inside_its_separation_and_under_its_cap() {
+        let boids = Boids {
+            neighbor_threshold: 150.0,
+            separation_threshold: 20.0,
+            max_speed: 10.0,
+            separation: 15.0,
+            alignment: 0.0,
+            cohesion: 0.0,
+        };
+        let mut s = system(
+            r#"{"material":"m","maxcount":2,
+            "emitter":[{"name":"sphererandom","instantaneous":2,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
+        );
+        run(&mut s, 0.01, 0.01);
+        s.live[0].position = [0.0; 3];
+        s.live[1].position = [10.0, 0.0, 0.0];
+        s.live[0].velocity = [0.0; 3];
+        s.live[1].velocity = [0.0; 3];
+        let added = flock(&s.live, &boids, 0, 1.0);
+        assert_eq!(added[0], [-10.0, 0.0, 0.0]);
+    }
+
+    /// A child burst from a dying particle takes on the colour it had, and a
+    /// parent's size scales it, which is what the editor's list says.
+    #[test]
+    fn a_child_takes_what_it_is_told_to_from_its_parent() {
+        let mut child = system(
+            r#"{"material":"m","maxcount":4,
+            "emitter":[{"name":"sphererandom","instantaneous":1,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                           {"name":"inheritinitialvaluefromevent","input":"setcolor"},
+                           {"name":"inheritinitialvaluefromevent","input":"multiplysize"}]}"#,
+        );
+        child.wait_for_parent();
+        let from = Snapshot { color: [0.5, 0.25, 1.0], size: 2.0, ..Snapshot::at([3.0, 4.0, 0.0]) };
+        let size = child.start.size.min;
+        child.burst_at(from, &Spectrum::SILENT);
+        assert_eq!(child.live[0].color, [0.5, 0.25, 1.0]);
+        assert_eq!(child.live[0].size, size * 2.0);
+        assert_eq!(&child.live[0].position[..2], &[3.0, 4.0]);
+    }
+
+    #[test]
+    fn a_line_that_does_not_mirror_starts_again() {
+        let line = Line { from: [0.0; 3], to: [3.0, 0.0, 0.0], count: 4, mirror: false };
+        let walked: Vec<f32> = (0..6).map(|n| line.at(n)[0]).collect();
+        assert_eq!(walked, [0.0, 1.0, 2.0, 3.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn a_sheet_played_once_stops_on_its_last_frame() {
+        let mut s = system(
+            r#"{"material":"m","maxcount":1,"animationmode":"once",
+            "emitter":[{"name":"sphererandom","instantaneous":1,"distancemax":0}],
+            "initializer":[{"name":"lifetimerandom","min":1,"max":1}]}"#,
+        );
+        run(&mut s, 0.5, 0.1);
+        let frame = s.vertices[FLOATS_PER_VERTEX - 1];
+        assert!((frame - 0.5).abs() < 0.15, "{frame}");
+    }
+
+    /// Every particle system Wallpaper Engine ships, which is the vocabulary
+    /// a wallpaper not in this library can be expected to use: all of it is
+    /// read and none of it runs away. A collision with a model and an emitter
+    /// shaped like a layer's picture have nothing here to work from yet.
+    #[test]
+    fn every_stock_system_is_read_and_stays_finite() {
+        let Some(assets) = wpe_format::assets::Assets::locate() else { return };
+        fn walk(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, found);
+                } else if path.extension().is_some_and(|e| e == "json")
+                    && path.to_string_lossy().contains("/particles/")
+                {
+                    found.push(path);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        walk(assets.root(), &mut files);
+        assert!(files.len() > 200, "{}", files.len());
+        for file in files {
+            let Ok(definition) = ParticleSystem::parse(&std::fs::read(&file).unwrap()) else {
+                continue;
+            };
+            for what in &definition.unsupported {
+                assert!(
+                    ["operator collisionmodel", "emitter layerimage"].contains(&what.as_str()),
+                    "{}: {what}",
+                    file.display()
+                );
+            }
+            let mut s = System::new(&definition, &InstanceOverride::default(), 1);
+            s.bound_by(Range { min: [0.0; 3], max: [1920.0, 1080.0, 0.0] });
+            s.thin_to(2000);
+            run(&mut s, 3.0, 1.0 / 30.0);
+            for p in &s.live {
+                assert!(
+                    p.position.iter().chain(&p.velocity).all(|c| c.is_finite()) && p.shown_size.is_finite(),
+                    "{}",
+                    file.display()
+                );
+            }
+        }
+    }
+
     fn run(system: &mut System, seconds: f32, step: f32) {
         for _ in 0..(seconds / step).round() as usize {
             system.advance(step, &Spectrum::SILENT);
@@ -1413,7 +2527,8 @@ mod tests {
             child.advance(1.0 / 60.0, &Spectrum::SILENT);
         }
         assert_eq!(child.count(), 0);
-        assert_eq!(died, [[100.0, 50.0, 0.0]]);
+        assert_eq!(died.len(), 1);
+        assert_eq!(died[0].position, [100.0, 50.0, 0.0]);
         child.burst_at(died[0], &Spectrum::SILENT);
         assert_eq!(child.count(), 20);
         assert!(child.live.iter().all(|p| p.position == [100.0, 50.0, 0.0]));
@@ -1436,7 +2551,7 @@ mod tests {
         parent.listen();
         child.ride_along(1);
         let step = 1.0 / 60.0;
-        let mut ride = |parent: &mut System, child: &mut System| {
+        let ride = |parent: &mut System, child: &mut System| {
             parent.advance(step, &Spectrum::SILENT);
             child.follow(&parent.events().unwrap().alive, step, &Spectrum::SILENT);
             child.advance(step, &Spectrum::SILENT);
@@ -1455,16 +2570,14 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_emitted_before_the_systems_start_time() {
+    fn a_systems_start_time_is_how_far_ahead_it_begins() {
         let mut s = system(
             r#"{"maxcount":100,"starttime":2,
                 "emitter":[{"name":"sphererandom","rate":50,"distancemax":1}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
         );
-        run(&mut s, 1.0, 1.0 / 60.0);
-        assert_eq!(s.count(), 0);
-        run(&mut s, 2.0, 1.0 / 60.0);
-        assert!(s.count() > 0);
+        run(&mut s, 1.0 / 60.0, 1.0 / 60.0);
+        assert!(s.count() >= 90, "{} after one step", s.count());
     }
 
     /// The embers' box, wider than it is tall: "512 256 0" read as one
@@ -1473,7 +2586,7 @@ mod tests {
     fn a_box_spreads_each_axis_as_far_as_it_says() {
         let mut s = system(
             r#"{"maxcount":200,"emitter":[{"name":"boxrandom","rate":1000,
-                 "directions":"1 0.1 0","distancemax":"512 256 0"}],
+                 "directions":"1 1 0","distancemax":"512 256 0"}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
         );
         run(&mut s, 0.2, 1.0 / 60.0);

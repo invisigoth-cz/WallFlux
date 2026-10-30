@@ -13,6 +13,7 @@ pub mod particles;
 pub mod render;
 pub mod script;
 pub mod sounds;
+pub mod text;
 pub mod texture;
 pub mod transform;
 pub mod video;

@@ -42,6 +42,31 @@ pub const IDENTITY: Matrix = [
 /// Projecting the scene straight onto the output instead squeezes it, which is
 /// invisible whenever the two shapes happen to match and obvious the moment
 /// they do not.
+/// What a perspective particle system is seen through: a camera a thousand
+/// units back from the middle of the scene, looking at it, cropped to the
+/// output the way [`orthographic_cover`] crops. A thousand is Almamu's reading.
+pub fn perspective_cover(scene: (f32, f32), output: (f32, f32), fov_degrees: f32) -> Matrix {
+    const EYE: f32 = 1000.0;
+    const NEAR: f32 = 1.0;
+    const FAR: f32 = 100_000.0;
+    let (sw, sh) = (scene.0.max(1.0), scene.1.max(1.0));
+    let scene_aspect = sw / sh;
+    let output_aspect = output.0.max(1.0) / output.1.max(1.0);
+    let (crop_x, crop_y) = match scene_aspect > output_aspect {
+        true => (scene_aspect / output_aspect, 1.0),
+        false => (1.0, output_aspect / scene_aspect),
+    };
+    let focal = 1.0 / (fov_degrees.clamp(1.0, 170.0).to_radians() / 2.0).tan();
+    let (x, y) = (focal / scene_aspect * crop_x, focal * crop_y);
+    let (a, b) = (-(FAR + NEAR) / (FAR - NEAR), -2.0 * FAR * NEAR / (FAR - NEAR));
+    [
+        x, 0.0, 0.0, -x * sw / 2.0,
+        0.0, y, 0.0, -y * sh / 2.0,
+        0.0, 0.0, a, b - a * EYE,
+        0.0, 0.0, -1.0, EYE,
+    ]
+}
+
 pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
     let (sw, sh) = (scene.0.max(1.0), scene.1.max(1.0));
     let scene_aspect = sw / sh;

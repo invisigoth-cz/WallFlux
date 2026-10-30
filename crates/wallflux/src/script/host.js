@@ -156,7 +156,7 @@ function lively(value) {
 const DEGREES = 180 / Math.PI;
 
 // The scene's objects, as JSON: `[{name, origin, angles, scale, size, alpha,
-// visible}]` with the vectors as arrays.
+// visible}]` with the vectors as arrays, and `text` on those that have one.
 globalThis.__layers = function (json) {
     for (const one of JSON.parse(json)) {
         const layer = {
@@ -168,6 +168,8 @@ globalThis.__layers = function (json) {
             alpha: one.alpha,
             visible: one.visible,
         };
+        if (one.text !== undefined)
+            layer.text = one.text;
         layers.push(layer);
         if (!byName.has(one.name))
             byName.set(one.name, layer);
@@ -253,12 +255,15 @@ globalThis.__listens = function () {
 };
 
 // What the frame left behind, as JSON: each layer as `[origin, angles,
-// scale, alpha, visible]` and each value a script drives on its own.
+// scale, alpha, visible]`, each value a script drives on its own, and each
+// layer's text. A script may answer with a number -- `date.getDate()` -- and
+// a text is words whatever it was handed.
 globalThis.__state = function () {
     const vector = v => [Number(v?.x ?? 0), Number(v?.y ?? 0), Number(v?.z ?? 0)];
     return JSON.stringify({
         layers: layers.map(l => [vector(l.origin), vector(l.angles).map(a => a / DEGREES), vector(l.scale),
                                  Number(l.alpha), Boolean(l.visible)]),
         values: scripts.map(s => (s.property ? null : plain(s.value))),
+        texts: layers.map(l => (l.text === undefined ? null : String(l.text))),
     });
 };

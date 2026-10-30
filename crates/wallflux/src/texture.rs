@@ -203,6 +203,48 @@ impl Texture {
         })
     }
 
+    /// A picture this program drew, four bytes a pixel, rows from the top.
+    pub fn from_rgba(gl: &glow::Context, width: u32, height: u32, rgba: &[u8]) -> Result<Self, String> {
+        let id = unsafe { gl.create_texture() }.map_err(|e| format!("create texture: {e}"))?;
+        let mut texture = Self::borrowed(id, width, height);
+        texture.write_rgba(gl, width, height, rgba);
+        Ok(texture)
+    }
+
+    /// Draws over the picture with another, of whatever size. Its levels are
+    /// made here, which a file's are not: a text is often drawn far smaller
+    /// than it was laid out.
+    pub fn write_rgba(&mut self, gl: &glow::Context, width: u32, height: u32, rgba: &[u8]) {
+        unsafe {
+            gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
+            gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                RGBA8.0 as i32,
+                width as i32,
+                height as i32,
+                0,
+                RGBA8.1,
+                RGBA8.2,
+                glow::PixelUnpackData::Slice(Some(rgba)),
+            );
+            gl.generate_mipmap(glow::TEXTURE_2D);
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                glow::TEXTURE_MIN_FILTER,
+                glow::LINEAR_MIPMAP_LINEAR as i32,
+            );
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+            gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+        }
+        self.width = width;
+        self.height = height;
+        self.image_size = (width, height);
+    }
+
     pub fn bind(&self, gl: &glow::Context, unit: u32) {
         unsafe {
             gl.active_texture(glow::TEXTURE0 + unit);
