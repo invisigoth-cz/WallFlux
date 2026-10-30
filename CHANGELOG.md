@@ -6,6 +6,12 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-10-30
+
+Warhammer and Star wars now match recordings of Wallpaper Engine on Windows within
+a few levels, and the smoke, fire and rays of the rest of the library come out
+closer to it for the same reasons.
+
 ### Fixed in the renderer
 
 - **A particle system's rate is how fast its time runs.** It was read as how many
@@ -826,7 +832,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.2...v0.17.0
 [0.16.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.0...v0.16.1
