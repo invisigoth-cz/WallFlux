@@ -6,6 +6,53 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-10-30
+
+A scene's clocks and calendars are on the desktop, and the wallpapers that were
+missing parts of themselves on a desktop set to a language that writes a decimal
+comma have them back.
+
+### New in the renderer
+
+- **Text.** Clocks, calendars and any other words a scene carries are drawn in
+  its own font, at the size and in the place Wallpaper Engine puts them, through
+  the layer's effects, and rewritten as its scripts change them. 90 of the 93
+  scripts in the library now run; the other three switch an effect or drive a
+  particle override other than the rate.
+- **The rest of the particle vocabulary.** Flocking (`boids`), collisions with a
+  plane, a sphere, a rectangle and the edges of the scene, `remapvalue` and
+  `remapinitialvalue`, keeping a distance from a control point or to a line
+  between two, children taking values from their parent's particles, sprite
+  sheets played once and control-point lines that start again. All 289 particle
+  files Wallpaper Engine ships are now read. Their defaults come from the engine
+  itself; how they behave comes from its editor's descriptions, and no wallpaper
+  here uses them yet to compare with. A collision with a 3D model and an emitter
+  shaped like a layer's picture are not done, and are reported.
+- **Compared against Wallpaper Engine on Windows**, recording by recording: fire
+  and smoke that take the scene behind them, a step following the sound standing
+  still in silence, sphere and box emitters, systems already running when the
+  wallpaper appears, `colorchange` over a particle's own colour, emitters that
+  come and go, perspective particles, `TEXB0001` textures, and more of the stock
+  steps (`oscillatesize`, `hsvcolorrandom`, `colorlist`, `positionoffsetrandom`,
+  `capvelocity`, `reducemovementnearcontrolpoint`, `vortex_v2`,
+  `mapsequencearoundcontrolpoint`).
+
+### Fixed in the renderer
+
+- **Scenes with scripts lost layers on a Czech desktop**, and on any other whose
+  language writes a decimal comma. The script engine read "0.5" as nought, so
+  every layer at less than full size or strength disappeared: Future Clock's
+  colours and scrolling code, and Time Reactor's dials. The tool used for
+  checking pictures never switches language, which is why it went unseen.
+- **Things turn about their origin.** A layer aligned to one of its edges turned
+  about its middle instead, which left Dark Core's clock hands standing at twelve
+  and started its second hand from the wrong place.
+
+### Dependencies
+
+- `ab_glyph` (Apache-2.0) for reading fonts, built into the renderer; nothing
+  new to install.
+
 ## [0.16.2] — 2026-10-29
 
 ### Fixed in the renderer
@@ -763,7 +810,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.2...v0.17.0
 [0.16.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.15.0...v0.16.0
