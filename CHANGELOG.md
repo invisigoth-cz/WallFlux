@@ -6,6 +6,22 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed in the renderer
+
+- **A particle system's rate is how fast its time runs.** It was read as how many
+  particles it lets out, so a slowed system flickered with one or two particles
+  where Wallpaper Engine shows it burning steadily at its full number. Warhammer's
+  muzzle flares now match a recording from Windows within a few per cent.
+- **Random turns are random.** A particle system that left the turn of its
+  particles unsaid drew them all at one angle: Warhammer's fan of rays was a single
+  beam across the picture, and every puff of a smoke lay the same way.
+- **Falling snow and everything else seen through a camera is on the screen.** Those
+  systems were drawn somewhere off it, because of a matrix written the wrong way.
+- **Star wars' embers fly the right way**, up across the picture rather than off the
+  bottom of it, which is where its orange lights had gone.
+- **A system's children keep to its strength and its speed.** A faint flare threw
+  rays as bright as the brightest one's.
+
 ## [0.17.0] — 2026-10-30
 
 A scene's clocks and calendars are on the desktop, and the wallpapers that were

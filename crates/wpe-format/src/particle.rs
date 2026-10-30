@@ -731,8 +731,20 @@ impl ParticleSystem {
                     count: num(step, "count", 1.0).max(f32::EPSILON),
                     speed: bounds3(step, "speedmin", "speedmax", 0.0),
                 },
-                "rotationrandom" => Initializer::Rotation(triple(0.0)),
-                "angularvelocityrandom" => Initializer::AngularVelocity(triple(0.0)),
+                // A turn at random about the axis out of the screen, and up to
+                // five radians a second either way, each end on its own: the
+                // engine's defaults, out of `wallpaper64.exe`. 112 steps state
+                // neither end and 32 only the top, and with a stated end
+                // standing for both, all of Warhammer's rays lay at one angle
+                // and every puff of a smoke at the same.
+                "rotationrandom" => Initializer::Rotation(Range {
+                    min: vector(step, "min", [0.0; 3]),
+                    max: vector(step, "max", [0.0, 0.0, std::f32::consts::TAU]),
+                }),
+                "angularvelocityrandom" => Initializer::AngularVelocity(Range {
+                    min: vector(step, "min", [0.0, 0.0, -5.0]),
+                    max: vector(step, "max", [0.0, 0.0, 5.0]),
+                }),
                 "mapsequencebetweencontrolpoints" => Initializer::AlongControlPoints {
                     count: num(step, "count", 2.0).clamp(2.0, 4096.0) as u32,
                     mirror: step.get("limitbehavior").and_then(Value::as_str) == Some("mirror"),
@@ -1674,6 +1686,27 @@ mod tests {
         assert!(p.unsupported.is_empty());
     }
 
+    /// A turn the file leaves unsaid is any turn, as Wallpaper Engine has it:
+    /// a stated end standing for both put every ray at one angle.
+    #[test]
+    fn a_rotation_with_an_end_unsaid_is_any_rotation() {
+        let p = ParticleSystem::parse(
+            br#"{"initializer":[{"name":"rotationrandom"},
+                                {"name":"rotationrandom","max":"0 0 3"},
+                                {"name":"angularvelocityrandom"}]}"#,
+        )
+        .unwrap();
+        let tau = std::f32::consts::TAU;
+        assert_eq!(
+            p.initializers,
+            [
+                Initializer::Rotation(Range { min: [0.0; 3], max: [0.0, 0.0, tau] }),
+                Initializer::Rotation(Range { min: [0.0; 3], max: [0.0, 0.0, 3.0] }),
+                Initializer::AngularVelocity(Range { min: [0.0, 0.0, -5.0], max: [0.0, 0.0, 5.0] }),
+            ]
+        );
+    }
+
     /// The default is to start again from the far end, which is what eight
     /// of Valve's twelve presets using this leave unsaid.
     #[test]
@@ -1891,19 +1924,6 @@ mod one_sided_tests {
         assert_eq!(range.min, range.max);
         assert_eq!(range.min, [0.0, 53.0 / 255.0, 1.0]);
     }
-
-    #[test]
-    fn a_rotation_stated_at_the_far_end_only_is_still_a_range_of_one() {
-        let p = only(r#"{"initializer":[{"name":"rotationrandom","max":"0 0 2"}]}"#);
-        assert_eq!(
-            p[0],
-            Initializer::Rotation(Range {
-                min: [0.0, 0.0, 2.0],
-                max: [0.0, 0.0, 2.0]
-            })
-        );
-    }
-
     #[test]
     fn values_nobody_stated_fall_back_to_something_that_shows() {
         let p = only(r#"{"initializer":[{"name":"alpharandom"},{"name":"colorrandom"}]}"#);

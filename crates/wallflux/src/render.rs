@@ -1447,11 +1447,18 @@ fn load_particles(
         // A number of its own, since a system is seeded from it: with its
         // parent's, a child and its siblings would all emit in step.
         placed.id = object.id.wrapping_mul(1_000_003).wrapping_add(index as i64 + 1);
-        // What the scene says about the parent stays with the parent. Handed
-        // down, Star Citizen's embers -- five times the rate, five times the
-        // size -- took their glows with them and burned the top of the
-        // picture out white, where the wallpaper's own preview has sky.
-        placed.instanceoverride = None;
+        // Its alpha and its clock go on down. Warhammer's rays are children of
+        // charges set anywhere from 0.13 to 0.76 at a rate of 0.07, and on
+        // Windows they keep to their charge's strength and its slow time. The
+        // rest stays with the parent: handed down, Star Citizen's embers, five
+        // times the size, took their glows with them and burned the sky white.
+        placed.instanceoverride = object.instanceoverride.as_ref().map(|over| {
+            wpe_format::scene::InstanceOverride {
+                alpha: over.alpha.clone(),
+                rate: over.rate.clone(),
+                ..Default::default()
+            }
+        });
         placed.origin.value.0 = transform::apply(&parent, child.origin);
         placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
         placed.angles.value.0 = std::array::from_fn(|i| object.angles.value.0[i] + child.angles[i]);

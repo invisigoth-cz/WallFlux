@@ -493,11 +493,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   -- alpha, size, lifetime, rate, speed, count, and a colour written
   either as `colorn` (0-1) or, in older scenes, `color` (0-255), never
   both. Unread, every smoke kept its preset's colours, which is where the
-  pastel blobs in half the library came from. **A child system does not
-  inherit it:** handed down, Star Citizen's embers -- five times the rate
-  and the size -- took their glows with them and burned the sky white;
-  kept to the parent, the picture matches the wallpaper's preview. Both
-  were rendered before deciding.
+  pastel blobs in half the library came from. **A child system takes only its alpha and its rate:** handed the size too, Star
+  Citizen's embers -- five times as large -- took their glows with them and burned
+  the sky white; given no alpha, Warhammer's faintest charge threw the same rays as
+  its brightest. Both were checked against recordings.
 
 - **A scene's y runs up, and its angles are radians.** Origin in the
   bottom-left corner: rain falls at a y of -10 000, snow at -50 to -90, a
@@ -568,6 +567,33 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   to twenty seconds, and no value above one. Smoke that is white is often
   meant to be: `genericparticle` multiplies by `g_Overbright`, and Pyramid
   Spaceships' smoke asks for 5.
+
+- **An instance's `rate` is how fast the system's time runs, not how many it lets
+  out.** Warhammer's charges say 0.07. Read as a fourteenth of the particles, each
+  muzzle flickered with one or two; on Windows it burns steady and hardly moves.
+  Between frames a tenth of a second apart, Windows / a fourteenth / a slow clock:
+  1.44 / 11.72 / 1.98, 1.56 / 7.30 / 1.64, 0.66 / 4.19 / 0.57, and the muzzles'
+  mean brightness 223, 161, 172, 167 against 219, 163, 172, 174 where it was 176,
+  143, 156, 108. As many particles are alive either way; each lives fourteen times
+  as long. Authors of scripted ones call the setting `firespeed` and
+  `smokespeed`. **Almamu's renderer multiplies the emission**, and Star Citizen,
+  at 1.8 to 5, cannot tell the two apart.
+
+- **`rotationrandom` is any turn unless it says otherwise**: `min` "0 0 0", `max`
+  "0 0 6.28318530717", and `angularvelocityrandom` "0 0 -5" to "0 0 5", both out
+  of `wallpaper64.exe`. 112 steps state neither end and 32 only the top. With a
+  stated end standing for both, as it does for colours, all of Warhammer's rays
+  lay at one angle: a single beam across the picture, where Wallpaper Engine has a
+  fan -- the "star-shaped flares" that were open for two days.
+
+- **A perspective camera stands where the plane at nought fills the scene**:
+  `(height / 2) / tan(fov / 2)`, not Almamu's thousand, and its matrix goes up
+  column by column like every other here. Written row by row it put Star wars'
+  two layers of falling snow off the screen, and no test or message said so.
+
+- **In these recordings `ffmpeg -ss` before `-i` hands back the same frame for
+  times close together.** Consecutive frames came out identical, which looked like
+  particles standing still. Decode a stretch with `-vf fps=10` instead.
 
 - **On a Czech desktop `strtod("0.5")` is nought, and QuickJS's `JSON.parse`
   goes through `strtod`.** `QCoreApplication` calls `setlocale(LC_ALL, "")`, so
@@ -694,10 +720,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   is how far from `forward` (up) a start may stray, in half turns, and its
   `offset` is radians it is turned about `right` (out of the screen) --
   the engine's defaults name a forward and a right, which mean nothing
-  otherwise, and Almamu reads it so. Which way the turn goes was taken
-  from the Windows screenshot, since Almamu's y runs down. Read as a
-  field, with no speed of its own, Star wars' embers were born still and
-  drawn nought long.
+  otherwise, and Almamu reads it so. Which way the turn goes was taken from a recording: Star wars' embers fly
+  at 49 degrees in the system's own axes, tracked frame by frame, and up turned by
+  -0.5 radians is 61, give or take 18. It was the other way round until 30 October,
+  read off one screenshot, and they flew off the bottom of the picture: the
+  "orange bokeh" missing at the left of Star wars was those embers. Read as a
+  field, with no speed of its own, they were born still and drawn nought long.
 
 - **`distancemax` is a vector in forty boxes** -- "512 256 0" -- and read
   as a number it was nought: every one of those boxes let all its
@@ -1679,11 +1707,17 @@ the file. Everything after it should.
    `vec4` as texture coordinates) and needs a translation that knows types; a black square under
    Alien Romulus's mouth; Alien Isolation, which wants its 2D lights.
 
-   **30 October, against the videos:** still open are Warhammer's flare,
-   whose core burns steadily in the recording and flickers here at `rate`
-   0.07 (setting the rate to one did not match either), Star wars' orange
-   bokeh. `turbulence` carries a particle where Almamu accelerates it; not yet
-   compared.
+   **30 October, against the videos:** Warhammer and Star wars now match the
+   recordings within a few levels. Star wars still has a little more haze at the
+   left (39 against 32 in its darkest part) and Dark Core lacks its glowing pipes.
+   `turbulence` carries a particle where Almamu accelerates it; not yet compared.
+
+   **30 October, looked at by the user on the desktop:** no complaints about
+   Warhammer, Star wars, Arkham Knight, Blue Dawn, Time Reactor, Future Clock,
+   Dark Core, Star Destroyer and Pyramid Spaceships. Star Citizen is better than
+   it was. **DOOM is clearly better and still wants work**; Ender Spartan looks
+   right but has yet to be compared with Wallpaper Engine. A spot check, not the
+   whole library.
 
    **30 October, the rest of the vocabulary:** `boids`, `collision*`, `remap*`,
    `maintaindistance*`, `inherit*` and `once` are read and run. Their defaults

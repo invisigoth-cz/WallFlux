@@ -648,9 +648,13 @@ pub struct System {
     exponents: Exponents,
     /// Whether the particles live in 3D rather than on the screen.
     perspective: bool,
-    /// What every emitter's rate is multiplied by: the scene's override,
-    /// and after it whatever a script on that override says.
-    rate: f32,
+    /// How fast the system's own time runs: the scene's `rate` override, and
+    /// after it whatever a script on that override says. **Not how many it
+    /// lets out.** Warhammer's charges say 0.07, and on Windows they burn
+    /// steady and hardly move -- 1.4 between frames where drawing a fourteenth
+    /// of the particles at full speed moved 11.7, and this 2.0 -- because each
+    /// one lives fourteen times as long and as many are alive as ever.
+    clock: f32,
     start: Start,
     operators: Vec<Operator>,
     animation: Option<Animation>,
@@ -824,7 +828,7 @@ impl System {
             exponents: definition.exponents,
             perspective: definition.perspective,
             emitters,
-            rate: over.rate.value,
+            clock: over.rate.value.max(0.0),
             start,
             operators: definition.operators.clone(),
             animation: definition.animation,
@@ -870,10 +874,9 @@ impl System {
         self.waits = true;
     }
 
-    /// Sets what the emitters' rates are multiplied by, as the scene's
-    /// override would.
+    /// Sets how fast the system's time runs, as the scene's override would.
     pub fn set_rate(&mut self, rate: f32) {
-        self.rate = rate.max(0.0);
+        self.clock = rate.max(0.0);
     }
 
     /// Whether anything about the system follows the sound.
@@ -986,7 +989,7 @@ impl System {
         let emitters = std::mem::take(&mut self.emitters);
         for host in &mut riding {
             for ((emitter, _), owed) in emitters.iter().zip(&mut host.owed) {
-                *owed += emitter.rate * self.rate * loudness(emitter.audio, sound) * dt;
+                *owed += emitter.rate * loudness(emitter.audio, sound) * dt * self.clock;
                 while *owed >= 1.0 {
                     *owed -= 1.0;
                     if self.live.len() >= self.maxcount {
@@ -1044,7 +1047,7 @@ impl System {
         let wanted: f32 = self
             .emitters
             .iter()
-            .map(|(e, _)| e.rate * self.rate * self.start.lifetime.max + e.instantaneous as f32)
+            .map(|(e, _)| e.rate * self.start.lifetime.max + e.instantaneous as f32)
             .sum();
         (wanted.ceil() as usize).min(self.maxcount)
     }
@@ -1090,16 +1093,21 @@ impl System {
     /// All zeroes is silence, which is what a step that follows the sound
     /// reads when there is nothing to listen to.
     pub fn advance(&mut self, dt: f32, sound: &Spectrum) {
-        if self.starttime > 0.0 && !self.waits {
+        // A clock standing still has not been running: Ender Dark Angels' rifle
+        // says a rate of nought, and its preview has no flash at the muzzle.
+        if self.starttime > 0.0 && !self.waits && self.clock > 0.0 {
             // Already running when the wallpaper appears, however long the
             // file says. `magic_charge_rays` says fifteen seconds, and in
             // Wallpaper Engine its rays are there from the first frame.
+            // Seconds of the system's own time, whatever its clock says.
             let ahead = std::mem::take(&mut self.starttime).min(MOST_AHEAD);
+            let clock = std::mem::replace(&mut self.clock, 1.0);
             for _ in 0..(ahead * AHEAD_STEPS) as u32 {
                 self.advance(1.0 / AHEAD_STEPS, sound);
             }
+            self.clock = clock;
         }
-        let dt = dt.clamp(0.0, MAX_STEP);
+        let dt = dt.clamp(0.0, MAX_STEP) * self.clock;
         self.elapsed += dt;
         if let Some(events) = &mut self.events {
             events.born.clear();
@@ -1335,7 +1343,7 @@ impl System {
             if !gate.open(emitter, dt, &mut self.rng) {
                 continue;
             }
-            *owed += emitter.rate * self.rate * loudness(emitter.audio, sound) * dt;
+            *owed += emitter.rate * loudness(emitter.audio, sound) * dt;
             if emitter.one_per_step {
                 *owed = owed.min(1.0);
             }
@@ -1872,7 +1880,11 @@ fn launch_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32
             along = turned(along, axis, (angle - most) * 180.0);
         }
     }
-    along = turned(along, field.right, -field.offset.to_degrees());
+    // Star wars' embers fly up and to the left of the picture at 49 degrees in
+    // the system's own axes, tracked frame by frame through a recording: a
+    // start straight up turned by -0.5 radians is 61, give or take its 18. The
+    // other way round was 119, and they flew off the bottom of the screen.
+    along = turned(along, field.right, field.offset.to_degrees());
     along[2] = 0.0;
     normalized(along).unwrap_or(forward)
 }
@@ -2385,6 +2397,59 @@ mod tests {
         assert!((frame - 0.5).abs() < 0.15, "{frame}");
     }
 
+    /// A rate is how fast the system's time runs: at a tenth, a particle lives
+    /// ten times as long and moves a tenth as far in the same second, and just
+    /// as many are alive once it has got going.
+    #[test]
+    fn a_rate_is_how_fast_the_systems_time_runs() {
+        let at = |rate: f32| {
+            let definition = ParticleSystem::parse(
+                br#"{"maxcount":100,"emitter":[{"name":"sphererandom","rate":10,"distancemax":0}],
+                    "initializer":[{"name":"lifetimerandom","min":1,"max":1},
+                                   {"name":"velocityrandom","min":"100 0 0","max":"100 0 0"}],
+                    "operator":[{"name":"movement","gravity":"0 0 0"}]}"#,
+            )
+            .unwrap();
+            let mut over = InstanceOverride::default();
+            over.rate.value = rate;
+            System::new(&definition, &over, 1)
+        };
+        let mut slow = at(0.1);
+        run(&mut slow, 30.0, 1.0 / 60.0);
+        let mut full = at(1.0);
+        run(&mut full, 30.0, 1.0 / 60.0);
+        assert!((slow.count() as i32 - full.count() as i32).abs() <= 2, "{} {}", slow.count(), full.count());
+        let farthest = |s: &System| s.live.iter().map(|p| p.position[0]).fold(0.0, f32::max);
+        // A whole life is as far as either gets, however long it took.
+        assert!((85.0..=100.0).contains(&farthest(&full)), "{}", farthest(&full));
+        assert!((85.0..=100.0).contains(&farthest(&slow)), "{}", farthest(&slow));
+        // The youngest, which will not die during the step.
+        let youngest = slow.live.last().unwrap();
+        let (serial, before) = (youngest.serial, youngest.position[0]);
+        slow.advance(0.1, &Spectrum::SILENT);
+        let now = slow.live.iter().find(|p| p.serial == serial).unwrap().position[0];
+        assert!((now - before - 1.0).abs() < 0.01, "{}", now - before);
+    }
+
+    /// `offset` turns the start about `right` the way a negative angle turns
+    /// things: up goes to the right, in the system's own axes.
+    #[test]
+    fn a_turbulent_start_turns_by_its_offset() {
+        let field = Turbulent {
+            speed: Range { min: 1.0, max: 1.0 },
+            scale: 0.001,
+            time_scale: 1.0,
+            phase_max: 0.0,
+            offset: -0.5,
+            forward: [0.0, 1.0, 0.0],
+            right: [0.0, 0.0, 1.0],
+            audio: None,
+        };
+        let along = launch_direction(&field, [10.0, 20.0, 0.0], 0.0, 0.0);
+        let angle = along[1].atan2(along[0]).to_degrees();
+        assert!((angle - 61.4).abs() < 1.0, "{angle}");
+    }
+
     /// Every particle system Wallpaper Engine ships, which is the vocabulary
     /// a wallpaper not in this library can be expected to use: all of it is
     /// read and none of it runs away. A collision with a model and an emitter
@@ -2490,7 +2555,8 @@ mod tests {
         over.count.value = 2.0;
         let mut s = System::new(&definition, &over, 12345);
         run(&mut s, 0.5, 1.0 / 60.0);
-        // Twenty a second for half a second is ten, and the pool is eight.
+        // Ten a second for a second of its own time is ten, and the pool is
+        // eight.
         assert_eq!(s.count(), 8);
         assert!(s.live.iter().all(|p| p.alpha == 0.5));
     }

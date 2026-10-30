@@ -42,11 +42,10 @@ pub const IDENTITY: Matrix = [
 /// Projecting the scene straight onto the output instead squeezes it, which is
 /// invisible whenever the two shapes happen to match and obvious the moment
 /// they do not.
-/// What a perspective particle system is seen through: a camera a thousand
-/// units back from the middle of the scene, looking at it, cropped to the
-/// output the way [`orthographic_cover`] crops. A thousand is Almamu's reading.
+/// What a perspective particle system is seen through: a camera back from the
+/// middle of the scene, looking at it, cropped to the output the way
+/// [`orthographic_cover`] crops.
 pub fn perspective_cover(scene: (f32, f32), output: (f32, f32), fov_degrees: f32) -> Matrix {
-    const EYE: f32 = 1000.0;
     const NEAR: f32 = 1.0;
     const FAR: f32 = 100_000.0;
     let (sw, sh) = (scene.0.max(1.0), scene.1.max(1.0));
@@ -57,13 +56,19 @@ pub fn perspective_cover(scene: (f32, f32), output: (f32, f32), fov_degrees: f32
         false => (1.0, output_aspect / scene_aspect),
     };
     let focal = 1.0 / (fov_degrees.clamp(1.0, 170.0).to_radians() / 2.0).tan();
+    // As far back as makes the plane at nought exactly fill the scene, so a
+    // particle there lands where the flat projection would put it.
+    let eye = sh / 2.0 * focal;
     let (x, y) = (focal / scene_aspect * crop_x, focal * crop_y);
     let (a, b) = (-(FAR + NEAR) / (FAR - NEAR), -2.0 * FAR * NEAR / (FAR - NEAR));
+    // Column by column, as every other matrix here. Written row by row it
+    // put each of Star wars' two layers of falling snow somewhere off the
+    // screen, without a word from anybody.
     [
-        x, 0.0, 0.0, -x * sw / 2.0,
-        0.0, y, 0.0, -y * sh / 2.0,
-        0.0, 0.0, a, b - a * EYE,
-        0.0, 0.0, -1.0, EYE,
+        x, 0.0, 0.0, 0.0, //
+        0.0, y, 0.0, 0.0, //
+        0.0, 0.0, a, -1.0, //
+        -x * sw / 2.0, -y * sh / 2.0, b - a * eye, eye,
     ]
 }
 
@@ -175,6 +180,25 @@ pub fn apply(m: &Matrix, p: [f32; 3]) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The middle of the scene is the middle of the screen, and what is
+    /// nearer the camera stands further from it.
+    #[test]
+    fn a_perspective_camera_looks_at_the_middle_of_the_scene() {
+        let camera = perspective_cover((1920.0, 1080.0), (1920.0, 1080.0), 50.0);
+        let seen = |p: [f32; 3]| {
+            let at = |row: usize| {
+                camera[row] * p[0] + camera[4 + row] * p[1] + camera[8 + row] * p[2] + camera[12 + row]
+            };
+            (at(0) / at(3), at(1) / at(3), at(3))
+        };
+        let (x, y, w) = seen([960.0, 540.0, 0.0]);
+        assert!(x.abs() < 1e-3 && y.abs() < 1e-3 && w > 0.0, "{x} {y} {w}");
+        let (far, _, _) = seen([1060.0, 540.0, 0.0]);
+        let (near, _, _) = seen([1060.0, 540.0, 500.0]);
+        assert!(far > 0.0 && near > far * 1.5, "{far} {near}");
+    }
+
 
     #[test]
     fn a_point_comes_back_from_where_a_transform_sent_it() {
