@@ -104,6 +104,29 @@ pub unsafe extern "C" fn wallflux_scene_load(
     }
 }
 
+/// Writes what the speakers are playing into `out`, 128 numbers from nought to
+/// one: 64 bands of the left ear and 64 of the right, which is the shape
+/// Wallpaper Engine hands a web wallpaper's audio listener. Asking is what
+/// keeps the stream open; see `audio`.
+///
+/// # Safety
+/// `out` must hold 128 floats.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wallflux_speakers(out: *mut f32) {
+    if out.is_null() {
+        return;
+    }
+    let bands = EARS.get_or_init(Audio::start).as_ref().map_or(wpe_format::particle::Spectrum::SILENT, Audio::bands);
+    // SAFETY: the caller said it holds 128.
+    let out = unsafe { std::slice::from_raw_parts_mut(out, 128) };
+    let spread = 64 / bands.left.len();
+    for (ear, side) in [&bands.left, &bands.right].into_iter().enumerate() {
+        for (i, &band) in side.iter().enumerate() {
+            out[ear * 64 + i * spread..ear * 64 + (i + 1) * spread].fill(band);
+        }
+    }
+}
+
 /// Draws the scene as it is `seconds` after it started, into whatever
 /// framebuffer is bound, at `width` by `height`.
 ///

@@ -136,6 +136,33 @@ impl Package {
         Self::parse(bytes).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
+    /// A wallpaper that was never packed, the way the ones Wallpaper Engine
+    /// ships are laid out: its files as they would be named inside a package.
+    pub fn from_folder(dir: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        fn walk(
+            dir: &std::path::Path,
+            prefix: &str,
+            data: &mut Vec<u8>,
+            entries: &mut BTreeMap<String, Range<usize>>,
+        ) -> std::io::Result<()> {
+            for entry in std::fs::read_dir(dir)? {
+                let entry = entry?;
+                let name = format!("{prefix}{}", entry.file_name().to_string_lossy());
+                if entry.file_type()?.is_dir() {
+                    walk(&entry.path(), &format!("{name}/"), data, entries)?;
+                } else {
+                    let start = data.len();
+                    data.extend(std::fs::read(entry.path())?);
+                    entries.insert(name, start..data.len());
+                }
+            }
+            Ok(())
+        }
+        let (mut data, mut entries) = (Vec::new(), BTreeMap::new());
+        walk(dir.as_ref(), "", &mut data, &mut entries)?;
+        Ok(Self { version: "folder".into(), data, entries })
+    }
+
     pub fn version(&self) -> &str {
         &self.version
     }
@@ -158,6 +185,18 @@ impl Package {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_reads_as_a_package_of_its_files() {
+        let dir = std::env::temp_dir().join(format!("wpe-from-folder-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("shaders/effects")).unwrap();
+        std::fs::write(dir.join("scene.json"), b"{}").unwrap();
+        std::fs::write(dir.join("shaders/effects/a.frag"), b"abc").unwrap();
+        let package = Package::from_folder(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(package.get("scene.json"), Some(&b"{}"[..]));
+        assert_eq!(package.get("shaders/effects/a.frag"), Some(&b"abc"[..]));
+    }
 
     /// Builds the smallest archive the reader should accept: one named entry.
     fn archive(tag: &str, name: &str, payload: &[u8]) -> Vec<u8> {

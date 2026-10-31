@@ -155,6 +155,34 @@ pub fn multiply(b: &Matrix, a: &Matrix) -> Matrix {
     out
 }
 
+/// A camera's matrix seen through a zoom about the middle of the screen and a
+/// shift across it in clip space, written so that it holds for a camera in
+/// perspective as well as a flat one.
+pub fn viewed(m: &Matrix, zoom: f32, shift: [f32; 2]) -> Matrix {
+    let mut out = *m;
+    for column in 0..4 {
+        let w = m[column * 4 + 3];
+        out[column * 4] = m[column * 4] * zoom + shift[0] * w;
+        out[column * 4 + 1] = m[column * 4 + 1] * zoom + shift[1] * w;
+    }
+    out
+}
+
+/// A flat transform undone, for a shader that works out what is under the
+/// mouse by running it backwards. None where it flattens the plane to a line.
+pub fn inverse_flat(m: &Matrix) -> Option<Matrix> {
+    let det = m[0] * m[5] - m[4] * m[1];
+    if det.abs() < f32::EPSILON {
+        return None;
+    }
+    let (a, b, c, d) = (m[5] / det, -m[1] / det, -m[4] / det, m[0] / det);
+    let mut out = IDENTITY;
+    (out[0], out[1], out[4], out[5]) = (a, b, c, d);
+    out[12] = -(a * m[12] + c * m[13]);
+    out[13] = -(b * m[12] + d * m[13]);
+    Some(out)
+}
+
 /// The point a transform sends to `to`, in the plane it draws in -- which is
 /// all a mouse on a flat screen can say. None where the transform flattens
 /// that plane to a line.
@@ -180,6 +208,27 @@ pub fn apply(m: &Matrix, p: [f32; 3]) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_inverse_undoes_the_transform() {
+        let m = multiply(
+            &orthographic_cover((3840.0, 2160.0), (2560.0, 1440.0)),
+            &model([1000.0, 500.0, 0.0], [10.0, 20.0], [2.0, 2.0, 1.0], [0.0, 0.0, 0.5]),
+        );
+        let back = inverse_flat(&m).unwrap();
+        let p = apply(&back, apply(&m, [0.25, -0.25, 0.0]));
+        assert!((p[0] - 0.25).abs() < 1e-4 && (p[1] + 0.25).abs() < 1e-4, "{p:?}");
+    }
+
+    #[test]
+    fn a_view_zooms_about_the_middle_and_shifts_across_it() {
+        let v = viewed(&orthographic_cover((100.0, 100.0), (100.0, 100.0)), 2.0, [0.5, 0.0]);
+        // The middle of the scene stays at the middle, moved by the shift alone.
+        let p = apply(&v, [50.0, 50.0, 0.0]);
+        assert!((p[0] - 0.5).abs() < 1e-5 && p[1].abs() < 1e-5, "{p:?}");
+        // The edge goes twice as far.
+        assert!((apply(&v, [100.0, 50.0, 0.0])[0] - 2.5).abs() < 1e-5);
+    }
 
     /// The middle of the scene is the middle of the screen, and what is
     /// nearer the camera stands further from it.

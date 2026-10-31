@@ -216,8 +216,8 @@ pub struct General {
     pub farz: f32,
     pub zoom: f32,
     pub bloom: Bound<bool>,
-    pub bloomstrength: Option<f32>,
-    pub bloomthreshold: Option<f32>,
+    pub bloomstrength: Option<Bound<f32>>,
+    pub bloomthreshold: Option<Bound<f32>>,
     pub hdr: Bound<bool>,
     pub cameraparallax: Bound<bool>,
     pub cameraparallaxamount: f32,
@@ -404,7 +404,8 @@ enum SoundField {
 ///
 /// The colour is written two ways: `colorn` from nought to one, and `color`
 /// out of 255 in older scenes. Seventy objects say the one, seventeen the
-/// other, and not one says both -- so they are the same thing.
+/// other, and not one says both -- so they are the same thing. Unlike the
+/// rest it is not a multiplier: it takes the place of the system's hue.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct InstanceOverride {
@@ -417,17 +418,18 @@ pub struct InstanceOverride {
     pub speed: Bound<f32>,
     /// How many may be alive at once.
     pub count: Bound<f32>,
-    pub colorn: Bound<Vector<3>>,
+    pub colorn: Option<Bound<Vector<3>>>,
     pub color: Option<Bound<Vector<3>>>,
 }
 
 impl InstanceOverride {
-    /// What the particles' colour is multiplied by, whichever way it was
-    /// written.
-    pub fn tint(&self) -> [f32; 3] {
-        match &self.color {
-            Some(color) => color.value.0.map(|c| c / 255.0),
-            None => self.colorn.value.0,
+    /// The hue the scene gives its particles, whichever way it was written,
+    /// or nothing if the scene leaves the system's own alone.
+    pub fn tint(&self) -> Option<[f32; 3]> {
+        match (&self.color, &self.colorn) {
+            (Some(color), _) => Some(color.value.0.map(|c| c / 255.0)),
+            (None, Some(colorn)) => Some(colorn.value.0),
+            (None, None) => None,
         }
     }
 }
@@ -441,7 +443,7 @@ impl Default for InstanceOverride {
             rate: Bound::plain(1.0),
             speed: Bound::plain(1.0),
             count: Bound::plain(1.0),
-            colorn: Bound::plain(Vector([1.0; 3])),
+            colorn: None,
             color: None,
         }
     }
@@ -565,6 +567,123 @@ impl Scene {
             bind_user_values(&mut scene, &properties);
         }
         serde_json::from_value(scene)
+    }
+}
+
+/// Numbers that move on the keyframes the editor draws, one list to a channel.
+/// Read in a straight line between keys; the curves' handles are left out.
+#[derive(Debug, Clone, Default)]
+pub struct Keyed {
+    still: Vec<f32>,
+    channels: Vec<Vec<(f32, f32)>>,
+    fps: f32,
+    length: f32,
+    mirror: bool,
+}
+
+impl Keyed {
+    /// `node` as the scene writes it: a value, or `{animation, value}` around one.
+    fn read(node: Option<&serde_json::Value>) -> Self {
+        let numbers = |value: Option<&serde_json::Value>| match value {
+            Some(serde_json::Value::String(text)) => {
+                text.split_whitespace().filter_map(|n| n.parse().ok()).collect()
+            }
+            Some(value) => value.as_f64().map(|n| vec![n as f32]).unwrap_or_default(),
+            None => Vec::new(),
+        };
+        let Some(node) = node else { return Self::default() };
+        let animation = node.get("animation");
+        let still = numbers(if node.is_object() { node.get("value") } else { Some(node) });
+        let options = animation.and_then(|a| a.get("options"));
+        let number = |name: &str| {
+            options.and_then(|o| o.get(name)).and_then(serde_json::Value::as_f64).unwrap_or(0.0) as f32
+        };
+        let channels = (0..)
+            .map_while(|c| animation?.get(format!("c{c}"))?.as_array())
+            .map(|keys| {
+                keys.iter()
+                    .filter_map(|key| {
+                        Some((key.get("frame")?.as_f64()? as f32, key.get("value")?.as_f64()? as f32))
+                    })
+                    .collect()
+            })
+            .collect();
+        Self {
+            still,
+            channels,
+            fps: number("fps"),
+            length: number("length"),
+            mirror: options.and_then(|o| o.get("mode")).and_then(|m| m.as_str()) == Some("mirror"),
+        }
+    }
+
+    /// One channel at `seconds` after the scene began.
+    pub fn at(&self, channel: usize, seconds: f32) -> f32 {
+        let still = self.still.get(channel).or(self.still.first()).copied().unwrap_or(0.0);
+        let Some(keys) = self.channels.get(channel).filter(|keys| !keys.is_empty()) else {
+            return still;
+        };
+        if self.length <= 0.0 {
+            return still;
+        }
+        let frame = match self.mirror {
+            true => {
+                let turn = (seconds * self.fps).rem_euclid(2.0 * self.length);
+                self.length - (turn - self.length).abs()
+            }
+            false => (seconds * self.fps).rem_euclid(self.length),
+        };
+        let next = keys.iter().position(|key| key.0 > frame);
+        match next {
+            Some(0) => keys[0].1,
+            None => keys[keys.len() - 1].1,
+            Some(n) => {
+                let ((a, from), (b, to)) = (keys[n - 1], keys[n]);
+                from + (to - from) * (frame - a) / (b - a).max(f32::EPSILON)
+            }
+        }
+    }
+}
+
+/// One light a scene places.
+#[derive(Debug, Clone)]
+pub struct Light {
+    pub position: [f32; 3],
+    pub color: [f32; 3],
+    pub radius: f32,
+    pub intensity: Keyed,
+}
+
+/// What lights a scene: its lights and the general ambient colour. Read apart
+/// from the objects because two of these numbers animate, which `Bound` drops.
+#[derive(Debug, Clone, Default)]
+pub struct Lighting {
+    pub ambient: Keyed,
+    pub lights: Vec<Light>,
+}
+
+impl Lighting {
+    pub fn read(bytes: &[u8]) -> Self {
+        let Ok(scene) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+            return Self::default();
+        };
+        let three = |node: Option<&serde_json::Value>| {
+            let keyed = Keyed::read(node);
+            std::array::from_fn(|i| keyed.at(i, 0.0))
+        };
+        let lights = scene.get("objects").and_then(|o| o.as_array()).into_iter().flatten()
+            .filter(|object| object.get("light").is_some())
+            .map(|object| Light {
+                position: three(object.get("origin")),
+                color: three(object.get("color")),
+                radius: object.get("radius").and_then(|r| r.as_f64()).unwrap_or(0.0) as f32,
+                intensity: Keyed::read(object.get("intensity")),
+            })
+            .collect();
+        Self {
+            ambient: Keyed::read(scene.pointer("/general/ambientcolor")),
+            lights,
+        }
     }
 }
 
@@ -768,6 +887,26 @@ mod tests {
     }
 
     #[test]
+    fn keyframes_mirror_and_lights_are_read() {
+        let lighting = Lighting::read(
+            br#"{"general":{"ambientcolor":{"value":"0.3 0.3 0.3","animation":{
+                    "c0":[{"frame":0,"value":0},{"frame":10,"value":1}],
+                    "options":{"fps":10,"length":20,"mode":"mirror"}}}},
+                "objects":[{"light":"point","origin":"1 2 3","color":"1 0 0","radius":100,"intensity":2},
+                           {"image":"a"}]}"#,
+        );
+        assert_eq!(lighting.ambient.at(0, 0.5), 0.5);
+        // Held at its last key, then coming back the same way.
+        assert_eq!(lighting.ambient.at(0, 1.5), 1.0);
+        assert_eq!(lighting.ambient.at(0, 3.5), 0.5);
+        // A channel with no keys keeps what the file says.
+        assert_eq!(lighting.ambient.at(1, 0.5), 0.3);
+        assert_eq!(lighting.lights.len(), 1);
+        assert_eq!(lighting.lights[0].position, [1.0, 2.0, 3.0]);
+        assert_eq!(lighting.lights[0].intensity.at(0, 7.0), 2.0);
+    }
+
+    #[test]
     fn an_instance_override_changes_only_what_it_names() {
         let s = Scene::parse(
             br#"{"objects":[
@@ -778,14 +917,13 @@ mod tests {
         .unwrap();
         let o = s.objects[0].instanceoverride.as_ref().unwrap();
         assert_eq!(o.alpha.value, 0.5);
-        assert_eq!(o.colorn.value.0, [0.75; 3]);
         assert_eq!((o.size.value, o.rate.value, o.count.value), (1.0, 1.0, 1.0));
         assert!(s.objects[1].instanceoverride.is_none());
-        assert_eq!(o.tint(), [0.75; 3]);
+        assert_eq!(o.tint(), Some([0.75; 3]));
 
         let old = Scene::parse(br#"{"objects":[{"instanceoverride": {"color": "255 51 0"}}]}"#)
             .unwrap();
-        assert_eq!(old.objects[0].instanceoverride.as_ref().unwrap().tint(), [1.0, 0.2, 0.0]);
+        assert_eq!(old.objects[0].instanceoverride.as_ref().unwrap().tint(), Some([1.0, 0.2, 0.0]));
     }
 
     #[test]

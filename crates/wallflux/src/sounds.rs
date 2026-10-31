@@ -13,7 +13,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use wpe_format::scene::ObjectKind;
-use wpe_format::{Package, Scene as SceneFile};
+use wpe_format::Scene as SceneFile;
 
 /// One sound object, ready to be played.
 #[derive(Debug, PartialEq)]
@@ -34,8 +34,7 @@ pub struct Sound {
 /// wallpaper again writes nothing. A hidden sound object -- one a setting has
 /// switched off -- is left out.
 pub fn unpack(folder: &Path, cache: &Path) -> Result<Vec<Sound>, String> {
-    let package = Package::read(crate::render::find_package(folder)?)
-        .map_err(|e| format!("reading package: {e}"))?;
+    let package = crate::render::open_package(folder)?;
     let project = std::fs::read(folder.join("project.json")).ok();
     let entry = crate::render::scene_entry(project.as_deref());
     let scene = package.get(&entry).ok_or_else(|| format!("no {entry} in this wallpaper"))?;
@@ -87,12 +86,14 @@ pub fn unpack(folder: &Path, cache: &Path) -> Result<Vec<Sound>, String> {
 /// Whether the scene in `folder` plays a sound of its own -- what `unpack`
 /// would find, asked without reading the package whole or writing anything.
 pub fn carries_sound(folder: &Path) -> Result<bool, String> {
-    let package = crate::render::find_package(folder)?;
     let project = std::fs::read(folder.join("project.json")).ok();
     let entry = crate::render::scene_entry(project.as_deref());
-    let scene = wpe_format::pkg::read_entry(&package, &entry)
-        .map_err(|e| format!("reading package: {e}"))?
-        .ok_or_else(|| format!("no {entry} in this wallpaper"))?;
+    let scene = match crate::render::find_package(folder) {
+        Ok(package) => wpe_format::pkg::read_entry(&package, &entry)
+            .map_err(|e| format!("reading package: {e}"))?
+            .ok_or_else(|| format!("no {entry} in this wallpaper"))?,
+        Err(_) => std::fs::read(folder.join(&entry)).map_err(|e| format!("{entry}: {e}"))?,
+    };
     let scene = SceneFile::parse_with_properties(&scene, project.as_deref())
         .map_err(|e| format!("scene.json: {e}"))?;
     Ok(scene.objects.iter().any(|object| {

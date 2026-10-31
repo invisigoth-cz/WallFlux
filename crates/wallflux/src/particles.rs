@@ -77,10 +77,6 @@ struct Particle {
     /// Seconds since the last place was kept.
     since: f32,
     velocity: [f32; 3],
-    /// How fast `turbulence` carried it on the last step, which it does
-    /// without touching `velocity` -- and which a trail is as long as all
-    /// the same.
-    stir: [f32; 3],
     rotation: [f32; 3],
     size: f32,
     color: [f32; 3],
@@ -643,6 +639,10 @@ pub struct System {
     ribbon: Ribbon,
     /// Each emitter with the fraction of a particle it is owed.
     emitters: Vec<(Emitter, f32)>,
+    /// Lets its particles out at the mouse, and none while there is no mouse.
+    /// Alien Romulus' black "explosion on cursor", held at where the scene
+    /// placed it, was a black blot under the alien's mouth.
+    born_on_pointer: bool,
     /// When each emitter runs, in the same order.
     gates: Vec<Gate>,
     exponents: Exponents,
@@ -777,7 +777,26 @@ impl System {
         start.alpha = times(start.alpha, over.alpha.value);
         start.size = times(start.size, over.size.value);
         start.lifetime = times(start.lifetime, over.lifetime.value);
-        start.color = times3(start.color, over.tint());
+        // The scene's colour takes the hue and the file keeps the brightness.
+        // Measured, not explained, off six recordings. Multiplied, Terminator's
+        // orange smoke set to 0.42 stays orange where it burns grey, Dark
+        // Angels' muzzle flash goes red and green where it is always the one
+        // yellow, and Tomb Raider's torch, orange to red in its own `colorchange`
+        // and set to white, stays orange where it burns white. Replaced, Star
+        // Destroyer's smoke, 0.5 grey set to 0.24 0.31 0.35, comes out twice as
+        // light as the 23 21 22 it is, and Star wars' dim brown light shafts
+        // set to 0.75 cross the picture in white.
+        let mut operators = definition.operators.clone();
+        if let Some(tint) = over.tint() {
+            let hued = |color: [f32; 3]| times_each(tint, brightness(color));
+            start.color = Range { min: hued(start.color.min), max: hued(start.color.max) };
+            for operator in &mut operators {
+                if let Operator::ColorChange { from, to, .. } = operator {
+                    *from = [brightness(*from); 3];
+                    *to = [brightness(*to); 3];
+                }
+            }
+        }
         start.velocity = times3(start.velocity, [speed; 3]);
         if let Some(field) = &mut start.turbulent {
             field.speed = times(field.speed, speed);
@@ -828,9 +847,10 @@ impl System {
             exponents: definition.exponents,
             perspective: definition.perspective,
             emitters,
+            born_on_pointer: definition.born_on_pointer,
             clock: over.rate.value.max(0.0),
             start,
-            operators: definition.operators.clone(),
+            operators,
             animation: definition.animation,
             maxcount,
             starttime: definition.starttime,
@@ -1119,7 +1139,9 @@ impl System {
                 self.burst = true;
                 self.burst([0.0; 3], None, None, sound);
             }
-            self.emit(dt, sound);
+            if !self.born_on_pointer || self.pointer.is_some() {
+                self.emit(dt, sound);
+            }
         }
 
         let elapsed = self.elapsed;
@@ -1209,12 +1231,10 @@ impl System {
                             particle.position[axis] += particle.velocity[axis] * pace * dt;
                         }
                     }
-                    // ponytail: turbulence carries the particle through the
-                    // field rather than accelerating it into one, so its
-                    // speed is the speed the file states and a long-lived
-                    // particle cannot be flung off screen. If a wallpaper
-                    // turns out to want building momentum, this is the line
-                    // to change.
+                    // It pushes: the field accelerates the particle. Read as a
+                    // speed that carries it along, Gears' 45 000 sparks at 500
+                    // to 1000 ran together into red bands where the recording
+                    // has them scattered evenly about, held back by their drag.
                     Operator::Turbulence { field, mask } => {
                         let along = field_direction(
                             field,
@@ -1226,8 +1246,7 @@ impl System {
                             + (field.speed.max - field.speed.min) * particle.drift)
                             * loudness(field.audio, sound);
                         for (axis, mask) in mask.iter().enumerate() {
-                            particle.stir[axis] = along[axis] * mask * speed;
-                            particle.position[axis] += particle.stir[axis] * dt;
+                            particle.velocity[axis] += along[axis] * mask * speed * dt;
                         }
                     }
                     // A spin only turns once something drives it, which is
@@ -1407,7 +1426,8 @@ impl System {
                 }
             })
         };
-        let position: [f32; 3] = std::array::from_fn(|i| emitter.origin[i] + flung[i]);
+        let mouse = self.pointer.filter(|_| self.born_on_pointer).unwrap_or([0.0; 3]);
+        let position: [f32; 3] = std::array::from_fn(|i| mouse[i] + emitter.origin[i] + flung[i]);
         // Outward from the emitter's middle, for a speed the emitter states.
         let direction = {
             let length = (flung[0] * flung[0] + flung[1] * flung[1] + flung[2] * flung[2]).sqrt();
@@ -1512,7 +1532,6 @@ impl System {
             velocity: std::array::from_fn(|i| {
                 drawn[i] + direction[i] * speed + turbulent[i] + thrown[i] + handed[i]
             }),
-            stir: [0.0; 3],
             rotation,
             size,
             color,
@@ -1616,12 +1635,7 @@ impl System {
                     .extend_from_slice(&[color[0], color[1], color[2], alpha]);
                 self.vertices
                     .extend_from_slice(&[particle.rotation[0], particle.rotation[1]]);
-                // The speed a trail's length is worked out from. Stirred and
-                // otherwise still, Star wars' embers were drawn nought long
-                // -- not at all -- where Wallpaper Engine draws them round.
-                self.vertices.extend_from_slice(&std::array::from_fn::<f32, 3, _>(|i| {
-                    particle.velocity[i] + particle.stir[i]
-                }));
+                self.vertices.extend_from_slice(&particle.velocity);
                 self.vertices.push(frame);
             }
         }
@@ -1729,6 +1743,15 @@ fn changed_color(operators: &[Operator], particle: &Particle) -> [f32; 3] {
         }
     }
     color
+}
+
+/// How bright a colour looks, from nought to one.
+fn brightness(color: [f32; 3]) -> f32 {
+    0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]
+}
+
+fn times_each(color: [f32; 3], by: f32) -> [f32; 3] {
+    color.map(|c| c * by)
 }
 
 /// How far through a ramp a particle is, as a fraction.
@@ -2861,18 +2884,19 @@ mod tests {
     }
 
     #[test]
-    fn turbulence_carries_a_particle_no_faster_than_it_says() {
+    fn turbulence_pushes_a_particle_no_harder_than_it_says() {
         let mut s = system(
             r#"{"maxcount":20,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
-                "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                "operator":[{"name":"movement"},
+                            {"name":"turbulence","scale":0.002,"speedmin":100,
                              "speedmax":150,"phasemax":5}]}"#,
         );
         run(&mut s, 2.0, 1.0 / 60.0);
         let mut moved = 0;
         for p in &s.live {
             let travelled = (p.position[0].powi(2) + p.position[1].powi(2)).sqrt();
-            // Two seconds at 150 a second, and it started at the origin.
+            // Two seconds pushed at 150 a second each second: half of 150 t squared.
             assert!(travelled <= 300.0, "drifted {travelled} in two seconds");
             if travelled > 1.0 {
                 moved += 1;
@@ -2886,7 +2910,8 @@ mod tests {
         let mut s = system(
             r#"{"maxcount":20,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
-                "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                "operator":[{"name":"movement"},
+                            {"name":"turbulence","scale":0.002,"speedmin":100,
                              "speedmax":150,"mask":"1 0 0","phasemax":5}]}"#,
         );
         run(&mut s, 2.0, 1.0 / 60.0);
@@ -2898,11 +2923,52 @@ mod tests {
     }
 
     #[test]
+    fn a_scenes_colour_takes_the_hue_and_leaves_the_brightness() {
+        let over = InstanceOverride {
+            colorn: Some(wpe_format::scene::Bound::plain(wpe_format::scene::Vector([1.0, 0.0, 0.0]))),
+            ..Default::default()
+        };
+        let definition = ParticleSystem::parse(
+            br#"{"material":"m.json","maxcount":1,"emitter":[{"name":"boxrandom","rate":100}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"colorrandom","min":"128 128 128","max":"128 128 128"}],
+                "operator":[{"name":"colorchange","startvalue":"1 0.5 0","endvalue":"0 0 1"}]}"#,
+        )
+        .unwrap();
+        let mut s = System::new(&definition, &over, 12345);
+        run(&mut s, 0.1, 1.0 / 60.0);
+        let [r, g, b] = s.live[0].shown_color;
+        assert!((r - 128.0 / 255.0).abs() < 1e-3 && g == 0.0 && b == 0.0, "{:?}", [r, g, b]);
+        // Its colour change is a change of brightness now, not of hue.
+        for operator in &s.operators {
+            if let Operator::ColorChange { from, to, .. } = operator {
+                assert!(from[0] == from[1] && from[1] == from[2] && to[0] == to[2], "{from:?} {to:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_system_on_the_mouse_lets_out_nothing_without_one_and_there_with_one() {
+        let mut s = system(
+            r#"{"maxcount":10,"controlpoint":[{"id":0,"flags":1}],
+                "emitter":[{"name":"sphererandom","rate":100,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}]}"#,
+        );
+        run(&mut s, 0.5, 1.0 / 60.0);
+        assert_eq!(s.live.len(), 0);
+        s.point_at(Some([300.0, 200.0, 0.0]));
+        run(&mut s, 0.5, 1.0 / 60.0);
+        assert!(!s.live.is_empty());
+        assert!(s.live.iter().all(|p| (p.position[0] - 300.0).abs() < 1.0), "not at the mouse");
+    }
+
+    #[test]
     fn two_particles_in_one_place_are_not_pushed_as_one() {
         let mut s = system(
             r#"{"maxcount":30,"emitter":[{"name":"boxrandom","rate":200,"distancemax":0}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
-                "operator":[{"name":"turbulence","scale":0.002,"speedmin":100,
+                "operator":[{"name":"movement"},
+                            {"name":"turbulence","scale":0.002,"speedmin":100,
                              "speedmax":150,"phasemax":5}]}"#,
         );
         run(&mut s, 1.0, 1.0 / 60.0);

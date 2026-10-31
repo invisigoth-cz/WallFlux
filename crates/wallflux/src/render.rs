@@ -323,6 +323,72 @@ struct Object {
     shown: bool,
     /// Set on a text object: its first pass draws the picture this keeps up.
     text: Option<Box<TextBox>>,
+    /// What a frame tells this object's shaders about where it is looking.
+    view: ObjectView,
+}
+
+/// Worked out once a frame, before anything is drawn.
+#[derive(Clone, Copy)]
+struct ObjectView {
+    /// How many of the scene's pixels one of its buffer's stands for. Wallpaper
+    /// Engine's buffers are as big as the object in the scene and ours as big
+    /// as it is on screen, and a blur reaches so many texels: told its own
+    /// size, Kratos' 5120-wide scene came out twice as blurred on a 2560-wide
+    /// screen, and four times at 1280, and its shoulders melted into the fog.
+    scene_per_pixel: f32,
+    /// Where the mouse is, as fractions of the output down from its top-left
+    /// corner, or well off it when there is none.
+    pointer: [f32; 2],
+    /// Clip space back to the object's own pixels from its middle.
+    from_clip: Matrix,
+    /// Clip space back to the object itself, one to minus one across it.
+    from_clip_to_unit: Matrix,
+    /// The object's quad into the scene, for a shader lighting it in the
+    /// scene's own pixels.
+    model: Matrix,
+    lights: LightsNow,
+}
+
+/// What Wallpaper Engine's lit shaders are handed, as they stand this frame.
+#[derive(Clone, Copy, Default)]
+struct LightsNow {
+    ambient: [f32; 3],
+    positions: [[f32; 3]; 4],
+    /// Colour times strength, and the fourth light's three channels across
+    /// the three alphas. A shader divides by the distance squared, so a light
+    /// of radius r is multiplied by r squared to be its colour at r away.
+    colors: [[f32; 4]; 3],
+}
+
+impl LightsNow {
+    fn of(lighting: &wpe_format::scene::Lighting, time: f32) -> Self {
+        let mut now = Self { ambient: std::array::from_fn(|i| lighting.ambient.at(i, time)), ..Self::default() };
+        for (index, light) in lighting.lights.iter().take(4).enumerate() {
+            now.positions[index] = light.position;
+            let strength = light.intensity.at(0, time) * light.radius * light.radius;
+            for channel in 0..3 {
+                let value = light.color[channel] * strength;
+                match index {
+                    3 => now.colors[channel][3] = value,
+                    _ => now.colors[index][channel] = value,
+                }
+            }
+        }
+        now
+    }
+}
+
+impl Default for ObjectView {
+    fn default() -> Self {
+        Self {
+            scene_per_pixel: 1.0,
+            pointer: [-10.0, -10.0],
+            from_clip: transform::IDENTITY,
+            from_clip_to_unit: transform::IDENTITY,
+            model: transform::IDENTITY,
+            lights: LightsNow::default(),
+        }
+    }
 }
 
 /// A text object: how to draw it and what it last drew.
@@ -428,6 +494,25 @@ impl Answer {
 /// times `amount` and `mouseinfluence`, eased towards at `delay` per second;
 /// each object moved by that times its own depth plus `amount`, in units of
 /// the scene's width.
+/// The camera wandering by itself, in fractions of the picture's width. On
+/// Windows it is two slow waves, measured off the recordings of Samurai, Alien:
+/// Isolation 4K and Space Marine II by following the picture frame to frame: a
+/// reach of 0.64 per cent of the width per unit of amplitude, at 0.168 Hz across
+/// and 0.22 Hz up per unit of speed.
+// ponytail: `camerashakeroughness` is left out. The recordings show it as a
+// beat on top that nobody would miss; put it in if a scene turns on it.
+struct Shake {
+    amplitude: f32,
+    speed: f32,
+}
+
+impl Shake {
+    fn at(&self, time: f32) -> [f32; 2] {
+        let wave = |hz: f32| (std::f32::consts::TAU * hz * self.speed * time).sin();
+        [wave(0.168), wave(0.22)].map(|w| 0.0064 * self.amplitude * w)
+    }
+}
+
 struct Parallax {
     amount: f32,
     delay: f32,
@@ -483,6 +568,10 @@ pub struct Scene {
     frame: Option<Target>,
     /// Set when the scene moves with the mouse.
     parallax: Option<Parallax>,
+    shake: Option<Shake>,
+    zoom: f32,
+    lighting: wpe_format::scene::Lighting,
+    pointer: Option<(f32, f32)>,
     /// Set when the scene turns on its glow.
     bloom: Option<Bloom>,
     /// The videos the scene's images play, one player for each, however
@@ -708,8 +797,7 @@ impl Scene {
         dir: &std::path::Path,
         budget: usize,
     ) -> Result<Self, String> {
-        let path = find_package(dir)?;
-        let package = Package::read(&path).map_err(|e| format!("reading package: {e}"))?;
+        let package = open_package(dir)?;
         let assets = Assets::locate();
         let resolve = Resolver::new(&package, assets.as_ref());
 
@@ -783,6 +871,7 @@ impl Scene {
                         from_scene: true,
                         shown: true,
                         text: Some(text),
+                        view: ObjectView::default(),
                     });
                     continue;
                 }
@@ -861,6 +950,7 @@ impl Scene {
                 from_scene: true,
                 shown: true,
                 text: None,
+                view: ObjectView::default(),
             });
         }
 
@@ -937,6 +1027,13 @@ impl Scene {
                     drift: [0.0; 2],
                     eased_at: 0.0,
                 }),
+            shake: file.general.camerashake.value.then_some(Shake {
+                amplitude: file.general.camerashakeamplitude,
+                speed: file.general.camerashakespeed,
+            }),
+            zoom: file.general.zoom,
+            lighting: wpe_format::scene::Lighting::read(bytes),
+            pointer: None,
             buffers,
             simulated: 0.0,
             sound: Spectrum::SILENT,
@@ -983,6 +1080,7 @@ impl Scene {
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
         );
+        self.pointer = pointer;
         // Clip space runs up the screen, the pointer down it.
         let clip = pointer.map(|(x, y)| [x * 2.0 - 1.0, 1.0 - y * 2.0]);
         if let Some(parallax) = &mut self.parallax {
@@ -1056,15 +1154,55 @@ impl Scene {
         for video in self.videos.values_mut() {
             video.show(gl, time);
         }
-        let projection = transform::orthographic_cover(
-            (self.scene_size.0 as f32, self.scene_size.1 as f32),
-            (output.0 as f32, output.1 as f32),
+        let aspect = output.0 as f32 / output.1.max(1) as f32;
+        let shift = self.shake.as_ref().map_or([0.0; 2], |s| {
+            let [x, y] = s.at(time);
+            [x * 2.0, y * 2.0 * aspect]
+        });
+        let projection = transform::viewed(
+            &transform::orthographic_cover(
+                (self.scene_size.0 as f32, self.scene_size.1 as f32),
+                (output.0 as f32, output.1 as f32),
+            ),
+            self.zoom,
+            shift,
         );
-        let camera = transform::perspective_cover(
-            (self.scene_size.0 as f32, self.scene_size.1 as f32),
-            (output.0 as f32, output.1 as f32),
-            self.fov,
+        let camera = transform::viewed(
+            &transform::perspective_cover(
+                (self.scene_size.0 as f32, self.scene_size.1 as f32),
+                (output.0 as f32, output.1 as f32),
+                self.fov,
+            ),
+            self.zoom,
+            shift,
         );
+        let pointer = self.pointer.map_or([-10.0, -10.0], |(x, y)| [x, y]);
+        let lights = LightsNow::of(&self.lighting, time);
+        for object in self.objects.iter_mut().filter(|o| matches!(o.drawing, Drawing::Image)) {
+            let used = object.on_screen(&projection, output, output);
+            let middle =
+                middle_of(object.origin, object.anchor, object.size, object.scale, object.angles[2]);
+            let onto = transform::multiply(
+                &projection,
+                &transform::model(middle, [1.0, 1.0], object.scale, object.angles),
+            );
+            let halves = [object.size[0].abs() / 2.0, object.size[1].abs() / 2.0];
+            let onto_unit =
+                transform::multiply(&onto, &transform::model([0.0; 3], halves, [1.0; 3], [0.0; 3]));
+            object.view = ObjectView {
+                scene_per_pixel: object.size[0].abs() / used.0.max(1) as f32,
+                pointer,
+                from_clip: transform::inverse_flat(&onto).unwrap_or(transform::IDENTITY),
+                from_clip_to_unit: transform::inverse_flat(&onto_unit).unwrap_or(transform::IDENTITY),
+                model: transform::model(
+                    middle,
+                    [object.size[0], -object.size[1]],
+                    object.scale,
+                    object.angles,
+                ),
+                lights,
+            };
+        }
         // Whatever the caller was drawing into, which an effect leaves for a
         // moment and has to put back.
         let screen = unsafe {
@@ -1456,6 +1594,8 @@ fn load_particles(
             wpe_format::scene::InstanceOverride {
                 alpha: over.alpha.clone(),
                 rate: over.rate.clone(),
+                colorn: over.colorn.clone(),
+                color: over.color.clone(),
                 ..Default::default()
             }
         });
@@ -1576,6 +1716,7 @@ fn build_particles(
         from_scene: false,
         shown: true,
         text: None,
+        view: ObjectView::default(),
     })
 }
 
@@ -2160,8 +2301,8 @@ fn build_bloom(
         };
         let mut pass = build_pass(gl, resolve, &material, Kind::Effect, None)?;
         pass.constants.insert("g_TexelSize".into(), texel.clone().into());
-        pass.constants.insert("g_BloomStrength".into(), general.bloomstrength.unwrap_or(2.0).into());
-        pass.constants.insert("g_BloomThreshold".into(), general.bloomthreshold.unwrap_or(0.65).into());
+        pass.constants.insert("g_BloomStrength".into(), general.bloomstrength.as_ref().map_or(2.0, |b| b.value).into());
+        pass.constants.insert("g_BloomThreshold".into(), general.bloomthreshold.as_ref().map_or(0.65, |b| b.value).into());
         passes.push(pass);
     }
     Ok(Bloom {
@@ -2189,6 +2330,7 @@ fn build_bloom(
             from_scene: false,
             shown: false,
             text: None,
+            view: ObjectView::default(),
         },
     })
 }
@@ -2535,16 +2677,22 @@ unsafe fn set_common(
                 set_float(gl, pass.program, "g_TextureReductionScale", reduction);
             }
             // .xy is the texture, .zw the image inside it; shaders divide one
-            // by the other to find the part that is not padding.
+            // by the other to find the part that is not padding. A buffer of
+            // ours says the size Wallpaper Engine's would be, for the sake of
+            // every effect that reaches a number of texels.
+            let as_big = match handed {
+                Some(_) => object.view.scene_per_pixel,
+                None => 1.0,
+            };
             set_vec4(
                 gl,
                 pass.program,
                 &format!("g_Texture{unit}Resolution"),
                 [
-                    texture.width as f32,
-                    texture.height as f32,
-                    texture.image_size.0 as f32,
-                    texture.image_size.1 as f32,
+                    texture.width as f32 * as_big,
+                    texture.height as f32 * as_big,
+                    texture.image_size.0 as f32 * as_big,
+                    texture.image_size.1 as f32 * as_big,
                 ],
             );
         }
@@ -2553,6 +2701,35 @@ unsafe fn set_common(
         // left, so the matrix goes up transposed to mean the same thing.
         if let Some(l) = gl.get_uniform_location(pass.program, "g_ModelViewProjectionMatrix") {
             gl.uniform_matrix_4_f32_slice(Some(&l), true, mvp);
+        }
+        // A lit shader takes its corners into the scene and from there to
+        // wherever this pass draws, which for an object with effects is its
+        // own buffer: what the two come to has to be `mvp` whichever it is.
+        if let Some(l) = gl.get_uniform_location(pass.program, "g_ModelMatrix") {
+            let view = &object.view;
+            gl.uniform_matrix_4_f32_slice(Some(&l), true, &view.model);
+            if let Some(l) = gl.get_uniform_location(pass.program, "g_ViewProjectionMatrix") {
+                let back = transform::inverse_flat(&view.model).unwrap_or(transform::IDENTITY);
+                gl.uniform_matrix_4_f32_slice(Some(&l), true, &transform::multiply(mvp, &back));
+            }
+            if let Some(l) = gl.get_uniform_location(pass.program, "g_NormalModelMatrix") {
+                gl.uniform_matrix_3_f32_slice(Some(&l), false, &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+            }
+            let lights = &view.lights;
+            set_vec3(gl, pass.program, "g_LightAmbientColor", lights.ambient);
+            if let Some(l) = gl.get_uniform_location(pass.program, "g_LightsPosition") {
+                gl.uniform_3_f32_slice(Some(&l), lights.positions.as_flattened());
+            }
+            if let Some(l) = gl.get_uniform_location(pass.program, "g_LightsColorPremultiplied") {
+                gl.uniform_4_f32_slice(Some(&l), lights.colors.as_flattened());
+            }
+        }
+        set_vec2(gl, pass.program, "g_PointerPosition", object.view.pointer);
+        if let Some(l) = gl.get_uniform_location(pass.program, "g_EffectTextureProjectionMatrixInverse") {
+            gl.uniform_matrix_4_f32_slice(Some(&l), true, &object.view.from_clip_to_unit);
+        }
+        if let Some(l) = gl.get_uniform_location(pass.program, "g_ModelViewProjectionMatrixInverse") {
+            gl.uniform_matrix_4_f32_slice(Some(&l), true, &object.view.from_clip);
         }
         set_float(gl, pass.program, "g_Time", time);
         set_float(gl, pass.program, "g_Alpha", object.alpha);
@@ -2720,15 +2897,13 @@ fn build_pass(
             );
         }
     }
-    // Lighting and reflection are asked for by one wallpaper in the library and
-    // nothing here answers them: no light is uploaded, and the reflection path
-    // samples a mip-mapped copy of the frame that is never made. Left on, the
-    // shader multiplies the picture by lights that are all black and draws
-    // nothing at all. Turned off, it draws the picture -- which is what the
-    // wallpaper looks like without its shading, rather than a black screen.
+    // Reflection samples a mip-mapped copy of the frame that is never made, and
+    // a particle's shader would want lights this renderer gives images alone.
     if kind != Kind::Effect {
-        combos.insert("LIGHTING".into(), "0".into());
         combos.insert("REFLECTION".into(), "0".into());
+    }
+    if matches!(kind, Kind::Particles(_)) {
+        combos.insert("LIGHTING".into(), "0".into());
     }
     // What was actually uploaded wins over anything the material says, since
     // this is the texture the shader will be sampling.
@@ -3357,6 +3532,16 @@ pub(crate) fn scene_entry(project: Option<&[u8]>) -> String {
         .and_then(|json| json.get("file")?.as_str().map(str::to_owned))
         .filter(|file| file.ends_with(".json"))
         .unwrap_or_else(|| "scene.json".into())
+}
+
+/// A wallpaper's files: its package, or the folder itself where there is
+/// none, which is how Wallpaper Engine's own Deep Space and the rest come.
+pub(crate) fn open_package(dir: &std::path::Path) -> Result<Package, String> {
+    match find_package(dir) {
+        Ok(path) => Package::read(&path).map_err(|e| format!("reading package: {e}")),
+        Err(none) if !dir.join("project.json").exists() => Err(none),
+        Err(_) => Package::from_folder(dir).map_err(|e| format!("reading {}: {e}", dir.display())),
+    }
 }
 
 pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, String> {

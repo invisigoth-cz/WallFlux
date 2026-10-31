@@ -601,6 +601,9 @@ pub struct ParticleSystem {
     /// file lists them. Every system carries eight whether it uses them or
     /// not, so most of these are the origin.
     pub control_points: Vec<[f32; 3]>,
+    /// The system's own first point is on the mouse, and what it lets out
+    /// is let out there.
+    pub born_on_pointer: bool,
     /// Named steps this reader does not handle yet.
     pub unsupported: Vec<String>,
     /// Other systems this one brings with it.
@@ -1023,6 +1026,7 @@ impl ParticleSystem {
                 .unwrap_or_default()
                 .to_owned(),
             control_points: points.iter().map(|(at, _)| *at).collect(),
+            born_on_pointer: points.first().is_some_and(|(_, pointer)| *pointer),
             maxcount: num(&root, "maxcount", 0.0).clamp(0.0, MAX_PARTICLES as f32) as usize,
             starttime: num(&root, "starttime", 0.0),
             emitters,
@@ -1227,7 +1231,10 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             min: vector(step, "distancemin", [0.0; 3]),
             max: vector(step, "distancemax", [256.0; 3]),
         },
-        rate: num(step, "rate", 0.0),
+        // Nine presets here state no rate. Read as nought they let nothing out:
+        // no embers in Terminator Resistance, where Wallpaper Engine has a
+        // sky of them, and no lava on Space Visualizer's planet.
+        rate: num(step, "rate", 5.0),
         instantaneous: num(step, "instantaneous", 0.0).max(0.0) as u32,
         speed: Range {
             min: num(step, "speedmin", 0.0),
@@ -1500,7 +1507,7 @@ mod tests {
         }"#;
         let p = ParticleSystem::parse(json).unwrap();
         assert_eq!(p.maxcount, 0);
-        assert_eq!(p.emitters[0].rate, 0.0);
+        assert_eq!(p.emitters[0].rate, 5.0);
         // What the engine fills in for a flat scene when nothing is said.
         let bare = ParticleSystem::parse(
             br#"{"initializer":[{"name":"sizerandom"},
