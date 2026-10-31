@@ -34,6 +34,8 @@ pub struct Model {
     /// run an effect over what is behind them.
     pub passthrough: bool,
     pub solidlayer: bool,
+    /// The `.mdl` that bends this image, where the editor's puppet warp was used.
+    pub puppet: Option<String>,
 }
 
 impl Model {

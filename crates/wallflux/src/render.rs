@@ -15,6 +15,7 @@ use glow::HasContext;
 use wpe_format::particle::ChildKind;
 use wpe_format::particle::Renderer as ParticleRenderer;
 use wpe_format::particle::Spectrum;
+use wpe_format::puppet::{Playing, Puppet};
 use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
 use wpe_format::{Assets, Material, Model, Package, ParticleSystem, Resolver, Scene as SceneFile};
@@ -325,6 +326,77 @@ struct Object {
     text: Option<Box<TextBox>>,
     /// What a frame tells this object's shaders about where it is looking.
     view: ObjectView,
+    /// The mesh that bends the image, drawn in place of its quad.
+    puppet: Option<Box<PuppetMesh>>,
+}
+
+/// A puppet on the GPU. Bent here rather than in the shader: its few thousand
+/// corners cost nothing to work out, and it leaves the program the same one a
+/// flat image uses, with the same vertex layout.
+struct PuppetMesh {
+    puppet: Puppet,
+    playing: Vec<Playing>,
+    array: glow::VertexArray,
+    vertices: glow::Buffer,
+    bent: Vec<f32>,
+}
+
+impl PuppetMesh {
+    unsafe fn new(
+        gl: &glow::Context,
+        puppet: Puppet,
+        playing: Vec<Playing>,
+    ) -> Result<Self, String> {
+        unsafe {
+            let array = gl.create_vertex_array()?;
+            let vertices = gl.create_buffer()?;
+            let indices = gl.create_buffer()?;
+            gl.bind_vertex_array(Some(array));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices));
+            let stride = 5 * size_of::<f32>() as i32;
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
+            gl.enable_vertex_attrib_array(1);
+            gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, stride, 3 * size_of::<f32>() as i32);
+            gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(indices));
+            let bytes: &[u8] = std::slice::from_raw_parts(
+                puppet.triangles.as_ptr() as *const u8,
+                std::mem::size_of_val(puppet.triangles.as_slice()),
+            );
+            gl.buffer_data_u8_slice(glow::ELEMENT_ARRAY_BUFFER, bytes, glow::STATIC_DRAW);
+            gl.bind_vertex_array(None);
+            Ok(Self { puppet, playing, array, vertices, bent: Vec::new() })
+        }
+    }
+
+    /// Bends it to `time`, in the unit the image's quad is in: a quad's corners
+    /// are half a size from its middle and its rows run down, where a puppet's
+    /// are in pixels with y up.
+    fn bend(&mut self, time: f32, size: [f32; 2]) {
+        self.puppet.bend_into(&self.playing, time, &mut self.bent);
+        for corner in self.bent.chunks_exact_mut(5) {
+            corner[0] /= size[0].max(1.0);
+            corner[1] /= -size[1].max(1.0);
+        }
+    }
+
+    /// Hands the GPU the mesh as bent, over a picture that fills `covered` of
+    /// whichever texture it is about to be drawn from.
+    unsafe fn upload(&self, gl: &glow::Context, covered: [f32; 2]) {
+        let mut floats = self.bent.clone();
+        for corner in floats.chunks_exact_mut(5) {
+            corner[3] *= covered[0];
+            corner[4] *= covered[1];
+        }
+        unsafe {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vertices));
+            let bytes: &[u8] = std::slice::from_raw_parts(
+                floats.as_ptr() as *const u8,
+                std::mem::size_of_val(floats.as_slice()),
+            );
+            gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::STREAM_DRAW);
+        }
+    }
 }
 
 /// Worked out once a frame, before anything is drawn.
@@ -872,6 +944,7 @@ impl Scene {
                         shown: true,
                         text: Some(text),
                         view: ObjectView::default(),
+                        puppet: None,
                     });
                     continue;
                 }
@@ -916,6 +989,27 @@ impl Scene {
                     .map(|(w, h)| [w as f32, h as f32])
                     .unwrap_or([scene_size.0 as f32, scene_size.1 as f32]),
             };
+            let puppet = model
+                .puppet
+                .as_deref()
+                .and_then(|path| resolve.get(path))
+                .and_then(|bytes| Puppet::parse(&bytes))
+                .and_then(|puppet| {
+                    let playing = object
+                        .animationlayers
+                        .iter()
+                        .filter(|layer| layer.visible.value)
+                        .map(|layer| Playing {
+                            animation: layer.animation,
+                            rate: layer.rate.value,
+                            blend: layer.blend.value,
+                        })
+                        .collect();
+                    unsafe { PuppetMesh::new(gl, puppet, playing) }.ok().map(Box::new)
+                });
+            if model.puppet.is_some() && puppet.is_none() {
+                skipped.push(format!("{}: its puppet could not be read, so it stays flat", object.name));
+            }
             let effects = build_effects(gl, &resolve, object, &carriers, &mut buffers, &mut skipped);
             let layer = match (model.passthrough, model.fullscreen) {
                 (false, _) => None,
@@ -951,6 +1045,7 @@ impl Scene {
                 shown: true,
                 text: None,
                 view: ObjectView::default(),
+                puppet,
             });
         }
 
@@ -1179,6 +1274,9 @@ impl Scene {
         let pointer = self.pointer.map_or([-10.0, -10.0], |(x, y)| [x, y]);
         let lights = LightsNow::of(&self.lighting, time);
         for object in self.objects.iter_mut().filter(|o| matches!(o.drawing, Drawing::Image)) {
+            if let Some(puppet) = &mut object.puppet {
+                puppet.bend(time, object.size);
+            }
             let used = object.on_screen(&projection, output, output);
             let middle =
                 middle_of(object.origin, object.anchor, object.size, object.scale, object.angles[2]);
@@ -1317,7 +1415,7 @@ impl Scene {
                         _ => {
                             for pass in &object.passes {
                                 write_quad(gl, self.buffer, pass.covered, 0.5);
-                                draw_pass(
+                                draw_own_pass(
                                     gl,
                                     pass,
                                     object,
@@ -1327,6 +1425,7 @@ impl Scene {
                                     &pass.screen_binds(frame),
                                     &self.sound,
                                     pass.blending,
+                                    pass.covered,
                                 );
                             }
                         }
@@ -1475,11 +1574,18 @@ impl Scene {
 
     fn advance_to(&mut self, time: f32, most: usize) {
         let sound = self.sound;
-        let mut steps = ((time - self.simulated).max(0.0) / STEP) as usize;
+        // In slices no longer than a step that come out to exactly the time
+        // owed. Whole steps of a sixtieth on a 75 Hz screen left every fifth
+        // frame with nothing new to show, which is how smoke came to stutter.
+        let mut steps = ((time - self.simulated).max(0.0) / STEP).ceil() as usize;
+        if time - self.simulated < 1e-4 {
+            return;
+        }
         if steps > most {
             self.simulated = time - most as f32 * STEP;
             steps = most;
         }
+        let slice = (time - self.simulated) / steps as f32;
         for _ in 0..steps {
             for index in 0..self.objects.len() {
                 let (before, rest) = self.objects.split_at_mut(index);
@@ -1502,7 +1608,7 @@ impl Scene {
                                     (serial, Snapshot { position: answer.inside(from.position), ..from })
                                 })
                                 .collect();
-                            system.follow(&hosts, STEP, &sound);
+                            system.follow(&hosts, slice, &sound);
                         }
                         kind => {
                             let places = match kind {
@@ -1516,10 +1622,10 @@ impl Scene {
                         }
                     }
                 }
-                system.advance(STEP, &sound);
+                system.advance(slice, &sound);
             }
         }
-        self.simulated += steps as f32 * STEP;
+        self.simulated = time;
     }
 }
 
@@ -1717,6 +1823,7 @@ fn build_particles(
         shown: true,
         text: None,
         view: ObjectView::default(),
+        puppet: None,
     })
 }
 
@@ -1978,7 +2085,10 @@ unsafe fn draw_through_effects(
                         _ => (mvp, 0.5),
                     };
                     write_quad(gl, buffer, covered(read), reach);
-                    draw_pass(
+                    // A puppet bends the finished picture, not the first pass:
+                    // bent earlier, the masks of the effects stayed behind and
+                    // the buffer's edge cut the jaw off in a straight line.
+                    draw_own_pass(
                         gl,
                         pass,
                         object,
@@ -1996,6 +2106,7 @@ unsafe fn draw_through_effects(
                             Some(Blending::Additive) => Blending::Additive,
                             _ => pass.blending,
                         },
+                        covered(read),
                     );
                 }
                 // A pass in the middle of a chain covers its whole buffer and
@@ -2331,6 +2442,7 @@ fn build_bloom(
             shown: false,
             text: None,
             view: ObjectView::default(),
+            puppet: None,
         },
     })
 }
@@ -2516,6 +2628,37 @@ fn build_passes(
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Draws an object into the scene: as its puppet where it has one, and as the
+/// quad already written where it does not.
+#[allow(clippy::too_many_arguments)]
+unsafe fn draw_own_pass(
+    gl: &glow::Context,
+    pass: &Pass,
+    object: &Object,
+    mvp: &Matrix,
+    time: f32,
+    white: &Texture,
+    bound: &[(usize, &Texture)],
+    sound: &Spectrum,
+    blending: Blending,
+    covered: [f32; 2],
+) {
+    unsafe {
+        let Some(puppet) = &object.puppet else {
+            draw_pass(gl, pass, object, mvp, time, white, bound, sound, blending);
+            return;
+        };
+        set_common(gl, pass, object, mvp, time, white, bound, sound);
+        blending.apply(gl);
+        let quad = std::num::NonZeroU32::new(gl.get_parameter_i32(glow::VERTEX_ARRAY_BINDING) as u32)
+            .map(glow::NativeVertexArray);
+        gl.bind_vertex_array(Some(puppet.array));
+        puppet.upload(gl, covered);
+        gl.draw_elements(glow::TRIANGLES, puppet.puppet.triangles.len() as i32, glow::UNSIGNED_SHORT, 0);
+        gl.bind_vertex_array(quad);
+    }
+}
+
 unsafe fn draw_pass(
     gl: &glow::Context,
     pass: &Pass,

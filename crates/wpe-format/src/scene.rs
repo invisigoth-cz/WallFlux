@@ -365,6 +365,9 @@ pub struct Object {
     /// a fire made to burn twice as fast.
     pub instanceoverride: Option<InstanceOverride>,
 
+    /// The animations of the object's puppet that play, and how.
+    pub animationlayers: Vec<AnimationLayer>,
+
     // The naming fields. Read through `kind()` rather than directly.
     #[serde(rename = "image")]
     image_field: Option<String>,
@@ -475,6 +478,7 @@ impl Default for Object {
             maxtime: 5.0,
             startsilent: false,
             instanceoverride: None,
+            animationlayers: Vec::new(),
             image_field: None,
             particle_field: None,
             sound_field: None,
@@ -567,6 +571,27 @@ impl Scene {
             bind_user_values(&mut scene, &properties);
         }
         serde_json::from_value(scene)
+    }
+}
+
+/// One animation of an object's puppet, as the scene plays it.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct AnimationLayer {
+    pub animation: i64,
+    pub rate: Bound<f32>,
+    pub blend: Bound<f32>,
+    pub visible: Bound<bool>,
+}
+
+impl Default for AnimationLayer {
+    fn default() -> Self {
+        Self {
+            animation: 0,
+            rate: Bound::plain(1.0),
+            blend: Bound::plain(1.0),
+            visible: Bound::plain(true),
+        }
     }
 }
 

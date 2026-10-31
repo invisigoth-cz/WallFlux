@@ -98,9 +98,12 @@ public:
         if (m_scene) {
             // Seconds the scene has been running, which is not the same as
             // seconds since it loaded: a covered screen stops its clock.
-            const qint64 since = m_clock.restart();
+            // Nanoseconds: whole milliseconds dropped most of a millisecond off
+            // every frame, and the scene ran four per cent slow at 60 a second.
+            const qint64 since = m_clock.nsecsElapsed();
+            m_clock.restart();
             if (m_running)
-                m_seconds += since / 1000.0;
+                m_seconds += since / 1e9;
             const QSize size = framebufferObject()->size();
             if (!wallflux_scene_draw(m_scene, size.width(), size.height(), float(m_seconds))) {
                 // The renderer has said why on stderr already. One scene

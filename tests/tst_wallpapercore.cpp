@@ -145,6 +145,8 @@ void TestWallpaperCore::drawsAPresetAsTheWallpaperItSitsOn()
     QVERIFY(told.value(QStringLiteral("image")).toObject().value(QStringLiteral("value")).toString()
                 .endsWith(QStringLiteral("/200/a.jpg")));
     QVERIFY(!told.contains(QStringLiteral("nobody")));
+    QVERIFY(!told.value(QStringLiteral("image")).toObject().value(QStringLiteral("value")).toString()
+                 .startsWith(u'/'));
 }
 
 void TestWallpaperCore::listsWhatComesWithWallpaperEngine()

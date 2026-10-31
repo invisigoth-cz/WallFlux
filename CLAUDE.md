@@ -311,7 +311,8 @@ packaging/PKGBUILD    builds from this checkout's git history
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 Cargo.toml            the Rust workspace: the two crates below
 crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
-                      materials, effects, particles, and the shader dialect
+                      materials, effects, particles, puppets (.mdl), and the
+                      shader dialect
 crates/wallflux/src/video.rs  a video a scene uses as a texture, decoded by
                       ffmpeg run as a program, one player per clip
 crates/wallflux/src/text.rs  a scene's text, laid out and drawn into a picture
@@ -738,13 +739,29 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   through `velocity`, so a system without `movement` is not moved by it, and a
   trail is as long as that velocity.
 
-- **An instance's colour takes the hue, and the file keeps the brightness.**
+- **An instance's colour takes the hue, and the file keeps the strength**, its largest channel.
   Measured off recordings, not explained. It is neither of the two obvious
   readings: multiplied, Terminator's orange smoke set to 0.42 stays orange where
   it burns grey and Tomb Raider's torch set to white stays orange; replaced, Star
   Destroyer's 0.5 grey smoke set to 0.24 0.31 0.35 comes out twice too light and
   Star wars' dim light shafts turn white. It stands over `colorchange` too, which
   keeps only its change of brightness, and it goes down to a child system.
+
+- **A puppet bends the finished picture, not the first pass.** An image whose model
+  names a `puppet` `.mdl` is drawn through that mesh on the way back into the scene,
+  after its effects (`wpe_format::puppet`, layout in its header; attachments are
+  optional). Bent earlier, the effects' masks stayed behind and the buffer's edge cut
+  the jaw off in a straight line. Corners are bent on the CPU and the shader is the
+  ordinary flat one. Each `animationlayers` entry adds what it moves a bone by against
+  the bone at rest. Alien Isolation's second jaw and tail are this.
+
+- **Particles step by exactly the time owed.** Whole steps of a sixtieth on a 75 Hz
+  screen left every fifth frame with nothing new, which read as smoke that stutters.
+  `shot` shows nothing of this. And `SceneView`'s clock counts nanoseconds: whole
+  milliseconds lost most of one a frame, four per cent at 60 Hz.
+
+- **A web page is handed a path with no leading slash**, as Wallpaper Engine's `C:/...`
+  has none: pages put `file:///` in front, and four slashes is a file that will not play.
 
 - **An emitter's rate defaults to five.** Nine presets state none, `ember_small`
   among them. Read as nought they let nothing out, which looks like a wallpaper
@@ -1796,16 +1813,34 @@ the file. Everything after it should.
    smoke and shaders. Find what in them is answering the pointer before
    deciding which half is mistaken.
 
+4. **Before the next release, as the user saw them on 1 November:**
+   - **Alien Isolation:** the second jaw is out from 0 s. It should first come out at
+     about 40 s, then in the 40 s cycle. Animation 716 on layer 28 (20 s, mirror).
+   - **Dark Angels:** the muzzle flash is paler than the recording, and it has a visible
+     mistake: a straight horizontal edge above the flash, where a lit rectangle starts
+     (a composition layer, 197 or 534, 2500x1600 at y 640-740), and the flash's middle is
+     flat grey under a yellow outline. Screenshot from the user.
+   - **Gears of War:** the background's ripple is too strong and should not look like
+     that (`waterripple` on layer 12). The user will send a longer video, since the
+     recording is 18 s and the ripple comes every 20-25 s. The eyes should glow whiter
+     and harder, as in the recording (the two Torch systems, colour 94 94 94).
+   - **Star Destroyer's** fire clouds at the bottom come out red, orange in the recording.
+   - **To come from the user:** recordings of Blue Dawn, Diablo 4, Dark Core and StarCraft:
+     Shakuras, and whether Mourning for Icarus really is still on Windows.
+
 ### Small things seen and left
 
 - Against the Windows recordings on 31 October, by eye, 39 scenes and 5 web
   pages (Mourning for Icarus, Blue Dawn, Dark Core, Diablo 4 and StarCraft: Shakuras
   have no recording). Sheets in `~/WallFlux-ukazky/2026-10-31/<id>/`. Left: Battlefield's one
-  keyframed `phase` is not played; Alien Isolation's tail is a puppet (`.mdl`) and
-  does not move; SCP's `chromatic_aberration` still does not build; Dark Angels'
-  flash is a little greener than the recording; Tomb Raider has some pink haze at
+  keyframed `phase` is not played; SCP's `chromatic_aberration` still does not build; Tomb Raider has some pink haze at
   her feet at some moments, from the torch's red smoke; Terminator Factory's sky is
   a little brighter.
+
+- **Gears of War's spin and jaw are right; looked at by the user and measured.** Gear
+  turn: 17 degrees a second in the recording, in `shot` and in the program at
+  2560x1440 (11.3 and 11.5 for the small one). Dark Angels carries no sound at all,
+  neither an object nor a file in 120 entries; its YouTube video does.
 
 - What a scene's scripts do not reach yet: an effect switched on and off, a particle override other than the
   rate, an object hidden in scene.json that a script would show -- it is

@@ -14,6 +14,7 @@ pub mod effect;
 pub mod material;
 pub mod particle;
 pub mod pkg;
+pub mod puppet;
 pub mod scene;
 pub mod shader;
 pub mod tex;

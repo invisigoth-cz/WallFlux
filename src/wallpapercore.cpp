@@ -150,7 +150,10 @@ QString webProperties(const QJsonObject &project, const QJsonObject &preset, con
         const QString type = property.value(QLatin1StringView("type")).toString();
         QJsonValue value = it.value();
         if (type == QLatin1StringView("file") || type == QLatin1StringView("directory"))
-            value = entryPoint(presetFolder, value.toString()).toLocalFile();
+            // Wallpaper Engine hands over a Windows path and pages put three
+            // slashes in front of it, so a path here goes without its first.
+            // Four slashes is a file that cannot be played: 三体's music was silent.
+            value = entryPoint(presetFolder, value.toString()).toLocalFile().mid(1);
         property.insert(QStringLiteral("value"), value);
         properties.insert(it.key(), property);
     }

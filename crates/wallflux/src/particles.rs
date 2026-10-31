@@ -777,15 +777,15 @@ impl System {
         start.alpha = times(start.alpha, over.alpha.value);
         start.size = times(start.size, over.size.value);
         start.lifetime = times(start.lifetime, over.lifetime.value);
-        // The scene's colour takes the hue and the file keeps the brightness.
-        // Measured, not explained, off six recordings. Multiplied, Terminator's
-        // orange smoke set to 0.42 stays orange where it burns grey, Dark
-        // Angels' muzzle flash goes red and green where it is always the one
-        // yellow, and Tomb Raider's torch, orange to red in its own `colorchange`
-        // and set to white, stays orange where it burns white. Replaced, Star
-        // Destroyer's smoke, 0.5 grey set to 0.24 0.31 0.35, comes out twice as
-        // light as the 23 21 22 it is, and Star wars' dim brown light shafts
-        // set to 0.75 cross the picture in white.
+        // The scene's colour takes the hue and the file keeps how strong it is,
+        // its largest channel: measured, not explained, off recordings.
+        // Multiplied, Terminator's orange smoke set to 0.42 stays orange where it
+        // burns grey, and Tomb Raider's torch, orange to red in its own
+        // `colorchange` and set to white, stays orange where it burns white.
+        // Replaced, Star Destroyer's smoke, 0.5 grey set to 0.24 0.31 0.35, comes
+        // out twice as light as it is, and Star wars' dim brown light shafts set
+        // to 0.75 cross the picture in white. Taken from the luminance instead,
+        // Dark Angels' flash, red to yellow in its file, lost its yellow.
         let mut operators = definition.operators.clone();
         if let Some(tint) = over.tint() {
             let hued = |color: [f32; 3]| times_each(tint, brightness(color));
@@ -1745,9 +1745,9 @@ fn changed_color(operators: &[Operator], particle: &Particle) -> [f32; 3] {
     color
 }
 
-/// How bright a colour looks, from nought to one.
+/// How strong a colour is, from nought to one.
 fn brightness(color: [f32; 3]) -> f32 {
-    0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]
+    color[0].max(color[1]).max(color[2])
 }
 
 fn times_each(color: [f32; 3], by: f32) -> [f32; 3] {
