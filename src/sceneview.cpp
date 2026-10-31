@@ -246,6 +246,13 @@ SceneSounds::SceneSounds(QObject *parent)
 {
 }
 
+QList<float> SceneSounds::speakers() const
+{
+    QList<float> bands(128);
+    wallflux_speakers(bands.data());
+    return bands;
+}
+
 QVariantList SceneSounds::of(const QUrl &source) const
 {
     if (!source.isLocalFile())

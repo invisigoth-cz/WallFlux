@@ -39,7 +39,7 @@ var asking = ({});
 /// What the workshop says about one item: `done({ maker, tags })`, once.
 /// Never called at all for an id Steam had nothing to say about.
 function detailsOf(id, done) {
-    if (!id)
+    if (!/^\d+$/.test(id))
         return;
     if (items[id] !== undefined) {
         done(items[id]);
@@ -115,8 +115,15 @@ function detailsOfMany(ids, done) {
         });
 }
 
-/// One POST about one handful of ids.
+/// One POST about one handful of ids. What comes with Wallpaper Engine is named
+/// `deep_space` and the like: Steam knows nothing of those, and one in the list
+/// would cost the answer about all the others.
 function askAbout(ids, done) {
+    ids = ids.filter(function (id) { return /^\d+$/.test(id); });
+    if (ids.length === 0) {
+        done();
+        return;
+    }
     var body = "itemcount=" + ids.length;
     for (var i = 0; i < ids.length; ++i)
         body += "&publishedfileids[" + i + "]=" + encodeURIComponent(ids[i]);

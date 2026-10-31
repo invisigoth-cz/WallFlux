@@ -732,9 +732,70 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   particles out at a single point. Pyramid Spaceships' exhaust and
   StarCraft's rain came back with it.
 
-- **A trail is as long as the particle is fast, and `turbulence` makes it
-  fast without touching its velocity**, so the speed handed to the shader
-  includes what the operator carried it by on the last step.
+- **`turbulence` accelerates.** Read as a speed that carries a particle along,
+  Gears of War's 45 000 sparks at 500 to 1000 ran together into red bands where
+  the recording has them scattered evenly, held back by their drag. It works
+  through `velocity`, so a system without `movement` is not moved by it, and a
+  trail is as long as that velocity.
+
+- **An instance's colour takes the hue, and the file keeps the brightness.**
+  Measured off recordings, not explained. It is neither of the two obvious
+  readings: multiplied, Terminator's orange smoke set to 0.42 stays orange where
+  it burns grey and Tomb Raider's torch set to white stays orange; replaced, Star
+  Destroyer's 0.5 grey smoke set to 0.24 0.31 0.35 comes out twice too light and
+  Star wars' dim light shafts turn white. It stands over `colorchange` too, which
+  keeps only its change of brightness, and it goes down to a child system.
+
+- **An emitter's rate defaults to five.** Nine presets state none, `ember_small`
+  among them. Read as nought they let nothing out, which looks like a wallpaper
+  that has no embers.
+
+- **A system whose control point 0 is on the mouse lets its particles out at the
+  mouse**, and none while there is no mouse. Alien Romulus' black "explosion on
+  cursor", held at where the scene placed it, was the black blot under the
+  alien's mouth.
+
+- **`g_Texture0Resolution` of an effect's buffer says the size Wallpaper Engine's
+  would be**: as big as the object in the scene, where ours is as big as it is on
+  screen. A blur reaches so many texels, so told the real size Kratos' 5120-wide
+  scene came out four times as blurred at 1280 and its shoulders melted. This is
+  why a blur used to look heavier the smaller the screen.
+
+- **Camera shake is two slow waves**, measured by phase correlation off recordings
+  of Samurai, Alien: Isolation 4K and Space Marine II: 0.64 % of the width per unit
+  of amplitude, at 0.168 Hz across and 0.22 Hz up per unit of speed.
+  `camerashakeroughness` is not read. **`zoom` is the camera's as well**; Space
+  Marine II says 1.07.
+
+- **Lit images are drawn.** Alien Isolation's six layers ask for `LIGHTING`; it is
+  the only wallpaper here that does. A light's `intensity` and the general
+  `ambientcolor` animate on keyframes (`scene::Keyed`, straight lines between keys,
+  handles left out), which `Bound` throws away, so `Lighting::read` reads the raw
+  JSON. The colour sent is colour x intensity x radius squared, since the shader
+  divides by distance squared. `g_ModelMatrix` times `g_ViewProjectionMatrix` has to
+  come to the pass's `mvp`, which for an object with effects is its own buffer.
+  With the renderer's old black fallback gone the scene pulses as on Windows.
+  Reflection is still off, and particles are not lit.
+
+- **A web wallpaper is told its settings, and hears the speakers.** Nothing used
+  to reach a page, so Perfect Wallpaper drew its first picture whatever was chosen.
+  `applyUserProperties` gets project.json's properties once the page has loaded,
+  and `wallpaperRegisterAudioListener` must exist before the page's own scripts
+  run, hence `WebEngineScript.DocumentCreation`. Reads `wallflux_speakers` thirty
+  times a second, only while a page asked and is on show, because listening shows
+  the microphone icon.
+
+- **A preset has no `type`: it is `dependency` (another wallpaper's folder) plus
+  `preset` (settings).** It is listed and drawn as that wallpaper, with its own
+  values laid over; its files stay in its own folder. The dependency comes off the
+  internet, so it has to be all digits. Its id is the preset's, so removing it
+  removes the preset only.
+
+- **Wallpaper Engine's own wallpapers are not packed and have no number.** `Package::
+  from_folder` reads them; `deep_space` and the like must not reach Steam (`qml/
+  steamprofile.js` filters them, one in the list would cost the whole answer) nor
+  the Remove button. Only four of the nineteen are listed, by name: the rest are 3D
+  models or come out black.
 
 - **A scene's file is the one project.json names**, `gifscene.json` in
   `gifscene.pkg` for SCP Terminal Lockdown, not always `scene.json` in
@@ -1736,6 +1797,15 @@ the file. Everything after it should.
    deciding which half is mistaken.
 
 ### Small things seen and left
+
+- Against the Windows recordings on 31 October, by eye, 39 scenes and 5 web
+  pages (Mourning for Icarus, Blue Dawn, Dark Core, Diablo 4 and StarCraft: Shakuras
+  have no recording). Sheets in `~/WallFlux-ukazky/2026-10-31/<id>/`. Left: Battlefield's one
+  keyframed `phase` is not played; Alien Isolation's tail is a puppet (`.mdl`) and
+  does not move; SCP's `chromatic_aberration` still does not build; Dark Angels'
+  flash is a little greener than the recording; Tomb Raider has some pink haze at
+  her feet at some moments, from the torch's red smoke; Terminator Factory's sky is
+  a little brighter.
 
 - What a scene's scripts do not reach yet: an effect switched on and off, a particle override other than the
   rate, an object hidden in scene.json that a script would show -- it is

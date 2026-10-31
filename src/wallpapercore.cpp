@@ -118,9 +118,8 @@ QString ratingFrom(const QString &contentRating)
     return {};
 }
 
-/// Reads one wallpaper folder, or nothing if it holds no readable
-/// project.json.
-std::optional<Wallpaper> readWallpaper(const QDir &folder)
+/// A folder's project.json, or nothing where it cannot be read.
+std::optional<QJsonObject> readProject(const QDir &folder)
 {
     QFile file(folder.filePath(QStringLiteral("project.json")));
     if (!file.open(QIODevice::ReadOnly))
@@ -133,15 +132,63 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
                           << error.errorString();
         return std::nullopt;
     }
+    return document.object();
+}
 
-    const QJsonObject root = document.object();
+/// What a web wallpaper is told about its settings: each as project.json
+/// declares it, with a preset's value laid over it. A file a preset names lives
+/// in the preset's own folder and the page is handed where that is, the way
+/// Wallpaper Engine does -- pages put `file:///` in front of what they get.
+QString webProperties(const QJsonObject &project, const QJsonObject &preset, const QDir &presetFolder)
+{
+    QJsonObject properties = project.value(QLatin1StringView("general")).toObject()
+                                 .value(QLatin1StringView("properties")).toObject();
+    for (auto it = preset.begin(); it != preset.end(); ++it) {
+        if (!properties.contains(it.key()))
+            continue;
+        QJsonObject property = properties.value(it.key()).toObject();
+        const QString type = property.value(QLatin1StringView("type")).toString();
+        QJsonValue value = it.value();
+        if (type == QLatin1StringView("file") || type == QLatin1StringView("directory"))
+            value = entryPoint(presetFolder, value.toString()).toLocalFile();
+        property.insert(QStringLiteral("value"), value);
+        properties.insert(it.key(), property);
+    }
+    return QString::fromUtf8(QJsonDocument(properties).toJson(QJsonDocument::Compact));
+}
 
-    // A preset carries no `type` at all -- it is somebody else's wallpaper
-    // plus a file of settings, and the two in this library are exactly that.
-    // Nothing here can draw one, or a type we have never seen, so neither
-    // gets into the list in the first place.
+/// Reads one wallpaper folder, or nothing if it holds no readable
+/// project.json.
+std::optional<Wallpaper> readWallpaper(const QDir &folder)
+{
+    const std::optional<QJsonObject> own = readProject(folder);
+    if (!own)
+        return std::nullopt;
+    const QJsonObject &root = *own;
+
+    // A preset carries no `type` at all: it is somebody else's wallpaper, named
+    // by its folder, plus a file of settings. Two here sit on top of Perfect
+    // Wallpaper and are what somebody subscribed to; it is that wallpaper that
+    // gets drawn. The name comes off the internet, so it has to be a number.
+    QDir drawnFrom = folder;
+    std::optional<QJsonObject> drawn = root;
+    const QJsonObject preset = root.value(QLatin1StringView("preset")).toObject();
+    const QString dependency = root.value(QLatin1StringView("dependency")).toString();
+    static const QRegularExpression workshopId(QStringLiteral("^\\d+$"));
+    if (!preset.isEmpty() && workshopId.match(dependency).hasMatch()) {
+        drawnFrom.setPath(folder.absoluteFilePath(QStringLiteral("../") + dependency));
+        drawnFrom.makeAbsolute();
+        drawn = readProject(drawnFrom);
+        if (!drawn) {
+            qCDebug(lcScan) << "skipping" << folder.dirName() << "-- its wallpaper is not here";
+            return std::nullopt;
+        }
+    }
+
+    // A type we have never seen, or a preset of a preset, cannot be drawn and
+    // does not get into the list in the first place.
     const WallpaperKind::Kind kind =
-        kindFromType(root.value(QLatin1StringView("type")).toString());
+        kindFromType(drawn->value(QLatin1StringView("type")).toString());
     if (kind == WallpaperKind::Unknown) {
         qCDebug(lcScan) << "skipping" << folder.dirName() << "-- no type we can draw";
         return std::nullopt;
@@ -154,12 +201,17 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     wallpaper.kind = kind;
     // A scene's own file is inside a package named after it -- scene.json in
     // scene.pkg almost always, gifscene.json in gifscene.pkg once here -- and
-    // the package is what is drawn.
-    const QString named = root.value(QLatin1StringView("file")).toString();
+    // the package is what is drawn. The ones Wallpaper Engine ships are not
+    // packed, and there the file itself says where the wallpaper is.
+    const QString named = drawn->value(QLatin1StringView("file")).toString();
     const QString package = named.endsWith(QLatin1StringView(".json"))
         ? named.chopped(5) + QLatin1StringView(".pkg")
         : QStringLiteral("scene.pkg");
-    wallpaper.source = entryPoint(folder, wallpaper.kind == WallpaperKind::Scene ? package : named);
+    wallpaper.source = entryPoint(drawnFrom, wallpaper.kind == WallpaperKind::Scene ? package : named);
+    if (wallpaper.kind == WallpaperKind::Scene && wallpaper.source.isEmpty())
+        wallpaper.source = entryPoint(drawnFrom, named);
+    if (wallpaper.kind == WallpaperKind::Web)
+        wallpaper.properties = webProperties(*drawn, preset, folder);
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
 
     for (const QJsonValue &tag : root.value(QLatin1StringView("tags")).toArray())
@@ -177,7 +229,7 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
 
     if (wallpaper.kind == WallpaperKind::Scene && wallpaper.hasFile()) {
         wallpaper.soundKnown = true;
-        wallpaper.hasSound = wallflux_scene_has_sound(QFile::encodeName(folder.absolutePath()).constData());
+        wallpaper.hasSound = wallflux_scene_has_sound(QFile::encodeName(drawnFrom.absolutePath()).constData());
     }
 
     return wallpaper;
@@ -268,6 +320,21 @@ QList<Wallpaper> WallpaperCore::scan(const QStringList &steamRoots)
         for (const QString &folder : folders) {
             if (const std::optional<Wallpaper> wallpaper =
                     readWallpaper(QDir(content.filePath(folder))))
+                found.append(*wallpaper);
+        }
+    }
+
+    // The ones that come with Wallpaper Engine, which no workshop folder holds.
+    // ponytail: by name, the four of its nineteen that draw. The rest are 3D
+    // models, or come out black, and a grid of cards that show nothing is worse
+    // than a shorter grid. Add to the list as the renderer learns them.
+    static const QStringList shippedThatDraw = {
+        QStringLiteral("beach"), QStringLiteral("deep_space"),
+        QStringLiteral("razer_bedroom"), QStringLiteral("razer_vortex")};
+    for (const QString &root : steamRoots) {
+        const QDir shipped(root + QLatin1StringView("/steamapps/common/wallpaper_engine/projects/defaultprojects"));
+        for (const QString &folder : shippedThatDraw) {
+            if (const std::optional<Wallpaper> wallpaper = readWallpaper(QDir(shipped.filePath(folder))))
                 found.append(*wallpaper);
         }
     }

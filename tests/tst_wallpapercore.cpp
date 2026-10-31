@@ -10,6 +10,8 @@
 #include <QLocale>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTest>
 
 namespace {
@@ -66,6 +68,8 @@ class TestWallpaperCore : public QObject
     Q_OBJECT
 
 private slots:
+    void drawsAPresetAsTheWallpaperItSitsOn();
+    void listsWhatComesWithWallpaperEngine();
     /// The things a scan has to get right, on one made-up Steam install.
     void readsWhatIsThere();
 
@@ -107,6 +111,64 @@ private slots:
     void takesOneOffTheDisk();
 };
 
+void TestWallpaperCore::drawsAPresetAsTheWallpaperItSitsOn()
+{
+    QTemporaryDir steam;
+    const QString content = steam.path() + QStringLiteral("/steamapps/workshop/content/431960/");
+    const auto write = [&content](const QString &id, const QByteArray &json) {
+        QVERIFY(QDir().mkpath(content + id));
+        QFile file(content + id + QStringLiteral("/project.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(json);
+        file.close();
+        QFile page(content + id + QStringLiteral("/index.html"));
+        QVERIFY(page.open(QIODevice::WriteOnly));
+        QFile picture(content + id + QStringLiteral("/a.jpg"));
+        QVERIFY(picture.open(QIODevice::WriteOnly));
+    };
+    write(QStringLiteral("100"), R"({"title":"Base","type":"web","file":"index.html","general":{"properties":
+          {"image":{"type":"file","value":null},"speed":{"type":"slider","value":1},"kept":{"type":"bool","value":true}}}})");
+    write(QStringLiteral("200"), R"({"title":"Preset","dependency":"100","preset":{"image":"a.jpg","speed":5,"nobody":1}})");
+    write(QStringLiteral("300"), R"({"title":"Out","dependency":"../../..","preset":{"speed":5}})");
+    write(QStringLiteral("400"), R"({"title":"Lost","dependency":"999","preset":{"speed":5}})");
+
+    const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
+    QCOMPARE(found.size(), 2);
+    QCOMPARE(found.at(0).title, QStringLiteral("Base"));
+    QCOMPARE(found.at(1).title, QStringLiteral("Preset"));
+    QCOMPARE(found.at(1).kind, WallpaperKind::Web);
+    QVERIFY(found.at(1).source.toLocalFile().endsWith(QStringLiteral("/100/index.html")));
+
+    const QJsonObject told = QJsonDocument::fromJson(found.at(1).properties.toUtf8()).object();
+    QCOMPARE(told.value(QStringLiteral("speed")).toObject().value(QStringLiteral("value")).toInt(), 5);
+    QVERIFY(told.value(QStringLiteral("kept")).toObject().value(QStringLiteral("value")).toBool());
+    QVERIFY(told.value(QStringLiteral("image")).toObject().value(QStringLiteral("value")).toString()
+                .endsWith(QStringLiteral("/200/a.jpg")));
+    QVERIFY(!told.contains(QStringLiteral("nobody")));
+}
+
+void TestWallpaperCore::listsWhatComesWithWallpaperEngine()
+{
+    QTemporaryDir steam;
+    const QString shipped = steam.path() + QStringLiteral("/steamapps/common/wallpaper_engine/projects/defaultprojects/");
+    const auto write = [&shipped](const QString &name, const QString &file, const QByteArray &json) {
+        QVERIFY(QDir().mkpath(shipped + name));
+        QFile project(shipped + name + file);
+        QVERIFY(project.open(QIODevice::WriteOnly));
+        project.write(json);
+    };
+    write(QStringLiteral("deep_space"), QStringLiteral("/project.json"), R"({"title":"Deep Space","type":"scene","file":"scene.json"})");
+    write(QStringLiteral("deep_space"), QStringLiteral("/scene.json"), "{}");
+    // One the renderer cannot draw stays out of the grid.
+    write(QStringLiteral("arsenal"), QStringLiteral("/project.json"), R"({"title":"Arsenal","type":"scene","file":"scene.json"})");
+    write(QStringLiteral("arsenal"), QStringLiteral("/scene.json"), "{}");
+
+    const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
+    QCOMPARE(found.size(), 1);
+    QCOMPARE(found.first().id, QStringLiteral("deep_space"));
+    QVERIFY(found.first().source.toLocalFile().endsWith(QStringLiteral("/deep_space/scene.json")));
+}
+
 void TestWallpaperCore::readsWhatIsThere()
 {
     QTemporaryDir steam;
@@ -125,10 +187,9 @@ void TestWallpaperCore::readsWhatIsThere()
                   {QStringLiteral("a.mp4")});
     // Not JSON at all. Must be skipped without taking the scan down.
     makeWallpaper(steam.path(), QStringLiteral("444"), "{ this is not json");
-    // A preset: no type of its own, only settings for somebody else's
-    // wallpaper. Nothing can draw it, so it must not be listed.
+    // A preset of a wallpaper that is not here: nothing can draw it.
     makeWallpaper(steam.path(), QStringLiteral("555"),
-                  R"({"title":"A preset","preset":{"ColorMode":1},"dependency":"111"})");
+                  R"({"title":"A preset","preset":{"ColorMode":1},"dependency":"999"})");
     // A type we have never seen. Also not listed.
     makeWallpaper(steam.path(), QStringLiteral("666"),
                   R"({"title":"A something else","type":"hologram","file":"a.txt"})",

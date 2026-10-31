@@ -2186,7 +2186,10 @@ Window {
                             // this could do but delete somebody's files
                             // behind Steam's back, which would come back
                             // the next time it looked.
+                            // What comes with Wallpaper Engine is its own to
+                            // keep: no workshop item, and no number for one.
                             enabled: Steamworks.available
+                                     && /^\d+$/.test(picker.inspected ? picker.inspected.id : "")
                             onClicked: {
                                 const going = picker.inspected;
                                 if (!going)

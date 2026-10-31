@@ -187,6 +187,40 @@ Window {
         // path here would break exactly those.
         url: surface.showingWeb ? Wallpapers.current.source : "about:blank"
 
+        /// Whether the page asked to hear the speakers.
+        property bool listens: false
+
+        settings.playbackRequiresUserGesture: false
+
+        // What Wallpaper Engine gives every page. It has to be there before
+        // the page's own scripts run, which call it while they load.
+        userScripts.collection: [{
+            name: "wallpaper-engine",
+            injectionPoint: WebEngineScript.DocumentCreation,
+            worldId: WebEngineScript.MainWorld,
+            sourceCode: "window.wallpaperRegisterAudioListener = function (listener) { window.wallfluxHear = listener; };"
+        }]
+
+        // Unasked, a page draws its own defaults: Perfect Wallpaper shows its
+        // first picture whatever its preset says, and neither clock nor ring.
+        onLoadingChanged: request => {
+            web.listens = false;
+            if (request.status !== WebEngineView.LoadSucceededStatus || !surface.showingWeb)
+                return;
+            web.runJavaScript("window.wallpaperPropertyListener && window.wallpaperPropertyListener.applyUserProperties && window.wallpaperPropertyListener.applyUserProperties("
+                              + (Wallpapers.current.properties || "{}") + "); !!window.wallfluxHear",
+                              heard => web.listens = !!heard);
+        }
+
+        // Read only while a page wants it and is on show: listening puts the
+        // microphone icon in the tray, see the renderer's audio.
+        Timer {
+            interval: 33
+            repeat: true
+            running: web.listens && web.visible
+            onTriggered: web.runJavaScript("window.wallfluxHear(" + JSON.stringify(SceneSounds.speakers()) + ")")
+        }
+
         // Frozen, not merely hidden: a hidden page still runs its timers,
         // and these wallpapers are animation loops that would go on burning
         // a core behind a fullscreen window. Chromium will not freeze a page

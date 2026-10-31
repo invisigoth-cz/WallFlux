@@ -56,6 +56,7 @@ class Wallpaper
     Q_PROPERTY(QStringList tags MEMBER tags CONSTANT)
     Q_PROPERTY(QString rating MEMBER rating CONSTANT)
     Q_PROPERTY(QString resolution MEMBER resolution CONSTANT)
+    Q_PROPERTY(QString properties MEMBER properties CONSTANT)
     Q_PROPERTY(bool soundKnown MEMBER soundKnown CONSTANT)
     Q_PROPERTY(bool hasSound MEMBER hasSound CONSTANT)
     Q_PROPERTY(QString sizeOnDisk MEMBER sizeOnDisk CONSTANT)
@@ -104,6 +105,11 @@ public:
     /// there is nowhere cheaper to get it. A scene or web wallpaper has no
     /// one answer and leaves this empty.
     QString resolution;
+
+    /// What a web wallpaper is told through `applyUserProperties`, as JSON in
+    /// the shape Wallpaper Engine hands it: the settings project.json declares
+    /// with their values, a preset's laid over them. Empty for any other kind.
+    QString properties;
 
     /// Whether the wallpaper plays a sound of its own, once it is known --
     /// which is not the same question as the workshop's "Audio responsive",

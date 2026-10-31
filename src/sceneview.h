@@ -93,5 +93,10 @@ public:
     /// Writes the files out the first time, which for a wallpaper carrying
     /// an album is a moment's work on this thread.
     Q_INVOKABLE QVariantList of(const QUrl &source) const;
+
+    /// What the speakers are playing, as a web wallpaper's audio listener
+    /// wants it: 64 bands of the left ear and 64 of the right, nought to one.
+    /// Reading it is what keeps the renderer listening.
+    Q_INVOKABLE QList<float> speakers() const;
 };
 
