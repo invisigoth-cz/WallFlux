@@ -6,6 +6,43 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-31
+
+Most of the library now matches recordings of Wallpaper Engine on Windows, compared
+wallpaper by wallpaper: 39 scenes and 5 web wallpapers. Web wallpapers are told their
+settings and hear the music, presets and four of Wallpaper Engine's own wallpapers
+are in the library, and lit scenes are lit.
+
+### New
+
+- **A web wallpaper gets its settings and the sound.** Pages were told nothing, so
+  they drew their defaults whatever had been chosen. They now receive their settings
+  when they load and what the speakers are playing while they ask for it.
+- **Presets.** A workshop item that is another wallpaper plus a file of settings is
+  in the library and plays as that wallpaper with those settings.
+- **Four of the wallpapers that come with Wallpaper Engine**: Beach, Deep Space, Razer
+  Bedroom and Razer Vortex. The others are 3D models or do not draw yet.
+- **Scene lights.** Lights and the ambient colour are drawn, and move on the keyframes
+  the scene gives them. Alien Isolation goes dark and pulses green and red.
+- **Camera shake and zoom.**
+
+### Fixed in the renderer
+
+- **A blur reaches as far on any screen.** It was heavier the smaller the screen: God
+  of War's armour melted into the fog.
+- **A scene's colour for a particle system takes the hue and leaves the brightness**,
+  over the system's own colour changes and down to its children. Smoke, torches and
+  muzzle flashes across the library change colour with this.
+- **A particle system that states no rate lets particles out.** Terminator Resistance
+  had no embers at all.
+- **`turbulence` accelerates a particle.** Gears of War's sparks ran together into red
+  bands.
+- **What is born on the mouse is born on the mouse.** Alien Romulus had a black blot
+  under the alien's mouth.
+- **A shader that asks where the mouse is gets told.** Space Marine II's Honor and Glory
+  was missing most of the helmet.
+- **A scene with a scripted or bound bloom setting loads.**
+
 ## [0.17.1] — 2026-10-30
 
 Warhammer and Star wars now match recordings of Wallpaper Engine on Windows within
@@ -832,7 +869,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.2...v0.17.0
 [0.16.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.1...v0.16.2
