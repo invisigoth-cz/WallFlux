@@ -47,6 +47,8 @@ pub struct Fbo {
     /// Divisor against the output size: 2 is half resolution.
     pub scale: f32,
     pub format: String,
+    /// This effect's own, even where another effect on the object uses the name.
+    pub unique: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

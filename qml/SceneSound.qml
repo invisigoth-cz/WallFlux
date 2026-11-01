@@ -74,7 +74,10 @@ Item {
 
         audioOutput: AudioOutput {
             muted: sound.silent
-            volume: sound.volume * sound.loudness
+            // The file's number is how loud it sounds, not how far the samples
+            // reach: Augmentation at 0.5 and a Space Marine at 1.9 play at 0.75
+            // and 1.33 of their files in recordings of Wallpaper Engine.
+            volume: Math.sqrt(sound.volume) * sound.loudness
         }
 
         // A new source is loaded and left stopped unless asked, the same as

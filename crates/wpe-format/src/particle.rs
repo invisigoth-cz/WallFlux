@@ -426,11 +426,12 @@ pub struct Vortex {
 /// A wave a particle is carried by.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Oscillation {
-    /// Cycles a second.
+    /// Radians a second, not cycles: an ember's 20 is three blinks a second.
     pub frequency: Range<f32>,
-    /// How far the wave reaches.
+    /// Alpha and size: the two ends the value swings between. Position: how far
+    /// a particle's own wave reaches, drawn once.
     pub scale: Range<f32>,
-    /// Where in the wave a particle starts, in cycles.
+    /// Where in the wave a particle starts, in radians.
     pub phase: Range<f32>,
 }
 
@@ -901,12 +902,8 @@ impl ParticleSystem {
                         max: num(step, "speedouter", 0.0),
                     },
                 }),
-                "oscillatealpha" => Operator::OscillateAlpha(oscillation(step)),
-                // A file naming the step and nothing else leaves the size be.
-                "oscillatesize" => Operator::OscillateSize(Oscillation {
-                    scale: bounds(step, "scalemin", "scalemax", 1.0),
-                    ..oscillation(step)
-                }),
+                "oscillatealpha" => Operator::OscillateAlpha(oscillation(step, 10.0, 0.0, 1.0)),
+                "oscillatesize" => Operator::OscillateSize(oscillation(step, 10.0, 0.8, 1.2)),
                 "capvelocity" => Operator::CapVelocity {
                     most: num(step, "maxspeed", f32::MAX),
                 },
@@ -924,8 +921,8 @@ impl ParticleSystem {
                     },
                 },
                 "oscillateposition" => Operator::OscillatePosition {
-                    wave: oscillation(step),
-                    mask: vector(step, "mask", [1.0; 3]),
+                    wave: oscillation(step, 5.0, 0.0, 10.0),
+                    mask: vector(step, "mask", [1.0, 1.0, 0.0]),
                 },
                 "angularmovement" => Operator::AngularMovement {
                     force: vector(step, "force", [0.0; 3]),
@@ -1331,11 +1328,22 @@ fn bounds3(step: &Value, low: &str, high: &str, default: f32) -> Range<[f32; 3]>
     }
 }
 
-fn oscillation(step: &Value) -> Oscillation {
+/// Each end has its own default, out of `wallpaper64.exe`: `scalemin` 0.7 alone
+/// is an ember swinging between 0.7 and 1, not a steady 0.7.
+fn oscillation(step: &Value, top_frequency: f32, low_scale: f32, high_scale: f32) -> Oscillation {
     Oscillation {
-        frequency: bounds(step, "frequencymin", "frequencymax", 0.0),
-        scale: bounds(step, "scalemin", "scalemax", 0.0),
-        phase: bounds(step, "phasemin", "phasemax", 0.0),
+        frequency: Range {
+            min: num(step, "frequencymin", 1.0),
+            max: num(step, "frequencymax", top_frequency),
+        },
+        scale: Range {
+            min: num(step, "scalemin", low_scale),
+            max: num(step, "scalemax", high_scale),
+        },
+        phase: Range {
+            min: num(step, "phasemin", 0.0),
+            max: num(step, "phasemax", std::f32::consts::TAU),
+        },
     }
 }
 

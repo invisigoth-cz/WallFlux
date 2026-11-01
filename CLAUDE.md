@@ -699,6 +699,68 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   1500` is twenty-five seconds as the desktop has them. It clears every frame now
   too, as the program does; without that Dark Core's tubes went white by frame six.
 
+- **A mirrored animation that starts off rest holds its first stretch.** Three of
+  Alien Isolation's start with a bone out of place: the jaw is written out of the
+  mouth at frame 0 and comes in by frame 120. Wallpaper Engine leaves it in, and it
+  first comes out at the far end of the mirror, forty seconds on: seen by the user
+  on Windows, not explained. `first_settled_frame` takes the first frame furthest
+  back along the way to rest, because a curve may stand still at either end.
+
+- **`g_TextureReductionScale` goes with the size `g_Texture0Resolution` claims.**
+  A buffer claims the scene's size, so the scale is about one. Counted in the
+  buffer's real pixels, `blend`'s offset fell short by the factor the screen is
+  smaller than the scene, and Dark Angels' light missed its cathedral. Only that
+  wallpaper moved in a sweep.
+
+- **The top band gathers everything above it, a dozen times over.** DOOM's D and M
+  spread on the average of bands 11 to 15, measured at 12 of the 14 pixels they can
+  reach at 1280, while its second O goes white if bands 8 to 12 pass a half. Band 15
+  alone can carry that (`TOP_LIFT`). Worked out from the sound of a recording and
+  drawn with those numbers; one wallpaper, and not yet heard on the desktop.
+
+- **A system whose rate a script drives starts 3.2 of its own seconds ahead.** From
+  nought Dark Core's fires took forty seconds to look like the first frame of a
+  recording, which grows at the same pace after that. The recording may simply have
+  started late, and 3.2 is fitted to this one wallpaper.
+
+- **`oscillate*` frequencies are radians a second, and the two scales are two ends.**
+  An ember's "frequencymax 20, scalemin 0.7" is alpha swinging between 0.7 and 1 up
+  to three times a second. Read as cycles, with the missing end taken as the stated
+  one, it was twenty blinks a second down to 0.3: the flicker the user saw on the
+  flying lights of four wallpapers. Defaults out of `wallpaper64.exe`: frequency 1
+  to 10 (position 1 to 5), alpha 0 to 1, size 0.8 to 1.2, phase 0 to 2 pi.
+
+- **An fbo marked `unique` is the effect's own, whatever its name.** Motion blur keeps
+  last frame in `_rt_FullCompoBuffer1` and `blurprecise` works in a buffer of that
+  name. Shared, the blur overwrote the memory each frame, so accumulation mixed with
+  an unscrolled picture: Snow Lights' deer came out 0.64 of itself and pale.
+  `var.py`-style unpacked copies of a package go straight into `shot`, which is how
+  this was found: switch one effect off in scene.json and look.
+
+- **The `turbulence` operator pushes round the hills of a noise, with its clock in
+  scene pixels.** Almamu's reading: position plus time times `timescale`, then the
+  scale doubled, then a curl (flattened here). Rainbow Six's -50 was added after the
+  scale, fifty cells a second, a new direction every frame: fog that shivered instead
+  of rolling. 21 wallpapers have the operator; only 5 systems state a `timescale`.
+
+- **Every `turbulentvelocityrandom` adds its push.** Time Reactor's fire has one up
+  its tube and one down; only the last counted, so half its tubes stayed empty.
+
+- **A `right` along `forward` is a straight jet.** Dark Angels' Torch says "0 1 0"
+  and its video runs down the barrel; let wander, it lit a column as far as the top of
+  composition layer 197, the straight edge. One preset and one video; the meaning of
+  `right` beyond that is a guess that fits.
+
+- **A vortex is a sideways push, and `controlpointattract` a constant pull within half
+  its `threshold`.** Almamu's reading of both. Augmentation's 8000 as degrees a second
+  was a turn and a half a frame and drew straight spikes; as a push held back by its
+  drag of 20 it swirls on the beat as in the video.
+
+- **A scene sound's `volume` goes up as its square root.** Augmentation at 0.5 and a
+  Space Marine at 1.9 play at 0.75 and 1.33 of their files in recordings. Two Alien
+  Isolation recordings at 0.5 and 0.65 say 0.99 and 0.96, so this is the closer of two
+  readings rather than settled; Qt tops out at 1.
+
 - **`colorchange` multiplies what the particle was born with.** Replacing it
   threw away a scene's tint.
 
@@ -1859,18 +1921,19 @@ the file. Everything after it should.
    deciding which half is mistaken.
 
 4. **Before the next release, as the user saw them on 1 November:**
-   - **Alien Isolation:** the second jaw is out at 0 s and the user has it first at
-     about 40 s. Animation 716 on layer 28, 20 s mirrored. The period is right: out
-     40 s in, in the recording and here. The recording hides the first seconds
-     behind Wallpaper Engine's own window, so what happens at nought is unmeasured,
-     and it wants a recording of the wallpaper being switched on.
-   - **Dark Angels:** the muzzle flash is paler than the video and has a straight
-     edge above it (layers 197 and 534, 2500x1600). Against the 3440x1440 video the
-     warm fog and smoke round the flash are missing altogether. That video is off
-     YouTube, so its settings are the author's; `firespeed` is 0 in the scene and 3
-     in the project.
-   - **Star Destroyer's** fire clouds at the bottom come out red, orange in the
-     recording.
+   - **Alien Romulus:** on Windows some 60 solid dots of about 4 pixels round the
+     mouse; here each is a splat of about 16, three or four times too large, which is
+     the black blot the user sees. The size is `sizerandom` halved, 0.51 for the
+     instance and 1.8 for `sizechange`. Which of them differs is not found: the shader
+     and its texture are shared and the file holds no sheet, so the renderer's numbers
+     agree. The user's fallback, if it still looks wrong, is not to draw the specks.
+   - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.
+   - **Gears of War:** the user's "bubble" at 28 to 30 s of the 64 s recording. The
+     Spectacle file is a player showing that recording. Not told apart from our ripple
+     at contact-sheet size, so not found.
+   - **Star Destroyer's** clouds and **Tomb Raider's** torch measured over time against
+     their recordings: 80/21/12 against 75/21/12, and a white core in red with no yellow
+     in either. Left alone, though the user remembered orange and yellow.
    - **Blue Dawn:** the video has a strong sun and a small flare under it, here a
      weaker sun and a large one, with the mouse in the same place.
 

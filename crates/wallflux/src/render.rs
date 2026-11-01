@@ -2267,19 +2267,31 @@ fn build_effect(
             // are the engine's own, and they say what they mean.
             false => divisor_of(&fbo.name),
         };
-        buffers.insert(fbo.name.clone(), divisor);
+        let name = match fbo.unique {
+            true => format!("{} of {}", fbo.name, effect.file),
+            false => fbo.name.clone(),
+        };
+        buffers.insert(name, divisor);
     }
+    // Motion blur keeps last frame in `_rt_FullCompoBuffer1`, says so with `unique`,
+    // and a blur ahead of it on the same object scribbles on a buffer of that
+    // name every frame. Shared, Snow Lights' deer mixed with nothing and came
+    // out pale and see-through.
+    let own_name = |name: &str| match parsed.fbos.iter().any(|fbo| fbo.unique && fbo.name == name) {
+        true => format!("{name} of {}", effect.file),
+        false => name.to_owned(),
+    };
     let mut steps = Vec::new();
     for (at, pass) in parsed.passes.iter().enumerate() {
         let into = match pass.target.is_empty() {
             true => output.clone(),
-            false => Buffer::Named(pass.target.clone()),
+            false => Buffer::Named(own_name(&pass.target)),
         };
         if pass.command == "copy" {
             steps.push(Step {
                 pass: None,
                 into,
-                reads: vec![(0, which_buffer(&pass.source, input))],
+                reads: vec![(0, which_buffer(&own_name(&pass.source), input))],
                 scene_pass: (0, at),
             });
             continue;
@@ -2290,7 +2302,7 @@ fn build_effect(
         let mut reads: Vec<_> = pass
             .bind
             .iter()
-            .map(|bind| (bind.index as usize, which_buffer(&bind.name, input)))
+            .map(|bind| (bind.index as usize, which_buffer(&own_name(&bind.name), input)))
             .collect();
         // A pass that binds nothing to its first unit still draws what came
         // in: that is what the engine had left bound there.
@@ -2821,19 +2833,6 @@ unsafe fn set_common(
             };
             texture.bind(gl, unit as u32);
             set_int(gl, pass.program, &format!("g_Texture{unit}"), unit as i32);
-            // How many of the scene's pixels one of the picture's stands for.
-            // An object's own texture is drawn at its own size; a buffer of
-            // ours is the object as big as it is on screen, where Wallpaper
-            // Engine's is as big as it is in the scene. `blend` divides an
-            // offset given in the scene's pixels by this, and left at nought
-            // it threw the texture off to infinity and blended nothing.
-            if unit == 0 {
-                let reduction = match handed {
-                    Some(_) => object.size[0] / texture.image_size.0.max(1) as f32,
-                    None => 1.0,
-                };
-                set_float(gl, pass.program, "g_TextureReductionScale", reduction);
-            }
             // .xy is the texture, .zw the image inside it; shaders divide one
             // by the other to find the part that is not padding. A buffer of
             // ours says the size Wallpaper Engine's would be, for the sake of
@@ -2842,6 +2841,19 @@ unsafe fn set_common(
                 Some(_) => object.view.scene_per_pixel,
                 None => 1.0,
             };
+            // How many of the scene's pixels one of the picture's stands for, as
+            // big as the line above says it is. `blend` divides an offset given
+            // in the scene's pixels by this and then by that size: left at
+            // nought it threw the texture off to infinity, and counted in the
+            // buffer's real pixels it fell short by the same factor the smaller
+            // the screen, which took Dark Angels' light off its cathedral.
+            if unit == 0 {
+                let reduction = match handed {
+                    Some(_) => object.size[0] / (texture.image_size.0.max(1) as f32 * as_big),
+                    None => 1.0,
+                };
+                set_float(gl, pass.program, "g_TextureReductionScale", reduction);
+            }
             set_vec4(
                 gl,
                 pass.program,

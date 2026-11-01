@@ -67,6 +67,12 @@ const MAX_STEP: f32 = 0.1;
 /// How far ahead a system may start, and in how fine a step it gets there.
 const MOST_AHEAD: f32 = 30.0;
 const AHEAD_STEPS: f32 = 30.0;
+/// How far ahead, in its own seconds, a system whose rate a script drives begins.
+/// A script holds Dark Core's tube fires at a tenth of their rate in silence, and
+/// from nought they took forty seconds to be where a recording from Windows has
+/// them at its first frame, growing no faster or slower from there. Measured there
+/// alone; it may be that the recording simply started late.
+const SCRIPTED_HEAD_START: f32 = 3.2;
 
 struct Particle {
     position: [f32; 3],
@@ -492,7 +498,8 @@ struct Start {
     angular: Range<[f32; 3]>,
     /// Set when the system takes its starting direction from a noise field
     /// rather than at random.
-    turbulent: Option<Turbulent>,
+    /// Each adds its push: Time Reactor's fire has one up its tube and one down.
+    turbulent: Vec<Turbulent>,
     /// Stands over `color` where the system draws its colours this way.
     palette: Palette,
     /// How far a particle may land from where the emitter put it.
@@ -549,7 +556,7 @@ impl Default for Start {
             velocity: Range::default(),
             rotation: Range::default(),
             angular: Range::default(),
-            turbulent: None,
+            turbulent: Vec::new(),
             palette: Palette::Ranged,
             offset: 0.0,
             around: None,
@@ -736,7 +743,7 @@ impl System {
                 Initializer::Color(r) => start.color = r,
                 Initializer::Velocity(r) => start.velocity = r,
                 Initializer::Rotation(r) => start.rotation = r,
-                Initializer::TurbulentVelocity(field) => start.turbulent = Some(field),
+                Initializer::TurbulentVelocity(field) => start.turbulent.push(field),
                 // Carried as a starting value but nothing turns it yet: the
                 // operator that spins a particle is `angularmovement`.
                 Initializer::AngularVelocity(r) => start.angular = r,
@@ -799,7 +806,7 @@ impl System {
             }
         }
         start.velocity = times3(start.velocity, [speed; 3]);
-        if let Some(field) = &mut start.turbulent {
+        for field in &mut start.turbulent {
             field.speed = times(field.speed, speed);
         }
         let emitters = definition
@@ -854,7 +861,8 @@ impl System {
             operators,
             animation: definition.animation,
             maxcount,
-            starttime: definition.starttime,
+            starttime: definition.starttime
+                + if over.rate.script.is_some() { SCRIPTED_HEAD_START } else { 0.0 },
             live: Vec::new(),
             elapsed: 0.0,
             rng: Rng::seeded(seed),
@@ -903,7 +911,7 @@ impl System {
     /// Whether anything about the system follows the sound.
     pub fn listens(&self) -> bool {
         self.emitters.iter().any(|(emitter, _)| emitter.audio.is_some())
-            || self.start.turbulent.is_some_and(|field| field.audio.is_some())
+            || self.start.turbulent.iter().any(|field| field.audio.is_some())
             || self.operators.iter().any(|operator| match operator {
                 Operator::Turbulence { field, .. } => field.audio.is_some(),
                 Operator::Vortex(vortex) => vortex.audio.is_some(),
@@ -1237,7 +1245,7 @@ impl System {
                     // to 1000 ran together into red bands where the recording
                     // has them scattered evenly about, held back by their drag.
                     Operator::Turbulence { field, mask } => {
-                        let along = field_direction(
+                        let along = eddy_direction(
                             field,
                             particle.position,
                             particle.phase * field.phase_max,
@@ -1259,11 +1267,9 @@ impl System {
                             particle.rotation[axis] += particle.spin[axis] * dt;
                         }
                     }
-                    // ponytail: the pull falls off in a straight line to
-                    // nothing at the reach the file states, and a particle
-                    // outside that reach is left alone. The file says nothing
-                    // about the shape of it; this is the shape that keeps the
-                    // push local, which is what the wallpapers using it want.
+                    // The same pull all the way out to half the reach the file
+                    // states, then none: Almamu's reading, and Romulus' pointer
+                    // says -600 inside 50 and 500 inside 5000, a ring of specks.
                     Operator::Attract {
                         toward,
                         strength,
@@ -1278,21 +1284,29 @@ impl System {
                         let away: [f32; 3] = std::array::from_fn(|i| particle.position[i] - at[i]);
                         let distance =
                             (away[0] * away[0] + away[1] * away[1] + away[2] * away[2]).sqrt();
-                        if distance > f32::EPSILON && distance < *reach {
-                            let force = strength * (1.0 - distance / reach) * dt;
+                        if distance > f32::EPSILON && distance < reach / 2.0 {
+                            let force = strength * dt;
                             for (axis, away) in away.iter().enumerate() {
                                 particle.velocity[axis] -= away / distance * force;
                             }
                         }
                     }
-                    // ponytail: a vortex carries the particle round rather
-                    // than pulling it in, for the same reason turbulence
-                    // does -- a speed the file states stays the speed.
+                    // A push along the way round, as Almamu reads it, which its
+                    // drag holds to a speed: Augmentation's eye asks for 8000 and
+                    // swirls on the beat. As degrees a second that was a turn and
+                    // a half a frame, and a mess of straight spikes.
                     Operator::Vortex(vortex) => {
-                        let turn = vortex_turn(vortex, particle.position)
-                            * loudness(vortex.audio, sound)
-                            * dt;
-                        particle.position = turned(particle.position, vortex.axis, turn);
+                        let round = cross(vortex.axis, particle.position);
+                        let length = round.iter().map(|v| v * v).sum::<f32>().sqrt();
+                        if length > 1e-3 {
+                            let push = vortex_speed(vortex, particle.position)
+                                * loudness(vortex.audio, sound)
+                                * dt
+                                / length;
+                            for axis in 0..3 {
+                                particle.velocity[axis] += round[axis] * push;
+                            }
+                        }
                     }
                     Operator::CapVelocity { most } => {
                         let speed = particle.velocity.iter().map(|v| v * v).sum::<f32>().sqrt();
@@ -1479,15 +1493,15 @@ impl System {
         let phase = self.rng.next_f32();
 
         // A turbulent start reads the field once, where the particle appears.
-        let turbulent = match self.start.turbulent {
-            Some(field) => {
-                let along =
-                    launch_direction(&field, position, phase * field.phase_max, self.elapsed);
-                let speed = self.rng.range(field.speed) * loudness(field.audio, sound);
-                along.map(|axis| axis * speed)
+        let mut turbulent = [0.0; 3];
+        for at in 0..self.start.turbulent.len() {
+            let field = self.start.turbulent[at];
+            let along = launch_direction(&field, position, phase * field.phase_max, self.elapsed);
+            let speed = self.rng.range(field.speed) * loudness(field.audio, sound);
+            for axis in 0..3 {
+                turbulent[axis] += along[axis] * speed;
             }
-            None => [0.0; 3],
-        };
+        }
 
         // In this order, which is the order they have always been drawn in:
         // another would be every particle in the library somewhere else, and a
@@ -1576,7 +1590,6 @@ impl System {
         self.vertices.clear();
         self.vertices
             .reserve(self.live.len() * VERTICES_PER_PARTICLE * FLOATS_PER_VERTEX);
-        let elapsed = self.elapsed;
         for particle in &self.live {
             let progress = particle.age / particle.lifetime;
             let mut alpha = particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
@@ -1594,20 +1607,14 @@ impl System {
                         });
                     }
                     Operator::OscillateAlpha(wave) => {
-                        let (amount, swing) = wave_at(wave, particle.wobble, elapsed);
-                        // Down from full and back, never past invisible.
-                        alpha *= 1.0 - amount * (0.5 - 0.5 * swing);
+                        alpha *= wave_between(wave, particle.wobble, particle.age);
                     }
                     // Between the two ends, each particle at its own rate.
                     Operator::OscillateSize(wave) => {
-                        let pick = |r: Range<f32>, at: f32| r.min + (r.max - r.min) * at;
-                        let turning = pick(wave.frequency, particle.wobble[0]) * particle.age
-                            + pick(wave.phase, particle.wobble[2]);
-                        let swing = (turning.cos() + 1.0) / 2.0;
-                        size *= pick(wave.scale, swing);
+                        size *= wave_between(wave, particle.wobble, particle.age);
                     }
                     Operator::OscillatePosition { wave, mask } => {
-                        let (amount, swing) = wave_at(wave, particle.wobble, elapsed);
+                        let (amount, swing) = wave_at(wave, particle.wobble, particle.age);
                         for (axis, mask) in mask.iter().enumerate() {
                             position[axis] += mask * amount * swing;
                         }
@@ -1776,12 +1783,17 @@ fn wave_at(wave: &Oscillation, wobble: [f32; 3], time: f32) -> (f32, f32) {
     let frequency = pick(wave.frequency, wobble[0]);
     let amount = pick(wave.scale, wobble[1]);
     let phase = pick(wave.phase, wobble[2]);
-    let turns = time * frequency + phase;
-    (amount, (turns * std::f32::consts::TAU).sin())
+    (amount, (time * frequency + phase).cos())
 }
 
-/// Degrees a second a vortex turns a particle at its distance from the centre.
-fn vortex_turn(vortex: &Vortex, position: [f32; 3]) -> f32 {
+/// A value swinging between the two ends of its wave's scale.
+fn wave_between(wave: &Oscillation, wobble: [f32; 3], time: f32) -> f32 {
+    let (_, swing) = wave_at(wave, wobble, time);
+    wave.scale.min + (wave.scale.max - wave.scale.min) * (swing + 1.0) / 2.0
+}
+
+/// How hard a vortex pushes a particle at its distance from the centre.
+fn vortex_speed(vortex: &Vortex, position: [f32; 3]) -> f32 {
     let distance =
         (position[0] * position[0] + position[1] * position[1] + position[2] * position[2]).sqrt();
     let span = vortex.distance.max - vortex.distance.min;
@@ -1876,6 +1888,29 @@ fn field_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32)
     centred.map(|axis| axis / length)
 }
 
+/// Which way the `turbulence` operator pushes: round the hills of a noise rather
+/// than along its values, so what it stirs turns in eddies instead of draining
+/// to one side. Almamu's reading, flattened, since no scene here moves in depth.
+///
+/// The clock moves the place asked about in the scene's own pixels, before the
+/// scale: Rainbow Six says -50 at a scale of 0.0053, half a cell a second. Added
+/// after it, that was fifty, a new direction every frame, and its fog only
+/// shivered where the recording's rolls round the man with the shield.
+fn eddy_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32) -> [f32; 3] {
+    const STEP: f32 = 0.01;
+    let scale = field.scale * 2.0;
+    let x = (position[0] + phase + time * field.time_scale) * scale;
+    let y = position[1] * scale;
+    let z = position[2] * scale;
+    let across = noise([x, y + STEP, z]) - noise([x, y - STEP, z]);
+    let up = noise([x - STEP, y, z]) - noise([x + STEP, y, z]);
+    let length = (across * across + up * up).sqrt();
+    if length < 1e-6 {
+        return [0.0; 3];
+    }
+    [across / length, up / length, 0.0]
+}
+
 /// Which way `turbulentvelocityrandom` sends a particle off: a direction out
 /// of the noise, held within `scale` half turns of `forward`, then turned
 /// `offset` radians about `right`, and kept in the plane.
@@ -1893,6 +1928,13 @@ fn launch_direction(field: &Turbulent, position: [f32; 3], phase: f32, time: f32
         (length > 1e-4).then(|| v.map(|x| x / length))
     };
     let forward = normalized(field.forward).unwrap_or([0.0, 1.0, 0.0]);
+    // The spread is a turn about `right`, and a turn about the way it is already
+    // going moves nothing. Dark Angels' Torch says `right` "0 1 0" and in its video
+    // it runs straight down the barrel; let wander, it lit a column up the picture
+    // as far as the edge of the layer it is copied through. One preset, one video.
+    if normalized(cross(forward, field.right)).is_none() {
+        return forward;
+    }
     let sampled = Turbulent {
         scale: 0.1,
         offset: -0.5,
@@ -3054,62 +3096,30 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_vortex_carries_a_particle_round_without_pulling_it_in() {
-        let mut s = system(
-            r#"{"maxcount":20,"emitter":[{"name":"sphererandom","rate":200,
-                 "directions":"1 1 0","distancemin":200,"distancemax":200}],
-                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
-                "operator":[{"name":"vortex","axis":"0 0 1","distanceinner":0,
-                             "distanceouter":500,"speedinner":90,"speedouter":90}]}"#,
-        );
-        let start: Vec<[f32; 3]> = {
-            s.advance(1.0 / 60.0, &Spectrum::SILENT);
-            s.live.iter().map(|p| p.position).collect()
-        };
-        run(&mut s, 1.0, 1.0 / 60.0);
-        let mut turned_by = Vec::new();
-        for (before, particle) in start.iter().zip(&s.live) {
-            let after = particle.position;
-            let radius = |p: &[f32; 3]| (p[0] * p[0] + p[1] * p[1]).sqrt();
-            // A swirl keeps the distance it found the particle at.
-            assert!(
-                (radius(before) - radius(&after)).abs() < 1.0,
-                "the vortex moved a particle from {} to {}",
-                radius(before),
-                radius(&after)
-            );
-            let angle = |p: &[f32; 3]| p[1].atan2(p[0]).to_degrees();
-            let mut moved = angle(&after) - angle(before);
-            if moved < -180.0 {
-                moved += 360.0;
-            }
-            turned_by.push(moved);
-        }
-        assert!(!turned_by.is_empty());
-        for moved in turned_by {
-            // Ninety degrees a second, for about a second.
-            assert!((80.0..=95.0).contains(&moved), "turned {moved} degrees");
-        }
+    /// Which way round a vortex sends a particle at (200, 0): up is the way of
+    /// a positive speed, with the y of a scene running up.
+    fn pushed_by_vortex(speed: &str) -> [f32; 3] {
+        let mut s = system(&format!(
+            r#"{{"maxcount":1,"emitter":[{{"name":"boxrandom","rate":1000,"distancemax":0}}],
+                "initializer":[{{"name":"lifetimerandom","min":10,"max":10}},
+                               {{"name":"velocityrandom","min":"0 0 0","max":"0 0 0"}}],
+                "operator":[{{"name":"movement"}},
+                            {{"name":"vortex","axis":"0 0 1","distanceinner":0,
+                             "distanceouter":500,"speedinner":{speed},"speedouter":{speed}}}]}}"#,
+        ));
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
+        s.live[0].position = [200.0, 0.0, 0.0];
+        s.live[0].velocity = [0.0; 3];
+        s.advance(0.1, &Spectrum::SILENT);
+        s.live[0].velocity
     }
 
     #[test]
-    fn a_vortex_turns_the_other_way_when_its_speed_is_negative() {
-        let positive = r#"{"maxcount":1,"emitter":[{"name":"sphererandom","rate":100,
-                 "directions":"1 1 0","distancemin":100,"distancemax":100}],
-                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
-                "operator":[{"name":"vortex","axis":"0 0 1","distanceouter":500,
-                             "speedinner":SPEED,"speedouter":SPEED}]}"#;
-        let turn = |speed: &str| {
-            let mut s = system(&positive.replace("SPEED", speed));
-            s.advance(1.0 / 60.0, &Spectrum::SILENT);
-            let before = s.live[0].position;
-            run(&mut s, 0.5, 1.0 / 60.0);
-            let after = s.live[0].position;
-            after[1].atan2(after[0]) - before[1].atan2(before[0])
-        };
-        assert!(turn("90") > 0.0);
-        assert!(turn("-90") < 0.0);
+    fn a_vortex_pushes_a_particle_along_the_way_round() {
+        let v = pushed_by_vortex("90");
+        assert!((v[1] - 9.0).abs() < 0.01, "pushed {v:?}");
+        assert!(v[0].abs() < 0.01, "pulled in or out: {v:?}");
+        assert!(pushed_by_vortex("-90")[1] < -8.0, "a negative speed goes the other way");
     }
 
     #[test]
@@ -3118,8 +3128,8 @@ mod tests {
             r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
                 "initializer":[{"name":"lifetimerandom","min":100,"max":100},
                                {"name":"alpharandom","min":1,"max":1}],
-                "operator":[{"name":"oscillatealpha","frequencymin":1,"frequencymax":1,
-                             "scalemin":0.8,"scalemax":0.8}]}"#,
+                "operator":[{"name":"oscillatealpha","frequencymin":6.283,"frequencymax":6.283,
+                             "scalemin":0.2}]}"#,
         );
         let mut seen: Vec<f32> = Vec::new();
         for _ in 0..90 {
@@ -3129,7 +3139,7 @@ mod tests {
         let low = seen.iter().cloned().fold(f32::MAX, f32::min);
         let high = seen.iter().cloned().fold(f32::MIN, f32::max);
         assert!(high > 0.95, "never came back up: {high}");
-        // Dimmed by at most the scale it states, and never to nothing.
+        // Down to the end it states, and up to the end it leaves out.
         assert!((0.15..0.35).contains(&low), "dimmed to {low}");
     }
 
@@ -3138,7 +3148,7 @@ mod tests {
         let mut s = system(
             r#"{"maxcount":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
                 "initializer":[{"name":"lifetimerandom","min":100,"max":100}],
-                "operator":[{"name":"oscillateposition","frequencymin":1,"frequencymax":1,
+                "operator":[{"name":"oscillateposition","frequencymin":6.283,"frequencymax":6.283,
                              "scalemin":30,"scalemax":30,"mask":"1 0 0"}]}"#,
         );
         let mut xs: Vec<f32> = Vec::new();

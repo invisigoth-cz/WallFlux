@@ -48,6 +48,8 @@ pub struct Animation {
     pub playback: Playback,
     /// Per bone, its poses frame by frame.
     pub tracks: Vec<Vec<Pose>>,
+    /// The frame its first pass starts from. See [`first_settled_frame`].
+    pub opening: f32,
 }
 
 impl Animation {
@@ -58,6 +60,7 @@ impl Animation {
         let last = self.frames.max(f32::EPSILON);
         let at = match self.playback {
             Playback::Loop => frame.rem_euclid(last),
+            Playback::Mirror if frame < last => frame.max(self.opening),
             Playback::Mirror => last - (frame.rem_euclid(2.0 * last) - last).abs(),
             Playback::Once => frame.min(last),
         };
@@ -70,6 +73,37 @@ impl Animation {
             angle: a.angle + (b.angle - a.angle) * t,
         })
     }
+}
+
+/// Where a first pass begins when an animation starts away from rest: the frame
+/// the bone furthest off has come furthest back. Alien Isolation's second jaw starts
+/// out of the mouth, and Wallpaper Engine leaves it in the mouth until it comes
+/// out at the far end of the mirror, forty seconds in. Seen from Windows, not
+/// explained; three animations here start that way and the rest start at rest.
+fn first_settled_frame(tracks: &[Vec<Pose>], bones: &[Bone]) -> f32 {
+    let off = |i: usize| {
+        let (start, rest) = (tracks[i].first().copied().unwrap_or(bones[i].rest), bones[i].rest);
+        (rest.x - start.x, rest.y - start.y)
+    };
+    let size = |(x, y): (f32, f32)| x * x + y * y;
+    let Some(furthest) = (0..tracks.len()).max_by(|a, b| size(off(*a)).total_cmp(&size(off(*b)))) else {
+        return 0.0;
+    };
+    let back = off(furthest);
+    if size(back) < 1.0 {
+        return 0.0;
+    }
+    // How far along the way back: the first frame to get furthest, since a curve
+    // may stand still at either end of the journey.
+    let track = &tracks[furthest];
+    let along = |p: &Pose| (p.x - track[0].x) * back.0 + (p.y - track[0].y) * back.1;
+    let mut opening = 0;
+    for (frame, pose) in track.iter().enumerate() {
+        if along(pose) > along(&track[opening]) + 1e-3 {
+            opening = frame;
+        }
+    }
+    opening as f32
 }
 
 /// An animation as the scene plays it.
@@ -235,7 +269,8 @@ impl Puppet {
                 tracks.push(track);
             }
             r.take(10)?;
-            animations.push(Animation { id, fps, frames, playback, tracks });
+            let opening = first_settled_frame(&tracks, &bones);
+            animations.push(Animation { id, fps, frames, playback, tracks, opening });
         }
         Some(Self { corners, triangles, bones, animations })
     }
@@ -344,6 +379,7 @@ mod tests {
                     vec![Pose::default(); 3],
                     track,
                 ],
+                opening: 0.0,
             }],
             bones,
         }
@@ -355,6 +391,28 @@ mod tests {
         let mut out = Vec::new();
         puppet.bend_into(playing, seconds, &mut out);
         (out[0], out[1])
+    }
+
+    #[test]
+    fn a_first_pass_starts_where_a_bone_off_rest_settles() {
+        let bones = vec![Bone { parent: None, rest: Pose::default() }];
+        let at = |x: f32| Pose { x, y: 0.0, angle: 0.0 };
+        let track = vec![at(9.0), at(9.0), at(-1.0), at(2.0), at(0.0)];
+        assert_eq!(first_settled_frame(std::slice::from_ref(&track), &bones), 2.0);
+        let animation = Animation {
+            id: 1,
+            fps: 1.0,
+            frames: 4.0,
+            playback: Playback::Mirror,
+            tracks: vec![track.clone()],
+            opening: 2.0,
+        };
+        assert_eq!(animation.pose(0, 0.0).unwrap().x, -1.0, "held at the start");
+        assert_eq!(animation.pose(0, 3.0).unwrap().x, 2.0, "then as written");
+        assert_eq!(animation.pose(0, 8.0).unwrap().x, 9.0, "and out at the far end of the mirror");
+
+        let from_rest = vec![at(0.0), at(5.0), at(0.0)];
+        assert_eq!(first_settled_frame(&[from_rest], &bones), 0.0);
     }
 
     #[test]
