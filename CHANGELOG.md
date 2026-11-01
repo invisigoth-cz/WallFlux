@@ -6,6 +6,46 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-01
+
+A whole library looked at side by side with recordings from Windows, and what that
+found. Flying lights stop flickering, fog rolls, and two effects that had been read
+wrongly from the start now do what the wallpapers ask of them.
+
+### Fixed in the renderer
+
+- **Flying lights no longer flicker.** The speed of `oscillatealpha` is radians a
+  second and its two scales are two ends. Read as cycles, an ember blinked twenty times
+  a second down to a third of its brightness: Ender Spartan, Star Wars 1811296056,
+  Terminator Resistance 4k and Warhammer 3341930145.
+- **An effect's `unique` buffer is its own.** A blur on the same object wrote over the
+  frame motion blur was keeping, and Snow Lights' deer came out pale and see-through.
+- **Turbulence stirs in eddies**, and its clock runs in the scene's pixels. It was a new
+  direction every frame, so Rainbow Six's fog shivered instead of rolling. This moves
+  every wallpaper with the operator, 21 here.
+- **Every turbulent start adds its push.** Only the last counted, and half of Time
+  Reactor's tubes stayed empty.
+- **A jet whose `right` lies along its `forward` goes straight.** Dark Angels' smoke
+  runs down the barrel, and the straight edge above the muzzle is gone.
+- **A vortex pushes sideways**, rather than turning a particle by degrees. Augmentation's
+  eye swirls on the beat instead of drawing straight spikes.
+- **`controlpointattract` pulls evenly out to half its threshold**, which changes the
+  specks round the mouse in Alien Romulus and the fog round it in Rainbow Six.
+- **`g_TextureReductionScale` goes with the size a buffer claims.** Dark Angels' light
+  lands on its cathedral.
+- **A mirrored animation that starts off rest holds its first stretch.** Alien
+  Isolation's jaw first comes out forty seconds in.
+
+### Sound
+
+- **DOOM's letters move with the music.** The top band was lifted so far that they sat at
+  the end of their travel for most of a track. Fitted to four minutes of a recording.
+- **A scene's music plays at the square root of its `volume`**, which is closer to the
+  recordings and louder than it was: Augmentation at 0.5 now plays at 0.71. The
+  recordings do not all agree on this one.
+- **A system whose rate a script drives starts ahead**, so Dark Core's fires are lit from
+  the first frames rather than after forty seconds.
+
 ## [0.19.0] — 2026-11-01
 
 Bent puppets, particles that run smoothly at any refresh rate, and a second round of
@@ -907,7 +947,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.0...v0.17.1
