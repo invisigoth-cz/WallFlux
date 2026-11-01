@@ -78,6 +78,11 @@ impl Object {
     /// the canvas as it needs. The projection carries the scale from the
     /// scene's own units to the output's.
     fn on_screen(&self, projection: &Matrix, output: (u32, u32), most: (u32, u32)) -> (u32, u32) {
+        // A post-processing layer is the screen, whatever size the file
+        // remembers it at: Gears of War's says 1248x702 in a 1920x1080 scene.
+        if self.layer == Some(Layer::Screen) {
+            return (output.0.min(most.0), output.1.min(most.1));
+        }
         let across = |scale: f32, size: f32, pixels: u32, most: u32| {
             let width = (scale.abs() * pixels as f32 / 2.0) * size.abs();
             (width.ceil() as u32).clamp(1, most)
@@ -1288,7 +1293,14 @@ impl Scene {
             let onto_unit =
                 transform::multiply(&onto, &transform::model([0.0; 3], halves, [1.0; 3], [0.0; 3]));
             object.view = ObjectView {
-                scene_per_pixel: object.size[0].abs() / used.0.max(1) as f32,
+                // Wallpaper Engine's buffer for a post-processing layer is the
+                // back buffer, so a blur there reaches screen pixels. Told the
+                // size in the file, Gears of War's reached twice as far.
+                scene_per_pixel: if object.layer == Some(Layer::Screen) {
+                    1.0
+                } else {
+                    object.size[0].abs() / used.0.max(1) as f32
+                },
                 pointer,
                 from_clip: transform::inverse_flat(&onto).unwrap_or(transform::IDENTITY),
                 from_clip_to_unit: transform::inverse_flat(&onto_unit).unwrap_or(transform::IDENTITY),
@@ -1845,31 +1857,33 @@ const MOST_SCRIPT_STEPS: f32 = 300.0;
 /// 24 000, half of them for under 600 -- so nothing but those four is touched.
 pub const DEFAULT_BUDGET: usize = 24_000;
 
-/// Scales every system in a scene down together until the scene fits.
+/// Holds the largest systems in a scene down until the scene fits.
 ///
-/// Every system keeps its share, so a scene thins out evenly rather than
-/// losing whichever systems happen to come last.
+/// They are what costs and they can spare it: a third of 45 000 sparks is still
+/// a shower, where a third of a torch's 41 flames is a torch a third as bright
+/// -- which is what Gears of War's eyes and DOOM's torches were while every
+/// system was scaled alike.
 fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<String>) {
-    let wanted: usize = objects
+    let expected: Vec<usize> = objects
         .iter()
         .filter_map(|o| match &o.drawing {
             Drawing::Particles(system) => Some(system.expected()),
             Drawing::Image => None,
         })
-        .sum();
-    if wanted <= budget || wanted == 0 {
+        .collect();
+    let wanted: usize = expected.iter().sum();
+    if wanted <= budget {
         return;
     }
 
-    let share = budget as f64 / wanted as f64;
+    let most = most_for_each(expected, budget);
     for object in objects {
-        if let Drawing::Particles(system) = &mut object.drawing {
-            // A system that keeps nothing draws nothing, so the smallest
-            // share is still one particle -- or two for a ribbon, which needs
-            // a pair to have anything between them.
+        if let Drawing::Particles(system) = &mut object.drawing
+            && system.expected() > most
+        {
+            // A ribbon needs a pair to have anything between them.
             let least = if system.is_rope() { 2 } else { 1 };
-            let kept = ((system.expected() as f64 * share) as usize).max(least);
-            system.thin_to(kept);
+            system.thin_to(most.max(least));
         }
     }
     skipped.push(format!(
@@ -1877,18 +1891,19 @@ fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<Strin
     ));
 }
 
-/// Whether a texture tiles rather than stopping at its edges, which only the
-/// `.tex-json` beside it says. Wallpapers ship none of those, so their own
-/// textures clamp.
-fn repeats(resolve: &Resolver<'_>, name: Option<&str>) -> bool {
-    let Some(name) = name else {
-        return false;
-    };
-    resolve
-        .get(&format!("materials/{name}.tex-json"))
-        .and_then(|bytes| wpe_format::tex::Sidecar::parse(&bytes).ok())
-        .and_then(|sidecar| sidecar.clamp)
-        .is_some_and(|clamp| !clamp)
+/// The most any one system may keep for them all to come to `budget`, those
+/// under it keeping everything they asked for.
+fn most_for_each(mut wanted: Vec<usize>, budget: usize) -> usize {
+    wanted.sort_unstable();
+    let mut left = budget;
+    for (i, &one) in wanted.iter().enumerate() {
+        let sharing = wanted.len() - i;
+        if one * sharing > left {
+            return left / sharing;
+        }
+        left -= one;
+    }
+    usize::MAX
 }
 
 /// Which texture unit a sampler's name stands for: `g_Texture2` is unit two.
@@ -3011,7 +3026,7 @@ fn build_pass(
                 .as_ref()
                 .filter(|texture| !texture.is_video())
                 .and_then(|source| {
-                    Texture::upload_page(gl, source, 0, repeats(resolve, named)).ok()
+                    Texture::upload_page(gl, source, 0, source.repeats()).ok()
                 }),
         );
     }
@@ -3225,7 +3240,7 @@ fn build_pass(
             .and_then(|bytes| wpe_format::Texture::parse(&bytes).ok())
             .filter(|texture| !texture.is_video())
             .and_then(|source| {
-                Texture::upload_page(gl, &source, 0, repeats(resolve, Some(path.as_str()))).ok()
+                Texture::upload_page(gl, &source, 0, source.repeats()).ok()
             });
     }
     let stated = pass
@@ -3765,6 +3780,13 @@ mod tests {
         // The background of one wallpaper in the library, 3840 by 2160 stored
         // in a 4096 square. Reading it whole samples the empty part.
         assert_eq!(coverage((3840, 2160), (4096, 4096)), [0.9375, 0.52734375]);
+    }
+
+    #[test]
+    fn thinning_takes_from_the_largest_and_leaves_the_small_alone() {
+        assert_eq!(super::most_for_each(vec![45_000, 41, 41, 30_000], 24_000), 11_959);
+        assert_eq!(super::most_for_each(vec![10, 20], 30), usize::MAX);
+        assert_eq!(super::most_for_each(vec![30, 30], 30), 15);
     }
 
     #[test]

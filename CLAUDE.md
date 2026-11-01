@@ -489,6 +489,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   disagree -- one wallpaper's scene tints everything red at full
   strength, and its project has the tint off.
 
+- **A colour bound inside `instanceoverride` stays the scene's.** Every other
+  bound value is played from project.json, as the trap above says, but on
+  Windows Dark Core's tubes burn the blue, purple and orange of its scene.json
+  where its project says orange for all of them. Only colours are measured:
+  Dark Angels' `rate` bound the same way has no recording of ours to settle it.
+
 - **A scene's `instanceoverride` multiplies the particle system it
   places, and stays with that system.** 462 particle objects carry one
   -- alpha, size, lifetime, rate, speed, count, and a colour written
@@ -669,6 +675,30 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **`starttime` is how far ahead a system begins, not a delay.**
   `magic_charge_rays` says 15 and its rays are there from the first frame.
 
+- **Thinning takes from the largest systems, not from all of them.** Scaled
+  alike to fit the budget, Gears of War's 75 620 particles left its eyes' two
+  torches 13 flames of 41: white over 3.0 % of the area round the eyes, against
+  8.7 % in the recording and 7.5 % unthinned. `most_for_each` is a ceiling only
+  the giants reach. Six wallpapers are over the budget, DOOM by seven times.
+
+- **Whether a texture repeats is bit 2 of its flags, in the file.** It agrees with
+  `clampuvs` in all 243 `.tex-json` that state one, and a wallpaper carries the
+  flag and not the sidecar. Read off the sidecar alone, Gears of War's ripple map
+  clamped, and past its first tile smeared one column into fine horizontal
+  stripes: the "ripple too strong" that was never about strength.
+
+- **A post-processing layer's buffer is the screen.** `fullscreenlayer` still
+  stores a size, 1248x702 in Gears' 1920x1080, and taking it as the buffer's made
+  a blur reach twice as far from a smaller picture. `rgba_backbuffer` is what it
+  says, so it is told the output's own size.
+
+- **`shot` runs a scripted rate wrong when it starts late.** `settle` catches up
+  at the rate in the file, before any script has said otherwise, so Dark Core's
+  fires, which a script holds at a tenth in silence, come out lit from the first
+  frame. For a scene like that draw from nought: `shot <dir> <png> w h 0 24000
+  1500` is twenty-five seconds as the desktop has them. It clears every frame now
+  too, as the program does; without that Dark Core's tubes went white by frame six.
+
 - **`colorchange` multiplies what the particle was born with.** Replacing it
   threw away a scene's tint.
 
@@ -770,7 +800,22 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **A system whose control point 0 is on the mouse lets its particles out at the
   mouse**, and none while there is no mouse. Alien Romulus' black "explosion on
   cursor", held at where the scene placed it, was the black blot under the
-  alien's mouth.
+  alien's mouth. On Windows it is a swarm of small dark specks round the pointer,
+  and it took three more things to get there:
+
+  **DXT1 has an alpha.** A block whose first colour is not above its second has
+  a transparent fourth entry, which is what Direct3D reads and
+  `COMPRESSED_RGBA_S3TC_DXT1` means. `COMPRESSED_RGB_S3TC_DXT1` draws it opaque
+  black, so every speck was a black square.
+
+  **`sizechange` steps take over from one another.** Multiplied, 0 to 1.8 and 1.8
+  to 0 peak at 3.24. Every other system with two steps meets at 1, where the two
+  readings agree, so only Romulus can tell them apart.
+
+  **An instance's `count` scales `mapsequencearoundcontrolpoint`'s too.** At 4 the
+  particles leave along four fixed arms, a clover; at 3.2 they go round and fill
+  the disc the recording has. Measured on this one wallpaper. It is still denser
+  than Windows, on the only reference there is: a dark corner, the mouse still.
 
 - **`g_Texture0Resolution` of an effect's buffer says the size Wallpaper Engine's
   would be**: as big as the object in the scene, where ours is as big as it is on
@@ -1814,19 +1859,20 @@ the file. Everything after it should.
    deciding which half is mistaken.
 
 4. **Before the next release, as the user saw them on 1 November:**
-   - **Alien Isolation:** the second jaw is out from 0 s. It should first come out at
-     about 40 s, then in the 40 s cycle. Animation 716 on layer 28 (20 s, mirror).
-   - **Dark Angels:** the muzzle flash is paler than the recording, and it has a visible
-     mistake: a straight horizontal edge above the flash, where a lit rectangle starts
-     (a composition layer, 197 or 534, 2500x1600 at y 640-740), and the flash's middle is
-     flat grey under a yellow outline. Screenshot from the user.
-   - **Gears of War:** the background's ripple is too strong and should not look like
-     that (`waterripple` on layer 12). The user will send a longer video, since the
-     recording is 18 s and the ripple comes every 20-25 s. The eyes should glow whiter
-     and harder, as in the recording (the two Torch systems, colour 94 94 94).
-   - **Star Destroyer's** fire clouds at the bottom come out red, orange in the recording.
-   - **To come from the user:** recordings of Blue Dawn, Diablo 4, Dark Core and StarCraft:
-     Shakuras, and whether Mourning for Icarus really is still on Windows.
+   - **Alien Isolation:** the second jaw is out at 0 s and the user has it first at
+     about 40 s. Animation 716 on layer 28, 20 s mirrored. The period is right: out
+     40 s in, in the recording and here. The recording hides the first seconds
+     behind Wallpaper Engine's own window, so what happens at nought is unmeasured,
+     and it wants a recording of the wallpaper being switched on.
+   - **Dark Angels:** the muzzle flash is paler than the video and has a straight
+     edge above it (layers 197 and 534, 2500x1600). Against the 3440x1440 video the
+     warm fog and smoke round the flash are missing altogether. That video is off
+     YouTube, so its settings are the author's; `firespeed` is 0 in the scene and 3
+     in the project.
+   - **Star Destroyer's** fire clouds at the bottom come out red, orange in the
+     recording.
+   - **Blue Dawn:** the video has a strong sun and a small flare under it, here a
+     weaker sun and a large one, with the mouse in the same place.
 
 ### Small things seen and left
 

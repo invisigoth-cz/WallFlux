@@ -771,7 +771,8 @@ impl System {
             max: std::array::from_fn(|i| r.max[i] * by[i]),
         };
         let speed = over.speed.value;
-        if let Some((_, _, around)) = &mut start.around {
+        if let Some((_, count, around)) = &mut start.around {
+            *count *= over.count.value;
             *around = times3(*around, [speed; 3]);
         }
         start.alpha = times(start.alpha, over.alpha.value);
@@ -1842,16 +1843,20 @@ fn fade(operators: &[Operator], age: f32, lifetime: f32) -> f32 {
 }
 
 /// What `sizechange` scales a particle's size by, `progress` being how far
-/// through its life it is.
+/// through its life it is. Several steps take over from one another: the last
+/// to have begun says, and they do not multiply -- 0 to 1.8 and then 1.8 to 0
+/// peaks at 1.8, not at its square.
 fn size_factor(operators: &[Operator], progress: f32) -> f32 {
-    let mut out = 1.0;
+    let mut out = None;
     for operator in operators {
-        if let Operator::SizeChange(ramp) = operator {
+        if let Operator::SizeChange(ramp) = operator
+            && (out.is_none() || progress >= ramp.time.min)
+        {
             let t = along(ramp.time, progress);
-            out *= ramp.from + (ramp.to - ramp.from) * t;
+            out = Some(ramp.from + (ramp.to - ramp.from) * t);
         }
     }
-    out
+    out.unwrap_or(1.0)
 }
 
 /// Which way a noise field points at a place, ready to be scaled by a speed.
@@ -2831,6 +2836,56 @@ mod tests {
         assert!((size(&s) - 50.0).abs() < 2.5, "started at {}", size(&s));
         run(&mut s, 0.5, 1.0 / 60.0);
         assert!((size(&s) - 100.0).abs() < 5.0, "halfway at {}", size(&s));
+    }
+
+    /// Four arms at a count of four. Romulus' instance says 0.8 of everything,
+    /// and on Windows its specks fill a disc, which 3.2 arms going round do.
+    #[test]
+    fn an_instance_count_scales_the_sequence_around_a_point() {
+        let definition = |count: f32| {
+            let mut over = InstanceOverride::default();
+            over.count.value = count;
+            let file = ParticleSystem::parse(
+                br#"{"material":"m","maxcount":8,
+                    "emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                    "initializer":[{"name":"lifetimerandom","min":9,"max":9},
+                                   {"name":"mapsequencearoundcontrolpoint","count":4,
+                                    "speedmin":"0 100 0","speedmax":"0 100 0"}]}"#,
+            )
+            .unwrap();
+            let mut s = System::new(&file, &over, 12345);
+            s.advance(1.0 / 30.0, &Spectrum::SILENT);
+            s
+        };
+        let directions = |s: &System| {
+            let mut seen: Vec<i32> = s
+                .live
+                .iter()
+                .map(|p| (p.velocity[1].atan2(p.velocity[0]).to_degrees().round() as i32 + 360) % 360)
+                .collect();
+            seen.sort_unstable();
+            seen.dedup();
+            seen.len()
+        };
+        assert_eq!(directions(&definition(1.0)), 4);
+        assert!(directions(&definition(0.8)) > 4);
+    }
+
+    /// Alien Romulus' specks grow to 1.8 and shrink from it. Multiplied they
+    /// peak at its square and run together into one black blot at the mouse.
+    #[test]
+    fn size_steps_take_over_from_one_another() {
+        let ramp = |min, max, from, to| Operator::SizeChange(wpe_format::particle::Ramp {
+            time: Range { min, max },
+            from,
+            to,
+        });
+        let steps = [ramp(0.0, 0.05, 0.0, 1.8), ramp(0.2, 1.0, 1.8, 0.0)];
+        assert_eq!(size_factor(&steps, 0.0), 0.0);
+        assert_eq!(size_factor(&steps, 0.1), 1.8);
+        assert!((size_factor(&steps, 0.6) - 0.9).abs() < 1e-5);
+        assert_eq!(size_factor(&steps, 1.0), 0.0);
+        assert_eq!(size_factor(&[], 0.5), 1.0);
     }
 
     #[test]

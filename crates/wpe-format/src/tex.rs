@@ -29,6 +29,11 @@ const MAX_DIM: i32 = 32_768;
 /// malformed or hostile file rather than something to allocate for.
 const MAX_DECOMPRESSED: usize = 512 << 20;
 
+/// Set in [`Texture::flags`] when the texture stops at its edges rather than
+/// starting over. It agrees with `clampuvs` in all 243 `.tex-json` files that
+/// ship with Wallpaper Engine that state one, and a wallpaper carries the flag
+/// and not the file.
+const FLAG_CLAMP: i32 = 2;
 /// Set in [`Texture::flags`] when the payload is an encoded video.
 const FLAG_VIDEO: i32 = 32;
 
@@ -223,12 +228,6 @@ pub struct Sprite {
 pub struct Sidecar {
     #[serde(rename = "spritesheetsequences")]
     pub sequences: Vec<Sequence>,
-    /// Whether the texture stops at its edges or starts over. Of the textures
-    /// that ship with Wallpaper Engine, 121 clamp and 61 repeat, and a cloud
-    /// layer that clamps when it meant to repeat smears its edge across the
-    /// sky in stripes.
-    #[serde(rename = "clampuvs")]
-    pub clamp: Option<bool>,
 }
 
 /// One sprite sheet animation described by a sidecar.
@@ -374,6 +373,13 @@ impl Texture {
     /// bytes for `ftyp` at offset 4.
     pub fn is_video(&self) -> bool {
         self.flags & FLAG_VIDEO != 0
+    }
+
+    /// Whether sampling past an edge starts the texture over. Clamped instead,
+    /// Gears of War's ripple map smeared its last column across the picture in
+    /// fine horizontal stripes.
+    pub fn repeats(&self) -> bool {
+        self.flags & FLAG_CLAMP == 0
     }
 
     /// The first mipmap of the first image: the full-size surface.
@@ -596,7 +602,7 @@ mod tests {
 
 #[cfg(test)]
 mod sidecar_tests {
-    use super::Sidecar;
+    use super::{Sidecar, Texture};
 
     #[test]
     fn reads_the_sheet_a_sidecar_describes() {
@@ -666,26 +672,16 @@ mod frame_tests {
 
 #[cfg(test)]
 mod wrapping_tests {
-    use super::Sidecar;
-
-    #[test]
-    fn reads_whether_a_texture_repeats() {
-        let repeats = br#"{"clampuvs":false,"format":"rgba8888"}"#;
-        let clamps = br#"{"clampuvs":true}"#;
-        assert_eq!(Sidecar::parse(repeats).unwrap().clamp, Some(false));
-        assert_eq!(Sidecar::parse(clamps).unwrap().clamp, Some(true));
-        // Said by neither, which is the wallpapers' own textures to a one.
-        assert_eq!(Sidecar::parse(b"{}").unwrap().clamp, None);
-    }
+    use super::{Sidecar, Texture};
 
     #[test]
     fn the_cloud_layer_wallpapers_use_says_it_repeats() {
         let Some(assets) = crate::Assets::locate() else {
             return;
         };
-        let Some(bytes) = assets.get("materials/util/clouds_256.tex-json") else {
+        let Some(bytes) = assets.get("materials/util/clouds_256.tex") else {
             return;
         };
-        assert_eq!(Sidecar::parse(&bytes).unwrap().clamp, Some(false));
+        assert!(Texture::parse(&bytes).unwrap().repeats());
     }
 }

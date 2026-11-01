@@ -170,6 +170,9 @@ unsafe fn render_to_image(
         for frame in 0..frames.max(1) {
             let at = time + frame as f32 / 60.0;
             let started = std::time::Instant::now();
+            // As the program does every frame: a layer that is not opaque
+            // would otherwise pile up on the frame before.
+            gl.clear(glow::COLOR_BUFFER_BIT);
             scene.draw(gl, (width, height), at);
             gl.finish();
             taken.push(started.elapsed());

@@ -26,7 +26,7 @@ const R8: (u32, u32, u32) = (glow::R8, glow::RED, glow::UNSIGNED_BYTE);
 const RGB8: (u32, u32, u32) = (glow::RGB8, glow::RGB, glow::UNSIGNED_BYTE);
 
 /// From `GL_EXT_texture_compression_s3tc`.
-const COMPRESSED_RGB_S3TC_DXT1: u32 = 0x83F0;
+const COMPRESSED_RGBA_S3TC_DXT1: u32 = 0x83F1;
 const COMPRESSED_RGBA_S3TC_DXT3: u32 = 0x83F2;
 const COMPRESSED_RGBA_S3TC_DXT5: u32 = 0x83F3;
 
@@ -113,10 +113,6 @@ impl Texture {
                 glow::TEXTURE_MAG_FILTER,
                 glow::LINEAR as i32,
             );
-            // Said by the `.tex-json` beside a texture, where there is one.
-            // Clamping is the safe default for a backdrop; a texture meant to
-            // tile and clamped instead smears its edge across whatever samples
-            // past it.
             let wrap = if repeat {
                 glow::REPEAT
             } else {
@@ -262,7 +258,7 @@ unsafe fn upload_blocks(
     data: &[u8],
 ) -> Result<(), String> {
     let internal = match format {
-        PixelFormat::Dxt1 => COMPRESSED_RGB_S3TC_DXT1,
+        PixelFormat::Dxt1 => COMPRESSED_RGBA_S3TC_DXT1,
         PixelFormat::Dxt3 => COMPRESSED_RGBA_S3TC_DXT3,
         PixelFormat::Dxt5 => COMPRESSED_RGBA_S3TC_DXT5,
         other => return Err(format!("{other:?} is not block compressed")),
