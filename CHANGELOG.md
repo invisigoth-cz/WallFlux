@@ -6,6 +6,44 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-01
+
+Bent puppets, particles that run smoothly at any refresh rate, and a second round of
+comparison with recordings from Windows. Six wallpapers that ask for more particles
+than the renderer keeps stop losing the small systems to the large ones.
+
+### New
+
+- **Puppets.** An image bent on the bones of a `.mdl` is drawn bent. Alien Isolation's
+  second jaw and its tail move.
+
+### Fixed in the renderer
+
+- **The largest particle systems give way first.** Every system used to lose the same
+  share, so a torch of 41 flames was left with 13. Gears of War's eyes are as white as
+  they are on Windows; DOOM and four others change too.
+- **A texture repeats when the file says it does.** Gears of War's ripple smeared one
+  column of its map into fine stripes, and it was the same for the 20 other textures in
+  the library that repeat.
+- **A post-processing layer is as big as the screen.** It took the size stored in the
+  file, and Gears of War's blur reached twice as far as it should.
+- **The transparent part of a DXT1 texture is transparent.** It came out opaque black,
+  which is what turned Alien Romulus' specks at the mouse into a black disc.
+- **Size changes take over from one another** and do not multiply, and a scene's count
+  for a system goes for the sequence that places its particles.
+- **A colour a scene binds to a particle system is the scene's own.** Dark Core's tubes
+  burn blue, purple and orange, as they do on Windows.
+- **Particles step by exactly the time owed.** A 75 Hz screen left every fifth frame
+  with nothing new, which read as smoke that stutters.
+- **The clock of a scene no longer loses four per cent at 60 Hz.**
+- **A colour's strength is its largest channel**, which keeps a yellow flash yellow.
+
+### Fixed in the program
+
+- **A web wallpaper's files are found.** A path with its leading slash made four
+  slashes in the page's address.
+- **A preset plays the music of the wallpaper it is built on.**
+
 ## [0.18.0] — 2026-10-31
 
 Most of the library now matches recordings of Wallpaper Engine on Windows, compared
@@ -869,7 +907,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.16.2...v0.17.0
