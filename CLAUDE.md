@@ -1985,16 +1985,21 @@ the file. Everything after it should.
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Next, as the user left them after testing 0.20.0 on 1 November:**
-   - **Done on 2 November, waiting for the user's eyes:** Romulus' specks left out,
-     and Time Reactor's and Dark Core's fires grow from nought (see the traps).
-     Romulus confirmed, the user may come back to it. Time Reactor's smoke now
-     runs its alpha script too, a fifth in silence: not yet seen by the user.
-   - **DOOM, on its own and last, by the user's order:** the letters still do not move
-     in time with the music and move less the longer it plays, and the glow at the
-     second O is enormous. That was with the old meter and its `TOP_LIFT`; since 2
-     November the sound is read as Wallpaper Engine reads it (see the traps), which
-     changes every wallpaper that listens, DOOM included. Look again before measuring.
+4. **Next, as the user left them on 2 November** (0.22.1 released; the sound
+   latency fix after it is committed and not yet released):
+   - **DOOM's glow at the second O** is the one thing left of DOOM, and the user is
+     comparing it on Windows first. The letters now move with the music -- the user's
+     word, after the meter was rewritten and the two-second fragments went (see the
+     traps). **Release 0.22.2 only after this, with the latency fix in its entry.**
+   - **Dark Core's red triangle** is too dim. It hangs on how 64 entries become 16,
+     which was not found; the user will bring a recording from Windows *with the
+     system's sound in it*, and the model in the trap on the sound settles it.
+   - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
+     scene's, ours plays the square root measured off recordings. The user finds the
+     volume right as it is; left for later, by the user's word.
+   - Done and confirmed on 2 November: Romulus' specks left out, Time Reactor's and
+     Dark Core's smoke from nought, Wallpaper Engine's own wallpapers listed and
+     removed as it does, Remove after a late Steam, music on a random first track.
 
    Older, still open:
    - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.
