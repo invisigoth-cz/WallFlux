@@ -64,6 +64,8 @@ class Wallpaper
     Q_PROPERTY(qint64 bytes MEMBER bytes CONSTANT)
     Q_PROPERTY(bool hasFile READ hasFile CONSTANT)
     Q_PROPERTY(bool playable READ playable CONSTANT)
+    Q_PROPERTY(bool official MEMBER official CONSTANT)
+    Q_PROPERTY(QString author MEMBER author CONSTANT)
 
 public:
     /// The workshop id, which is the name of the folder it sits in. The
@@ -138,6 +140,20 @@ public:
     /// than when somebody asks: ordering by size needs all of them at once.
     qint64 bytes = 0;
 
+    /// Whether it came with Wallpaper Engine rather than from the workshop:
+    /// one of its own, under `projects/defaultprojects`, named rather than
+    /// numbered. Removing one hides it, as Wallpaper Engine does.
+    bool official = false;
+
+    /// Who made it, as a steamID64 string, where project.json says so --
+    /// only Wallpaper Engine's own do, in `authorsteamid`. For a workshop
+    /// item the workshop is asked instead.
+    QString author;
+
+    /// Whether the renderer can draw it. False only for those of Wallpaper
+    /// Engine's own scenes it is known not to: 3D models, or black.
+    bool drawable = true;
+
     /// Whether the file this wallpaper is made of was found on disk.
     ///
     bool hasFile() const { return !source.isEmpty(); }
@@ -149,7 +165,7 @@ public:
     /// repeated in QML so there is one answer, not two that can drift.
     bool playable() const
     {
-        return hasFile()
+        return hasFile() && drawable
                && (kind == WallpaperKind::Web || kind == WallpaperKind::Video
                    || kind == WallpaperKind::Scene);
     }
@@ -254,6 +270,12 @@ public:
     /// Refuses anything that is not the workshop folder named after `id`,
     /// under app 431960, under a root this program scanned. It is deleting
     /// somebody's files; it does not take anybody's word for which ones.
+    ///
+    /// **One of Wallpaper Engine's own is hidden instead, not deleted** --
+    /// what its `removeOfficialWallpaper` does: `false` against its name in
+    /// `projects/defaultprojects/visibility.json`, which Wallpaper Engine
+    /// reads too. Its files belong to the install, and Steam would put them
+    /// back the next time it checked.
     Q_INVOKABLE bool discard(const QString &id);
 
     /// Reads the wallpapers under each of these Steam installs.

@@ -610,6 +610,14 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Odebrat</translation>
     </message>
     <message>
+        <source>It comes with Wallpaper Engine, which keeps its files and hides it, as Wallpaper Engine does itself. Hidden here, it is hidden in Wallpaper Engine too.</source>
+        <translation>Je součástí Wallpaper Engine: jeho soubory zůstanou a tapeta se skryje, stejně jako to dělá Wallpaper Engine sám. Skrytá tady je skrytá i ve Wallpaper Engine.</translation>
+    </message>
+    <message>
+        <source>Really remove?</source>
+        <translation>Opravdu odebrat?</translation>
+    </message>
+    <message>
         <location filename="../qml/Picker.qml" line="2223"/>
         <source>Steam has to be running to give a wallpaper back.</source>
         <translation>Aby šlo tapetu vrátit, musí běžet Steam.</translation>

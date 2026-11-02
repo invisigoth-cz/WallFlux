@@ -70,6 +70,7 @@ class TestWallpaperCore : public QObject
 private slots:
     void drawsAPresetAsTheWallpaperItSitsOn();
     void listsWhatComesWithWallpaperEngine();
+    void hidesOneOfWallpaperEnginesOwn();
     /// The things a scan has to get right, on one made-up Steam install.
     void readsWhatIsThere();
 
@@ -159,16 +160,70 @@ void TestWallpaperCore::listsWhatComesWithWallpaperEngine()
         QVERIFY(project.open(QIODevice::WriteOnly));
         project.write(json);
     };
-    write(QStringLiteral("deep_space"), QStringLiteral("/project.json"), R"({"title":"Deep Space","type":"scene","file":"scene.json"})");
+    write(QStringLiteral("deep_space"), QStringLiteral("/project.json"),
+          R"({"title":"Deep Space","type":"scene","file":"scene.json","official":true,)"
+          R"("authorsteamid":"76561197975619619"})");
     write(QStringLiteral("deep_space"), QStringLiteral("/scene.json"), "{}");
-    // One the renderer cannot draw stays out of the grid.
+    // One the renderer cannot draw is listed all the same, as Wallpaper Engine
+    // lists it, and cannot be played.
     write(QStringLiteral("arsenal"), QStringLiteral("/project.json"), R"({"title":"Arsenal","type":"scene","file":"scene.json"})");
     write(QStringLiteral("arsenal"), QStringLiteral("/scene.json"), "{}");
+    // No type at all: a scene by its file, as Techno's is.
+    write(QStringLiteral("techno"), QStringLiteral("/project.json"), R"({"title":"Techno","file":"techno.json"})");
+    write(QStringLiteral("techno"), QStringLiteral("/techno.json"), "{}");
+    // Hidden by Wallpaper Engine's own list, so not listed here either.
+    write(QStringLiteral("dino_run"), QStringLiteral("/project.json"), R"({"title":"Dino Run","type":"scene","file":"scene.json"})");
+    write(QStringLiteral("dino_run"), QStringLiteral("/scene.json"), "{}");
+    write(QString(), QStringLiteral("visibility.json"), R"({"dino_run":false,"techno":true})");
 
     const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
-    QCOMPARE(found.size(), 1);
-    QCOMPARE(found.first().id, QStringLiteral("deep_space"));
-    QVERIFY(found.first().source.toLocalFile().endsWith(QStringLiteral("/deep_space/scene.json")));
+    QStringList ids;
+    for (const Wallpaper &one : found)
+        ids.append(one.id);
+    QCOMPARE(ids, QStringList({QStringLiteral("arsenal"), QStringLiteral("deep_space"),
+                               QStringLiteral("techno")}));
+    for (const Wallpaper &one : found)
+        QVERIFY2(one.official, qPrintable(one.id));
+    QCOMPARE(found.at(1).author, QStringLiteral("76561197975619619"));
+    QVERIFY(found.at(1).source.toLocalFile().endsWith(QStringLiteral("/deep_space/scene.json")));
+    QVERIFY(found.at(1).playable());
+    QVERIFY(!found.at(0).playable());
+    QCOMPARE(found.at(2).kind, WallpaperKind::Scene);
+}
+
+/// Removing one of Wallpaper Engine's own hides it the way Wallpaper Engine
+/// does, in visibility.json, and leaves its files where the install put them.
+void TestWallpaperCore::hidesOneOfWallpaperEnginesOwn()
+{
+    QTemporaryDir steam;
+    const QString shipped = steam.path() + QStringLiteral("/steamapps/common/wallpaper_engine/projects/defaultprojects/");
+    for (const QString &name : {QStringLiteral("beach"), QStringLiteral("retro")}) {
+        QVERIFY(QDir().mkpath(shipped + name));
+        QFile project(shipped + name + QStringLiteral("/project.json"));
+        QVERIFY(project.open(QIODevice::WriteOnly));
+        project.write(R"({"title":"x","type":"scene","file":"scene.json","preview":"preview.jpg"})");
+        QFile preview(shipped + name + QStringLiteral("/preview.jpg"));
+        QVERIFY(preview.open(QIODevice::WriteOnly));
+    }
+    QFile visibility(shipped + QStringLiteral("visibility.json"));
+    QVERIFY(visibility.open(QIODevice::WriteOnly));
+    visibility.write(R"({"audiophile":false})");
+    visibility.close();
+
+    WallpaperCore core;
+    core.rescan({steam.path()});
+    QCOMPARE(core.wallpapers().size(), 2);
+
+    QVERIFY(core.discard(QStringLiteral("beach")));
+    QCOMPARE(core.wallpapers().size(), 1);
+    QCOMPARE(core.wallpapers().constFirst().id, QStringLiteral("retro"));
+    QVERIFY2(QFile::exists(shipped + QStringLiteral("beach/project.json")),
+             "the install's own files were deleted");
+
+    QVERIFY(visibility.open(QIODevice::ReadOnly));
+    const QJsonObject said = QJsonDocument::fromJson(visibility.readAll()).object();
+    QCOMPARE(said.value(QStringLiteral("beach")), QJsonValue(false));
+    QCOMPARE(said.value(QStringLiteral("audiophile")), QJsonValue(false));
 }
 
 void TestWallpaperCore::readsWhatIsThere()

@@ -271,7 +271,12 @@ bool Steamworks::open()
     qputenv("SteamAppId", WallpaperEngineAppId);
     qputenv("SteamGameId", WallpaperEngineAppId);
 
-    if (!initSafe()) {
+    // Asked first because it is cheap: without Steam, InitSafe still loads
+    // steamclient.so and takes 1.3 s of this thread to say no -- measured,
+    // and the library asks again each time a card is looked at.
+    const auto steamRunning = reinterpret_cast<bool (*)()>(
+        dlsym(m_library, "SteamAPI_IsSteamRunning"));
+    if ((steamRunning && !steamRunning()) || !initSafe()) {
         // Almost always: Steam is not running, or the account signed in to it
         // does not own Wallpaper Engine.
         m_trouble = SteamSilent;

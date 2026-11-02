@@ -13,6 +13,8 @@
 #include <QLocale>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSaveFile>
+#include <QSet>
 
 #include <utility>
 #include <QJsonDocument>
@@ -46,6 +48,37 @@ WallpaperKind::Kind kindFromType(const QString &type)
     if (lowered == QLatin1StringView("scene"))
         return WallpaperKind::Scene;
     return WallpaperKind::Unknown;
+}
+
+/// What a wallpaper that states no type is, going by its file. Four of
+/// Wallpaper Engine's own say nothing -- Audiophile, Ricepod and Techno name
+/// a .json, Sheep an .exe -- and Wallpaper Engine lists them all the same.
+WallpaperKind::Kind kindFromFile(const QString &file)
+{
+    const QString suffix = QFileInfo(file).suffix().toLower();
+    if (suffix == QLatin1StringView("json"))
+        return WallpaperKind::Scene;
+    if (suffix == QLatin1StringView("html") || suffix == QLatin1StringView("htm"))
+        return WallpaperKind::Web;
+    if (suffix == QLatin1StringView("exe"))
+        return WallpaperKind::Application;
+    return WallpaperKind::Unknown;
+}
+
+/// The ones of Wallpaper Engine's own its `visibility.json` hides: those
+/// set to `false`, which is what removing one writes.
+QSet<QString> hiddenIn(const QDir &shipped)
+{
+    QFile file(shipped.filePath(QStringLiteral("visibility.json")));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    QSet<QString> hidden;
+    const QJsonObject said = QJsonDocument::fromJson(file.readAll()).object();
+    for (auto it = said.begin(); it != said.end(); ++it) {
+        if (it.value().isBool() && !it.value().toBool())
+            hidden.insert(it.key());
+    }
+    return hidden;
 }
 
 
@@ -190,8 +223,10 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
 
     // A type we have never seen, or a preset of a preset, cannot be drawn and
     // does not get into the list in the first place.
-    const WallpaperKind::Kind kind =
-        kindFromType(drawn->value(QLatin1StringView("type")).toString());
+    const QString type = drawn->value(QLatin1StringView("type")).toString();
+    const WallpaperKind::Kind kind = type.isEmpty()
+        ? kindFromFile(drawn->value(QLatin1StringView("file")).toString())
+        : kindFromType(type);
     if (kind == WallpaperKind::Unknown) {
         qCDebug(lcScan) << "skipping" << folder.dirName() << "-- no type we can draw";
         return std::nullopt;
@@ -220,6 +255,7 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     for (const QJsonValue &tag : root.value(QLatin1StringView("tags")).toArray())
         wallpaper.tags.append(tag.toString());
     wallpaper.rating = ratingFrom(root.value(QLatin1StringView("contentrating")).toString());
+    wallpaper.author = root.value(QLatin1StringView("authorsteamid")).toString();
 
     const QFileInfo here(folder.absolutePath());
     // birthTime where the filesystem keeps one -- btrfs does, measured --
@@ -327,18 +363,28 @@ QList<Wallpaper> WallpaperCore::scan(const QStringList &steamRoots)
         }
     }
 
-    // The ones that come with Wallpaper Engine, which no workshop folder holds.
-    // ponytail: by name, the four of its nineteen that draw. The rest are 3D
-    // models, or come out black, and a grid of cards that show nothing is worse
-    // than a shorter grid. Add to the list as the renderer learns them.
-    static const QStringList shippedThatDraw = {
+    // The ones that come with Wallpaper Engine, which no workshop folder holds:
+    // every one Wallpaper Engine lists, less those its visibility.json hides.
+    // ponytail: by name, the four of its scenes the renderer draws. The rest are
+    // 3D models or come out black, and are listed dimmed as Wallpaper Engine
+    // lists them, so that they can be read about and removed. Add to the list
+    // as the renderer learns them.
+    static const QStringList scenesThatDraw = {
         QStringLiteral("beach"), QStringLiteral("deep_space"),
         QStringLiteral("razer_bedroom"), QStringLiteral("razer_vortex")};
     for (const QString &root : steamRoots) {
         const QDir shipped(root + QLatin1StringView("/steamapps/common/wallpaper_engine/projects/defaultprojects"));
-        for (const QString &folder : shippedThatDraw) {
-            if (const std::optional<Wallpaper> wallpaper = readWallpaper(QDir(shipped.filePath(folder))))
-                found.append(*wallpaper);
+        const QSet<QString> hidden = hiddenIn(shipped);
+        for (const QString &folder : shipped.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+            if (hidden.contains(folder))
+                continue;
+            std::optional<Wallpaper> wallpaper = readWallpaper(QDir(shipped.filePath(folder)));
+            if (!wallpaper)
+                continue;
+            wallpaper->official = true;
+            wallpaper->drawable =
+                wallpaper->kind != WallpaperKind::Scene || scenesThatDraw.contains(folder);
+            found.append(*wallpaper);
         }
     }
 
@@ -424,14 +470,41 @@ bool WallpaperCore::discard(const QString &id)
     // across every one of them -- so the folder is that file's folder.
     const QDir folder = QFileInfo(match->preview.toLocalFile()).absoluteDir();
 
-    QDir workshop = folder;
     const bool named = folder.dirName() == id;
-    const bool belongs = workshop.cdUp()
-                         && workshop.dirName() == QStringLiteral("431960");
     const bool scanned = std::ranges::any_of(m_roots, [&folder](const QString &root) {
         return folder.absolutePath().startsWith(QDir(root).absolutePath()
                                                 + QLatin1Char('/'));
     });
+
+    if (match->official) {
+        QDir shipped = folder;
+        if (!named || !shipped.cdUp() || shipped.dirName() != QLatin1StringView("defaultprojects")
+            || !scanned) {
+            qCWarning(lcScan) << "refusing to hide" << folder.absolutePath()
+                              << "-- that is not one of Wallpaper Engine's own";
+            return false;
+        }
+        const QString path = shipped.filePath(QStringLiteral("visibility.json"));
+        QJsonObject visibility;
+        if (QFile was(path); was.open(QIODevice::ReadOnly))
+            visibility = QJsonDocument::fromJson(was.readAll()).object();
+        visibility.insert(id, false);
+        // Written whole or not at all: Wallpaper Engine reads this file too.
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly)
+            || file.write(QJsonDocument(visibility).toJson()) < 0 || !file.commit()) {
+            qCWarning(lcScan) << "could not hide" << id << "in" << path << "--"
+                              << file.errorString();
+            return false;
+        }
+        qCInfo(lcScan) << "hiding" << id << "in" << path << "as Wallpaper Engine does";
+        rescan(m_roots);
+        return true;
+    }
+
+    QDir workshop = folder;
+    const bool belongs = workshop.cdUp()
+                         && workshop.dirName() == QStringLiteral("431960");
 
     if (!named || !belongs || !scanned) {
         qCWarning(lcScan) << "refusing to delete" << folder.absolutePath()

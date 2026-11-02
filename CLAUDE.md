@@ -950,9 +950,20 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
 - **Wallpaper Engine's own wallpapers are not packed and have no number.** `Package::
   from_folder` reads them; `deep_space` and the like must not reach Steam (`qml/
-  steamprofile.js` filters them, one in the list would cost the whole answer) nor
-  the Remove button. Only four of the nineteen are listed, by name: the rest are 3D
-  models or come out black.
+  steamprofile.js` filters them, one in the list would cost the whole answer).
+
+  **All nineteen are listed, as Wallpaper Engine lists them, less what its
+  `projects/defaultprojects/visibility.json` hides** -- `false` against a name,
+  three of them so on this machine. Removing one is what Wallpaper Engine's own
+  Remove does (`removeOfficialWallpaper` in its `scripts.js`, the file written by
+  `wallpaperui.exe`): `false` written there, files left alone, since they belong to
+  the install. There is no way back in Wallpaper Engine's window either. Four say no
+  `type` and are taken by their file (`.json` a scene, `.exe` an application), and
+  their `authorsteamid` names who made them, which is the panel's author. Only four
+  scenes draw (`scenesThatDraw`); the rest are 3D models or come out black, and are
+  listed dimmed so that they can still be read about and removed. Until 2 November
+  only those four were listed, and Remove had no button for them -- reported as
+  broken.
 
 - **A scene's file is the one project.json names**, `gifscene.json` in
   `gifscene.pkg` for SCP Terminal Lockdown, not always `scene.json` in

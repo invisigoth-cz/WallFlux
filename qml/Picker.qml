@@ -50,6 +50,18 @@ Window {
     /// The one the details panel is about, or null while it is shut.
     property var inspected: null
 
+    // Its Remove needs Steam, and Steam usually comes up after WallFlux at a
+    // login: asked once at startup it said no, and nothing asked again, so
+    // the button stayed grey with Steam running. Looking at one asks again.
+    onInspectedChanged: if (picker.inspected && !Steamworks.available) Steamworks.retry()
+
+    /// Whether a wallpaper came from the workshop. Wallpaper Engine's own --
+    /// Beach, Deep Space and the rest -- are named rather than numbered, have
+    /// no author and no workshop item, and are not Steam's to take back.
+    function fromWorkshop(one) {
+        return !!one && /^\d+$/.test(one.id);
+    }
+
     /// Which card the ring is on, as an id rather than as a row.
     ///
     /// A GridView puts its own `currentIndex` back to nought every time
@@ -396,7 +408,8 @@ Window {
         if (one.soundKnown)
             told.push({ label: qsTr("Sound of its own"), icon: "audio-volume-high",
                         value: one.hasSound ? qsTr("Yes") : qsTr("No") });
-        told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: one.id });
+        if (picker.fromWorkshop(one))
+            told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: one.id });
         return told;
     }
 
@@ -450,9 +463,10 @@ Window {
     /// arrived, and a row of dots in the meantime, so the button is there
     /// from the moment the panel opens rather than a second later.
     readonly property var inspectedAuthor: {
-        if (!picker.inspected)
+        const one = picker.inspected;
+        if (!picker.fromWorkshop(one) && !(one && one.author))
             return null;
-        return picker.authors[picker.inspected.id] || { name: "…", avatar: "" };
+        return picker.authors[one.id] || { name: "…", avatar: "" };
     }
 
     /// What the workshop says the tags of an installed wallpaper are,
@@ -494,6 +508,18 @@ Window {
     }
 
     function lookUpAuthor(id) {
+        // One of Wallpaper Engine's own says who made it, and the workshop
+        // has never heard of it.
+        const one = picker.inspected && picker.inspected.id === id ? picker.inspected : null;
+        if (one && one.official) {
+            if (one.author && !picker.authors[id])
+                Steam.profileOf(one.author, function (person) {
+                    const known = Object.assign({}, picker.authors);
+                    known[id] = { owner: one.author, name: person.name, avatar: person.avatar };
+                    picker.authors = known;
+                });
+            return;
+        }
         Steam.detailsOf(id, function (said) {
             // Only what is new. An answer that is already in the map is
             // put back as a new object every time otherwise -- and since
@@ -2175,25 +2201,37 @@ Window {
                         RoundedButton {
                             id: giveBack
 
+                            /// Asked once on the button itself, as a
+                            /// playlist's Delete does: Wallpaper Engine asks
+                            /// too, and one click is one too few for this.
+                            property bool asking: false
+
+                            readonly property bool official:
+                                !!picker.inspected && picker.inspected.official
+
                             Layout.fillWidth: true
-                            text: qsTr("Remove")
+                            text: giveBack.asking ? qsTr("Really remove?") : qsTr("Remove")
                             icon.name: "edit-delete"
                             // Red, because it is the one thing in this
                             // window that takes something away.
                             accent: "#c0392b"
-                            // Steam owns the folder, so Steam is what takes
-                            // it away. Without it running there is nothing
-                            // this could do but delete somebody's files
-                            // behind Steam's back, which would come back
-                            // the next time it looked.
-                            // What comes with Wallpaper Engine is its own to
-                            // keep: no workshop item, and no number for one.
-                            enabled: Steamworks.available
-                                     && /^\d+$/.test(picker.inspected ? picker.inspected.id : "")
+                            // Steam owns a workshop item's folder, so Steam
+                            // is what takes it away. Without it running there
+                            // is nothing this could do but delete somebody's
+                            // files behind Steam's back, which would come
+                            // back the next time it looked. One of Wallpaper
+                            // Engine's own needs no Steam: it is hidden.
+                            visible: giveBack.official || picker.fromWorkshop(picker.inspected)
+                            enabled: giveBack.official || Steamworks.available
                             onClicked: {
                                 const going = picker.inspected;
                                 if (!going)
                                     return;
+                                if (!giveBack.asking) {
+                                    giveBack.asking = true;
+                                    return;
+                                }
+                                giveBack.asking = false;
                                 // Taking the file out from under a player
                                 // that is drawing it leaves a black screen
                                 // with no reason given.
@@ -2204,10 +2242,20 @@ Window {
                                 // Steam leaves the folder exactly where it
                                 // is -- measured -- so the second half is
                                 // ours.
-                                Steamworks.remove(going.id);
+                                if (!going.official)
+                                    Steamworks.remove(going.id);
                                 Wallpapers.discard(going.id);
                                 details.open = false;
                                 picker.inspected = null;
+                            }
+
+                            // Another wallpaper in the panel takes the
+                            // question back: a button left saying "Really
+                            // remove?" about something else is how the
+                            // wrong one goes.
+                            Connections {
+                                target: picker
+                                function onInspectedChanged() { giveBack.asking = false; }
                             }
                         }
 
@@ -2220,7 +2268,11 @@ Window {
                             wrapMode: Text.Wrap
                             font.pixelSize: 11
                             opacity: 0.8
-                            text: Steamworks.available
+                            text: giveBack.official
+                                ? qsTr("It comes with Wallpaper Engine, which keeps its files "
+                                       + "and hides it, as Wallpaper Engine does itself. "
+                                       + "Hidden here, it is hidden in Wallpaper Engine too.")
+                                : Steamworks.available
                                 ? qsTr("Steam unsubscribes it and takes the folder away. "
                                        + "Subscribing to it again is all it takes to have it back.")
                                 : qsTr("Steam has to be running to give a wallpaper back.")
