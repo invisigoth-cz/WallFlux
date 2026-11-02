@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.1] — 2026-11-02
+
+### Fixed
+
+- **A scene's music starts on a track picked at random**, whatever its mode, as
+  Wallpaper Engine starts it. A sound object set to go round in order, or to play
+  once, always began on its first file.
+- **How a scene's music plays was checked against Wallpaper Engine itself**: one
+  track at a time, from its start, with the pause the wallpaper asks for between
+  them. Space Marine II's soundtracks open quietly, and do so on Windows too.
+
 ## [0.22.0] — 2026-11-02
 
 Removing a wallpaper works for every wallpaper in the library, and Wallpaper Engine's
@@ -1002,7 +1013,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.1...HEAD
+[0.22.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.19.0...v0.20.0
