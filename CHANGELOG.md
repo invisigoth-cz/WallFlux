@@ -6,6 +6,37 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-02
+
+The sound a wallpaper hears is now worked out the way Wallpaper Engine works it out,
+read out of its own program, and three wallpapers the user looked at on the desktop
+behave as they do on Windows.
+
+### Sound
+
+- **The music is read as Wallpaper Engine reads it.** Its own reading, taken out of
+  `wallpaper64.exe`: 64 numbers per ear, the bass weighed down so music comes out
+  level, nothing held from one reading to the next and nothing capped at one. The
+  old meter held every band near the top, so a wallpaper that smooths the sound for
+  itself stood still: Dark Core's equaliser bars under STANDBY hardly moved and its
+  red triangle never blinked. This changes every wallpaper that answers to music,
+  DOOM among them. How Wallpaper Engine goes from 64 numbers to 16 or 32 was not
+  found; the loudest of each group is used.
+
+### Fixed in the renderer
+
+- **Time Reactor's smoke follows its alpha script**: faint in silence, full with the
+  music. Unrun, it burned five times too strong and filled a third of its tubes at once.
+- **Smoke a script slows starts from nothing.** Time Reactor's and Dark Core's tubes
+  fill over tens of seconds in silence, as on Windows. The head start of 3.2 seconds
+  fitted to a Dark Core recording is gone; that recording had started late.
+
+### Changed
+
+- **Alien Romulus draws no specks round the mouse.** Wallpaper Engine draws them; ours
+  came out three or four times too large, and none was preferred to those. The
+  wallpaper offers no setting to switch them off.
+
 ## [0.20.0] — 2026-11-01
 
 A whole library looked at side by side with recordings from Windows, and what that
@@ -947,7 +978,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.17.1...v0.18.0
