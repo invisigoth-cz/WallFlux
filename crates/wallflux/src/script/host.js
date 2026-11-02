@@ -220,11 +220,17 @@ globalThis.__frame = function (frametime, runtime, left, right) {
     engine.runtime = runtime;
     for (const buffer of audio) {
         const n = buffer.left.length;
+        // Each the loudest of the 64 entries it covers, as `Spectrum::fewer`.
+        const per = left.length / n;
         for (let i = 0; i < n; i++) {
-            const band = Math.floor(i * 16 / n);
-            buffer.left[i] = left[band];
-            buffer.right[i] = right[band];
-            buffer.average[i] = (left[band] + right[band]) / 2;
+            let l = 0, r = 0;
+            for (let j = i * per; j < (i + 1) * per; j++) {
+                l = Math.max(l, left[j]);
+                r = Math.max(r, right[j]);
+            }
+            buffer.left[i] = l;
+            buffer.right[i] = r;
+            buffer.average[i] = (l + r) / 2;
         }
     }
 };

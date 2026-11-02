@@ -13,7 +13,7 @@
 #[path = "../src/audio.rs"]
 mod audio;
 
-use wpe_format::particle::AUDIO_BANDS;
+use wpe_format::particle::{AUDIO_BANDS, Spectrum};
 
 fn main() {
     let seconds: f32 = std::env::args()
@@ -29,13 +29,14 @@ fn main() {
     while started.elapsed().as_secs_f32() < seconds {
         std::thread::sleep(std::time::Duration::from_millis(100));
         let sound = ears.bands();
-        for (peak, band) in peak[0].iter_mut().zip(sound.left) {
+        let sound = (Spectrum::fewer::<AUDIO_BANDS>(&sound.left), Spectrum::fewer::<AUDIO_BANDS>(&sound.right));
+        for (peak, band) in peak[0].iter_mut().zip(sound.0) {
             *peak = peak.max(band);
         }
-        for (peak, band) in peak[1].iter_mut().zip(sound.right) {
+        for (peak, band) in peak[1].iter_mut().zip(sound.1) {
             *peak = peak.max(band);
         }
-        println!("L[{}]  P[{}]", meter(&sound.left), meter(&sound.right));
+        println!("L[{}]  P[{}]", meter(&sound.0), meter(&sound.1));
     }
     println!("\nnejhlasitejsi na pasmo (levy / pravy):");
     for (band, (left, right)) in peak[0].iter().zip(peak[1]).enumerate() {

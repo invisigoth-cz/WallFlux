@@ -35,10 +35,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   A scene that answers to the music hears what the speakers are playing
   -- 7 of the 40 here do -- read off the default output's monitor by the
   renderer itself, once for every screen. A scene's JavaScript runs --
-  90 of the 93 scripts in 7 packages, under QuickJS: what writes a clock's digits, turns
-  its hands, swells a ring with the bass and keeps a particle system's rate on
-  the beat. The other three switch an effect or drive a particle override other
-  than the rate, and are reported. And a scene
+  92 of the 93 scripts in 7 packages, under QuickJS: what writes a clock's digits, turns
+  its hands, swells a ring with the bass and keeps a particle system's rate and
+  alpha on the beat. The other one switches an effect, and is reported. And a scene
   follows the mouse -- layers that lean away from it, particles pushed
   aside -- with the position asked of KWin, since the wallpaper's surfaces
   take no input and must not.
@@ -712,16 +711,44 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   smaller than the scene, and Dark Angels' light missed its cathedral. Only that
   wallpaper moved in a sweep.
 
-- **The top band gathers everything above it, a dozen times over.** DOOM's D and M
-  spread on the average of bands 11 to 15, measured at 12 of the 14 pixels they can
-  reach at 1280, while its second O goes white if bands 8 to 12 pass a half. Band 15
-  alone can carry that (`TOP_LIFT`). Worked out from the sound of a recording and
-  drawn with those numbers; one wallpaper, and not yet heard on the desktop.
+- **The sound is read as Wallpaper Engine reads it, out of `wallpaper64.exe`**, not
+  as a visualiser would. `FUN_1400d02b0` (its defaults in the constructor at
+  `0x1400c0c80`): a DFT of 1920 samples, no window, bins 1 to 639, each bin's power
+  weighted by `0.501 - cos(pi x) 0.499` -- the bass a five-hundredth of the top,
+  which levels music out -- its root put into one of 64 entries by `x^0.25`, the
+  loudest bin winning, and the lot times 127 x 0.001 x 640/960 x the recording
+  volume (50 of 200, one). **Every reading starts from nought: nothing held, nothing
+  smoothed, nothing capped at one.** `audio.rs` does the same off an FFT of 2048,
+  each of its bins read off the nearest of ours.
 
-- **A system whose rate a script drives starts 3.2 of its own seconds ahead.** From
-  nought Dark Core's fires took forty seconds to look like the first frame of a
-  recording, which grows at the same pace after that. The recording may simply have
-  started late, and 3.2 is fitted to this one wallpaper.
+  The meter it replaced was a visualiser's -- a Hann window, sixteen bands, rising
+  at once and falling slowly, square-rooted and capped at one -- with a `TOP_LIFT`
+  fitted to DOOM. On music its values sat near the top and stayed there, and a
+  script that smooths for itself then stood still: Dark Core's red triangle, three
+  times band 4 smoothed over a second, was lit all the time where Windows blinks,
+  and its green bars under STANDBY hardly moved. Simulated over a recording's music:
+  the triangle's alpha 2.5 to 3.0 before, 0.25 to 0.94 now.
+
+  **How 64 entries become 16 or 32 was not found** -- the reader is on the far side
+  of a pointer. `Spectrum::fewer` and `script/host.js` take the loudest of each
+  group, which is how the 64 are filled from their bins. Shaders here read only
+  `g_AudioSpectrum16*`; scripts get the 64 and ask for what they like.
+
+- **A system whose rate a script drives starts from nought, like any other.** A
+  script holds Dark Core's and Time Reactor's fires at a tenth of their speed in
+  silence, so they take tens of seconds to fill their tubes, and on Windows both
+  do -- the user's word for both. They are built alike (`wildfire.json`, the same
+  script), so no rule can start one ahead and not the other. A 3.2 s head start
+  fitted to a Dark Core recording was taken out on 2 November: that recording had
+  simply started late. Only the preset's own `starttime` is run ahead.
+
+  **Time Reactor's smoke has its alpha on a script as well**, a fifth in silence
+  and up to whole with the music. Unrun, it burned five times as strong, and its
+  `wildfire.json` is not Dark Core's: born up to 600 out, as fast as 500 and with
+  no fade in, so the second of `starttime` run ahead at full speed already
+  reaches a third of the way along its tubes. That second is the preset's and
+  stays -- Space Visualizer's rays, at a rate of 0.01, are only there from the
+  first frame because `starttime` is not slowed by the rate.
 
 - **`oscillate*` frequencies are radians a second, and the two scales are two ends.**
   An ember's "frequencymax 20, scalemin 0.7" is alpha swinging between 0.7 and 1 up
@@ -879,6 +906,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   the disc the recording has. Measured on this one wallpaper. It is still denser
   than Windows, on the only reference there is: a dark corner, the mouse still.
 
+  **And in the end it is not drawn.** The user preferred none to specks three or
+  four times too large, so `LEFT_OUT` in `render.rs` skips object 162 of
+  3315524934 -- the one object here left out against Wallpaper Engine. Its
+  visibility is bound to a `mausverfolgung` the published project.json does not
+  declare, so there is no setting that could switch it off instead.
+
 - **`g_Texture0Resolution` of an effect's buffer says the size Wallpaper Engine's
   would be**: as big as the object in the scene, where ours is as big as it is on
   screen. A blur reaches so many texels, so told the real size Kratos' 5120-wide
@@ -1002,8 +1035,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
   **Almamu's renderer has no `engine.registerAudioBuffers`**, which 39 of
   the 93 call: his scenes stay at the quiet end of what they say. Ours
-  hands the sixteen bands it measures, each spread over the 32 or 64
-  entries a script may ask for. Asking for them is what makes a scene
+  hands the 64 entries it measures, each group of them as loud as its
+  loudest when a script asks for 16 or 32. Asking for them is what makes a scene
   listen, so the microphone rule above holds for scripts too.
 
 - **The mouse comes from KWin, and the surfaces never take input.** A
@@ -1913,20 +1946,23 @@ the file. Everything after it should.
    are the ones to look at first when one turns up. Not done: `collisionmodel`
    (there are no models) and the `layerimage` emitter, both reported.
 
-   **And Alien Romulus and Space Marine 2 -- Honor and Glory move with
-   the mouse where they should not.** Measured as following it (1 760 and
-   1 125 apart with the mouse left and right in `shot`); seen on the
-   desktop to be wrong -- they are meant to move by their own particles,
-   smoke and shaders. Find what in them is answering the pointer before
-   deciding which half is mistaken.
+   **Alien Romulus and Space Marine 2 -- Honor and Glory were said to move
+   with the mouse where they should not.** Romulus' whole answer to the
+   pointer was the specks now left out. Space Marine 2 was looked at by the
+   user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Before the next release, as the user saw them on 1 November:**
-   - **Alien Romulus:** on Windows some 60 solid dots of about 4 pixels round the
-     mouse; here each is a splat of about 16, three or four times too large, which is
-     the black blot the user sees. The size is `sizerandom` halved, 0.51 for the
-     instance and 1.8 for `sizechange`. Which of them differs is not found: the shader
-     and its texture are shared and the file holds no sheet, so the renderer's numbers
-     agree. The user's fallback, if it still looks wrong, is not to draw the specks.
+4. **Next, as the user left them after testing 0.20.0 on 1 November:**
+   - **Done on 2 November, waiting for the user's eyes:** Romulus' specks left out,
+     and Time Reactor's and Dark Core's fires grow from nought (see the traps).
+     Romulus confirmed, the user may come back to it. Time Reactor's smoke now
+     runs its alpha script too, a fifth in silence: not yet seen by the user.
+   - **DOOM, on its own and last, by the user's order:** the letters still do not move
+     in time with the music and move less the longer it plays, and the glow at the
+     second O is enormous. That was with the old meter and its `TOP_LIFT`; since 2
+     November the sound is read as Wallpaper Engine reads it (see the traps), which
+     changes every wallpaper that listens, DOOM included. Look again before measuring.
+
+   Older, still open:
    - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.
    - **Gears of War:** the user's "bubble" at 28 to 30 s of the 64 s recording. The
      Spectacle file is a player showing that recording. Not told apart from our ripple
@@ -1952,7 +1988,7 @@ the file. Everything after it should.
   neither an object nor a file in 120 entries; its YouTube video does.
 
 - What a scene's scripts do not reach yet: an effect switched on and off, a particle override other than the
-  rate, an object hidden in scene.json that a script would show -- it is
+  rate and the alpha, an object hidden in scene.json that a script would show -- it is
   never loaded -- and the children of a particle system whose parent a
   script moves, which were placed once from where the parent started.
 

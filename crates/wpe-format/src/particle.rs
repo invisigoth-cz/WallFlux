@@ -265,24 +265,39 @@ pub enum Initializer {
     },
 }
 
-/// How many bands the engine splits the sound it hears into. Wallpapers name
-/// the ones they listen to by index, and the highest any of them names is 15.
+/// How many bands a particle system and a shader's `g_AudioSpectrum16` name.
+/// Wallpapers name the ones they listen to by index, and the highest any of
+/// them names is 15.
 pub const AUDIO_BANDS: usize = 16;
 
-/// The sound as the bands a wallpaper asks for, one set of them per ear.
+/// How many entries the engine reads the sound into, per ear. A script may ask
+/// for 16, 32 or all 64 of them.
+pub const AUDIO_ENTRIES: usize = 64;
+
+/// The sound as Wallpaper Engine reads it, 64 entries per ear.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Spectrum {
-    pub left: [f32; AUDIO_BANDS],
-    pub right: [f32; AUDIO_BANDS],
+    pub left: [f32; AUDIO_ENTRIES],
+    pub right: [f32; AUDIO_ENTRIES],
 }
 
 impl Spectrum {
     /// A silent room, which is what a renderer with nothing to listen to
     /// hands out.
     pub const SILENT: Self = Self {
-        left: [0.0; AUDIO_BANDS],
-        right: [0.0; AUDIO_BANDS],
+        left: [0.0; AUDIO_ENTRIES],
+        right: [0.0; AUDIO_ENTRIES],
     };
+
+    /// The same sound in fewer entries, each the loudest of those it covers.
+    ///
+    /// ponytail: how Wallpaper Engine goes from its 64 to 16 or 32 was not
+    /// found (it happens on the far side of a pointer); the loudest is how it
+    /// fills each of the 64 from its bins, so it is the guess that matches.
+    pub fn fewer<const N: usize>(entries: &[f32; AUDIO_ENTRIES]) -> [f32; N] {
+        let per = AUDIO_ENTRIES / N;
+        std::array::from_fn(|i| entries[i * per..(i + 1) * per].iter().cloned().fold(0.0, f32::max))
+    }
 
     /// The loudness across a range of bands, which is their average.
     ///
@@ -291,7 +306,7 @@ impl Spectrum {
     /// both. A step of a particle system is read the same way.
     pub fn across(&self, bands: (usize, usize), ears: Channels) -> f32 {
         let (first, last) = bands;
-        let reach = |of: &[f32; AUDIO_BANDS]| match of.get(first..=last) {
+        let reach = |of: &[f32; AUDIO_ENTRIES]| match Self::fewer::<AUDIO_BANDS>(of).get(first..=last) {
             Some(heard) if !heard.is_empty() => heard.iter().sum::<f32>() / heard.len() as f32,
             _ => 0.0,
         };
@@ -1627,15 +1642,27 @@ mod tests {
     /// the step asked for.
     #[test]
     fn a_spectrum_averages_the_bands_it_is_asked_for() {
+        // Bands 4 to 7 of sixteen are entries 16 to 31 of the 64 heard.
         let mut sound = Spectrum::SILENT;
-        sound.left[4..=7].fill(1.0);
-        sound.right[4..=7].fill(0.5);
+        sound.left[16..=31].fill(1.0);
+        sound.right[16..=31].fill(0.5);
         assert_eq!(sound.across((4, 7), Channels::Left), 1.0);
         assert_eq!(sound.across((4, 7), Channels::Right), 0.5);
         assert_eq!(sound.across((4, 7), Channels::Both), 0.75);
         // Half the range is loud and half is not.
         assert_eq!(sound.across((4, 11), Channels::Left), 0.5);
         assert_eq!(sound.across((0, 3), Channels::Both), 0.0);
+    }
+
+    /// Sixteen bands out of 64 entries, each the loudest of its four.
+    #[test]
+    fn fewer_entries_keep_the_loudest_of_each_group() {
+        let mut entries = [0.0; AUDIO_ENTRIES];
+        entries[5] = 0.25;
+        entries[6] = 0.75;
+        entries[63] = 2.0;
+        let bands = Spectrum::fewer::<AUDIO_BANDS>(&entries);
+        assert_eq!((bands[0], bands[1], bands[2], bands[15]), (0.0, 0.75, 0.0, 2.0));
     }
 
     #[test]

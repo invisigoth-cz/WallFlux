@@ -2,12 +2,13 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
-//! Listening to what the speakers are playing, as the sixteen bands a
-//! wallpaper asks for.
+//! Listening to what the speakers are playing, as the 64 entries per ear
+//! Wallpaper Engine hands its wallpapers.
 //!
-//! Wallpapers name bands by index and ask for the loudness across a range of
-//! them, so the whole job here is to turn a stream of samples into sixteen
-//! numbers from zero to one, often enough that a visualiser keeps up.
+//! Wallpapers name entries by index, sixteen, 32 or 64 of them, and ask for
+//! the loudness across a range, so the whole job here is to turn a stream of
+//! samples into the same numbers Wallpaper Engine would, often enough that a
+//! visualiser keeps up.
 //!
 //! The sound is read from the output's own monitor rather than a microphone,
 //! which is what makes a wallpaper answer to the music the viewer is playing.
@@ -32,7 +33,7 @@ use std::time::{Duration, Instant};
 use libpulse_binding::sample::{Format, Spec};
 use libpulse_binding::stream::Direction;
 use libpulse_simple_binding::Simple;
-use wpe_format::particle::{AUDIO_BANDS, Spectrum};
+use wpe_format::particle::{AUDIO_ENTRIES, Spectrum};
 
 /// Samples read at a time. At 44 100 Hz this is 23 ms, so the bands are
 /// renewed about forty times a second, which is faster than the frames that
@@ -40,42 +41,30 @@ use wpe_format::particle::{AUDIO_BANDS, Spectrum};
 pub const READ: usize = 1024;
 
 /// Samples each reading is measured over, which is the last two mouthfuls
-/// rather than only the newest. Twice the samples halves the width of a bin,
-/// and the bottom bands need that: a kick drum and a bass note are only forty
-/// hertz apart, and a window of a thousand samples cannot tell them apart.
+/// rather than only the newest.
 const WINDOW: usize = 2048;
 pub const RATE: u32 = 44_100;
 
-/// The lowest and highest frequency the bands are spread between. Below the
-/// first is rumble no music carries, and above the last is air.
-const LOWEST: f32 = 40.0;
-const HIGHEST: f32 = 16_000.0;
-
-/// How quickly a band may fall. A band that followed the sound exactly would
-/// flicker on every drum hit; rising at once and falling slowly is what makes
-/// a visualiser read as a beat rather than as noise.
-const FALL: f32 = 0.12;
-
-/// What a band's magnitude is divided by before it is squared down into zero
-/// to one. This is the knob: too small and every band sits at the top however
-/// quiet the room, too large and nothing ever reaches it.
+/// Wallpaper Engine's own reading of the sound, out of `wallpaper64.exe`
+/// (`FUN_1400d02b0`, its defaults in the constructor at `0x1400c0c80`): a
+/// discrete Fourier transform of 1920 samples, no window, of which bins 1 to
+/// 639 are read. Each bin's power is weighted by `TILT - cos(pi x)(1 - TILT)`,
+/// `x` how far up the 639 it is, so the bass counts a five-hundredth as much as
+/// the top and music comes out about level; its root goes into one of 64
+/// entries, the loudest bin in each winning. An entry is placed by `x` to the
+/// `PLACING` power and is never more than one ahead of the last, so the first
+/// thirty each hold a single bin of 23 Hz. The whole is multiplied by the
+/// samples' scale of 127, by 0.001, by 640 over half the window and by the
+/// recording volume, 50 out of 200 by default, which is one.
 ///
-/// Settled by ear against three pieces of music the wallpapers carry
-/// themselves. The first reading of 0.02 was judged a fifth too weak; because
-/// the magnitude is square-rooted, turning the answer up by a fifth means
-/// dividing this by 1.2 squared.
-const LOUD: f32 = 0.02 / (1.2 * 1.2);
-
-/// How much stronger the top band is than the rest, and the most it may reach.
-///
-/// Fitted to DOOM Visualizer's letters, whose D and M spread on the average of
-/// bands 11 to 15: over four minutes of a recording the D stands at 0.03, 0.47,
-/// 0.77, 0.89 and 0.95 of its way at the five deciles from 10 to 90, and this
-/// gives 0.19, 0.51, 0.76, 0.86 and 0.94 for the same sound. At twelve the letters
-/// sat at the far end for most of the music and hardly moved with it. The
-/// working is Wallpaper Engine's own and not known.
-const TOP_LIFT: f32 = 7.0;
-const TOP_MOST: f32 = 8.0;
+/// **Nothing is held, smoothed or capped**: every reading starts from nought,
+/// and music that is loud reads above one. A script's own smoothing is all the
+/// smoothing there is, which is why one that is held already stands still.
+const ITS_WINDOW: f32 = 1920.0;
+const ITS_BINS: usize = 640;
+const TILT: f32 = 0.501;
+const PLACING: f32 = 0.25;
+const SCALE: f32 = 127.0 * 0.001 * ITS_BINS as f32 / (ITS_WINDOW / 2.0);
 
 /// How long the bands may go unread before the stream is closed.
 const QUIET: Duration = Duration::from_secs(1);
@@ -153,35 +142,22 @@ fn connect() -> Option<Simple> {
 /// file reads it exactly as the renderer reads the speakers: a clip that
 /// measured the sound its own way would be showing something nobody gets.
 pub struct Meter {
-    edges: [usize; AUDIO_BANDS + 1],
     samples: [f32; WINDOW],
-    held: [f32; AUDIO_BANDS],
 }
 
 impl Meter {
     pub fn new() -> Self {
-        Self {
-            edges: band_edges(),
-            samples: [0.0; WINDOW],
-            held: [0.0; AUDIO_BANDS],
-        }
+        Self { samples: [0.0; WINDOW] }
     }
 
-    /// Takes the next [`READ`] samples and gives the bands as they now stand.
+    /// Takes the next [`READ`] samples and gives the entries as they now stand.
     ///
     /// The newest mouthful goes at the end and what was there slides back, so
     /// each reading is measured over a window twice as long as it waited.
-    pub fn feed(&mut self, fresh: &[f32; READ]) -> [f32; AUDIO_BANDS] {
+    pub fn feed(&mut self, fresh: &[f32; READ]) -> [f32; AUDIO_ENTRIES] {
         self.samples.copy_within(READ.., 0);
         self.samples[WINDOW - READ..].copy_from_slice(fresh);
-        let measured = spectrum(&self.samples, &self.edges);
-        for (held, measured) in self.held.iter_mut().zip(measured) {
-            *held = match measured > *held {
-                true => measured,
-                false => *held + (measured - *held) * FALL,
-            };
-        }
-        self.held
+        spectrum(&self.samples)
     }
 }
 
@@ -271,53 +247,30 @@ fn listen(stream: Simple, bands: &Mutex<Spectrum>, asked: &AtomicU64, epoch: Ins
     }
 }
 
-/// Which bin each band starts at, spread so that each band covers the same
-/// span in pitch rather than in hertz -- the bottom four bands are the bass a
-/// listener hears as separate notes, which an even spread would lump together.
-fn band_edges() -> [usize; AUDIO_BANDS + 1] {
-    let bins = WINDOW / 2;
-    let per_bin = RATE as f32 / WINDOW as f32;
-    let step = (HIGHEST / LOWEST).powf(1.0 / AUDIO_BANDS as f32);
-    let mut edges = [0usize; AUDIO_BANDS + 1];
-    for (band, edge) in edges.iter_mut().enumerate() {
-        let frequency = LOWEST * step.powi(band as i32);
-        *edge = ((frequency / per_bin).round() as usize).min(bins - 1);
-    }
-    // Two bands landing on one bin would leave the lower of them always empty,
-    // so each is pushed up to at least one bin of its own.
-    for band in 1..edges.len() {
-        edges[band] = edges[band].max(edges[band - 1] + 1).min(bins);
-    }
-    edges
-}
-
-/// The loudness of each band in one window of samples, zero to one.
-fn spectrum(samples: &[f32; WINDOW], edges: &[usize; AUDIO_BANDS + 1]) -> [f32; AUDIO_BANDS] {
-    // A window that cut the samples off square would smear every tone across
-    // the whole spectrum, which reads as every band lighting up at once.
-    let mut real = [0f32; WINDOW];
+/// The 64 entries of one window of samples, as Wallpaper Engine reads them.
+///
+/// ponytail: its bins are 23 Hz apart and ours 21.5, so each of its bins is
+/// read off the nearest of ours, a few per cent out in pitch; a transform of
+/// 1920 itself (Bluestein) if that ever shows.
+fn spectrum(samples: &[f32; WINDOW]) -> [f32; AUDIO_ENTRIES] {
+    let mut real = *samples;
     let mut imaginary = [0f32; WINDOW];
-    for (at, sample) in samples.iter().enumerate() {
-        let turn = std::f32::consts::TAU * at as f32 / WINDOW as f32;
-        real[at] = sample * 0.5 * (1.0 - turn.cos());
-    }
     transform(&mut real, &mut imaginary);
 
-    let mut out = [0f32; AUDIO_BANDS];
-    for (band, out) in out.iter_mut().enumerate() {
-        let (from, to) = (edges[band], edges[band + 1]);
-        let mut loudest = 0f32;
-        for bin in from..to {
-            let magnitude = (real[bin] * real[bin] + imaginary[bin] * imaginary[bin]).sqrt();
-            loudest = loudest.max(magnitude / WINDOW as f32);
-        }
-        *out = (loudest / LOUD).sqrt().min(1.0);
+    // A tone read over 2048 samples comes out that much larger than over 1920.
+    let length = ITS_WINDOW / WINDOW as f32;
+    let mut out = [0f32; AUDIO_ENTRIES];
+    let mut entry = 0;
+    for bin in 1..ITS_BINS {
+        let x = (bin - 1) as f32 / (ITS_BINS - 1) as f32;
+        let ours = (bin as f32 * WINDOW as f32 / ITS_WINDOW).round() as usize;
+        let power = (real[ours] * real[ours] + imaginary[ours] * imaginary[ours]) * length * length;
+        let weight = TILT - (std::f32::consts::PI * x).cos() * (1.0 - TILT);
+        let placed = ((x.powf(PLACING) * AUDIO_ENTRIES as f32) as usize).min(AUDIO_ENTRIES - 1);
+        entry = placed.min(if bin == 1 { 0 } else { entry + 1 });
+        out[entry] = out[entry].max((weight * power).max(0.0).sqrt());
     }
-    let above: f32 = (edges[AUDIO_BANDS - 1]..WINDOW / 2)
-        .map(|bin| (real[bin] * real[bin] + imaginary[bin] * imaginary[bin]).sqrt() / WINDOW as f32)
-        .sum();
-    out[AUDIO_BANDS - 1] = ((above / LOUD).sqrt() * TOP_LIFT).min(TOP_MOST);
-    out
+    out.map(|level| level * SCALE)
 }
 
 /// An in-place radix-2 fast Fourier transform.
@@ -388,47 +341,49 @@ mod tests {
         assert!(magnitude(wanted) > 100.0 * magnitude(wanted + 3));
     }
 
-    /// Every band needs a bin of its own: two sharing one would leave the
-    /// lower of them dark whatever was played.
-    #[test]
-    fn the_bands_rise_and_never_share_a_bin() {
-        let edges = band_edges();
-        for band in 1..edges.len() {
-            assert!(
-                edges[band] > edges[band - 1],
-                "band {band} starts where {} did: {edges:?}",
-                band - 1
-            );
-        }
-        assert!(*edges.last().unwrap() <= WINDOW / 2);
-    }
-
     /// Silence has to read as silence rather than as a floor of noise.
     #[test]
-    fn silence_reads_as_nothing_in_every_band() {
-        let bands = spectrum(&[0.0; WINDOW], &band_edges());
-        assert_eq!(bands, [0.0; AUDIO_BANDS]);
+    fn silence_reads_as_nothing_in_every_entry() {
+        assert_eq!(spectrum(&[0.0; WINDOW]), [0.0; AUDIO_ENTRIES]);
     }
 
-    /// A bass note belongs in the bottom bands and a hiss in the top ones.
+    fn tone(hz: f32, loudness: f32) -> [f32; AUDIO_ENTRIES] {
+        let mut samples = [0f32; WINDOW];
+        for (at, sample) in samples.iter_mut().enumerate() {
+            *sample = loudness * (std::f32::consts::TAU * hz * at as f32 / RATE as f32).sin();
+        }
+        spectrum(&samples)
+    }
+
+    fn loudest(entries: [f32; AUDIO_ENTRIES]) -> usize {
+        (0..AUDIO_ENTRIES).max_by(|a, b| entries[*a].total_cmp(&entries[*b])).unwrap()
+    }
+
+    /// The first thirty entries are a bin of 23 Hz each and the rest spread
+    /// up to 14.7 kHz: a bass note near the bottom, a kilohertz about half way.
     #[test]
-    fn a_tone_shows_up_in_the_band_that_covers_it() {
-        let edges = band_edges();
-        let tone = |hz: f32| {
-            let mut samples = [0f32; WINDOW];
-            for (at, sample) in samples.iter_mut().enumerate() {
-                *sample = (std::f32::consts::TAU * hz * at as f32 / RATE as f32).sin();
-            }
-            let bands = spectrum(&samples, &edges);
-            bands
-                .iter()
-                .enumerate()
-                .max_by(|a, b| a.1.total_cmp(b.1))
-                .map(|(band, _)| band)
-                .unwrap()
-        };
-        assert!(tone(60.0) <= 2, "60 Hz landed in band {}", tone(60.0));
-        assert!(tone(8000.0) >= 13, "8 kHz landed in band {}", tone(8000.0));
-        assert!(tone(60.0) < tone(1000.0) && tone(1000.0) < tone(8000.0));
+    fn a_tone_lands_in_the_entry_that_covers_it() {
+        assert!(loudest(tone(60.0, 0.5)) <= 2, "{}", loudest(tone(60.0, 0.5)));
+        assert!((31..=34).contains(&loudest(tone(1000.0, 0.5))), "{}", loudest(tone(1000.0, 0.5)));
+        assert!(loudest(tone(8000.0, 0.5)) >= 52, "{}", loudest(tone(8000.0, 0.5)));
+    }
+
+    /// A tenth of full scale at 10 kHz, on a bin of ours so none of it leaks:
+    /// 127 x 0.1 x 960 for the transform, the root of its weight of 0.77, and
+    /// 0.001 x 2/3 -- about seven. **Not one**: nothing is capped.
+    #[test]
+    fn a_loud_treble_tone_reads_well_above_one() {
+        let hz = 465.0 * RATE as f32 / WINDOW as f32;
+        let level = tone(hz, 0.1)[loudest(tone(hz, 0.1))];
+        assert!((6.0..8.0).contains(&level), "{level}");
+    }
+
+    /// The bass is weighed down on purpose: the same tone at 50 Hz reads a
+    /// small part of what it does at 10 kHz.
+    #[test]
+    fn the_bass_counts_far_less_than_the_treble() {
+        let low = tone(50.0, 0.1).iter().cloned().fold(0.0, f32::max);
+        let high = tone(10_000.0, 0.1).iter().cloned().fold(0.0, f32::max);
+        assert!(low < high / 10.0, "{low} against {high}");
     }
 }

@@ -911,8 +911,9 @@ impl Scene {
             .filter(|o| o.visible.value && (!o.effects.is_empty() || asked_for.contains(&o.id)))
             .map(|o| o.id)
             .collect();
+        let folder = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
         for object in &file.objects {
-            if !object.visible.value {
+            if !object.visible.value || LEFT_OUT.contains(&(folder, object.id)) {
                 continue;
             }
             match object.kind() {
@@ -1566,6 +1567,14 @@ impl Scene {
                     for index in placed(&mut self.objects, *id) {
                         if let Drawing::Particles(system) = &mut self.objects[index].drawing {
                             system.set_rate(rate as f32);
+                        }
+                    }
+                }
+                Drives::Alpha { id } => {
+                    let Some(alpha) = value.as_f64() else { continue };
+                    for index in placed(&mut self.objects, *id) {
+                        if let Drawing::Particles(system) = &mut self.objects[index].drawing {
+                            system.set_alpha(alpha as f32);
                         }
                     }
                 }
@@ -2810,8 +2819,8 @@ unsafe fn set_common(
         // A shader that answers to music declares the spectrum itself, behind
         // the same switch that turns its audio response on, so a pass that
         // wants none of this has no such uniform and is passed over.
-        set_floats(gl, pass.program, "g_AudioSpectrum16Left", &sound.left);
-        set_floats(gl, pass.program, "g_AudioSpectrum16Right", &sound.right);
+        set_floats(gl, pass.program, "g_AudioSpectrum16Left", &Spectrum::fewer::<16>(&sound.left));
+        set_floats(gl, pass.program, "g_AudioSpectrum16Right", &Spectrum::fewer::<16>(&sound.right));
 
         let still = pass.film.as_ref().map(|film| (film, film.at(time)));
         // A pass of an effect is handed buffers at units its own material never
@@ -3703,6 +3712,16 @@ pub(crate) fn scene_entry(project: Option<&[u8]>) -> String {
         .filter(|file| file.ends_with(".json"))
         .unwrap_or_else(|| "scene.json".into())
 }
+
+/// Objects left out by the user's decision although Wallpaper Engine draws
+/// them, as (the wallpaper's folder, the object's id).
+const LEFT_OUT: &[(&str, i64)] = &[
+    // Alien Romulus' "explosion on cursor": small dark specks round the pointer on
+    // Windows, splats three or four times as large here, and none at all was
+    // preferred to those. Its visibility is bound to a `mausverfolgung` that the
+    // published project.json does not offer, so there is no setting to turn it off.
+    ("3315524934", 162),
+];
 
 /// A wallpaper's files: its package, or the folder itself where there is
 /// none, which is how Wallpaper Engine's own Deep Space and the rest come.

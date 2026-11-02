@@ -100,8 +100,8 @@ fn main() {
         scene.point_at(Some(pointer), (width, height));
     }
     scene.hear(wpe_format::particle::Spectrum {
-        left: [loudness; wpe_format::particle::AUDIO_BANDS],
-        right: [loudness; wpe_format::particle::AUDIO_BANDS],
+        left: [loudness; wpe_format::particle::AUDIO_ENTRIES],
+        right: [loudness; wpe_format::particle::AUDIO_ENTRIES],
     });
     let pixels = unsafe { render_to_image(&gl, &mut scene, width, height, time, frames) }
         .unwrap_or_else(|e| {

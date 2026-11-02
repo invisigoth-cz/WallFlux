@@ -67,12 +67,6 @@ const MAX_STEP: f32 = 0.1;
 /// How far ahead a system may start, and in how fine a step it gets there.
 const MOST_AHEAD: f32 = 30.0;
 const AHEAD_STEPS: f32 = 30.0;
-/// How far ahead, in its own seconds, a system whose rate a script drives begins.
-/// A script holds Dark Core's tube fires at a tenth of their rate in silence, and
-/// from nought they took forty seconds to be where a recording from Windows has
-/// them at its first frame, growing no faster or slower from there. Measured there
-/// alone; it may be that the recording simply started late.
-const SCRIPTED_HEAD_START: f32 = 3.2;
 
 struct Particle {
     position: [f32; 3],
@@ -662,6 +656,12 @@ pub struct System {
     /// of the particles at full speed moved 11.7, and this 2.0 -- because each
     /// one lives fourteen times as long and as many are alive as ever.
     clock: f32,
+    /// What a script on the scene's `alpha` override makes of the alpha the
+    /// file gave, as a share of it: Time Reactor's smoke is held at a fifth in
+    /// silence. Over every particle alive, not only those born after.
+    opacity: f32,
+    /// The override's alpha as the file gives it, already in every particle.
+    given_alpha: f32,
     start: Start,
     operators: Vec<Operator>,
     animation: Option<Animation>,
@@ -857,12 +857,13 @@ impl System {
             emitters,
             born_on_pointer: definition.born_on_pointer,
             clock: over.rate.value.max(0.0),
+            opacity: 1.0,
+            given_alpha: over.alpha.value,
             start,
             operators,
             animation: definition.animation,
             maxcount,
-            starttime: definition.starttime
-                + if over.rate.script.is_some() { SCRIPTED_HEAD_START } else { 0.0 },
+            starttime: definition.starttime,
             live: Vec::new(),
             elapsed: 0.0,
             rng: Rng::seeded(seed),
@@ -906,6 +907,11 @@ impl System {
     /// Sets how fast the system's time runs, as the scene's override would.
     pub fn set_rate(&mut self, rate: f32) {
         self.clock = rate.max(0.0);
+    }
+
+    /// Sets the alpha the scene's override gives, as a script on it says.
+    pub fn set_alpha(&mut self, alpha: f32) {
+        self.opacity = alpha.max(0.0) / self.given_alpha.max(f32::EPSILON);
     }
 
     /// Whether anything about the system follows the sound.
@@ -1592,7 +1598,8 @@ impl System {
             .reserve(self.live.len() * VERTICES_PER_PARTICLE * FLOATS_PER_VERTEX);
         for particle in &self.live {
             let progress = particle.age / particle.lifetime;
-            let mut alpha = particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
+            let mut alpha =
+                self.opacity * particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
             let mut size = particle.shown_size * size_factor(&self.operators, progress);
             let mut color = particle.shown_color;
             let mut position = particle.position;
@@ -1661,7 +1668,8 @@ impl System {
         self.vertices
             .reserve(self.pieces() * VERTICES_PER_PARTICLE * FLOATS_PER_ROPE_VERTEX);
         for particle in &self.live {
-            let alpha = particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
+            let alpha =
+                self.opacity * particle.shown_alpha * fade(&self.operators, particle.age, particle.lifetime);
             let size =
                 particle.shown_size * size_factor(&self.operators, particle.age / particle.lifetime);
             let tint = changed_color(&self.operators, particle);
@@ -1704,7 +1712,7 @@ impl System {
         for piece in 0..pieces {
             let (start, end) = (&self.live[piece], &self.live[piece + 1]);
             let shown = |p: &Particle| {
-                let alpha = p.shown_alpha * fade(&self.operators, p.age, p.lifetime);
+                let alpha = self.opacity * p.shown_alpha * fade(&self.operators, p.age, p.lifetime);
                 let size = p.shown_size * size_factor(&self.operators, p.age / p.lifetime);
                 let tint = changed_color(&self.operators, p);
                 ([tint[0], tint[1], tint[2], alpha], size)
@@ -2078,8 +2086,9 @@ mod tests {
         });
         let fill = |level: f32| {
             let mut sound = Spectrum::SILENT;
-            sound.left[4..=7].fill(level);
-            sound.right[4..=7].fill(level);
+            // Bands 4 to 7 of sixteen are entries 16 to 31 of 64.
+            sound.left[16..=31].fill(level);
+            sound.right[16..=31].fill(level);
             sound
         };
 
@@ -2091,8 +2100,8 @@ mod tests {
 
         // Sound outside the bands it listens to is not its business.
         let mut elsewhere = Spectrum::SILENT;
-        elsewhere.left[0..=3].fill(1.0);
-        elsewhere.right[0..=3].fill(1.0);
+        elsewhere.left[0..=15].fill(1.0);
+        elsewhere.right[0..=15].fill(1.0);
         assert_eq!(loudness(step, &elsewhere), 0.0);
     }
 

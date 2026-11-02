@@ -56,6 +56,8 @@ pub enum Drives {
     Layer,
     /// The rate of the particle system object `id` places.
     Rate { id: i64 },
+    /// The alpha the override gives the particle system object `id` places.
+    Alpha { id: i64 },
     /// A constant of pass `pass` of effect `effect` on object `id`, by the
     /// name the scene gives it.
     Constant {
@@ -423,8 +425,16 @@ fn find<'a>(file: &'a SceneFile, skipped: &mut Vec<String>) -> Vec<Found<'a>> {
                 serde_json::json!(rate.value),
                 &rate.scriptproperties,
             );
+            let alpha = &over.alpha;
+            take(
+                None,
+                Drives::Alpha { id: object.id },
+                "alpha",
+                &alpha.script,
+                serde_json::json!(alpha.value),
+                &alpha.scriptproperties,
+            );
             for (what, bound) in [
-                ("alpha", &over.alpha),
                 ("size", &over.size),
                 ("lifetime", &over.lifetime),
                 ("speed", &over.speed),
@@ -432,7 +442,7 @@ fn find<'a>(file: &'a SceneFile, skipped: &mut Vec<String>) -> Vec<Found<'a>> {
             ] {
                 if bound.script.is_some() {
                     skipped.push(format!(
-                        "{}/instanceoverride/{what}: only the rate follows a script yet",
+                        "{}/instanceoverride/{what}: only the rate and the alpha follow a script yet",
                         object.name
                     ));
                 }
@@ -521,6 +531,20 @@ mod tests {
         );
     }
 
+    /// A script on an override's alpha drives it: Time Reactor's smoke is held
+    /// at a fifth of its alpha in silence. Left unrun it burned five times over.
+    #[test]
+    fn a_script_drives_a_particle_systems_alpha() {
+        let fifth = script("let v; export function init(x) { v = x; } export function update() { return v * 0.2; }");
+        let file = scene(&format!(
+            r#"{{"id":3,"name":"smoke","instanceoverride":{{"alpha":{{"script":{fifth},"value":1}}}}}}"#
+        ));
+        let mut scripts = Scripts::load(&file, None).unwrap();
+        assert!(scripts.skipped.is_empty(), "{:?}", scripts.skipped);
+        let frame = scripts.run(0.0, 0.0, &SILENCE).unwrap();
+        assert_eq!(frame.values, vec![(&Drives::Alpha { id: 3 }, serde_json::json!(0.2))]);
+    }
+
     /// A script answering with a number still leaves words: `date.getDate()`
     /// is how Dark Core writes the day.
     #[test]
@@ -587,8 +611,8 @@ mod tests {
         let mut scripts = Scripts::load(&file, Some(project)).unwrap();
         assert!(scripts.listens());
         let mut loud = Spectrum::SILENT;
-        loud.left[15] = 0.5;
-        loud.right[15] = 0.5;
+        loud.left[63] = 0.5;
+        loud.right[63] = 0.5;
         let frame = scripts.run(0.0, 0.0, &loud).unwrap();
         assert_eq!(frame.values[0].1, serde_json::json!(6.5));
     }
