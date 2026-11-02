@@ -9,11 +9,12 @@ import QtMultimedia
 
 /// One sound object of a scene wallpaper, played the way the scene asks.
 ///
-/// `loop` goes through the files in order and round again -- most scenes
-/// hold one, which simply repeats. `random` plays one picked at random,
-/// waits between `mintime` and `maxtime` seconds and picks again, which is
-/// how a scene carrying a whole album shuffles it. `single` plays the first
-/// once. A sound that starts silent waits for a script to start it, and
+/// Whatever the mode, the first file is one picked at random, as Wallpaper
+/// Engine picks it (`FUN_1401f5980` in its wallpaper64.exe), and it starts at
+/// once. `loop` then goes through the files in order and round again -- most
+/// scenes hold one, which simply repeats. `random` waits between `mintime`
+/// and `maxtime` seconds after each and picks again, which is how a scene
+/// carrying a whole album shuffles it. `single` plays the one it picked once. A sound that starts silent waits for a script to start it, and
 /// there are no scripts here yet, so it stays silent.
 Item {
     id: sound
@@ -59,8 +60,7 @@ Item {
     // Picked here rather than in a binding, which could be worked out before
     // the files were handed in.
     Component.onCompleted: {
-        if (sound.mode === "random")
-            sound.playing = sound.anyOne();
+        sound.playing = sound.anyOne();
         sound.start();
     }
 

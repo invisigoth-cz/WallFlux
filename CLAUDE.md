@@ -783,6 +783,19 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   was a turn and a half a frame and drew straight spikes; as a push held back by its
   drag of 20 it swirls on the beat as in the video.
 
+- **A sound in `random` plays one track at once, from its start**, and the next after
+  that track's length plus `mintime` to `maxtime` -- `FUN_1401f5980` in
+  `wallpaper64.exe`, which is also the play of a script's `play()`: the pick is
+  `rand() / 32767` times the count. So a scene whose tracks open quietly (Space
+  Marine II's five fade in over 2 to 10 s) is quiet for those seconds on Windows
+  too. **Almamu's renderer plays every file of a sound object at once**, each its own
+  stream mixed in (`CSound::load`, `SDL_MixAudioFormat`), and reads no mode but
+  `loop`: five soundtracks over one another, which is why it is loud from the first
+  second. Not copied. The same function starts `loop` and `single` on a random
+  file as well, and so does `SceneSound` since 2 November. It also sets the volume
+  as `volume^2` times the scene's -- against the square root measured below; that
+  is not changed yet.
+
 - **A scene sound's `volume` goes up as its square root.** Augmentation at 0.5 and a
   Space Marine at 1.9 play at 0.75 and 1.33 of their files in recordings. Two Alien
   Isolation recordings at 0.5 and 0.65 say 0.99 and 0.96, so this is the closer of two
