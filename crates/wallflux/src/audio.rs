@@ -30,6 +30,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use libpulse_binding::def::BufferAttr;
 use libpulse_binding::sample::{Format, Spec};
 use libpulse_binding::stream::Direction;
 use libpulse_simple_binding::Simple;
@@ -131,7 +132,17 @@ fn connect() -> Option<Simple> {
         "wallpaper",
         &spec,
         None,
-        None,
+        // A fragment as long as one reading. Left to the server, pipewire-pulse
+        // hands a recording over in fragments of two seconds -- measured,
+        // `node.latency` 88200/44100 -- so a wallpaper moved up to two seconds
+        // behind its own music: DOOM's letters, seen by the user.
+        Some(&BufferAttr {
+            maxlength: u32::MAX,
+            tlength: u32::MAX,
+            prebuf: u32::MAX,
+            minreq: u32::MAX,
+            fragsize: (READ * 2 * size_of::<f32>()) as u32,
+        }),
     )
     .ok()
 }

@@ -1013,6 +1013,16 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `preview.gif` is what settled it. **When a picture moves, look at the
   preview before deciding which of the two was right.**
 
+- **pipewire-pulse records in fragments of two seconds unless told otherwise.** A
+  record stream opened with no buffer attributes got `node.latency` 88200/44100 and
+  a `fragsize` of 705 600 bytes -- read with `pactl list source-outputs` -- so the
+  samples arrived two seconds at a time and DOOM's letters moved one to two seconds
+  behind its own music, which the speakers carry and the monitor hears, as Wallpaper
+  Engine's loopback does. `connect()` asks for a fragment of one reading, 8 192 bytes:
+  `node.latency` 1024/44100, and the meter moves 0.12 s after a sound starts,
+  measured three times with `listen` and `pacat` -- the tenth of that is `listen`'s
+  own interval.
+
 - **Plasma calls listening to the speakers using the microphone.** A
   record stream on a sink's monitor puts `plasmashell_microphone` -- the
   microphone icon -- in the tray for as long as it is open. Measured by
