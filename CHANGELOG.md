@@ -6,6 +6,30 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-02
+
+Removing a wallpaper works for every wallpaper in the library, and Wallpaper Engine's
+own wallpapers are all there, as Wallpaper Engine has them.
+
+### Added
+
+- **All of Wallpaper Engine's own wallpapers are listed**: sixteen here, where four
+  were. Wallpaper Engine shows every one it ships less those its `visibility.json`
+  hides, and so does WallFlux. Each has its author, and the ones the renderer cannot
+  draw yet are listed dimmed, to be read about and removed.
+- **One of Wallpaper Engine's own can be removed**, the way Wallpaper Engine removes
+  it: it is hidden in `visibility.json` and its files stay, since they belong to the
+  install. Hidden in WallFlux, it is hidden in Wallpaper Engine too.
+- **Remove asks first.** The button says "Really remove?" and only the second click
+  takes the wallpaper away, as Wallpaper Engine asks before it does.
+
+### Fixed
+
+- **Remove stays usable when Steam starts after WallFlux**, which is what a login
+  does. Steam was asked once at startup and never again, so the button stayed grey
+  with Steam running; looking at a wallpaper asks again, and finding out that Steam
+  is not running no longer takes over a second.
+
 ## [0.21.0] — 2026-11-02
 
 The sound a wallpaper hears is now worked out the way Wallpaper Engine works it out,
@@ -978,7 +1002,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.18.0...v0.19.0
