@@ -1315,10 +1315,11 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             min: vector(step, "distancemin", [0.0; 3]),
             max: vector(step, "distancemax", [256.0; 3]),
         },
-        // Nine presets here state no rate. Read as nought they let nothing out:
-        // no embers in Terminator Resistance, where Wallpaper Engine has a
-        // sky of them, and no lava on Space Visualizer's planet.
-        rate: num(step, "rate", 5.0),
+        // Ten a second, what `wallpaper64.exe` fills in for every kind of
+        // emitter (`FUN_1401b8df0`). Read as nought they let nothing out: no
+        // embers in Terminator Resistance and no lava on Space Visualizer's
+        // planet; read as five, Dark Core's tubes burned half full.
+        rate: num(step, "rate", 10.0),
         instantaneous: num(step, "instantaneous", 0.0).max(0.0) as u32,
         speed: Range {
             min: num(step, "speedmin", 0.0),
@@ -1602,7 +1603,7 @@ mod tests {
         }"#;
         let p = ParticleSystem::parse(json).unwrap();
         assert_eq!(p.maxcount, 0);
-        assert_eq!(p.emitters[0].rate, 5.0);
+        assert_eq!(p.emitters[0].rate, 10.0);
         // What the engine fills in for a flat scene when nothing is said.
         let bare = ParticleSystem::parse(
             br#"{"initializer":[{"name":"sizerandom"},

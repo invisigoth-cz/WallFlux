@@ -912,9 +912,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **A web page is handed a path with no leading slash**, as Wallpaper Engine's `C:/...`
   has none: pages put `file:///` in front, and four slashes is a file that will not play.
 
-- **An emitter's rate defaults to five.** Nine presets state none, `ember_small`
-  among them. Read as nought they let nothing out, which looks like a wallpaper
-  that has no embers.
+- **An emitter's rate defaults to ten**, for every kind of emitter, out of
+  `wallpaper64.exe` (`FUN_1401b8df0`, which each emitter's defaults call first:
+  `0x4024000000000000`). Ten wallpapers here have an emitter that states none,
+  `ember_small`, `dust_motes_0` and `wildfire` among them. Read as nought they let
+  nothing out, which looks like a wallpaper that has no embers; read as five, a
+  guess that stood until 3 November, Dark Core's tubes burned half full -- a
+  thinner, patchier fire, about 0.6 of the recording's along the lower tubes.
 
 - **A system whose control point 0 is on the mouse lets its particles out at the
   mouse**, and none while there is no mouse. Alien Romulus' black "explosion on
@@ -2017,6 +2021,13 @@ the file. Everything after it should.
    - Done and confirmed on 2 November: Romulus' specks left out, Time Reactor's and
      Dark Core's smoke from nought, Wallpaper Engine's own wallpapers listed and
      removed as it does, Remove after a late Steam, music on a random first track.
+
+   - **An emitter's audio defaults disagree with ours** -- found on 3 November,
+     not yet changed: `FUN_1401c1e20` in `wallpaper64.exe` fills in
+     `audioprocessingexponent` 2.0, `audioprocessingbounds` "0.8 1.0" and
+     `audioprocessingfrequencyend` 1, where `particle.rs` assumes 1.0, 0 to 1.5
+     and 15. Only an emitter that listens and leaves these out is affected;
+     look at DOOM's sparks first.
 
    Older, still open:
    - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.
