@@ -2013,8 +2013,9 @@ the file. Everything after it should.
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Next, as the user left them on 3 November** (0.23.0 released, with the
-   scene's evening out of the music, Dark Core's tubes and the latency fix):
+4. **Next, as the user left them on 3 November** (0.23.1 released: 0.23.0 brought
+   the scene's evening out of the music, Dark Core's tubes and the latency fix,
+   0.23.1 an emitter's audio defaults for DOOM):
    - **DOOM's glow at the second O** is the one thing left of DOOM, and the user is
      comparing it on Windows first; a recording with sound is in
      `~/WallFlux-ukazky/wpe-windows/Doom_2026.11.03-14.52.mp4`. Everything that

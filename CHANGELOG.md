@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.1] — 2026-11-03
+
+### Fixed
+
+- **Fire, smoke, torches and sparks that follow the music listen to the bass**,
+  as Wallpaper Engine has them when their preset says no more: the two lowest
+  bands, from four fifths of their loudness up. They listened to the whole
+  spectrum. DOOM was checked against a recording of it on Windows with its sound:
+  the white glow on its second O comes at the same moments and about as often.
+  Space Visualizer, Snow Lights and Augmentation have such particles too.
+
 ## [0.23.0] — 2026-11-03
 
 Every scene that follows the music reads it the way Wallpaper Engine reads it, all
@@ -1039,7 +1050,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.1...HEAD
+[0.23.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.21.0...v0.22.0
