@@ -2006,15 +2006,15 @@ the file. Everything after it should.
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Next, as the user left them on 2 November** (0.22.1 released; the sound
-   latency fix after it is committed and not yet released):
+4. **Next, as the user left them on 3 November** (0.23.0 released, with the
+   scene's evening out of the music, Dark Core's tubes and the latency fix):
    - **DOOM's glow at the second O** is the one thing left of DOOM, and the user is
-     comparing it on Windows first. The letters now move with the music -- the user's
-     word, after the meter was rewritten and the two-second fragments went (see the
-     traps). **Release 0.22.2 only after this, with the latency fix in its entry.**
-   - **Dark Core's red triangle** is too dim. It hangs on how 64 entries become 16,
-     which was not found; the user will bring a recording from Windows *with the
-     system's sound in it*, and the model in the trap on the sound settles it.
+     comparing it on Windows first; a recording with sound is in
+     `~/WallFlux-ukazky/wpe-windows/Doom_2026.11.03-14.52.mp4`. Everything that
+     listens changed on 3 November, so look at DOOM afresh before trusting older
+     notes on it.
+   - Done and confirmed on 3 November: Dark Core as on Windows -- the triangle, the
+     lines and bars, STANDBY and the tubes, colours and fill.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.

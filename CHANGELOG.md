@@ -6,6 +6,32 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-11-03
+
+Every scene that follows the music reads it the way Wallpaper Engine reads it, all
+the way through -- checked against a recording of Dark Core on Windows with the
+system's sound in it.
+
+### Fixed
+
+- **The music is evened out before a scene hears it**, as Wallpaper Engine does it:
+  each part of the sound is measured against how loud the music has lately been, so
+  the loudest of it reads about the same whether it is played loud or quiet. Without
+  that, everything that follows the music was four to nine times too weak after the
+  first second. Dark Core's lines and bars under STANDBY are as long as on Windows,
+  its triangle pulses as brightly, and STANDBY goes away while music plays.
+- **A scene answers the music when it plays it, not a second or two later.** The
+  sound was recorded in two-second pieces; DOOM's letters moved behind their own
+  music.
+- **Dark Core's tubes burn orange**, as its settings say and as Wallpaper Engine
+  burns them, rather than blue and purple.
+- **Fire, dust and embers whose preset says nothing about how many to let out let
+  out ten a second**, Wallpaper Engine's own number, not five. Dark Core's lower
+  tubes are full along their length, and Terminator Resistance has more embers; nine
+  other wallpapers change slightly.
+- **A script that asks for the average of both ears gets it in Wallpaper Engine's
+  order**: the two ears averaged first, and the loudest of each group taken after.
+
 ## [0.22.1] — 2026-11-02
 
 ### Fixed
@@ -1013,7 +1039,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.20.0...v0.21.0
