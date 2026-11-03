@@ -2016,26 +2016,32 @@ the file. Everything after it should.
 4. **Next, as the user left them on 3 November** (0.23.1 released: 0.23.0 brought
    the scene's evening out of the music, Dark Core's tubes and the latency fix,
    0.23.1 an emitter's audio defaults for DOOM):
-   - **DOOM's glow at the second O** is the one thing left of DOOM, and the user is
-     comparing it on Windows first; a recording with sound is in
-     `~/WallFlux-ukazky/wpe-windows/Doom_2026.11.03-14.52.mp4`. Everything that
-     listens changed on 3 November, so look at DOOM afresh before trusting older
-     notes on it.
+   - **Every other scene that follows the music, afresh.** The evening out of the
+     music changed all of them, and only Dark Core and DOOM have been checked
+     against a recording with the system's sound in it since. Time Reactor was
+     confirmed before the change; Augmentation, Space Visualizer and Snow Lights
+     also have particles whose audio defaults changed in 0.23.1. Their recordings
+     here are YouTube videos, whose sound may not be what Wallpaper Engine heard, so
+     the user was asked for recordings of their own with the system's sound, a
+     minute of music each. Compare as Dark Core and DOOM were: `clip` with the
+     recording's front channels (`pan=stereo|c0=FL|c1=FR` -- `-ac 2` loses 7 dB),
+     drawn at the screen's 2560x1440 and scaled down as the recorder did, regions
+     measured over time against the recording.
+   - **If no recordings yet**: Dark Angels' paler flash, Blue Dawn's sun and flare,
+     Gears of War's bubble -- the older items below.
    - Done and confirmed on 3 November: Dark Core as on Windows -- the triangle, the
-     lines and bars, STANDBY and the tubes, colours and fill.
+     lines and bars, STANDBY and the tubes, colours and fill -- and DOOM, drawn at
+     2560x1440 against its recording with sound: the second O's white glow comes
+     in the same seconds as on Windows and about as often (2.5 % of frames against
+     3.0), the Os pulse with Windows at 0.87. Left as it is, by the user's eye: the
+     letters a level or two darker and their pulsing about 15 % weaker, the D and
+     the M following Windows at only 0.5.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.
    - Done and confirmed on 2 November: Romulus' specks left out, Time Reactor's and
      Dark Core's smoke from nought, Wallpaper Engine's own wallpapers listed and
      removed as it does, Remove after a late Steam, music on a random first track.
-
-   - **DOOM against its recording with sound, 3 November**, drawn at 2560x1440
-     and scaled down as the recorder did: the second O's white glow comes in the
-     same seconds as on Windows and about as often (2.5 % of frames against 3.0),
-     the Os pulse with Windows at 0.87. Still a little off: the letters a level or
-     two darker and their pulsing about 15 % weaker, the D and the M following
-     Windows at only 0.5. Looked at by the user on the desktop: right.
 
    Older, still open:
    - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.
