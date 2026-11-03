@@ -289,11 +289,10 @@ impl Spectrum {
         right: [0.0; AUDIO_ENTRIES],
     };
 
-    /// The same sound in fewer entries, each the loudest of those it covers.
-    ///
-    /// ponytail: how Wallpaper Engine goes from its 64 to 16 or 32 was not
-    /// found (it happens on the far side of a pointer); the loudest is how it
-    /// fills each of the 64 from its bins, so it is the guess that matches.
+    /// The same sound in fewer entries, each the loudest of those it covers:
+    /// 32 are the louder of each pair and 16 the louder of each pair of those,
+    /// as the scene's render loop in `wallpaper64.exe` (`FUN_140110630`) fills
+    /// them.
     pub fn fewer<const N: usize>(entries: &[f32; AUDIO_ENTRIES]) -> [f32; N] {
         let per = AUDIO_ENTRIES / N;
         std::array::from_fn(|i| entries[i * per..(i + 1) * per].iter().cloned().fold(0.0, f32::max))
@@ -315,6 +314,79 @@ impl Spectrum {
             Channels::Right => reach(&self.right),
             Channels::Both => (reach(&self.left) + reach(&self.right)) / 2.0,
         }
+    }
+}
+
+/// What a scene does with the meter's readings before anything sees them.
+///
+/// Read off the render loop of a scene in `wallpaper64.exe` (`FUN_140110630`),
+/// once a frame and by the time the frame took. The 64 entries of each ear go
+/// in eight groups of eight, and each group is divided by an envelope that
+/// rises towards the louder of the group's loudest entry and a third of the
+/// loudest of all, at one a second, and falls at half that. So the loudest
+/// part of the music reads about one whatever the volume, and the quietest
+/// groups are lifted the most. After silence the envelopes start again from
+/// one, which is why the first second of music reads as the meter has it.
+/// What comes out is eased towards that, a twentieth of a second, and never
+/// moves more than forty a second.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Response {
+    envelope: [f32; GROUPS],
+    eased: Spectrum,
+    shown: Spectrum,
+}
+
+const GROUP: usize = 8;
+const GROUPS: usize = 2 * AUDIO_ENTRIES / GROUP;
+
+impl Default for Response {
+    fn default() -> Self {
+        Self {
+            envelope: [0.0; GROUPS],
+            eased: Spectrum::SILENT,
+            shown: Spectrum::SILENT,
+        }
+    }
+}
+
+impl Response {
+    /// The sound as a scene hands it on this frame, `dt` seconds after the
+    /// last.
+    pub fn step(&mut self, heard: &Spectrum, dt: f32) -> Spectrum {
+        let dt = dt.clamp(0.0001, 0.25);
+        let ears = [&heard.left, &heard.right];
+        let entry = |i: usize| ears[i / AUDIO_ENTRIES][i % AUDIO_ENTRIES];
+        let loudest = (0..2 * AUDIO_ENTRIES).map(entry).fold(0.0, f32::max);
+        if self.envelope[0] <= 0.0001 && loudest >= 0.0001 {
+            self.envelope = [1.0; GROUPS];
+        }
+        for (g, envelope) in self.envelope.iter_mut().enumerate() {
+            let group = (g * GROUP..(g + 1) * GROUP).map(entry).fold(0.0, f32::max);
+            let towards = group.max(loudest * 0.333) - *envelope;
+            if towards.abs() <= 0.0001 {
+                *envelope += towards;
+            } else {
+                *envelope += towards.abs().min(dt) * if towards > 0.0 { 1.0 } else { -0.5 };
+            }
+        }
+        // Silence hands out nothing and leaves the easing where it was.
+        if loudest < 0.0001 {
+            return Spectrum::SILENT;
+        }
+        let ease = (dt * 20.0).min(1.0);
+        let most = (dt * 40.0).min(1.0);
+        let ears = [
+            (&heard.left, &mut self.eased.left, &mut self.shown.left),
+            (&heard.right, &mut self.eased.right, &mut self.shown.right),
+        ];
+        for (ear, (heard, eased, shown)) in ears.into_iter().enumerate() {
+            for at in 0..AUDIO_ENTRIES {
+                let scale = 1.0 / self.envelope[(ear * AUDIO_ENTRIES + at) / GROUP].max(0.001);
+                eased[at] += (heard[at] * scale - eased[at]) * ease;
+                shown[at] += (eased[at] - shown[at]).clamp(-most, most);
+            }
+        }
+        self.shown
     }
 }
 
@@ -1655,6 +1727,25 @@ mod tests {
     }
 
     /// Sixteen bands out of 64 entries, each the loudest of its four.
+    #[test]
+    fn the_response_starts_at_the_meter_and_lifts_the_music_to_one() {
+        let mut heard = Spectrum::SILENT;
+        heard.left[20] = 0.2;
+        heard.left[50] = 0.05;
+        let mut response = Response::default();
+        // A frame at a time for a second: the envelopes start at one, so the
+        // first moment reads as the meter has it.
+        let first = (0..6).map(|_| response.step(&heard, 1.0 / 60.0)).last().unwrap();
+        assert!((first.left[20] - 0.2).abs() < 0.03, "{}", first.left[20]);
+        // Two seconds on, the envelope has come down to the loudest entry,
+        // and a quiet group to a third of it.
+        let later = (0..120).map(|_| response.step(&heard, 1.0 / 60.0)).last().unwrap();
+        assert!((later.left[20] - 1.0).abs() < 0.01, "{}", later.left[20]);
+        assert!((later.left[50] - 0.05 / (0.2 * 0.333)).abs() < 0.01, "{}", later.left[50]);
+        // Silence hands out nothing.
+        assert_eq!(response.step(&Spectrum::SILENT, 1.0 / 60.0), Spectrum::SILENT);
+    }
+
     #[test]
     fn fewer_entries_keep_the_loudest_of_each_group() {
         let mut entries = [0.0; AUDIO_ENTRIES];

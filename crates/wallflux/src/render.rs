@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use glow::HasContext;
 use wpe_format::particle::ChildKind;
 use wpe_format::particle::Renderer as ParticleRenderer;
-use wpe_format::particle::Spectrum;
+use wpe_format::particle::{Response, Spectrum};
 use wpe_format::puppet::{Playing, Puppet};
 use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
@@ -659,9 +659,14 @@ pub struct Scene {
     buffers: BTreeMap<String, u32>,
     /// How far the particle systems have been simulated.
     simulated: f32,
-    /// What the speakers are playing, as the bands a wallpaper asks for.
-    /// Silence until a caller says otherwise, which is what a tool drawing
-    /// to a file wants: the same wallpaper twice gives the same picture.
+    /// What the speakers are playing, as the meter last read it. Silence
+    /// until a caller says otherwise, which is what a tool drawing to a file
+    /// wants: the same wallpaper twice gives the same picture.
+    heard: Spectrum,
+    /// What the scene makes of that, a frame at a time, and when it last did:
+    /// the bands everything in the scene that follows the sound reads.
+    response: Response,
+    responded_at: Option<f32>,
     sound: Spectrum,
     /// The scene's JavaScript, where it has any, and the time it last ran.
     scripts: Option<Scripts>,
@@ -1137,6 +1142,9 @@ impl Scene {
             pointer: None,
             buffers,
             simulated: 0.0,
+            heard: Spectrum::SILENT,
+            response: Response::default(),
+            responded_at: None,
             sound: Spectrum::SILENT,
             scripts,
             scripted_at: None,
@@ -1150,7 +1158,7 @@ impl Scene {
     /// follow the sound read on the next frame. A caller that never says
     /// anything leaves the scene running as it would in a silent room.
     pub fn hear(&mut self, sound: Spectrum) {
-        self.sound = sound;
+        self.heard = sound;
     }
 
     /// Whether anything in the scene follows the sound: a shader that reads
@@ -1250,6 +1258,9 @@ impl Scene {
     /// may jump straight to a moment and the particle systems still arrive
     /// there the same way they would have by running.
     pub fn draw(&mut self, gl: &glow::Context, output: (u32, u32), time: f32) {
+        let dt = self.responded_at.map_or(0.0, |at| time - at);
+        self.responded_at = Some(time);
+        self.sound = self.response.step(&self.heard, dt);
         self.run_scripts(gl, time);
         self.advance_to(time, STEPS_PER_FRAME);
         for video in self.videos.values_mut() {

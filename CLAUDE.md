@@ -717,9 +717,22 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   weighted by `0.501 - cos(pi x) 0.499` -- the bass a five-hundredth of the top,
   which levels music out -- its root put into one of 64 entries by `x^0.25`, the
   loudest bin winning, and the lot times 127 x 0.001 x 640/960 x the recording
-  volume (50 of 200, one). **Every reading starts from nought: nothing held, nothing
-  smoothed, nothing capped at one.** `audio.rs` does the same off an FFT of 2048,
-  each of its bins read off the nearest of ours.
+  volume (`audioinputvolume` x 0.02, so 50 is one). Every reading starts from
+  nought: the meter holds and smooths nothing. `audio.rs` does the same off an FFT
+  of 2048, each of its bins read off the nearest of ours.
+
+  **And then the scene evens the music out before anything sees it** --
+  `wpe_format::particle::Response`, read off the scene's render loop
+  (`FUN_140110630`, after its call through the meter object's vtable at `+0x58`),
+  once a frame and by the frame's own time. Each ear's 64 in eight groups of
+  eight, each group divided by an envelope that goes towards the louder of the
+  group's loudest and a third of the loudest of all -- up at one a second, down
+  at half that -- and starts again from one after silence; then eased at twenty a
+  second and moved at most forty a second. Without it the meter is right for the
+  first second of music and four to nine times too weak after: measured on the
+  white lines under Dark Core's STANDBY (each one is 380 scene pixels times one
+  entry), against a recording with the system's sound in it, the lines went
+  from a fifth of Windows' length to the same within a few hundredths.
 
   The meter it replaced was a visualiser's -- a Hann window, sixteen bands, rising
   at once and falling slowly, square-rooted and capped at one -- with a `TOP_LIFT`
@@ -729,10 +742,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   and its green bars under STANDBY hardly moved. Simulated over a recording's music:
   the triangle's alpha 2.5 to 3.0 before, 0.25 to 0.94 now.
 
-  **How 64 entries become 16 or 32 was not found** -- the reader is on the far side
-  of a pointer. `Spectrum::fewer` and `script/host.js` take the loudest of each
-  group, which is how the 64 are filled from their bins. Shaders here read only
-  `g_AudioSpectrum16*`; scripts get the 64 and ask for what they like.
+  **32 and 16 are the loudest of each pair, twice over**, in the same loop -- and
+  the averaged ear is the two ears' entries averaged first and the loudest of
+  those taken after. Dark Core's green bars, which read 16, 32 and 64 side by
+  side, agree: an average of each group would have them at two thirds of their
+  length. Shaders here read only `g_AudioSpectrum16*`; scripts get the 64 and
+  ask for what they like.
 
 - **A system whose rate a script drives starts from nought, like any other.** A
   script holds Dark Core's and Time Reactor's fires at a tenth of their speed in
