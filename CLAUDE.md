@@ -658,6 +658,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   defaulting to that target and surviving compilation is handed the scene as
   it stands (`Pass::screen_slots`), copied before each such system.
 
+- **An emitter that listens and says no more hears the two lowest bands,
+  squared, from 0.8 to 1** -- `audioprocessingfrequencystart` 0, `...end` 1,
+  `audioprocessingexponent` 2 and `audioprocessingbounds` "0.8 1.0", filled in by
+  `FUN_1401c1e20` in `wallpaper64.exe`. They were taken as the whole spectrum,
+  unsquared, from 0 to 1.5. DOOM, Space Visualizer, Snow Lights and Augmentation
+  leave some of them out; in DOOM it moved the picture by a quarter of a level.
+
 - **`audioprocessingbounds` is the part of the loudness a step hears, not a
   range of strengths.** `CreateAudioResponse` in the stock shaders:
   `smoothstep(bounds.x, bounds.y, level)`, then the exponent. So a step that
@@ -2022,12 +2029,12 @@ the file. Everything after it should.
      Dark Core's smoke from nought, Wallpaper Engine's own wallpapers listed and
      removed as it does, Remove after a late Steam, music on a random first track.
 
-   - **An emitter's audio defaults disagree with ours** -- found on 3 November,
-     not yet changed: `FUN_1401c1e20` in `wallpaper64.exe` fills in
-     `audioprocessingexponent` 2.0, `audioprocessingbounds` "0.8 1.0" and
-     `audioprocessingfrequencyend` 1, where `particle.rs` assumes 1.0, 0 to 1.5
-     and 15. Only an emitter that listens and leaves these out is affected;
-     look at DOOM's sparks first.
+   - **DOOM against its recording with sound, 3 November**, drawn at 2560x1440
+     and scaled down as the recorder did: the second O's white glow comes in the
+     same seconds as on Windows and about as often (2.5 % of frames against 3.0),
+     the Os pulse with Windows at 0.87. Still a little off: the letters a level or
+     two darker and their pulsing about 15 % weaker, the D and the M following
+     Windows at only 0.5. Looked at by the user on the desktop: right.
 
    Older, still open:
    - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.

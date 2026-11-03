@@ -1346,16 +1346,17 @@ fn audio_response(step: &Value) -> Option<AudioResponse> {
         ..=0 => return None,
         _ => Channels::Both,
     };
+    // What `wallpaper64.exe` fills in for an emitter that leaves these out
+    // (`FUN_1401c1e20`): the two lowest bands, squared, heard from 0.8 to 1.
+    // A start past the end swaps them, and neither goes past the last band.
     let last = AUDIO_BANDS - 1;
-    let first = (num(step, "audioprocessingfrequencystart", 0.0) as usize).min(last);
+    let start = (num(step, "audioprocessingfrequencystart", 0.0).max(0.0) as usize).min(last);
+    let end = (num(step, "audioprocessingfrequencyend", 1.0).max(0.0) as usize).min(last);
     Some(AudioResponse {
-        bands: (
-            first,
-            (num(step, "audioprocessingfrequencyend", last as f32) as usize).clamp(first, last),
-        ),
+        bands: (start.min(end), start.max(end)),
         ears,
-        exponent: num(step, "audioprocessingexponent", 1.0).max(f32::EPSILON),
-        bounds: pair(step, "audioprocessingbounds", Range { min: 0.0, max: 1.5 }),
+        exponent: num(step, "audioprocessingexponent", 2.0).max(f32::EPSILON),
+        bounds: pair(step, "audioprocessingbounds", Range { min: 0.8, max: 1.0 }),
     })
 }
 
@@ -1766,9 +1767,15 @@ mod tests {
             .audio
             .unwrap();
         assert_eq!(audio.bounds, Range { min: 0.9, max: 1.0 });
-        // Nothing stated means the whole spectrum rather than one band.
-        assert_eq!(audio.bands, (0, 15));
-        assert_eq!(audio.exponent, 1.0);
+        // Nothing stated is what the engine fills in: the two lowest bands,
+        // squared.
+        assert_eq!(audio.bands, (0, 1));
+        assert_eq!(audio.exponent, 2.0);
+        let bare = br#"{"emitter":[{"name":"sphererandom","audioprocessingmode":3,
+                        "audioprocessingfrequencystart":12,"audioprocessingfrequencyend":20}]}"#;
+        let audio = ParticleSystem::parse(bare).unwrap().emitters[0].audio.unwrap();
+        assert_eq!(audio.bounds, Range { min: 0.8, max: 1.0 });
+        assert_eq!(audio.bands, (12, 15));
     }
 
     #[test]
