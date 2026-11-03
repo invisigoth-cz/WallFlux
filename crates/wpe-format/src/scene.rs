@@ -724,22 +724,8 @@ fn bind_user_values(node: &mut serde_json::Value, properties: &serde_json::Map<S
             {
                 map.insert("value".into(), new);
             }
-            for (key, child) in map.iter_mut() {
-                // The colour a scene gives a particle system stays the scene's,
-                // whatever the property says. Dark Core's project has its tubes
-                // orange, its scene blue, purple and orange, and on Windows they
-                // burn blue, purple and orange, each where the scene says.
-                if key == "instanceoverride"
-                    && let Value::Object(over) = child
-                {
-                    for (what, value) in over.iter_mut() {
-                        if what != "color" && what != "colorn" {
-                            bind_user_values(value, properties);
-                        }
-                    }
-                } else {
-                    bind_user_values(child, properties);
-                }
+            for child in map.values_mut() {
+                bind_user_values(child, properties);
             }
         }
         Value::Array(items) => {
@@ -851,14 +837,16 @@ mod tests {
         assert!(!s.objects[2].visible.value);
     }
 
+    /// Dark Core's project has its tubes orange and its scene blue, purple
+    /// and orange, and on Windows, untouched, every tube burns orange.
     #[test]
-    fn an_instance_keeps_its_own_colour_and_not_the_rest() {
+    fn an_instance_takes_its_colour_from_the_project_like_the_rest() {
         let project = br#"{"general":{"properties":{"c":{"value":"1 0 0"},"r":{"value":3}}}}"#;
         let scene = br#"{"objects":[{"instanceoverride":{
             "colorn":{"user":"c","value":"0 0 1"},"rate":{"user":"r","value":0}}}]}"#;
         let s = Scene::parse_with_properties(scene, Some(project)).unwrap();
         let over = s.objects[0].instanceoverride.as_ref().unwrap();
-        assert_eq!(over.colorn.as_ref().unwrap().value.0, [0.0, 0.0, 1.0]);
+        assert_eq!(over.colorn.as_ref().unwrap().value.0, [1.0, 0.0, 0.0]);
         assert_eq!(over.rate.value, 3.0);
     }
 

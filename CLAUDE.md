@@ -488,11 +488,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   disagree -- one wallpaper's scene tints everything red at full
   strength, and its project has the tint off.
 
-- **A colour bound inside `instanceoverride` stays the scene's.** Every other
-  bound value is played from project.json, as the trap above says, but on
-  Windows Dark Core's tubes burn the blue, purple and orange of its scene.json
-  where its project says orange for all of them. Only colours are measured:
-  Dark Angels' `rate` bound the same way has no recording of ours to settle it.
+- **A colour bound inside `instanceoverride` is the project's too, like every
+  other bound value.** Dark Core's scene.json has its tubes blue, purple and
+  orange and its project orange for all of them, and on Windows, untouched, all
+  of them burn orange -- the user's word and a recording with music. An earlier
+  rule kept the scene's colours, read off a recording in silence where the
+  tubes hardly burn at all: faint glints in a dark tube are no evidence of a
+  colour. Look at a particle system's colour while it is lit.
 
 - **A scene's `instanceoverride` multiplies the particle system it
   places, and stays with that system.** 462 particle objects carry one
