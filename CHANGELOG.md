@@ -19,6 +19,13 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and with the pool thinned instead the ripple had room for none.
 - **Snow Lights' nearest snowflakes pass the camera as large stars**: a scene's
   own field of view for perspective particles is used, where it gives one.
+- **Particles that follow the music hear the loudest of their bands**, as
+  Wallpaper Engine reads them, not the average. Space Visualizer, which listens
+  across a wide range, answers the music about twice as strongly; DOOM, which
+  listens to two bands, moved by tenths of a level, towards its recording.
+- **Trails of sparks are as long as Wallpaper Engine draws them** when their
+  preset does not say: capped at ten times the spark's size. Uncapped, Space
+  Visualizer's lava threw lines across the whole planet.
 
 ## [0.23.1] — 2026-11-03
 

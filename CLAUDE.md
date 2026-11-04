@@ -673,6 +673,23 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   Wildfire has no audio mode and burns. Read the other way round, DOOM ran
   flat out in a silent room.
 
+- **A step hears the loudest of its bands, not their average.** One function in
+  `wallpaper64.exe` reads the sound for every emitter and operator
+  (`0x14022a8a0`, seven callers): mode 1 the left ear, 2 the right, 3 the two
+  added band by band and halved, then the largest over the range, then the
+  bounds, `smoothstep` and `pow` by the exponent. The stock *effect* shaders
+  average a range for themselves, which is where the average came from. Space
+  Visualizer listens across eleven bands and more, and answered the music half
+  as much; DOOM, on two, moved by tenths of a level, towards its recording.
+
+- **A `spritetrail` that says no more is 0.05 long and capped at 10**
+  (`FUN_1401c0af0`; no floor). The cap is in sizes of the particle:
+  `ComputeParticleTrailTangents` draws it `size x min(speed x length,
+  maxlength)`. Read as uncapped, Space Visualizer's lava sparks -- 3 to 10
+  across, hundreds a second, `length` 3.03 -- drew lines across the whole
+  planet where Windows throws fans of short red ones; with the hearing above
+  they fired often enough to show it.
+
 - **`sphererandom` is an even disc times `directions`, not a direction and a
   distance.** `directions` multiplies the place drawn; normalised after the
   mask, "1 0.07 0" sent some of Star Destroyer's fire well off the hull it
@@ -2082,12 +2099,16 @@ the file. Everything after it should.
      on Windows and 1.0 and 1.3 here; what Windows adds when it is loud is fog over
      the small planet, stars all over the sky and rays round the sun (the shine on
      composition layer 5767 picking up a sun the background's audio `pulse` makes
-     brighter). The planet's surface follows Windows at 0.8 to 0.97. Taking the
-     loudest band instead of the average across an emitter's range moved the sky
-     halfway (std 1.9, 2.5) -- an experiment, reverted, not in the binary. The
-     background's `pulse` is the stock shader averaging for itself and is weak as
-     well, so the suspicion is the bands' values after the evening out, not how a
-     range is read. DOOM's letters pulsing about 15 % weaker may be the same thing.
+     brighter). The planet's surface follows Windows at 0.8 to 0.97. **Half of it
+     was how a range is heard**: the loudest band, as `wallpaper64.exe` reads it
+     (see the trap), moved the sky halfway (std 1.9, 2.5), and with it the lava
+     sparks fired often enough to show their trails uncapped -- fixed too. Still
+     short of Windows: fewer red streaks across the sky; the lava's fans of
+     trails come out near white where Windows has them dark red (`REFRACT`, an
+     overbright of 6, over a bright planet); the background's `pulse` is the
+     stock shader averaging for itself and is weak as well, so the bands' values
+     after the evening out are still suspect. DOOM's letters pulsing about 15 %
+     weaker may be the same thing.
    - **Alien Romulus' specks round the mouse** (object 162, left out): on Windows a
      sparse ring of dots 2-3 px across at 1280, falling from the pointer; here, with
      it switched on and the mouse still, a dense black ball about 35 px. The system:

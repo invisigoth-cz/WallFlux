@@ -298,22 +298,26 @@ impl Spectrum {
         std::array::from_fn(|i| entries[i * per..(i + 1) * per].iter().cloned().fold(0.0, f32::max))
     }
 
-    /// The loudness across a range of bands, which is their average.
+    /// The loudness across a range of bands, which is the loudest of them.
     ///
-    /// The stock effect shaders spell this out for themselves: they walk the
-    /// range adding bands up and divide by how many they added, one ear or
-    /// both. A step of a particle system is read the same way.
+    /// `wallpaper64.exe` reads a particle step's sound in one function
+    /// (`0x14022a8a0`, called by emitters and operators alike): one ear, the
+    /// other, or both ears added band by band and halved, and the largest of
+    /// those over the range -- not their average, which the stock effect
+    /// shaders take for themselves and which this was read as until
+    /// 4 November. Space Visualizer, which listens across eleven bands and
+    /// more, answered the music half as much that way; DOOM, on two, moved by
+    /// tenths of a level.
     pub fn across(&self, bands: (usize, usize), ears: Channels) -> f32 {
         let (first, last) = bands;
-        let reach = |of: &[f32; AUDIO_ENTRIES]| match Self::fewer::<AUDIO_BANDS>(of).get(first..=last) {
-            Some(heard) if !heard.is_empty() => heard.iter().sum::<f32>() / heard.len() as f32,
-            _ => 0.0,
-        };
-        match ears {
-            Channels::Left => reach(&self.left),
-            Channels::Right => reach(&self.right),
-            Channels::Both => (reach(&self.left) + reach(&self.right)) / 2.0,
-        }
+        let (left, right) = (Self::fewer::<AUDIO_BANDS>(&self.left), Self::fewer::<AUDIO_BANDS>(&self.right));
+        (first..=last.min(AUDIO_BANDS - 1))
+            .map(|i| match ears {
+                Channels::Left => left[i],
+                Channels::Right => right[i],
+                Channels::Both => (left[i] + right[i]) * 0.5,
+            })
+            .fold(0.0, f32::max)
     }
 }
 
@@ -1052,13 +1056,17 @@ impl ParticleSystem {
                     // and cheap enough for a system of five hundred.
                     points: num(r, "segments", 8.0).clamp(2.0, 48.0) as u32,
                 },
+                // Defaults out of `wallpaper64.exe` (`FUN_1401c0af0`): a length
+                // of 0.05 and a cap of 10, and no floor. The cap is in sizes of
+                // the particle -- `ComputeParticleTrailTangents` draws it
+                // `size x min(speed x length, maxlength)` long -- and half the
+                // systems that trail leave it out. Uncapped, Space Visualizer's
+                // sparks, 3 to 10 across at hundreds a second, drew lines across
+                // the whole planet where Windows throws fans of short ones.
                 "spritetrail" => Renderer::Trail {
-                    length: num(r, "length", 0.0),
+                    length: num(r, "length", 0.05),
                     min_length: num(r, "minlength", 0.0),
-                    // Left out by half the systems that trail, and the shader
-                    // caps the length against it, so absent has to mean
-                    // uncapped rather than nothing.
-                    max_length: num(r, "maxlength", f32::MAX),
+                    max_length: num(r, "maxlength", 10.0),
                 },
                 other => Renderer::Other(other.to_owned()),
             },
@@ -1635,7 +1643,7 @@ mod tests {
             Renderer::Trail {
                 length: 0.02,
                 min_length: 0.0,
-                max_length: f32::MAX
+                max_length: 10.0
             }
         );
         assert_eq!(p.animation, None);
@@ -1712,10 +1720,10 @@ mod tests {
         assert_eq!(with(3), Some(Channels::Both));
     }
 
-    /// One ear, the other, or the pair averaged -- and only across the bands
-    /// the step asked for.
+    /// One ear, the other, or the pair averaged -- the loudest band, and only
+    /// of the bands the step asked for.
     #[test]
-    fn a_spectrum_averages_the_bands_it_is_asked_for() {
+    fn a_spectrum_takes_the_loudest_of_the_bands_it_is_asked_for() {
         // Bands 4 to 7 of sixteen are entries 16 to 31 of the 64 heard.
         let mut sound = Spectrum::SILENT;
         sound.left[16..=31].fill(1.0);
@@ -1723,8 +1731,13 @@ mod tests {
         assert_eq!(sound.across((4, 7), Channels::Left), 1.0);
         assert_eq!(sound.across((4, 7), Channels::Right), 0.5);
         assert_eq!(sound.across((4, 7), Channels::Both), 0.75);
-        // Half the range is loud and half is not.
-        assert_eq!(sound.across((4, 11), Channels::Left), 0.5);
+        // Half the range is loud and half is not: the loud half is heard.
+        assert_eq!(sound.across((4, 11), Channels::Left), 1.0);
+        // Both ears are added band by band before the loudest is taken.
+        let mut apart = Spectrum::SILENT;
+        apart.left[16..=19].fill(1.0);
+        apart.right[20..=23].fill(1.0);
+        assert_eq!(apart.across((4, 5), Channels::Both), 0.5);
         assert_eq!(sound.across((0, 3), Channels::Both), 0.0);
     }
 
