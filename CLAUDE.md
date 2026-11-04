@@ -2070,9 +2070,13 @@ the file. Everything after it should.
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Next, as the user left them on 3 November** (0.23.1 released: 0.23.0 brought
-   the scene's evening out of the music, Dark Core's tubes and the latency fix,
-   0.23.1 an emitter's audio defaults for DOOM):
+4. **Next, as the user left them on 4 November** (0.23.2 released: a scene's
+   particle `count`, the perspective field of view and the instance colour as
+   Wallpaper Engine has them, a step hearing its loudest band and a trail's cap.
+   Confirmed by the user that day: Snow Lights, Augmentation, Gears, Dark Angels,
+   and DOOM unchanged to the eye after the loudest band. **Space Visualizer
+   "looks very nice" and is to be brought into line with Windows next** -- see
+   its entry below):
    - **Every other scene that follows the music, afresh.** The evening out of the
      music changed all of them, and only Dark Core and DOOM have been checked
      against a recording with the system's sound in it since. Time Reactor was
@@ -2093,7 +2097,8 @@ the file. Everything after it should.
      Space Visualizer, Snow Lights (the deer and the night come at the same
      moments), Dark Angels (our flame whiter at its core, Windows' more orange).
      `clip` now pipes frames into ffmpeg, so a minute at 2560x1440 needs no space.
-     Later that day: Dark Angels' flame fixed by the instance colour (see the trap).
+     Later that day: Dark Angels' flame fixed by the instance colour (see the trap);
+     the user confirmed Snow Lights, Augmentation, Gears and Dark Angels.
    - **Space Visualizer answers the music too weakly.** Against the user's
      recording, regions of the sky over the planet swing 2.7 and 3.6 levels (std)
      on Windows and 1.0 and 1.3 here; what Windows adds when it is loud is fog over

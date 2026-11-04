@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.2] — 2026-11-04
+
 ### Fixed
 
 - **Dark Angels' muzzle flash burns yellow, not white**, and every particle
@@ -1071,7 +1073,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.2...HEAD
+[0.23.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.22.0...v0.22.1
