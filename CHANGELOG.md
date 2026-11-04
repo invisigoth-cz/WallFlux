@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dark Angels' muzzle flash burns yellow, not white**, and every particle
+  system a scene recolours takes its colour as Wallpaper Engine gives it: moved
+  in hue, saturation and value from the system's own, and in a scene from before
+  version 5 multiplied as well. Checked against recordings on Windows: Dark
+  Angels' flame, Ender Spartan, Star Destroyer, Tomb Raider's torch and Dark
+  Core's tubes.
+- **Gears of War's ripple comes back**, once every half a minute as on Windows.
+  A scene's particle `count` thins how many are let out, not how many may live,
+  and with the pool thinned instead the ripple had room for none.
+- **Snow Lights' nearest snowflakes pass the camera as large stars**: a scene's
+  own field of view for perspective particles is used, where it gives one.
+
 ## [0.23.1] — 2026-11-03
 
 ### Fixed

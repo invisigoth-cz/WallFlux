@@ -535,6 +535,49 @@ fn from_hsv(hue: f32, saturation: f32, value: f32) -> [f32; 3] {
     }
 }
 
+/// Hue, saturation and value, each nought to one.
+fn to_hsv([r, g, b]: [f32; 3]) -> [f32; 3] {
+    let top = r.max(g).max(b);
+    let spread = top - r.min(g).min(b);
+    if spread < 1e-5 || top <= 0.0 {
+        return [0.0, 0.0, top];
+    }
+    let sector = match () {
+        _ if r >= top => (g - b) / spread,
+        _ if g >= top => (b - r) / spread + 2.0,
+        _ => (r - g) / spread + 4.0,
+    };
+    [(sector / 6.0).rem_euclid(1.0), spread / top, top]
+}
+
+/// The colour a system's particles have before a scene says otherwise, as
+/// `wallpaper64.exe` takes it: the middle of the last colour initializer, the
+/// start of the first `colorchange` where there is none, or white.
+fn own_color(definition: &ParticleSystem) -> [f32; 3] {
+    let middle = |r: &Range<[f32; 3]>| std::array::from_fn(|i| (r.min[i] + r.max[i]) / 2.0);
+    definition
+        .initializers
+        .iter()
+        .rev()
+        .find_map(|i| match i {
+            Initializer::Color(r) => Some(middle(r)),
+            Initializer::HsvColor { hue, saturation, value } => Some(from_hsv(
+                (hue.min + hue.max) / 2.0,
+                (saturation.min + saturation.max) / 2.0,
+                (value.min + value.max) / 2.0,
+            )),
+            Initializer::ColorList(colors) => colors.first().copied(),
+            _ => None,
+        })
+        .or_else(|| {
+            definition.operators.iter().find_map(|o| match o {
+                Operator::ColorChange { from, .. } => Some(*from),
+                _ => None,
+            })
+        })
+        .unwrap_or([1.0; 3])
+}
+
 impl Default for Start {
     fn default() -> Self {
         Self {
@@ -595,7 +638,7 @@ impl Gate {
 struct Line {
     from: [f32; 3],
     to: [f32; 3],
-    count: u32,
+    steps: u32,
     /// Back the way it came from the far end, rather than from the start again.
     mirror: bool,
 }
@@ -606,13 +649,13 @@ impl Line {
     /// The walk turns round at each end rather than jumping back, so a ribbon
     /// threaded through these runs out to the far point and back along itself.
     fn at(&self, nth: u32) -> [f32; 3] {
-        let last = self.count - 1;
+        let last = self.steps - 1;
         let step = match self.mirror {
             true => match nth % (2 * last) {
                 step if step <= last => step,
                 step => 2 * last - step,
             },
-            false => nth % self.count,
+            false => nth % self.steps,
         };
         let t = step as f32 / last as f32;
         std::array::from_fn(|i| self.from[i] + (self.to[i] - self.from[i]) * t)
@@ -660,6 +703,10 @@ pub struct System {
     /// file gave, as a share of it: Time Reactor's smoke is held at a fifth in
     /// silence. Over every particle alive, not only those born after.
     opacity: f32,
+    /// What every particle's colour is multiplied by as it is born: the
+    /// scene's colour, in a scene written before version 5 -- see
+    /// [`System::multiply_colour`].
+    multiplier: [f32; 3],
     /// The override's alpha as the file gives it, already in every particle.
     given_alpha: f32,
     start: Start,
@@ -778,31 +825,53 @@ impl System {
             max: std::array::from_fn(|i| r.max[i] * by[i]),
         };
         let speed = over.speed.value;
-        if let Some((_, count, around)) = &mut start.around {
-            *count *= over.count.value;
+        let count = over.count.value.max(0.0);
+        if let Some((_, steps, around)) = &mut start.around {
+            *steps *= count;
             *around = times3(*around, [speed; 3]);
         }
         start.alpha = times(start.alpha, over.alpha.value);
         start.size = times(start.size, over.size.value);
         start.lifetime = times(start.lifetime, over.lifetime.value);
-        // The scene's colour takes the hue and the file keeps how strong it is,
-        // its largest channel: measured, not explained, off recordings.
-        // Multiplied, Terminator's orange smoke set to 0.42 stays orange where it
-        // burns grey, and Tomb Raider's torch, orange to red in its own
-        // `colorchange` and set to white, stays orange where it burns white.
-        // Replaced, Star Destroyer's smoke, 0.5 grey set to 0.24 0.31 0.35, comes
-        // out twice as light as it is, and Star wars' dim brown light shafts set
-        // to 0.75 cross the picture in white. Taken from the luminance instead,
-        // Dark Angels' flash, red to yellow in its file, lost its yellow.
+        // The scene's colour moves the system's colours by how far it is, in
+        // hue, saturation and value, from the colour the system already has:
+        // `wallpaper64.exe` works out that colour when it reads the system
+        // (`FUN_1401c45f0`) and moves every colour range by the difference
+        // (`FUN_1401d15a0`, cases 11 to 13), the hue going round and the other
+        // two held between nought and one.
         let mut operators = definition.operators.clone();
         if let Some(tint) = over.tint() {
-            let hued = |color: [f32; 3]| times_each(tint, brightness(color));
-            start.color = Range { min: hued(start.color.min), max: hued(start.color.max) };
+            let by = std::array::from_fn::<f32, 3, _>(|i| {
+                to_hsv(tint)[i] - to_hsv(own_color(definition))[i]
+            });
+            let moved = |color: [f32; 3]| {
+                let [h, s, v] = to_hsv(color);
+                from_hsv(h + by[0], (s + by[1]).clamp(0.0, 1.0), (v + by[2]).clamp(0.0, 1.0))
+            };
+            // Only a colour an initializer gave: a system with none is white,
+            // and that white is multiplied instead -- see `multiply_colour`.
+            if definition.initializers.iter().any(|i| matches!(i, Initializer::Color(_))) {
+                start.color = Range { min: moved(start.color.min), max: moved(start.color.max) };
+            }
+            // Its two ends are moved alike, which the binary was not seen to
+            // do -- no binding of `colorchange` was found -- but the
+            // recordings say so: Tomb Raider's torch, orange to red and set to
+            // white, burns white on Windows and orange unmoved, and Dark
+            // Angels' flash stays within a few hundredths of its recording.
             for operator in &mut operators {
                 if let Operator::ColorChange { from, to, .. } = operator {
-                    *from = [brightness(*from); 3];
-                    *to = [brightness(*to); 3];
+                    *from = moved(*from);
+                    *to = moved(*to);
                 }
+            }
+            if let Palette::Hsv { hue, saturation, value } = &mut start.palette {
+                let held = |r: Range<f32>, by: f32| Range {
+                    min: (r.min + by).clamp(0.0, 1.0),
+                    max: (r.max + by).clamp(0.0, 1.0),
+                };
+                *hue = Range { min: hue.min + by[0], max: hue.max + by[0] };
+                *saturation = held(*saturation, by[1]);
+                *value = held(*value, by[2]);
             }
         }
         start.velocity = times3(start.velocity, [speed; 3]);
@@ -815,10 +884,18 @@ impl System {
             .cloned()
             .map(|mut e| {
                 e.speed = times(e.speed, speed);
+                // The scene's `count` is how many are let out, not how many
+                // may live: `wallpaper64.exe` binds it to each emitter's rate
+                // and burst (`FUN_1401c5490`, the entries at `0x1401c626c`)
+                // and to nothing that sizes the pool. Gears of War's ripple,
+                // one a second times 0.03, comes every 33 s as on Windows; with
+                // the pool scaled instead, 16 x 0.03 left it none at all.
+                e.rate *= count;
+                e.instantaneous = (e.instantaneous as f32 * count) as u32;
                 (e, 0.0)
             })
             .collect();
-        let maxcount = (definition.maxcount as f32 * over.count.value.max(0.0)).round() as usize;
+        let maxcount = definition.maxcount as usize;
         // The line runs between the first two control points. A system naming
         // the step without having them keeps the emitter's own placing.
         let line = definition
@@ -834,10 +911,11 @@ impl System {
                     .first()
                     .zip(definition.control_points.get(1)),
             )
-            .map(|((count, mirror), (from, to))| Line {
+            .map(|((steps, mirror), (from, to))| Line {
                 from: *from,
                 to: *to,
-                count,
+                // Bound to the scene's `count` too (`0x1401ca6b3`).
+                steps: ((steps as f32 * count).round() as u32).max(2),
                 mirror,
             });
         Self {
@@ -858,6 +936,7 @@ impl System {
             born_on_pointer: definition.born_on_pointer,
             clock: over.rate.value.max(0.0),
             opacity: 1.0,
+            multiplier: [1.0; 3],
             given_alpha: over.alpha.value,
             start,
             operators,
@@ -1100,6 +1179,21 @@ impl System {
     }
 
     /// Whether its particles are seen through a camera.
+    /// Multiplies every colour by the scene's, on top of moving them in hue,
+    /// saturation and value. `wallpaper64.exe` sets a flag (`0x200000`,
+    /// `FUN_1401c5490`) under which the instance's colour becomes a
+    /// multiplier on the particles drawn (`FUN_1401d15a0`), for a scene whose
+    /// `version` is below 5 -- every one here but Ender Spartan -- and for a
+    /// system with no colour of its own, which has nothing to move: Dark
+    /// Core's fire, white and set to orange, is orange, where moved and then
+    /// multiplied it came out red.
+    /// Dark Angels' flash, measured over 15 s against its recording: blue to
+    /// red 0.59 to Windows' 0.58, where moving alone gave 0.86 and
+    /// multiplying alone 0.27, and white over 2.8 % of the flame against 1.7.
+    pub fn multiply_colour(&mut self, by: [f32; 3]) {
+        self.multiplier = by;
+    }
+
     pub fn is_perspective(&self) -> bool {
         self.perspective
     }
@@ -1529,6 +1623,7 @@ impl System {
                 colors[((self.rng.next_f32() * colors.len() as f32) as usize).min(colors.len() - 1)]
             }
         };
+        let color: [f32; 3] = std::array::from_fn(|i| color[i] * self.multiplier[i]);
         let alpha = self.rng.skewed(self.start.alpha, exponents.alpha);
         let handed = match self.start.point_velocity {
             Some(share) => {
@@ -1762,14 +1857,6 @@ fn changed_color(operators: &[Operator], particle: &Particle) -> [f32; 3] {
 }
 
 /// How strong a colour is, from nought to one.
-fn brightness(color: [f32; 3]) -> f32 {
-    color[0].max(color[1]).max(color[2])
-}
-
-fn times_each(color: [f32; 3], by: f32) -> [f32; 3] {
-    color.map(|c| c * by)
-}
-
 /// How far through a ramp a particle is, as a fraction.
 fn along(time: Range<f32>, progress: f32) -> f32 {
     let span = time.max - time.min;
@@ -2154,7 +2241,7 @@ mod tests {
         let line = Line {
             from: [0.0; 3],
             to: [9.0, 0.0, 0.0],
-            count: 10,
+            steps: 10,
             mirror: true,
         };
         let walk: Vec<f32> = (0..20).map(|n| line.at(n)[0]).collect();
@@ -2459,7 +2546,7 @@ mod tests {
 
     #[test]
     fn a_line_that_does_not_mirror_starts_again() {
-        let line = Line { from: [0.0; 3], to: [3.0, 0.0, 0.0], count: 4, mirror: false };
+        let line = Line { from: [0.0; 3], to: [3.0, 0.0, 0.0], steps: 4, mirror: false };
         let walked: Vec<f32> = (0..6).map(|n| line.at(n)[0]).collect();
         assert_eq!(walked, [0.0, 1.0, 2.0, 3.0, 0.0, 1.0]);
     }
@@ -2624,7 +2711,7 @@ mod tests {
     #[test]
     fn the_scenes_override_multiplies_what_the_file_says() {
         let definition = ParticleSystem::parse(
-            br#"{"maxcount":4,"emitter":[{"name":"sphererandom","rate":10,"distancemax":1}],
+            br#"{"maxcount":100,"emitter":[{"name":"sphererandom","rate":10,"distancemax":1}],
                  "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
         )
         .unwrap();
@@ -2634,10 +2721,28 @@ mod tests {
         over.count.value = 2.0;
         let mut s = System::new(&definition, &over, 12345);
         run(&mut s, 0.5, 1.0 / 60.0);
-        // Ten a second for a second of its own time is ten, and the pool is
-        // eight.
-        assert_eq!(s.count(), 8);
+        // Twenty a second, for a second of its own time.
+        assert!((19..=21).contains(&s.count()), "{}", s.count());
         assert!(s.live.iter().all(|p| p.alpha == 0.5));
+    }
+
+    /// Gears of War's ripple: one a second, a pool of sixteen, and the scene's
+    /// count at 0.03 -- one every thirty-three seconds, as the recording has
+    /// it. Scaling the pool instead left it room for none.
+    #[test]
+    fn the_scenes_count_thins_what_is_let_out_and_not_the_pool() {
+        let definition = ParticleSystem::parse(
+            br#"{"maxcount":16,"emitter":[{"name":"sphererandom","rate":1,"distancemax":1}],
+                 "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
+        )
+        .unwrap();
+        let mut over = InstanceOverride::default();
+        over.count.value = 0.03;
+        let mut s = System::new(&definition, &over, 12345);
+        run(&mut s, 30.0, 1.0 / 60.0);
+        assert_eq!(s.count(), 0);
+        run(&mut s, 4.0, 1.0 / 60.0);
+        assert_eq!(s.count(), 1);
     }
 
     #[test]
@@ -3028,8 +3133,33 @@ mod tests {
         }
     }
 
+    /// Tomb Raider's torch: no colour initializer but a `colorchange` from
+    /// orange to red, set by the scene to white. It is born white, and the
+    /// change is moved as far as orange is from white -- to white at both
+    /// ends, which is how it burns on Windows.
     #[test]
-    fn a_scenes_colour_takes_the_hue_and_leaves_the_brightness() {
+    fn a_scenes_colour_moves_the_systems_by_the_difference_in_hsv() {
+        let over = InstanceOverride {
+            colorn: Some(wpe_format::scene::Bound::plain(wpe_format::scene::Vector([1.0, 1.0, 1.0]))),
+            ..Default::default()
+        };
+        let definition = ParticleSystem::parse(
+            br#"{"material":"m.json","maxcount":1,"emitter":[{"name":"boxrandom","rate":100}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"colorchange","startvalue":"1 0.75 0","endvalue":"1 0 0"}]}"#,
+        )
+        .unwrap();
+        let mut s = System::new(&definition, &over, 12345);
+        run(&mut s, 0.1, 1.0 / 60.0);
+        assert_eq!(s.live[0].shown_color, [1.0; 3]);
+        let change = s.operators.iter().find_map(|o| match o {
+            Operator::ColorChange { from, to, .. } => Some((*from, *to)),
+            _ => None,
+        });
+        let (from, to) = change.unwrap();
+        assert!(from.iter().chain(&to).all(|c| (c - 1.0).abs() < 1e-3), "{from:?} {to:?}");
+
+        // A grey of its own set to red: as saturated as red, as bright as red.
         let over = InstanceOverride {
             colorn: Some(wpe_format::scene::Bound::plain(wpe_format::scene::Vector([1.0, 0.0, 0.0]))),
             ..Default::default()
@@ -3037,20 +3167,13 @@ mod tests {
         let definition = ParticleSystem::parse(
             br#"{"material":"m.json","maxcount":1,"emitter":[{"name":"boxrandom","rate":100}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10},
-                               {"name":"colorrandom","min":"128 128 128","max":"128 128 128"}],
-                "operator":[{"name":"colorchange","startvalue":"1 0.5 0","endvalue":"0 0 1"}]}"#,
+                               {"name":"colorrandom","min":"128 128 128","max":"128 128 128"}]}"#,
         )
         .unwrap();
         let mut s = System::new(&definition, &over, 12345);
-        run(&mut s, 0.1, 1.0 / 60.0);
+        run(&mut s, 0.02, 1.0 / 60.0);
         let [r, g, b] = s.live[0].shown_color;
-        assert!((r - 128.0 / 255.0).abs() < 1e-3 && g == 0.0 && b == 0.0, "{:?}", [r, g, b]);
-        // Its colour change is a change of brightness now, not of hue.
-        for operator in &s.operators {
-            if let Operator::ColorChange { from, to, .. } = operator {
-                assert!(from[0] == from[1] && from[1] == from[2] && to[0] == to[2], "{from:?} {to:?}");
-            }
-        }
+        assert!((r - 1.0).abs() < 1e-3 && g.abs() < 1e-3 && b.abs() < 1e-3, "{:?}", [r, g, b]);
     }
 
     #[test]

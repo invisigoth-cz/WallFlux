@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use glow::HasContext;
 use wpe_format::particle::ChildKind;
 use wpe_format::particle::Renderer as ParticleRenderer;
-use wpe_format::particle::{Response, Spectrum};
+use wpe_format::particle::{Initializer, Operator, Response, Spectrum};
 use wpe_format::puppet::{Playing, Puppet};
 use wpe_format::scene::ObjectKind;
 use wpe_format::shader::{Stage, combo_defaults, preprocess, uniforms};
@@ -917,13 +917,14 @@ impl Scene {
             .map(|o| o.id)
             .collect();
         let folder = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let multiplies = file.version < 5;
         for object in &file.objects {
             if !object.visible.value || LEFT_OUT.contains(&(folder, object.id)) {
                 continue;
             }
             match object.kind() {
                 ObjectKind::Particle(file) => {
-                    if let Some(system) = load_particles(gl, &resolve, object, &file, 0, &mut objects, &mut skipped) {
+                    if let Some(system) = load_particles(gl, &resolve, object, &file, 0, multiplies, &mut objects, &mut skipped) {
                         objects[system].from_scene = true;
                     }
                     continue;
@@ -1148,7 +1149,10 @@ impl Scene {
             sound: Spectrum::SILENT,
             scripts,
             scripted_at: None,
-            fov: file.general.fov,
+            // Snow Lights says 95, and its nearest flakes pass the camera as
+            // the large stars the recording has; seen through its `fov` of
+            // 50 the camera stood twice as far back and every flake was a dot.
+            fov: file.general.perspectiveoverridefov.unwrap_or(file.general.fov),
             scene_size,
             skipped,
         })
@@ -1677,6 +1681,7 @@ fn load_particles(
     object: &wpe_format::scene::Object,
     path: &str,
     depth: u32,
+    multiplies: bool,
     objects: &mut Vec<Object>,
     skipped: &mut Vec<String>,
 ) -> Option<usize> {
@@ -1690,7 +1695,16 @@ fn load_particles(
             return None;
         }
     };
-    let built = build_particles(gl, resolve, object, &definition, skipped);
+    let mut built = build_particles(gl, resolve, object, &definition, skipped);
+    let tint = object.instanceoverride.as_ref().and_then(|o| o.tint());
+    let colourless = !definition.initializers.iter().any(|i| {
+        matches!(i, Initializer::Color(_) | Initializer::HsvColor { .. } | Initializer::ColorList(_))
+    }) && !definition.operators.iter().any(|o| matches!(o, Operator::ColorChange { .. }));
+    if let (Some(Object { drawing: Drawing::Particles(system), .. }), Some(tint), true) =
+        (&mut built, tint, multiplies || colourless)
+    {
+        system.multiply_colour(tint);
+    }
     let drawn = built.is_some().then_some(objects.len());
     objects.extend(built);
 
@@ -1740,7 +1754,7 @@ fn load_particles(
         placed.origin.value.0 = transform::apply(&parent, child.origin);
         placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
         placed.angles.value.0 = std::array::from_fn(|i| object.angles.value.0[i] + child.angles[i]);
-        let made = load_particles(gl, resolve, &placed, &child.file, depth + 1, objects, skipped);
+        let made = load_particles(gl, resolve, &placed, &child.file, depth + 1, multiplies, objects, skipped);
         if let Some((answer, made)) = answers.zip(made) {
             let parent = answer.parent;
             if let Drawing::Particles(system) = &mut objects[made].drawing {

@@ -212,6 +212,10 @@ pub struct General {
     pub skylightcolor: Vector<3>,
     pub orthogonalprojection: Projection,
     pub fov: f32,
+    /// What a perspective particle system is seen through, where the scene
+    /// says: the editor's own setting, beside `fov`, which a 2D scene keeps
+    /// at 50 whatever this one is.
+    pub perspectiveoverridefov: Option<f32>,
     pub nearz: f32,
     pub farz: f32,
     pub zoom: f32,
@@ -240,6 +244,7 @@ impl Default for General {
             skylightcolor: Vector([0.0; 3]),
             orthogonalprojection: Projection::default(),
             fov: 50.0,
+            perspectiveoverridefov: None,
             nearz: 0.01,
             farz: 10_000.0,
             zoom: 1.0,
@@ -542,6 +547,9 @@ impl Object {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct Scene {
+    /// Which editor wrote it; below 5 a particle system's colour from the
+    /// scene multiplies as well as moves.
+    pub version: u32,
     pub camera: Camera,
     pub general: General,
     pub objects: Vec<Object>,

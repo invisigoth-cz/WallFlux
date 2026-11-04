@@ -680,6 +680,34 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `wallpaper64.exe` for a flat scene are "1 1 0" and a radius of 256; a box
   draws min to max per axis with a random sign.
 
+- **An instance's `count` is how many are let out, not how many may live.**
+  `wallpaper64.exe` builds a list of bindings from the instance's values to the
+  system's fields (applied in `FUN_1401d15a0`; offsets in the override: alpha
+  0xc8, size 0xcc, count 0xd0, speed 0xd4, lifetime 0xd8, rate 0xdc), and the only
+  entries reading `count` are each emitter's `rate` and `instantaneous` (the
+  latter truncated), the steps of `mapsequencebetweencontrolpoints` (`1 / (count x
+  steps - 1)`, `0x1401ca6b3`) and those of `mapsequencearoundcontrolpoint`.
+  Nothing binds it to `maxcount`. Scaling the pool instead left Gears of War's
+  ripple -- `magic_pulse`, one a second, a pool of 16, count 0.03 -- with a pool
+  of nought: never drawn, where Windows throws one every 33 s (30.5 and 63.5 in
+  the recording). The user's "bubble" and "a stone thrown into water" were it.
+
+- **A perspective particle system is seen through `perspectiveoverridefov`**, a
+  key of `general` beside `fov`, where the scene has one -- 95 in Snow Lights,
+  DOOM, Augmentation, Space Visualizer and Terminator, 30 in four others, absent
+  in the rest; `fov` itself is 50 in all of them. Through 50 the camera stood
+  1158 back instead of 495 and Snow Lights' nearest flakes, which pass the
+  camera as large stars in the recording, were dots like the rest. The key is
+  in `wallpaper64.exe`'s scene properties (offset 0x144, `fov` at 0x140); where
+  it is read for the camera was not found, so the meaning is the recording's.
+  Windows' largest stars are still two or three times ours.
+
+- **`shot` cannot show motion blur, and a muzzle flash leans on it.** Dark
+  Angels' flash in one `shot` frame is a small blob and a cold scene; in a
+  `clip` its layer 151, accumulated over frames and blended back by 534, 516,
+  604 and 197, is the big yellow flame and the warm light over everything, as
+  on Windows. Judge such a wallpaper in `clip`.
+
 - **`starttime` is how far ahead a system begins, not a delay.**
   `magic_charge_rays` says 15 and its rays are there from the first frame.
 
@@ -895,13 +923,25 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   through `velocity`, so a system without `movement` is not moved by it, and a
   trail is as long as that velocity.
 
-- **An instance's colour takes the hue, and the file keeps the strength**, its largest channel.
-  Measured off recordings, not explained. It is neither of the two obvious
-  readings: multiplied, Terminator's orange smoke set to 0.42 stays orange where
-  it burns grey and Tomb Raider's torch set to white stays orange; replaced, Star
-  Destroyer's 0.5 grey smoke set to 0.24 0.31 0.35 comes out twice too light and
-  Star wars' dim light shafts turn white. It stands over `colorchange` too, which
-  keeps only its change of brightness, and it goes down to a child system.
+- **An instance's colour moves a system's colours in HSV, and in an old scene
+  multiplies them too.** `wallpaper64.exe` works out the colour a system already
+  has (`FUN_1401c45f0`: the middle of its last colour initializer, else the start
+  of its first `colorchange`, else white) and moves each colour range by the
+  difference between the scene's colour and that one in hue, saturation and
+  value, the hue going round and the other two held to nought to one
+  (`FUN_1401d15a0`, cases 11 to 13). A flag (`0x200000`, set in `FUN_1401c5490`)
+  makes the scene's colour a multiplier on the particles as well: for a scene
+  whose `version` is below 5 -- all of them here but Ender Spartan -- and for a
+  system with no colour of its own. `colorchange`'s two ends are moved as well;
+  that binding was not found in the binary, the recordings say so: Tomb Raider's
+  torch, orange to red and set to white, burns white on Windows and orange if they
+  are not. Dark Angels' flash went from blue to red 0.77 and white over 9.5 % of
+  it to 0.64 and 4.6 % (Windows 0.58 and 1.7 %); Ender Spartan from 13.7 apart
+  from its recording to 7.2, Star Destroyer from 2.3 to 0.9. Moved and then
+  multiplied, a colourless system comes out twice its colour: Dark Core's tubes
+  went red. The reading it replaced -- the scene's hue with the file's strength,
+  `colorchange` kept as a change of brightness -- was fitted to recordings and
+  explained none of this.
 
 - **A puppet bends the finished picture, not the first pass.** An image whose model
   names a `puppet` `.mdl` is drawn through that mesh on the way back into the scene,
@@ -2027,8 +2067,34 @@ the file. Everything after it should.
      recording's front channels (`pan=stereo|c0=FL|c1=FR` -- `-ac 2` loses 7 dB),
      drawn at the screen's 2560x1440 and scaled down as the recorder did, regions
      measured over time against the recording.
-   - **If no recordings yet**: Dark Angels' paler flash, Blue Dawn's sun and flare,
-     Gears of War's bubble -- the older items below.
+   - **4 November: the user's recordings arrived** (`wpe-windows/*_2026.11.04-*`,
+     1280x720, sound unaltered; Dark Angels and Gears are silent, Romulus,
+     Augmentation and Space Visualizer quiet at peaks of 0.07). Side by side with
+     `clip` in `~/WallFlux-ukazky/2026-11-04/`. Fixed: Gears' ripple (`count`),
+     Snow Lights' near flakes (`perspectiveoverridefov`). Close by eye and waiting
+     for the user's: Augmentation (Windows' rainbow rings a little more vivid),
+     Space Visualizer, Snow Lights (the deer and the night come at the same
+     moments), Dark Angels (our flame whiter at its core, Windows' more orange).
+     `clip` now pipes frames into ffmpeg, so a minute at 2560x1440 needs no space.
+     Later that day: Dark Angels' flame fixed by the instance colour (see the trap).
+   - **Space Visualizer answers the music too weakly.** Against the user's
+     recording, regions of the sky over the planet swing 2.7 and 3.6 levels (std)
+     on Windows and 1.0 and 1.3 here; what Windows adds when it is loud is fog over
+     the small planet, stars all over the sky and rays round the sun (the shine on
+     composition layer 5767 picking up a sun the background's audio `pulse` makes
+     brighter). The planet's surface follows Windows at 0.8 to 0.97. Taking the
+     loudest band instead of the average across an emitter's range moved the sky
+     halfway (std 1.9, 2.5) -- an experiment, reverted, not in the binary. The
+     background's `pulse` is the stock shader averaging for itself and is weak as
+     well, so the suspicion is the bands' values after the evening out, not how a
+     range is read. DOOM's letters pulsing about 15 % weaker may be the same thing.
+   - **Alien Romulus' specks round the mouse** (object 162, left out): on Windows a
+     sparse ring of dots 2-3 px across at 1280, falling from the pointer; here, with
+     it switched on and the mouse still, a dense black ball about 35 px. The system:
+     emitter on control point 0 (the mouse), `mapsequencearoundcontrolpoint` 4 x
+     0.8, `controlpointattract` -600 within 50 and +500 within 5000, an audio
+     `vortex`, `spritetrail`, and a texture that is an 8 x 8 cluster of square
+     blocks in 1095 of its 2048. Where it differs is not found yet.
    - Done and confirmed on 3 November: Dark Core as on Windows -- the triangle, the
      lines and bars, STANDBY and the tubes, colours and fill -- and DOOM, drawn at
      2560x1440 against its recording with sound: the second O's white glow comes
