@@ -90,8 +90,12 @@ fn main() {
         eprintln!("  skipped {skipped}");
     }
 
-    let frames = std::env::temp_dir().join(format!("wallflux-clip-{}", std::process::id()));
-    std::fs::create_dir_all(&frames).expect("cannot make a place for the frames");
+    // Frames go straight into the encoder: as PNGs on the disk, a minute at
+    // 2560x1440 is ten gigabytes, which a tmpfs /tmp does not have.
+    let mut encoder = encode(&track, out, seconds, width, height).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        std::process::exit(1);
+    });
 
     let mut ears = audio::Ears::new();
     let mut fed = 0usize;
@@ -123,12 +127,11 @@ fn main() {
         }
         let pixels = unsafe { render_frame(&gl, &mut scene, width, height, at) }
             .expect("drawing a frame failed");
-        write_png(
-            &frames.join(format!("{frame:05}.png")),
-            width,
-            height,
-            &pixels,
-        );
+        use std::io::Write;
+        if let Err(e) = encoder.stdin.as_mut().expect("piped").write_all(&pixels) {
+            eprintln!("ffmpeg stopped taking frames: {e}");
+            std::process::exit(1);
+        }
         if frame % FPS == 0 {
             print!("\r{}s of {seconds}s", frame / FPS);
             use std::io::Write;
@@ -137,14 +140,13 @@ fn main() {
     }
     println!("\rdrew {frames_wanted} frames   ");
 
-    match mux(&frames, &track, out, seconds) {
+    match finish(encoder) {
         Ok(()) => println!(
             "wrote {out} ({width}x{height}, {seconds}s, sound from {})",
             track.display()
         ),
         Err(e) => eprintln!("ffmpeg: {e}"),
     }
-    let _ = std::fs::remove_dir_all(&frames);
     let readings = readings.max(1);
     println!(
         "bands over the clip: average {:.2}, loudest {loudest:.2}, {:.0}% of readings at the top",
@@ -241,28 +243,26 @@ unsafe fn render_frame(
     }
 }
 
-fn write_png(path: &Path, width: u32, height: u32, pixels: &[u8]) {
-    let file = std::fs::File::create(path).expect("cannot write a frame");
-    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), width, height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder
-        .write_header()
-        .and_then(|mut w| w.write_image_data(pixels))
-        .expect("cannot write a frame");
-}
-
-fn mux(frames: &Path, track: &Path, out: &str, seconds: f32) -> Result<(), String> {
-    let mut child = Command::new("ffmpeg")
-        .args(["-v", "error", "-y", "-framerate", &FPS.to_string(), "-i"])
-        .arg(frames.join("%05d.png"))
-        .arg("-i")
+/// ffmpeg, waiting for raw RGBA frames on its stdin and the track beside them.
+fn encode(
+    track: &Path,
+    out: &str,
+    seconds: f32,
+    width: u32,
+    height: u32,
+) -> Result<std::process::Child, String> {
+    Command::new("ffmpeg")
+        .args(["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba"])
+        .args(["-s", &format!("{width}x{height}")])
+        .args(["-framerate", &FPS.to_string(), "-i", "-", "-i"])
         .arg(track)
         .args([
             "-t",
             &seconds.to_string(),
             "-c:v",
             "libx264",
+            "-crf",
+            "14",
             "-pix_fmt",
             "yuv420p",
             "-c:a",
@@ -270,9 +270,14 @@ fn mux(frames: &Path, track: &Path, out: &str, seconds: f32) -> Result<(), Strin
             "-shortest",
             out,
         ])
+        .stdin(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("cannot run ffmpeg: {e}"))?;
+        .map_err(|e| format!("cannot run ffmpeg: {e}"))
+}
+
+fn finish(mut child: std::process::Child) -> Result<(), String> {
+    drop(child.stdin.take());
     let mut complaint = String::new();
     if let Some(err) = child.stderr.as_mut() {
         let _ = err.read_to_string(&mut complaint);
