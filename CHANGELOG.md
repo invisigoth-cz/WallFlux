@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.3] — 2026-11-05
+
+### Changed
+
+- **Nothing in the program**: this release carries the notes of 5 November --
+  Wallpaper Engine on the user's Windows draws fifteen frames a second where
+  this program has no cap at all, the meter re-read against `wallpaper64.exe`
+  and found the same, and what is known about Space Visualizer's sky and Alien
+  Romulus' specks -- so the version number says which notes go with which
+  build.
+
 ## [0.24.2] — 2026-11-05
 
 ### Fixed
@@ -1127,7 +1138,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.3...HEAD
+[0.24.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.2...v0.24.3
 [0.24.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.1...v0.24.2
 [0.24.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.23.3...v0.24.0
