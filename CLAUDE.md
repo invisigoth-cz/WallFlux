@@ -682,6 +682,23 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   Visualizer listens across eleven bands and more, and answered the music half
   as much; DOOM, on two, moved by tenths of a level, towards its recording.
 
+- **A particle system can be turned about x and y, and is.** Six here are:
+  Space Visualizer's and Snow Lights' stars, which fly along z -- towards the
+  camera -- and are turned a quarter about y to fly across the screen instead,
+  the "Stars (left to right)" in the first one's settings. Read about z alone,
+  the red streaks Windows throws across Space Visualizer's sky were not there
+  at all. **The order is z, then x the other way round, then y** -- read
+  off the one system turned about two axes: Space Visualizer's
+  `starfield2` (-0.785 about x, 1.571 about y) is lit only over the bright
+  sun, being `REFRACT`, and on Windows draws a band from the top left down
+  through it; Almamu's `Rx * Ry * Rz` flew it level. Snow Lights' star field,
+  turned about x alone, did not move by a fifth of a level either way.
+  Wallpaper Engine's own order was not found. The shader is handed the
+  screen's axes and the eye with the turn about x and y undone, or a turned
+  sprite would stand edge on -- **and not the turn about z**, which stays on
+  the sprites as it always has: undone too, it moved 27 pictures of a
+  sweep. No image here is turned about anything but z.
+
 - **The bottom bit of a system's `flags` is *Worldspace*** -- the editor's own
   word for it. A particle is placed by the object's transform once, where it is
   born, and after that lives in the scene's axes: drawn with no model matrix,
@@ -709,6 +726,17 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `length` is the whole path in seconds, as read before: Blue Moon's shooting
   stars trail about 0.35 s of their flight on Windows against 0.2 here, where
   a length per segment would be 1.4.
+
+- **A thinned trail is counted in pieces and never let out more than the file
+  allows.** A `ropetrail`'s buffer is its particles times its gaps, so thinning it
+  to the ceiling and taking that as the particle count gave Space Visualizer's
+  sparktrails -- 100 of 16 points, thinned to 703 -- room for 703 sparks, and the
+  sprite twin beside it 100. Twins are held to the smaller of the two after
+  thinning, or they part. **That scene asks for 167 917 at once and is given
+  24 000**, a ceiling of 703 a system: its five sky systems keep 2.8 % of 25 000
+  and its white stars (261, `boxrandom` six times the scene) 17 %, which is most of
+  what its sky lacks against Windows. Unthinned, a frame at 2560x1440 on the VM
+  takes 41 ms against 17.
 
 - **A `spritetrail` that says no more is 0.05 long and capped at 10**
   (`FUN_1401c0af0`; no floor). The cap is in sizes of the particle:
@@ -874,6 +902,18 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   and its video runs down the barrel; let wander, it lit a column as far as the top of
   composition layer 197, the straight edge. One preset and one video; the meaning of
   `right` beyond that is a guess that fits.
+
+- **A vortex turns the other way from its axis, and says 500, 650 and 2500 when it
+  says nothing.** Space Visualizer's stars fly left to right turned about y, and
+  their vortex about z leans them: on Windows they rise to the right by about 12
+  degrees, here they fell by 20 -- the half of them pushed down is the half nearer
+  the camera, so no turn of the object explains it, only the swirl's own sense.
+  Reversed, DOOM and Snow Lights moved by less than a fifth of a level over half a
+  minute with their recordings' sound, and Augmentation's rings are rings either
+  way. The defaults are `wallpaper64.exe`'s (`0x1401bf0a0`, a flat scene's side of
+  each `test sil,sil`): `distanceinner` 500, `distanceouter` 650, `speedinner`
+  2500, `speedouter` nought, axis "0 0 1"; 30 vortices here leave some out, and
+  read as nought they swirled at their inner speed everywhere.
 
 - **A vortex is a sideways push, and `controlpointattract` a constant pull within half
   its `threshold`.** Almamu's reading of both. Augmentation's 8000 as degrees a second

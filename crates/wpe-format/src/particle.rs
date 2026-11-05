@@ -989,13 +989,16 @@ impl ParticleSystem {
                 }
                 "vortex" | "vortex_v2" => Operator::Vortex(Vortex {
                     audio: audio_response(step),
+                    // Defaults out of `wallpaper64.exe` (`0x1401bf0a0`, a flat
+                    // scene's side of each `test sil,sil`): within 500 at 2500,
+                    // nothing from 650 out.
                     axis: vector(step, "axis", [0.0, 0.0, 1.0]),
                     distance: Range {
-                        min: num(step, "distanceinner", 0.0),
-                        max: num(step, "distanceouter", 0.0),
+                        min: num(step, "distanceinner", 500.0),
+                        max: num(step, "distanceouter", 650.0),
                     },
                     speed: Range {
-                        min: num(step, "speedinner", 0.0),
+                        min: num(step, "speedinner", 2500.0),
                         max: num(step, "speedouter", 0.0),
                     },
                 }),

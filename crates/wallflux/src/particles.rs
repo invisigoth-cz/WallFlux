@@ -1201,9 +1201,28 @@ impl System {
     }
 
     /// Lowers that cap, for a scene asking for more than it can afford.
+    /// Holds the system to `capacity` of what [`capacity`](Self::capacity)
+    /// counts -- pieces for a trail, so the particles are that over a trail's
+    /// gaps -- and never lets out more than the file allows. Taken as the
+    /// particle count, a `ropetrail` of 100 with 15 gaps each, thinned to 703,
+    /// was allowed 703 particles.
     pub fn thin_to(&mut self, capacity: usize) {
-        self.maxcount = capacity;
-        self.live.truncate(capacity);
+        let gaps = match self.ribbon {
+            Ribbon::Trail { points, .. } => points.saturating_sub(1).max(1),
+            _ => 1,
+        };
+        self.cap_at((capacity / gaps).max(1));
+    }
+
+    /// The most particles it lets live at once.
+    pub fn most(&self) -> usize {
+        self.maxcount
+    }
+
+    /// Lets no more than `count` particles live at once.
+    pub fn cap_at(&mut self, count: usize) {
+        self.maxcount = self.maxcount.min(count);
+        self.live.truncate(self.maxcount);
     }
 
     /// The buffer to draw: four vertices per live particle, or four per rope
@@ -1448,7 +1467,11 @@ impl System {
                     // swirls on the beat. As degrees a second that was a turn and
                     // a half a frame, and a mess of straight spikes.
                     Operator::Vortex(vortex) => {
-                        let round = cross(vortex.axis, particle.position);
+                        // The turn goes the other way from the axis's own: Space
+                        // Visualizer's stars, turned about y and swirled about
+                        // z, rise to the right on Windows and fell to it here.
+                        // DOOM and Snow Lights did not move by a fifth of a level.
+                        let round = cross(particle.position, vortex.axis);
                         let length = round.iter().map(|v| v * v).sum::<f32>().sqrt();
                         if length > 1e-3 {
                             let push = vortex_speed(vortex, particle.position)
@@ -3280,8 +3303,9 @@ mod tests {
         }
     }
 
-    /// Which way round a vortex sends a particle at (200, 0): up is the way of
-    /// a positive speed, with the y of a scene running up.
+    /// Which way round a vortex sends a particle at (200, 0): down is the way
+    /// of a positive speed about z, clockwise on the screen -- the way Space
+    /// Visualizer's stars say it goes on Windows.
     fn pushed_by_vortex(speed: &str) -> [f32; 3] {
         let mut s = system(&format!(
             r#"{{"maxcount":1,"emitter":[{{"name":"boxrandom","rate":1000,"distancemax":0}}],
@@ -3301,9 +3325,9 @@ mod tests {
     #[test]
     fn a_vortex_pushes_a_particle_along_the_way_round() {
         let v = pushed_by_vortex("90");
-        assert!((v[1] - 9.0).abs() < 0.01, "pushed {v:?}");
+        assert!((v[1] + 9.0).abs() < 0.01, "pushed {v:?}");
         assert!(v[0].abs() < 0.01, "pulled in or out: {v:?}");
-        assert!(pushed_by_vortex("-90")[1] < -8.0, "a negative speed goes the other way");
+        assert!(pushed_by_vortex("-90")[1] > 8.0, "a negative speed goes the other way");
     }
 
     #[test]
@@ -3467,6 +3491,21 @@ mod tests {
         assert!(p.position[0].abs() < 1e-3 && (p.position[1] - 5.0).abs() < 1e-3, "{:?}", p.position);
         // Up, turned a quarter to the left, at its own speed.
         assert!((p.velocity[0] + 100.0).abs() < 1e-3 && p.velocity[1].abs() < 1e-3, "{:?}", p.velocity);
+    }
+
+    /// Thinning a trail counts its pieces, and never lets out more than the
+    /// file allows: Space Visualizer's sparktrails, 100 of 16 points, thinned
+    /// to 703 pieces, are 46 particles -- not 703.
+    #[test]
+    fn a_thinned_trail_is_held_to_its_pieces_and_never_raised() {
+        let mut s = system(r#"{"maxcount":100,"renderer":[{"name":"ropetrail","length":0.1,"segments":16}]}"#);
+        s.thin_to(703);
+        assert_eq!(s.most(), 46);
+        s.thin_to(100_000);
+        assert_eq!(s.most(), 46);
+        let mut flat = system(r#"{"maxcount":100}"#);
+        flat.thin_to(703);
+        assert_eq!(flat.most(), 100);
     }
 
     #[test]

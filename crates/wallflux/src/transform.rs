@@ -117,31 +117,38 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
 /// `angles` are radians about x, y and z, as scene.json stores them: 308
 /// objects here are turned and the largest turn is 3.142. Read as degrees,
 /// every one of them was turned a fifty-seventh of the way. Only z turns a
-/// flat image, but all three are carried because scenes set them.
+/// flat image; x and y are used by six particle systems here, the stars of
+/// Space Visualizer and Snow Lights, which fly along z and are turned to fly
+/// across the screen -- "Stars (left to right)", in the first one's settings.
+/// See [`turn`] for the order.
 pub fn model(origin: [f32; 3], size: [f32; 2], scale: [f32; 3], angles: [f32; 3]) -> Matrix {
-    let (sx, sy) = (size[0] * scale[0], size[1] * scale[1]);
-    let z = angles[2];
-    let (sin, cos) = (z.sin(), z.cos());
+    let [x, y, z] = turn(angles);
+    let along = [size[0] * scale[0], size[1] * scale[1], scale[2]];
+    let column = |c: [f32; 3], by: f32| [c[0] * by, c[1] * by, c[2] * by, 0.0];
+    let ([a, b, c, d], [e, f, g, h], [i, j, k, l]) =
+        (column(x, along[0]), column(y, along[1]), column(z, along[2]));
+    [a, b, c, d, e, f, g, h, i, j, k, l, origin[0], origin[1], origin[2], 1.0]
+}
 
-    // Column-major: the quad is built around its own centre, turned, then moved.
-    [
-        cos * sx,
-        sin * sx,
-        0.0,
-        0.0,
-        -sin * sy,
-        cos * sy,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        scale[2],
-        0.0,
-        origin[0],
-        origin[1],
-        origin[2],
-        1.0,
-    ]
+/// The turn `angles` make, as its three columns.
+///
+/// ponytail, measured on one wallpaper: about z first -- as every flat layer
+/// is turned -- then x, the other way round, then y. Space Visualizer's
+/// `starfield2`, turned -0.785 about x and 1.571 about y and flying along z,
+/// draws a band from the top left down through the sun on Windows; built as
+/// Almamu's `Rx * Ry * Rz` it flew level. Its perspective `Stars`, turned
+/// about y alone, fly left to right either way. Wallpaper Engine's own order
+/// was not found.
+pub fn turn(angles: [f32; 3]) -> [[f32; 3]; 3] {
+    let (sx, cx) = angles[0].sin_cos();
+    let (sy, cy) = angles[1].sin_cos();
+    let (sz, cz) = angles[2].sin_cos();
+    // Each column of Rz pushed through x (reversed) and then y.
+    let xy = |v: [f32; 3]| {
+        let (x, y, z) = (v[0], v[1] * cx + v[2] * sx, -v[1] * sx + v[2] * cx);
+        [x * cy + z * sy, y, -x * sy + z * cy]
+    };
+    [xy([cz, sz, 0.0]), xy([-sz, cz, 0.0]), xy([0.0, 0.0, 1.0])]
 }
 
 /// `a` then `b`, as `b * a`.
@@ -208,6 +215,19 @@ pub fn apply(m: &Matrix, p: [f32; 3]) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Stars that fly along z, turned a quarter about y, fly along x: left
+    /// to right, as Space Visualizer's setting says.
+    #[test]
+    fn a_quarter_about_y_sends_depth_across() {
+        let m = model([0.0; 3], [1.0, 1.0], [1.0; 3], [0.0, std::f32::consts::FRAC_PI_2, 0.0]);
+        let ahead = apply(&m, [0.0, 0.0, 10.0]);
+        assert!((ahead[0] - 10.0).abs() < 1e-4 && ahead[1].abs() < 1e-4 && ahead[2].abs() < 1e-4, "{ahead:?}");
+        // And about z alone, as before.
+        let m = model([0.0; 3], [1.0, 1.0], [1.0; 3], [0.0, 0.0, std::f32::consts::FRAC_PI_2]);
+        let up = apply(&m, [10.0, 0.0, 0.0]);
+        assert!(up[0].abs() < 1e-4 && (up[1] - 10.0).abs() < 1e-4, "{up:?}");
+    }
 
     #[test]
     fn an_inverse_undoes_the_transform() {

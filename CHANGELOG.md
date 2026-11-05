@@ -15,6 +15,16 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   turned and squashed with the object. And a system with two renderers draws
   its particles both ways: `sparktrails` is a streak at the head and a line from
   where each spark was born.
+- **Space Visualizer's stars fly across the sky from left to right**, as its
+  setting says they do, red against the red sky. They fly along z and their
+  object is turned a quarter about y, and only a turn about z was being read.
+  They rise a little as they go, as on Windows: a particle vortex turns the
+  other way from what was read, and takes Wallpaper Engine's own distances and
+  speed where the file states none.
+- **Space Visualizer's sun has its band of light from the top left**, the
+  stars of a second system turned about two axes, lit where they cross the sun.
+- **A thinned spark trail keeps to the count its file allows**, and the two
+  renderers of one system keep the same count.
 
 ## [0.23.2] — 2026-11-04
 

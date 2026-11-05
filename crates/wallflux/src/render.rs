@@ -1956,13 +1956,27 @@ fn thin_particles(objects: &mut [Object], budget: usize, skipped: &mut Vec<Strin
     }
 
     let most = most_for_each(expected, budget);
-    for object in objects {
+    for object in objects.iter_mut() {
         if let Drawing::Particles(system) = &mut object.drawing
             && system.expected() > most
         {
             // A ribbon needs a pair to have anything between them.
             let least = if system.is_rope() { 2 } else { 1 };
             system.thin_to(most.max(least));
+        }
+    }
+    // A twin drawing the same particles another way sits right after its
+    // system, under the same id, and has to keep the same count or the two
+    // part: both are held to the smaller.
+    for i in 1..objects.len() {
+        let (before, rest) = objects.split_at_mut(i);
+        let (one, two) = (&mut before[i - 1], &mut rest[0]);
+        if one.id == two.id
+            && let (Drawing::Particles(a), Drawing::Particles(b)) = (&mut one.drawing, &mut two.drawing)
+        {
+            let both = a.most().min(b.most());
+            a.cap_at(both);
+            b.cap_at(both);
         }
     }
     skipped.push(format!(
@@ -2800,6 +2814,19 @@ unsafe fn draw_particles(
     if vertices.is_empty() {
         return;
     }
+    // A direction in the scene, in the object's own axes: the turn about x
+    // and y undone, which for a turn is its transpose, so a system turned
+    // to fly across the screen still shows its sprites face on. The turn
+    // about z stays on them, as it always has: undone too, it moved 27
+    // pictures of a sweep, Star wars' and Star Citizen's the most, which
+    // were looked at on Windows the way they are. A system in world space
+    // was turned as it was born and is drawn unturned.
+    let [x, y, z] = match system.is_in_world() {
+        true => transform::turn([0.0; 3]),
+        false => transform::turn([object.angles[0], object.angles[1], 0.0]),
+    };
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let back = |v: [f32; 3]| [dot(x, v), dot(y, v), dot(z, v)];
     let (vao, buffer) = match system.is_rope() {
         true => (buffers.rope, buffers.rope_vertices),
         false => (buffers.vao, buffers.vertices),
@@ -2816,11 +2843,12 @@ unsafe fn draw_particles(
         for pass in &object.passes {
             set_common(gl, pass, object, mvp, time, white, &pass.screen_binds(frame), sound);
             pass.blending.apply(gl);
-            // A flat wallpaper's particles face the screen, so the frame the
-            // shader turns a particle in is the scene's own axes.
-            set_vec3(gl, pass.program, "g_OrientationRight", [1.0, 0.0, 0.0]);
-            set_vec3(gl, pass.program, "g_OrientationUp", [0.0, 1.0, 0.0]);
-            set_vec3(gl, pass.program, "g_OrientationForward", [0.0, 0.0, 1.0]);
+            // A particle faces the screen, so the frame the shader turns it
+            // in is the screen's axes as the object sees them: the scene's
+            // own, turned back by the object's turn.
+            set_vec3(gl, pass.program, "g_OrientationRight", back([1.0, 0.0, 0.0]));
+            set_vec3(gl, pass.program, "g_OrientationUp", back([0.0, 1.0, 0.0]));
+            set_vec3(gl, pass.program, "g_OrientationForward", back([0.0, 0.0, 1.0]));
             // Which way the screen's own axes lie, which a refraction's offset
             // is worked out along.
             set_vec3(gl, pass.program, "g_ViewRight", [1.0, 0.0, 0.0]);
@@ -2837,7 +2865,7 @@ unsafe fn draw_particles(
                 "g_ModelMatrixInverse",
                 &transform::IDENTITY,
             );
-            set_vec3(gl, pass.program, "g_EyePosition", [0.0, 0.0, -FAR_AWAY]);
+            set_vec3(gl, pass.program, "g_EyePosition", back([0.0, 0.0, -FAR_AWAY]));
             if let Some(trail) = object.trail {
                 // How long a trail runs: its speed times the first, held
                 // between the other two.

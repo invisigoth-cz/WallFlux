@@ -75,7 +75,13 @@ fn main() {
         eprintln!("cannot get a GL context: {e}");
         std::process::exit(1);
     });
-    let mut scene = Scene::load_within(&gl, &dir, render::DEFAULT_BUDGET).unwrap_or_else(|e| {
+    // WALLFLUX_BUDGET draws with another particle budget than the program's,
+    // to see what thinning a scene costs it.
+    let budget = std::env::var("WALLFLUX_BUDGET")
+        .ok()
+        .and_then(|b| b.parse().ok())
+        .unwrap_or(render::DEFAULT_BUDGET);
+    let mut scene = Scene::load_within(&gl, &dir, budget).unwrap_or_else(|e| {
         eprintln!("cannot load wallpaper: {e}");
         std::process::exit(1);
     });
