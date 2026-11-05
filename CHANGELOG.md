@@ -6,6 +6,16 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Space Visualizer's lava throws fans of red sparks**, as on Windows, where it
+  scattered short white dashes all leaning one way. A particle system marked
+  *Worldspace* is placed by its object once, as each particle is born, and lives
+  in the scene's own axes after that -- its gravity and its trails no longer
+  turned and squashed with the object. And a system with two renderers draws
+  its particles both ways: `sparktrails` is a streak at the head and a line from
+  where each spark was born.
+
 ## [0.23.2] — 2026-11-04
 
 ### Fixed

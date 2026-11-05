@@ -545,6 +545,7 @@ fn build_text(
 /// A child system that answers to its parent's particles -- bursting where
 /// they are born or die, or riding along with them: which object the parent
 /// is, which of those it does, and where the child sits inside it.
+#[derive(Clone, Copy)]
 struct Answer {
     parent: usize,
     kind: ChildKind,
@@ -924,7 +925,10 @@ impl Scene {
             }
             match object.kind() {
                 ObjectKind::Particle(file) => {
-                    if let Some(system) = load_particles(gl, &resolve, object, &file, 0, multiplies, &mut objects, &mut skipped) {
+                    for system in load_particles(gl, &resolve, object, &file, 0, multiplies, &mut objects, &mut skipped)
+                        .into_iter()
+                        .flatten()
+                    {
                         objects[system].from_scene = true;
                     }
                     continue;
@@ -1406,6 +1410,12 @@ impl Scene {
             };
             origin = middle_of(origin, object.anchor, object.size, object.scale, object.angles[2]);
             let model = transform::model(origin, size, object.scale, object.angles);
+            // A system in world space was placed by the model as each
+            // particle was born, and is not placed by it again.
+            let model = match &object.drawing {
+                Drawing::Particles(system) if system.is_in_world() => transform::IDENTITY,
+                _ => model,
+            };
             let mvp = match &object.drawing {
                 Drawing::Particles(system) if system.is_perspective() => {
                     transform::multiply(&camera, &model)
@@ -1622,6 +1632,13 @@ impl Scene {
             steps = most;
         }
         let slice = (time - self.simulated) / steps as f32;
+        for object in &mut self.objects {
+            let middle = middle_of(object.origin, object.anchor, object.size, object.scale, object.angles[2]);
+            let model = transform::model(middle, object.size, object.scale, object.angles);
+            if let Drawing::Particles(system) = &mut object.drawing {
+                system.stand_at(model);
+            }
+        }
         for _ in 0..steps {
             for index in 0..self.objects.len() {
                 let (before, rest) = self.objects.split_at_mut(index);
@@ -1684,7 +1701,7 @@ fn load_particles(
     multiplies: bool,
     objects: &mut Vec<Object>,
     skipped: &mut Vec<String>,
-) -> Option<usize> {
+) -> Option<std::ops::Range<usize>> {
     let Some(bytes) = resolve.get(path) else {
         return None;
     };
@@ -1706,7 +1723,31 @@ fn load_particles(
         system.multiply_colour(tint);
     }
     let drawn = built.is_some().then_some(objects.len());
+    // Each further renderer is a twin: the same system, seeded alike and told
+    // the same things, so it lets out the same particles and draws them its
+    // own way. ponytail: twins are thinned apart, so a scene over the budget
+    // could part them; Space Visualizer, the one that has them, is not.
+    let twins: Vec<Object> = match &built {
+        Some(_) => definition
+            .more_renderers
+            .iter()
+            .filter_map(|renderer| {
+                let mut twin = definition.clone();
+                twin.renderer = renderer.clone();
+                let mut made = build_particles(gl, resolve, object, &twin, skipped)?;
+                if let (Drawing::Particles(system), Some(tint), true) =
+                    (&mut made.drawing, tint, multiplies || colourless)
+                {
+                    system.multiply_colour(tint);
+                }
+                Some(made)
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+    let drawn = drawn.map(|first| first..first + 1 + twins.len());
     objects.extend(built);
+    objects.extend(twins);
 
     let parent = transform::model(
         object.origin.value.0,
@@ -1717,11 +1758,11 @@ fn load_particles(
     for (index, child) in definition.children.iter().enumerate() {
         // A burst at a particle needs particles: with no parent drawn there
         // is nothing to burst at.
-        let answers = match (child.kind, drawn) {
+        let answers = match (child.kind, &drawn) {
             (ChildKind::Static, _) => None,
             (_, None) => continue,
             (kind, Some(parent)) => Some(Answer {
-                parent,
+                parent: parent.start,
                 kind,
                 origin: child.origin,
                 scale: child.scale,
@@ -1757,13 +1798,15 @@ fn load_particles(
         let made = load_particles(gl, resolve, &placed, &child.file, depth + 1, multiplies, objects, skipped);
         if let Some((answer, made)) = answers.zip(made) {
             let parent = answer.parent;
-            if let Drawing::Particles(system) = &mut objects[made].drawing {
-                match answer.kind {
-                    ChildKind::EventFollow => system.ride_along(child.maxcount),
-                    _ => system.wait_for_parent(),
+            for made in made {
+                if let Drawing::Particles(system) = &mut objects[made].drawing {
+                    match answer.kind {
+                        ChildKind::EventFollow => system.ride_along(child.maxcount),
+                        _ => system.wait_for_parent(),
+                    }
                 }
+                objects[made].answers = Some(answer);
             }
-            objects[made].answers = Some(answer);
             if let Drawing::Particles(system) = &mut objects[parent].drawing {
                 system.listen();
             }

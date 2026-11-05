@@ -686,8 +686,14 @@ pub struct ParticleSystem {
     pub exponents: Exponents,
     /// Particles live in a 3D space seen through a camera, not on the screen.
     pub perspective: bool,
+    /// The bottom bit of `flags`, which the editor calls *Worldspace*: a
+    /// particle is placed by the object's transform once, where it is born,
+    /// and lives in the scene's own axes after that.
+    pub world: bool,
     pub operators: Vec<Operator>,
     pub renderer: Renderer,
+    /// The renderers after the first, each drawing the same particles again.
+    pub more_renderers: Vec<Renderer>,
     pub animation: Option<Animation>,
     /// Points a step may aim at, in the system's own space, in the order the
     /// file lists them. Every system carries eight whether it uses them or
@@ -1040,38 +1046,40 @@ impl ParticleSystem {
             });
         }
 
-        // The renderer is a list in the file but never holds more than one
-        // entry in the library, and a system draws one way.
-        let renderer = match array(&root, "renderer").first().copied() {
-            Some(r) => match name_of(r) {
-                "sprite" => Renderer::Sprite,
-                "rope" => Renderer::Rope {
-                    subdivision: num(r, "subdivision", 1.0).clamp(1.0, 64.0) as u32,
-                },
-                "ropetrail" => Renderer::RopeTrail {
-                    length: num(r, "length", 0.2).clamp(0.0, 10.0),
-                    // Four of the five systems in the library leave this out
-                    // and the fifth says sixteen. Eight points across a fifth
-                    // of a second is a smooth enough streak for a falling star
-                    // and cheap enough for a system of five hundred.
-                    points: num(r, "segments", 8.0).clamp(2.0, 48.0) as u32,
-                },
-                // Defaults out of `wallpaper64.exe` (`FUN_1401c0af0`): a length
-                // of 0.05 and a cap of 10, and no floor. The cap is in sizes of
-                // the particle -- `ComputeParticleTrailTangents` draws it
-                // `size x min(speed x length, maxlength)` long -- and half the
-                // systems that trail leave it out. Uncapped, Space Visualizer's
-                // sparks, 3 to 10 across at hundreds a second, drew lines across
-                // the whole planet where Windows throws fans of short ones.
-                "spritetrail" => Renderer::Trail {
-                    length: num(r, "length", 0.05),
-                    min_length: num(r, "minlength", 0.0),
-                    max_length: num(r, "maxlength", 10.0),
-                },
-                other => Renderer::Other(other.to_owned()),
+        // The renderer is a list, and every entry in it draws the same
+        // particles. Only Space Visualizer's `sparktrails` has two -- a
+        // `spritetrail` and a `ropetrail` -- and on Windows its sparks are
+        // both: a short streak at the head and a line from where each was born.
+        let renderer_of = |r: &Value| match name_of(r) {
+            "sprite" => Renderer::Sprite,
+            "rope" => Renderer::Rope {
+                subdivision: num(r, "subdivision", 1.0).clamp(1.0, 64.0) as u32,
             },
-            None => Renderer::Sprite,
+            "ropetrail" => Renderer::RopeTrail {
+                length: num(r, "length", 0.2).clamp(0.0, 10.0),
+                // Four of the five systems in the library leave this out
+                // and the fifth says sixteen. Eight points across a fifth
+                // of a second is a smooth enough streak for a falling star
+                // and cheap enough for a system of five hundred.
+                points: num(r, "segments", 8.0).clamp(2.0, 48.0) as u32,
+            },
+            // Defaults out of `wallpaper64.exe` (`FUN_1401c0af0`): a length
+            // of 0.05 and a cap of 10, and no floor. The cap is in sizes of
+            // the particle -- `ComputeParticleTrailTangents` draws it
+            // `size x min(speed x length, maxlength)` long -- and half the
+            // systems that trail leave it out. Uncapped, Space Visualizer's
+            // sparks, 3 to 10 across at hundreds a second, drew lines across
+            // the whole planet where Windows throws fans of short ones.
+            "spritetrail" => Renderer::Trail {
+                length: num(r, "length", 0.05),
+                min_length: num(r, "minlength", 0.0),
+                max_length: num(r, "maxlength", 10.0),
+            },
+            other => Renderer::Other(other.to_owned()),
         };
+        let mut renderers = array(&root, "renderer").into_iter().map(renderer_of);
+        let renderer = renderers.next().unwrap_or(Renderer::Sprite);
+        let more_renderers = renderers.collect();
 
         let animation = match root.get("animationmode").and_then(Value::as_str) {
             Some("sequence") => Some(Animation::Sequence {
@@ -1125,8 +1133,10 @@ impl ParticleSystem {
             initializers,
             exponents,
             perspective: num(&root, "flags", 0.0) as u32 & PERSPECTIVE != 0,
+            world: num(&root, "flags", 0.0) as u32 & WORLD_SPACE != 0,
             operators,
             renderer,
+            more_renderers,
             animation,
             children,
             unsupported,
@@ -1136,6 +1146,8 @@ impl ParticleSystem {
 
 /// The bit of a control point's `flags` that hangs it on the mouse.
 const FOLLOWS_POINTER: u32 = 1;
+/// The bit of a system's `flags` that the editor calls Worldspace.
+const WORLD_SPACE: u32 = 1;
 /// The bit of a system's `flags` that says it is seen through a camera.
 const PERSPECTIVE: u32 = 4;
 /// The bits of an emitter's `flags`, as the editor lists them.
@@ -2090,5 +2102,21 @@ mod one_sided_tests {
                 max: [1.0; 3]
             })
         );
+    }
+
+    /// The bottom bit is world space, and every renderer after the first
+    /// draws the same particles again.
+    #[test]
+    fn a_system_in_world_space_keeps_all_its_renderers() {
+        let p = ParticleSystem::parse(
+            br#"{"material":"m.json","flags":1,"renderer":[{"name":"spritetrail","length":3},
+                {"name":"ropetrail","length":0.1,"segments":16}]}"#,
+        )
+        .unwrap();
+        assert!(p.world);
+        assert!(matches!(p.renderer, Renderer::Trail { .. }));
+        assert_eq!(p.more_renderers, vec![Renderer::RopeTrail { length: 0.1, points: 16 }]);
+        let flat = ParticleSystem::parse(br#"{"material":"m.json","flags":4}"#).unwrap();
+        assert!(!flat.world && flat.more_renderers.is_empty());
     }
 }

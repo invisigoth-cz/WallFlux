@@ -692,6 +692,9 @@ pub struct System {
     exponents: Exponents,
     /// Whether the particles live in 3D rather than on the screen.
     perspective: bool,
+    /// For a system in world space, the object's transform, which places each
+    /// particle once as it is born; after that it lives in the scene's axes.
+    world: Option<crate::transform::Matrix>,
     /// How fast the system's own time runs: the scene's `rate` override, and
     /// after it whatever a script on that override says. **Not how many it
     /// lets out.** Warhammer's charges say 0.07, and on Windows they burn
@@ -932,6 +935,7 @@ impl System {
             gates: vec![Gate::default(); definition.emitters.len()],
             exponents: definition.exponents,
             perspective: definition.perspective,
+            world: definition.world.then_some(crate::transform::IDENTITY),
             emitters,
             born_on_pointer: definition.born_on_pointer,
             clock: over.rate.value.max(0.0),
@@ -1125,6 +1129,29 @@ impl System {
         if let Some(events) = &mut self.events {
             events.born.push(Snapshot::of(&particle));
         }
+        // ponytail: a child of a world-space system is still handed places in
+        // the parent's own space; none in the library has children.
+        // The place goes through the whole transform, the velocity only
+        // through its turn. Space Visualizer's sparks fly about a hundred
+        // pixels from where they are born, which is their speed over their
+        // drag as the file has it; scaled with the object, 0.6 by 0.3, they
+        // made fans a quarter of the size.
+        if let Some(model) = &self.world {
+            let place = |p| crate::transform::apply(model, p);
+            let turn = |column: usize| {
+                let (x, y) = (model[column * 4], model[column * 4 + 1]);
+                let length = (x * x + y * y).sqrt().max(f32::EPSILON);
+                [x / length, y / length]
+            };
+            let ([c0, s0], [c1, s1]) = (turn(0), turn(1));
+            let [vx, vy, vz] = particle.velocity;
+            particle.velocity = [c0 * vx + c1 * vy, s0 * vx + s1 * vy, vz];
+            particle.position = place(particle.position);
+            particle.previous = particle.position;
+            for point in &mut particle.trail {
+                *point = place(*point);
+            }
+        }
         self.live.push(particle);
     }
 
@@ -1196,6 +1223,23 @@ impl System {
 
     pub fn is_perspective(&self) -> bool {
         self.perspective
+    }
+
+    pub fn is_in_world(&self) -> bool {
+        self.world.is_some()
+    }
+
+    /// Where the object stands now, for a system in world space: what the
+    /// particles born from here on are placed by.
+    ///
+    /// ponytail: the mouse, the scene's edges and the control points are
+    /// still handed over in the object's own space; for the systems in the
+    /// library, which are not turned or scaled where those matter, the two
+    /// agree.
+    pub fn stand_at(&mut self, model: crate::transform::Matrix) {
+        if self.world.is_some() {
+            self.world = Some(model);
+        }
     }
 
     /// Whether this system draws as ribbons rather than loose quads.
@@ -3397,6 +3441,25 @@ mod tests {
 
     /// A rope trail keeps a path per particle: it stops growing at the count
     /// the file states, and the buffer never outgrows what was reserved for it.
+    /// A system in world space is placed by its object once, as a particle
+    /// is born: where by the whole transform, which way it flies by the turn
+    /// alone, not squashed by the scale.
+    #[test]
+    fn a_world_space_particle_is_placed_once_and_flies_unscaled() {
+        let mut s = system(
+            r#"{"maxcount":1,"flags":1,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10},
+                               {"name":"velocityrandom","min":"0 100 0","max":"0 100 0"}]}"#,
+        );
+        let quarter = std::f32::consts::FRAC_PI_2;
+        s.stand_at(crate::transform::model([500.0, 300.0, 0.0], [1.0, 1.0], [0.5, 0.25, 1.0], [0.0, 0.0, quarter]));
+        run(&mut s, 0.02, 0.01);
+        let p = &s.live[0];
+        assert!((p.position[0] - 500.0).abs() < 1e-3 && (p.position[1] - 300.0).abs() < 1e-3, "{:?}", p.position);
+        // Up, turned a quarter to the left, at its own speed.
+        assert!((p.velocity[0] + 100.0).abs() < 1e-3 && p.velocity[1].abs() < 1e-3, "{:?}", p.velocity);
+    }
+
     #[test]
     fn a_rope_trail_keeps_a_bounded_path_per_particle() {
         let mut s = system(

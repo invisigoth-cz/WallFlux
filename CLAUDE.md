@@ -682,6 +682,30 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   Visualizer listens across eleven bands and more, and answered the music half
   as much; DOOM, on two, moved by tenths of a level, towards its recording.
 
+- **The bottom bit of a system's `flags` is *Worldspace*** -- the editor's own
+  word for it. A particle is placed by the object's transform once, where it is
+  born, and after that lives in the scene's axes: drawn with no model matrix,
+  its gravity the scene's. Its position goes through the whole transform and
+  its velocity through **the turn alone, not the scale**. Space Visualizer's
+  sparks are the evidence: in their object's frame (0.6 by 0.3, turned -43
+  degrees) they came out as short white dashes all leaning one way, turned
+  and scaled at birth as fans a quarter the size; on Windows each is a fan of
+  red lines about a hundred pixels long, which is their speed over their drag
+  as the file has it, bending from the object's turn towards their gravity.
+  Twelve packages here carry the bit (rain, fireworks, vapour, trails); in a
+  sweep Rainbow Six, StarCraft, Gears, Snow Lights and Space Marine II moved
+  a little and none looked different. The mouse, the scene's edges and the
+  control points are still handed over in the object's space.
+
+  **And every renderer in the list draws.** `sparktrails` in Space Visualizer
+  -- the only system here with two -- says `spritetrail` and `ropetrail`, and
+  on Windows its lines start where each spark was born and grow for half a
+  second, which a sprite trail cannot do. The second renderer is a twin
+  system seeded alike, so it lets out the same particles. A `ropetrail`'s
+  `length` is the whole path in seconds, as read before: Blue Moon's shooting
+  stars trail about 0.35 s of their flight on Windows against 0.2 here, where
+  a length per segment would be 1.4.
+
 - **A `spritetrail` that says no more is 0.05 long and capped at 10**
   (`FUN_1401c0af0`; no floor). The cap is in sizes of the particle:
   `ComputeParticleTrailTangents` draws it `size x min(speed x length,
