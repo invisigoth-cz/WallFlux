@@ -16,6 +16,11 @@
 //! ```text
 //! cargo run -p wallflux --example clip -- <wallpaper-dir> <out.mp4> <sound> [seconds] [width] [height]
 //! ```
+//!
+//! `WALLFLUX_POINTER_PATH=<file>` moves the mouse as a recording did: a line
+//! of `seconds x y` for each moment, `x` and `y` as fractions of the picture
+//! from its top-left corner, and a line with the time alone where the mouse
+//! was not to be seen.
 
 // The audio module carries the listening side too, which a tool reading a
 // file never touches.
@@ -103,6 +108,20 @@ fn main() {
         std::process::exit(1);
     });
 
+    let pointer_path = std::env::var("WALLFLUX_POINTER_PATH").ok().map(|file| {
+        let text = std::fs::read_to_string(&file).unwrap_or_else(|e| {
+            eprintln!("cannot read {file}: {e}");
+            std::process::exit(1);
+        });
+        text.lines()
+            .filter_map(|line| {
+                let mut parts = line.split_whitespace().map(|p| p.parse::<f32>().ok());
+                let at = parts.next()??;
+                Some((at, parts.next().flatten().zip(parts.next().flatten())))
+            })
+            .collect::<Vec<(f32, Option<(f32, f32)>)>>()
+    });
+
     let mut ears = audio::Ears::new();
     let mut fed = 0usize;
     // How the bands sat over the whole piece, which is the only way to tell a
@@ -130,6 +149,10 @@ fn main() {
             }
             scene.hear(sound);
             fed += audio::READ * 2;
+        }
+        if let Some(path) = &pointer_path {
+            let now = path.iter().take_while(|(t, _)| *t <= at).last().and_then(|(_, p)| *p);
+            scene.point_at(now, (width, height));
         }
         let pixels = unsafe { render_frame(&gl, &mut scene, width, height, at) }
             .expect("drawing a frame failed");
