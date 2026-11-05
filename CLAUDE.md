@@ -821,6 +821,23 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   lets them run at once, and the one thing that would make parallel pictures differ.
   Children still step after, in order, since they read their parent's step.
 
+- **The recordings from Windows run at fifteen pictures a second.** Counted
+  as frames that differ from the one before: Space Visualizer 16, DOOM 19,
+  Romulus 16, Snow Lights 15, Gears 16, in 60 fps video. Wallpaper Engine's
+  `config.json` says `"fps": 15` for this user. That is how it keeps 170 000
+  particles going -- four times the time a frame that 60 has -- and it is why
+  motion in those recordings steps. **This program has no cap at all**:
+  `SceneView` asks for the next frame as soon as one is drawn, which on this
+  machine's 144 Hz screen is as fast as the scene can go. Wallpaper Engine's
+  settings offer a limit of 15 to 120 and switches for particles and effects;
+  so does Almamu's renderer. Taken up as the Settings tab's first content.
+
+  **Stepping one system's particles on several threads was tried and taken
+  out.** Moving the loop into a closure to share it out made it slower on one
+  thread -- Space Visualizer at 48 000 from 16.4 to 23.5 ms a frame -- and the
+  threads only won that back on the giants (29 to 26.5 unthinned). What is
+  left of a frame there is drawing and writing vertices, not stepping.
+
 - **`shot` turns the sound on only for the frames it times.** It settles to the
   start in silence, so a scene that answers to music is still filling up during
   the measured frames and a median of a hundred of them is the ramp, not the
