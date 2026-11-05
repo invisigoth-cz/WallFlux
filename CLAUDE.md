@@ -733,10 +733,9 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   sparktrails -- 100 of 16 points, thinned to 703 -- room for 703 sparks, and the
   sprite twin beside it 100. Twins are held to the smaller of the two after
   thinning, or they part. **That scene asks for 167 917 at once and is given
-  24 000**, a ceiling of 703 a system: its five sky systems keep 2.8 % of 25 000
-  and its white stars (261, `boxrandom` six times the scene) 17 %, which is most of
-  what its sky lacks against Windows. Unthinned, a frame at 2560x1440 on the VM
-  takes 41 ms against 17.
+  48 000** (24 000 until 0.24.0, a ceiling of 703 a system: its five sky systems
+  kept 2.8 % of 25 000 and its white stars 17 %, which was most of what its sky
+  lacked against Windows). See the budget trap below for what it costs.
 
 - **A `spritetrail` that says no more is 0.05 long and capped at 10**
   (`FUN_1401c0af0`; no floor). The cap is in sizes of the particle:
@@ -788,7 +787,27 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   alike to fit the budget, Gears of War's 75 620 particles left its eyes' two
   torches 13 flames of 41: white over 3.0 % of the area round the eyes, against
   8.7 % in the recording and 7.5 % unthinned. `most_for_each` is a ceiling only
-  the giants reach. Six wallpapers are over the budget, DOOM by seven times.
+  the giants reach. Four wallpapers here are over the budget: Rainbow Six (50 201),
+  Gears (75 681), Space Visualizer (167 917) and DOOM (177 307).
+
+- **The budget is what keeps 60 frames a second, and it is the CPU's.** Measured on
+  the real machine (Ryzen 9 5900X, RX 6900 XT) at 2560x1440: a particle costs a
+  third of a microsecond to step, and drawing it is cheap beside that. Stepped one
+  system after another, Space Visualizer unthinned took 62 ms a frame and DOOM 67;
+  **the systems with no parent now step in parallel** (`advance_to`, one thread per
+  ten thousand alive), which halves that and changes no picture -- a sweep came out
+  identical but for the four scenes that read the clock or `Math.random`, and those
+  differ between two runs of the old binary too. At 48 000 Space Visualizer and DOOM
+  take 15.9 and 15.8 ms with loud music; at 76 000 Space Visualizer took 18.6.
+  **Keep a root system from reading any other system while it steps**: that is what
+  lets them run at once, and the one thing that would make parallel pictures differ.
+  Children still step after, in order, since they read their parent's step.
+
+- **`shot` turns the sound on only for the frames it times.** It settles to the
+  start in silence, so a scene that answers to music is still filling up during
+  the measured frames and a median of a hundred of them is the ramp, not the
+  scene: Space Visualizer's simulation went from 0.1 to 16 ms over 90 frames.
+  Time 600 frames or more before believing a number.
 
 - **Whether a texture repeats is bit 2 of its flags, in the file.** It agrees with
   `clampuvs` in all 243 `.tex-json` that state one, and a wallpaper carries the
@@ -804,7 +823,7 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **`shot` runs a scripted rate wrong when it starts late.** `settle` catches up
   at the rate in the file, before any script has said otherwise, so Dark Core's
   fires, which a script holds at a tenth in silence, come out lit from the first
-  frame. For a scene like that draw from nought: `shot <dir> <png> w h 0 24000
+  frame. For a scene like that draw from nought: `shot <dir> <png> w h 0 48000
   1500` is twenty-five seconds as the desktop has them. It clears every frame now
   too, as the program does; without that Dark Core's tubes went white by frame six.
 

@@ -6,6 +6,18 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Particle systems are stepped on several cores at once**, which halves what
+  the heaviest scenes cost: Space Visualizer from 62 to 30 ms a frame unthinned
+  at 2560x1440, DOOM from 59 to 22 at 150 000 particles. Nothing drawn changes --
+  each system draws from a generator of its own, and a sweep of the whole
+  library came out identical.
+- **A scene may keep 48 000 particles alive instead of 24 000**, the most that
+  keeps Space Visualizer and DOOM at 60 frames a second at 2560x1440 with loud
+  music on a Ryzen 9 5900X and an RX 6900 XT. Space Visualizer's sky, DOOM,
+  Gears of War and Rainbow Six are thinned less; Snow Lights not at all.
+
 ## [0.23.3] — 2026-11-05
 
 ### Fixed

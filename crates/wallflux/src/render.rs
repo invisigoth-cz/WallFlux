@@ -1641,15 +1641,54 @@ impl Scene {
                 system.stand_at(model);
             }
         }
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
         for _ in 0..steps {
+            // A system that answers to nobody depends on nothing but itself and
+            // draws from a generator of its own, so these can all take the step
+            // at once and come out exactly as they would one after another.
+            let mut free: Vec<&mut particles::System> = self
+                .objects
+                .iter_mut()
+                .filter(|o| o.answers.is_none())
+                .filter_map(|o| match &mut o.drawing {
+                    Drawing::Particles(system) => Some(&mut **system),
+                    Drawing::Image => None,
+                })
+                .collect();
+            let alive: usize = free.iter().map(|s| s.count()).sum();
+            // A thread costs a few microseconds to start, a particle a third of
+            // one to step: one for every ten thousand alive.
+            let workers = alive.div_ceil(PARTICLES_A_THREAD).min(cores).min(free.len());
+            if workers < 2 {
+                for system in free {
+                    system.advance(slice, &sound);
+                }
+            } else {
+                // The largest first, so none of them is left to finish alone.
+                free.sort_by_key(|s| std::cmp::Reverse(s.count()));
+                let queue = std::sync::Mutex::new(free.into_iter());
+                std::thread::scope(|scope| {
+                    for _ in 0..workers {
+                        scope.spawn(|| {
+                            while let Some(system) = { queue.lock().expect("a step panicked").next() } {
+                                system.advance(slice, &sound);
+                            }
+                        });
+                    }
+                });
+            }
+            // Then the children, in order: a parent is always loaded before
+            // them, so it has already taken this step and what it says is this
+            // step's.
             for index in 0..self.objects.len() {
                 let (before, rest) = self.objects.split_at_mut(index);
                 let Object { drawing, answers, .. } = &mut rest[0];
                 let Drawing::Particles(system) = drawing else {
                     continue;
                 };
-                // A parent is always loaded before its children, so it has
-                // already taken this step and what it says is this step's.
+                if answers.is_none() {
+                    continue;
+                }
                 if let Some(answer) = answers
                     && let Drawing::Particles(parent) = &before[answer.parent].drawing
                     && let Some(events) = parent.events()
@@ -1929,12 +1968,14 @@ const MOST_SCRIPT_STEPS: f32 = 300.0;
 
 /// How many particles a scene may keep alive at once before it is thinned.
 ///
-/// Measured here: a frame costs about four tenths of a millisecond plus a
-/// fifth of a microsecond for every particle, so this is a few milliseconds of
-/// one. It is also where the library divides -- four wallpapers ask for
-/// between 51 000 and 183 000 particles and every other one asks for under
-/// 24 000, half of them for under 600 -- so nothing but those four is touched.
-pub const DEFAULT_BUDGET: usize = 24_000;
+/// The most that still keeps the heaviest scenes here at 60 frames a second
+/// at 2560x1440 on a Ryzen 9 5900X and an RX 6900 XT, the systems stepped in
+/// parallel: Space Visualizer and DOOM 15.9 and 15.8 ms a frame with loud
+/// music, where 76 000 took Space Visualizer to 18.6. A particle costs about
+/// a third of a microsecond to step. Five wallpapers here ask for more --
+/// Snow Lights 25 490, Rainbow Six 50 201, Gears 75 681, Space Visualizer
+/// 167 917, DOOM 177 307 -- and every other one for under 24 000.
+pub const DEFAULT_BUDGET: usize = 48_000;
 
 /// Holds the largest systems in a scene down until the scene fits.
 ///
@@ -3590,6 +3631,11 @@ const STEP: f32 = 1.0 / 60.0;
 /// scene run slow. Four is a fifteenth of a second, which no light scene ever
 /// reaches and which keeps a heavy one moving instead of seizing.
 const STEPS_PER_FRAME: usize = 4;
+
+/// How many live particles are worth a thread of their own when a step is
+/// taken. Measured here: a particle costs about a third of a microsecond to
+/// step and a thread a few microseconds to start.
+const PARTICLES_A_THREAD: usize = 10_000;
 
 /// Far enough that the direction to it is the z axis for every particle in a
 /// scene, whose own coordinates run to a few thousand.
