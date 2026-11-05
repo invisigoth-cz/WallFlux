@@ -2219,6 +2219,23 @@ the file. Everything after it should.
      stock shader averaging for itself and is weak as well, so the bands' values
      after the evening out are still suspect. DOOM's letters pulsing about 15 %
      weaker may be the same thing.
+
+     **5 November, on the real machine, each group of systems drawn alone**
+     (`~/WallFlux-ukazky/2026-11-05-real/sv/izolace/`, a hard-linked copy of the
+     unpacked package with `keep.py`, max over 40 s): the long thick red streaks
+     rising across our sky are the four `Stars` (`starfield`, `starfield2`); on
+     Windows the sky has many short thin ones at about ten degrees instead. The
+     lava's columns and rays were the spark trails' gravity, fixed (see the
+     world-space trap). **The swarm of red dots round the sun on Windows is
+     missing here**, and it is not the hearing: the five `particle_0x_audio_response`
+     systems hear 0.3 to 0.99 through that recording and let out 120 000 at
+     once unthinned, but every one is born on a ring of 256 (`distancemin` 256,
+     the default `distancemax` 256) times the object's 1.4 and stopped by a drag
+     of 6 before it gets anywhere -- a thin red ring round the small planet,
+     whichever operator is switched off. Where Windows takes them from there is
+     not found; candidates are `distancemax` when only `distancemin` is stated,
+     and the turn of `starfield2`, whose band of dots through the sun may be the
+     swarm.
    - **Alien Romulus' specks round the mouse** (object 162, left out): on Windows a
      sparse ring of dots 2-3 px across at 1280, falling from the pointer; here, with
      it switched on and the mouse still, a dense black ball about 35 px. The system:
