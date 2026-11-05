@@ -2250,6 +2250,22 @@ the file. Everything after it should.
      3.0), the Os pulse with Windows at 0.87. Left as it is, by the user's eye: the
      letters a level or two darker and their pulsing about 15 % weaker, the D and
      the M following Windows at only 0.5.
+
+     **5 November, on the real machine, the first minute of `Doom_2026.11.03`**
+     (`~/WallFlux-ukazky/2026-11-05-real/doom/`, letters as boxes at 640x360):
+     D -3.4 levels, O -2.7 and -2.3, M -3.5; swing 0.83 to 0.86 of Windows';
+     followed at 0.56, 0.77, 0.79, 0.58. **It is not how loud the bands are**:
+     the letters' pulse is DOOM's own `effects/pulse` (bands averaged over both
+     ears, `smoothstep(0.5, 1.5)`, so a band has to pass one to do half), and
+     the sixteen handed to shaders times 1.5 put every letter 8 to 28 levels
+     over Windows with a swing of 2.4 -- while the D and the M followed worse.
+     **It is the bass.** Over that minute our band 0 sits at 0.79 on average and
+     hardly moves (the evening out holds it at its own envelope through DOOM's
+     rumble), and Windows' D and M follow our band 1 best (0.47, 0.53) and
+     band 0 hardly at all (0.19); the Os follow 13 and 14 best where they read
+     8 to 14. So the lowest entries are where ours and Wallpaper Engine's part:
+     bins 1 to 4 of the 1920 (23 to 92 Hz) read off our 2048, or how the meter
+     treats them in `wallpaper64.exe`, which was not re-read. Nothing changed.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.
