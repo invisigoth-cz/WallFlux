@@ -694,8 +694,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   as the file has it, bending from the object's turn towards their gravity.
   Twelve packages here carry the bit (rain, fireworks, vapour, trails); in a
   sweep Rainbow Six, StarCraft, Gears, Snow Lights and Space Marine II moved
-  a little and none looked different. The mouse, the scene's edges and the
-  control points are still handed over in the object's space.
+  a little and none looked different. **Measured from the object's origin,
+  not from the scene's corner**: the control points, a vortex's middle and the
+  mouse are handed over from there, and with the particles counted from the
+  corner Space Visualizer's sky swirled round the bottom left of the screen
+  and Gears' turbulence read another part of its noise. Those points are not
+  turned or scaled with the object yet.
 
   **And every renderer in the list draws.** `sparktrails` in Space Visualizer
   -- the only system here with two -- says `spritetrail` and `ropetrail`, and

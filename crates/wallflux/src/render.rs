@@ -1410,10 +1410,12 @@ impl Scene {
             };
             origin = middle_of(origin, object.anchor, object.size, object.scale, object.angles[2]);
             let model = transform::model(origin, size, object.scale, object.angles);
-            // A system in world space was placed by the model as each
-            // particle was born, and is not placed by it again.
+            // A system in world space was turned and scaled by the model as
+            // each particle was born, and is only moved to its place now.
             let model = match &object.drawing {
-                Drawing::Particles(system) if system.is_in_world() => transform::IDENTITY,
+                Drawing::Particles(system) if system.is_in_world() => {
+                    transform::model(origin, [1.0, 1.0], [1.0; 3], [0.0; 3])
+                }
                 _ => model,
             };
             let mvp = match &object.drawing {

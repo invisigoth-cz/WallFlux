@@ -1137,7 +1137,14 @@ impl System {
         // drag as the file has it; scaled with the object, 0.6 by 0.3, they
         // made fans a quarter of the size.
         if let Some(model) = &self.world {
-            let place = |p| crate::transform::apply(model, p);
+            // From the object's origin, which the drawing adds back: the
+            // control points, a vortex's middle and the mouse are all handed
+            // over from there.
+            let origin = crate::transform::apply(model, [0.0; 3]);
+            let place = |p| {
+                let at = crate::transform::apply(model, p);
+                std::array::from_fn(|i| at[i] - origin[i])
+            };
             let turn = |column: usize| {
                 let (x, y) = (model[column * 4], model[column * 4 + 1]);
                 let length = (x * x + y * y).sqrt().max(f32::EPSILON);
@@ -1232,10 +1239,11 @@ impl System {
     /// Where the object stands now, for a system in world space: what the
     /// particles born from here on are placed by.
     ///
-    /// ponytail: the mouse, the scene's edges and the control points are
-    /// still handed over in the object's own space; for the systems in the
-    /// library, which are not turned or scaled where those matter, the two
-    /// agree.
+    /// The particles are kept in the scene's axes but measured from the
+    /// object's origin, so the control points, a vortex's middle and the mouse
+    /// still meet them there. ponytail: those are not turned or scaled with
+    /// the object; in the library the systems they matter to are not turned,
+    /// and their points sit at nought.
     pub fn stand_at(&mut self, model: crate::transform::Matrix) {
         if self.world.is_some() {
             self.world = Some(model);
@@ -3442,12 +3450,12 @@ mod tests {
     /// A rope trail keeps a path per particle: it stops growing at the count
     /// the file states, and the buffer never outgrows what was reserved for it.
     /// A system in world space is placed by its object once, as a particle
-    /// is born: where by the whole transform, which way it flies by the turn
-    /// alone, not squashed by the scale.
+    /// is born: where by the turn and the scale, measured from the object's
+    /// origin, and which way it flies by the turn alone.
     #[test]
     fn a_world_space_particle_is_placed_once_and_flies_unscaled() {
         let mut s = system(
-            r#"{"maxcount":1,"flags":1,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0}],
+            r#"{"maxcount":1,"flags":1,"emitter":[{"name":"boxrandom","rate":100,"distancemax":0,"origin":"10 0 0"}],
                 "initializer":[{"name":"lifetimerandom","min":10,"max":10},
                                {"name":"velocityrandom","min":"0 100 0","max":"0 100 0"}]}"#,
         );
@@ -3455,7 +3463,8 @@ mod tests {
         s.stand_at(crate::transform::model([500.0, 300.0, 0.0], [1.0, 1.0], [0.5, 0.25, 1.0], [0.0, 0.0, quarter]));
         run(&mut s, 0.02, 0.01);
         let p = &s.live[0];
-        assert!((p.position[0] - 500.0).abs() < 1e-3 && (p.position[1] - 300.0).abs() < 1e-3, "{:?}", p.position);
+        // Ten along x, halved and turned a quarter: five up from the origin.
+        assert!(p.position[0].abs() < 1e-3 && (p.position[1] - 5.0).abs() < 1e-3, "{:?}", p.position);
         // Up, turned a quarter to the left, at its own speed.
         assert!((p.velocity[0] + 100.0).abs() < 1e-3 && p.velocity[1].abs() < 1e-3, "{:?}", p.velocity);
     }
