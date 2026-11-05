@@ -2236,6 +2236,24 @@ the file. Everything after it should.
      not found; candidates are `distancemax` when only `distancemin` is stated,
      and the turn of `starfield2`, whose band of dots through the sun may be the
      swarm.
+
+     **Later that night, by motion maps** (the brightest of five seconds less
+     their median, `~/WallFlux-ukazky/2026-11-05-real/sv/obloha/`): the swarm
+     *is* those five systems. On Windows they leave their ring over the small
+     planet and stream at 45 degrees -- their gravity's "100 100" -- towards
+     the sun, at about 30 to 80 scene pixels a second, measured by phase
+     correlation; here they do the same, faintly. Unthinned the plume and the
+     swirl over the planet come close to Windows', so what is left of it is
+     the particle budget, which is the whole library's to change. **The
+     `Stars` streaks** rise at a median of 33 degrees here and 16 on Windows:
+     their vortex (50 inside, 100 outside, bands 5 to 9) is measured from its
+     middle while they fly thousands along its axis, so it pushes them at its
+     outer speed all the way. Measured from the axis instead: 26, Augmentation
+     the same to the byte, DOOM and Snow Lights moved by less than a hundredth
+     of a level against their recordings. Cutting a vortex off past its outer
+     distance gave 17 but would stop Augmentation's swirl, which states
+     `distanceinner` 0, `distanceouter` 32 and `speedouter` 8000 and was
+     checked against its video.
    - **Alien Romulus' specks round the mouse** (object 162, left out): on Windows a
      sparse ring of dots 2-3 px across at 1280, falling from the pointer; here, with
      it switched on and the mouse still, a dense black ball about 35 px. The system:
@@ -2243,6 +2261,19 @@ the file. Everything after it should.
      0.8, `controlpointattract` -600 within 50 and +500 within 5000, an audio
      `vortex`, `spritetrail`, and a texture that is an 8 x 8 cluster of square
      blocks in 1095 of its 2048. Where it differs is not found yet.
+
+     **5 November, with the mouse moved as in the recording** (`clip` takes
+     `WALLFLUX_POINTER_PATH`, the cursor tracked out of the video,
+     `~/WallFlux-ukazky/2026-11-05-real/romulus/`): the trail follows the
+     cursor in the same places at the same moments, and there are as many
+     specks a frame (28 here, 24 on Windows), but ours cover 5.6 times the
+     dark area -- each speck two to two and a half times as large, and with
+     the mouse still, 352 of them make a ball 65 pixels across. The texture is
+     one pixel-art speck of 8 by 8 filling the 1095 image, and a particle's
+     corners read the whole 2048, as the stock shader does; the sizes come
+     out as the file says (sizerandom halved, the instance's 0.51, sizechange
+     up to 1.8). Where Windows' factor of two comes from is not found, so 162
+     stays left out.
    - Done and confirmed on 3 November: Dark Core as on Windows -- the triangle, the
      lines and bars, STANDBY and the tubes, colours and fill -- and DOOM, drawn at
      2560x1440 against its recording with sound: the second O's white glow comes
@@ -2266,6 +2297,18 @@ the file. Everything after it should.
      8 to 14. So the lowest entries are where ours and Wallpaper Engine's part:
      bins 1 to 4 of the 1920 (23 to 92 Hz) read off our 2048, or how the meter
      treats them in `wallpaper64.exe`, which was not re-read. Nothing changed.
+
+     **Re-read the same night, and it is not the meter's reading either.**
+     `FUN_1400d02b0` decompiled: bins 1 to N-1, the place `pow((bin-1)/(N-1),
+     PLACING) x 64`, never more than one ahead, the weight `TILT -
+     cos(pi (bin-1)/(N-1)) (1 - TILT)`, the root of weight times power, the
+     loudest in each entry, then times the volume, 0.001 and N over half the
+     window -- all as `audio.rs` has it. The evening out in `FUN_140110630`
+     likewise: sixteen groups of eight, the loudest of all times 0.333 as a
+     floor, envelopes put back to one after silence. Tried and worse: the
+     meter's input three and ten times louder before the evening out (D
+     followed at 0.23 and 0.09), and the bins read as at 48 kHz, 25 Hz apart
+     (0.54). So the D's and the M's 0.56 is still unexplained.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.
