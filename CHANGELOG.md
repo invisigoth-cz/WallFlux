@@ -6,6 +6,14 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Space Visualizer's stars cross the sky more nearly level**, rising at 26
+  degrees where they rose at 33 (Windows: 16). A particle vortex measures how
+  far a particle is from the axis it turns about, not from its middle, so
+  stars flying along that axis are no longer pushed at its outer speed all the
+  way.
+
 ## [0.24.1] — 2026-11-05
 
 ### Fixed

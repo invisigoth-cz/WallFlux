@@ -1974,8 +1974,23 @@ fn wave_between(wave: &Oscillation, wobble: [f32; 3], time: f32) -> f32 {
 
 /// How hard a vortex pushes a particle at its distance from the centre.
 fn vortex_speed(vortex: &Vortex, position: [f32; 3]) -> f32 {
-    let distance =
-        (position[0] * position[0] + position[1] * position[1] + position[2] * position[2]).sqrt();
+    // From the axis it turns about, not from its middle. Space Visualizer's
+    // stars fly thousands along the axis of their vortex: counted from the
+    // middle they were soon past its outer distance and pushed at its outer
+    // speed for the rest of the way, and rose across the sky at 33 degrees
+    // where Windows has 16; from the axis, 26. Augmentation, whose particles
+    // lie across their axis, comes out the same to the byte.
+    let axis = vortex.axis;
+    let long = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+    let along = if long > f32::EPSILON {
+        (position[0] * axis[0] + position[1] * axis[1] + position[2] * axis[2]) / long
+    } else {
+        0.0
+    };
+    let distance = (position[0] * position[0] + position[1] * position[1] + position[2] * position[2]
+        - along * along)
+        .max(0.0)
+        .sqrt();
     let span = vortex.distance.max - vortex.distance.min;
     let at = if span > 0.0 {
         ((distance - vortex.distance.min) / span).clamp(0.0, 1.0)
@@ -3354,6 +3369,19 @@ mod tests {
         assert!((v[1] + 9.0).abs() < 0.01, "pushed {v:?}");
         assert!(v[0].abs() < 0.01, "pulled in or out: {v:?}");
         assert!(pushed_by_vortex("-90")[1] > 8.0, "a negative speed goes the other way");
+    }
+
+    /// Along its axis a particle is as near the vortex as where it started.
+    #[test]
+    fn a_vortex_measures_from_its_axis() {
+        let vortex = Vortex {
+            audio: None,
+            axis: [0.0, 0.0, 1.0],
+            distance: Range { min: 100.0, max: 200.0 },
+            speed: Range { min: 10.0, max: 20.0 },
+        };
+        assert_eq!(vortex_speed(&vortex, [50.0, 0.0, 5000.0]), 10.0);
+        assert_eq!(vortex_speed(&vortex, [150.0, 0.0, -5000.0]), 15.0);
     }
 
     #[test]
