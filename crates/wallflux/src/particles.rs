@@ -1357,6 +1357,16 @@ impl System {
         };
         let scene = self.scene;
         let hosts = &self.hosts;
+        // A system in world space feels its gravity at its object's size but
+        // not at its object's turn. Space Visualizer's spark trails say "500
+        // 1500" on objects 0.6 by 0.3 turned -43 degrees, and on Windows each
+        // burst leans at about 56 degrees and stays low: at the scene's own
+        // size they climbed for seconds in tall columns, and turned as well
+        // they lay down at 25.
+        let pull = match &self.world {
+            Some(m) => [(m[0] * m[0] + m[1] * m[1]).sqrt(), (m[4] * m[4] + m[5] * m[5]).sqrt(), 1.0],
+            None => [1.0; 3],
+        };
         for particle in &mut self.live {
             particle.age += dt;
             particle.shown_size = particle.size;
@@ -1403,7 +1413,7 @@ impl System {
                     }
                     Operator::Movement { gravity, drag } => {
                         for (axis, gravity) in gravity.iter().enumerate() {
-                            particle.velocity[axis] += gravity * dt;
+                            particle.velocity[axis] += gravity * pull[axis] * dt;
                             // Drag as a proportion shed per second, which stays
                             // stable whatever the frame rate and never reverses
                             // the velocity the way `1 - drag * dt` would.
@@ -2951,6 +2961,22 @@ mod tests {
         let y = s.live[0].position[1];
         // Half of g t squared, with the first frame's worth of slack.
         assert!((-52.0..=-48.0).contains(&y), "fell to {y}");
+    }
+
+    /// At its object's size and not at its turn: a quarter turn would send
+    /// this one sideways, and the scene's own size would let it fall 50.
+    #[test]
+    fn a_world_space_system_feels_gravity_at_its_objects_size() {
+        let mut s = system(
+            r#"{"maxcount":1,"flags":1,"emitter":[{"name":"boxrandom","rate":1000,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":10,"max":10}],
+                "operator":[{"name":"movement","gravity":"0 -100 0"}]}"#,
+        );
+        let quarter = std::f32::consts::FRAC_PI_2;
+        s.stand_at(crate::transform::model([0.0; 3], [1.0, 1.0], [1.0, 0.25, 1.0], [0.0, 0.0, quarter]));
+        run(&mut s, 1.0, 1.0 / 60.0);
+        let [x, y, _] = s.live[0].position;
+        assert!((-13.5..=-11.5).contains(&y) && x.abs() < 0.01, "fell to {x}, {y}");
     }
 
     #[test]

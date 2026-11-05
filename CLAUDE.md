@@ -718,6 +718,24 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   and Gears' turbulence read another part of its noise. Those points are not
   turned or scaled with the object yet.
 
+  **Its gravity is felt at the object's size and not at its turn.** Space
+  Visualizer's spark trails say "500 1500" on objects 0.6 by 0.3 turned -43
+  degrees. In the scene's own axes they climbed for seconds in tall columns
+  and threw rays across the planet; turned as well, each burst lay down at 25
+  degrees; scaled only, it leans at about 56 and stays low, as every burst in
+  the recording does. Pixels brighter than Windows' in the brightest moment of
+  a minute fell from 3.9 % to 3.2 %. DOOM, Snow Lights, Rainbow Six and STAR
+  WARS carry such systems too: DOOM measured the same against its recording
+  within noise, the others did not move. Read off recordings, not the binary.
+
+  **A `ropetrail`'s `length` is not multiplied by its `subdivision`**, though
+  that reading drew Space Visualizer's bursts as straight lines from where each
+  spark was born, as Windows does: Augmentation's vortex (0.5, 16 and 16) then
+  kept eight seconds of path and filled the iris with green and white tangles
+  where Windows has one thin ring. Taken out again. `wallpaper64.exe` fills a
+  missing `segments` with 4 (here 8), `subdivision` with 1 and `length` with 1
+  (`FUN_1401c1070`), and leaves `fadealpha` and `fadesize` off.
+
   **And every renderer in the list draws.** `sparktrails` in Space Visualizer
   -- the only system here with two -- says `spritetrail` and `ropetrail`, and
   on Windows its lines start where each spark was born and grow for half a

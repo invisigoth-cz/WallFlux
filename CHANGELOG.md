@@ -6,6 +6,12 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Space Visualizer's lava throws low fans of sparks**, where they climbed in
+  tall columns and shot rays across the planet. A particle system in world
+  space feels its gravity at its object's size, not the scene's.
+
 ## [0.24.0] — 2026-11-05
 
 ### Changed
