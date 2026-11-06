@@ -2267,6 +2267,24 @@ the file. Everything after it should.
      the sun moves and the blob moves away from it -- and the `angles` script,
      which pivots the layer about `size x scale x (0, -0.5)`, nothing for a
      particle layer here.
+
+     **Later that day:** the parallax is not it -- the background is at depth
+     1.5 like the flare, so both move alike, in Almamu's formula as in ours
+     (`(depth + amount) x displacement x width`); and the "cursor" at (1877, 150)
+     is part of the background, Almamu draws it too. Almamu draws no blob at
+     all, with the script or without it, and no flare (he has no children).
+     **Moved onto the sun, at (2035, 1905) instead of (2012.6, 1597.9), ours
+     looks like Windows** -- dots on a line through the sun on both sides,
+     turning -- and over 40 s the old blob's place reads 128 against Windows'
+     126, the ring round the sun 169 against 166, the sun's core 246 against
+     238 (white over more of the picture than Windows). So Windows has the
+     system about 308 scene pixels higher, seemingly fixed; why is not found.
+     `wallpaper64.exe` gives a script `size` only on image layers (property
+     table at `0x1401ee5bd`; the layer's own at `0x1401e05d2`: origin 0x128,
+     scale 0x134, angles 0x140, parallaxDepth 0x170), so `thisLayer.size` is
+     undefined for this one, and `lib.sceneScript.d.ts` declares only
+     `Vec3(x: Number|Vec2|String, ...)` -- what `new Vec3(undefined)` gives in
+     Wallpaper Engine is not known.
    - Done: **Battlefield** has nothing unplayed. Its `phase` has an
      `animation` with options and a `previewvalue` and no keyframes at all, so
      the value is the 0 written beside it; the pulse it offsets (`effects/pulse`,
