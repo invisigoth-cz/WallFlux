@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.3] — 2026-11-06
+
+### Fixed
+
+- **Wallpapers make their sound again.** A program that keeps a sound stream
+  open without playing anything -- speech-dispatcher does, for as long as it
+  runs -- was taken for another program using the speakers, so every
+  wallpaper stayed quiet. What counts now is whether PipeWire is actually
+  running the stream, read with `pw-dump`, which is why the package depends
+  on `pipewire`.
+
 ## [0.25.2] — 2026-11-06
 
 ### Fixed
@@ -1193,7 +1204,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.3...HEAD
+[0.25.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.3...v0.25.0
