@@ -3860,13 +3860,11 @@ pub(crate) fn scene_entry(project: Option<&[u8]>) -> String {
 
 /// Objects left out by the user's decision although Wallpaper Engine draws
 /// them, as (the wallpaper's folder, the object's id).
-const LEFT_OUT: &[(&str, i64)] = &[
-    // Alien Romulus' "explosion on cursor": small dark specks round the pointer on
-    // Windows, splats three or four times as large here, and none at all was
-    // preferred to those. Its visibility is bound to a `mausverfolgung` that the
-    // published project.json does not offer, so there is no setting to turn it off.
-    ("3315524934", 162),
-];
+///
+/// Empty since 6 November: Alien Romulus' specks round the mouse, left out
+/// while they came out as splats, draw as Windows' once a placed system's
+/// `size` and `speed` reached its `sizechange` and its pull.
+const LEFT_OUT: &[(&str, i64)] = &[];
 
 /// A wallpaper's files: its package, or the folder itself where there is
 /// none, which is how Wallpaper Engine's own Deep Space and the rest come.

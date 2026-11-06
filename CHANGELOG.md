@@ -6,6 +6,23 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.2] — 2026-11-06
+
+### Fixed
+
+- **Alien Romulus' specks round the mouse are back, and look as on Windows**:
+  small sparse dots, where they used to be splats several times too large and
+  were left out for it. A placed particle system's size and speed now reach
+  every step Wallpaper Engine binds them to (read off `wallpaper64.exe`): the
+  size also its growth and shrinking, the speed also its pulls, swirls,
+  turbulence and sway.
+- **A pull towards a control point works as Wallpaper Engine's does**: full
+  strength at the point, none at its stated reach and a straight line between,
+  never overshooting, with the engine's defaults. The mouse pushes particles a
+  little differently in wallpapers that react to it.
+- Space Visualizer's swarm streams wider towards the sun; Gears of War and
+  Dark Angels come out nearer their recordings.
+
 ## [0.25.1] — 2026-11-06
 
 ### Fixed
@@ -1176,7 +1193,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.2...HEAD
+[0.25.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.3...v0.25.0
 [0.24.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.2...v0.24.3

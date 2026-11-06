@@ -1193,9 +1193,11 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   the disc the recording has. Measured on this one wallpaper. It is still denser
   than Windows, on the only reference there is: a dark corner, the mouse still.
 
-  **And in the end it is not drawn.** The user preferred none to specks three or
-  four times too large, so `LEFT_OUT` in `render.rs` skips object 162 of
-  3315524934 -- the one object here left out against Wallpaper Engine. Its
+  **It was left out until 6 November** (`LEFT_OUT` in `render.rs`, now empty),
+  the user having preferred none to specks three or four times too large. What
+  made them so was a placed system's `size` and `speed` not reaching its
+  `sizechange` and its pull -- see the bindings under Romulus in the open list;
+  bound, they are Windows' sparse small dots, and they are drawn again. Its
   visibility is bound to a `mausverfolgung` the published project.json does not
   declare, so there is no setting that could switch it off instead.
 
@@ -2300,8 +2302,7 @@ the file. Everything after it should.
      after the left), mode 3 the largest of left plus right halved -- as ours.
      So the letters, effects and flames alike, all come back to the meter's two
      lowest bands of sixteen.
-   - **Alien Romulus' specks round the mouse:** Windows draws them fine. If the
-     cause is still not found, they stay left out.
+   - Done: **Alien Romulus' specks round the mouse**, drawn again in 0.25.2.
      **6 November:** `controlpointattract` read off `wallpaper64.exe`
      (`0x140241630`, defaults `FUN_1401bdee0`): the whole strength at the point,
      none at the full `threshold`, a straight line between, never past the
