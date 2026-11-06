@@ -2252,8 +2252,26 @@ the file. Everything after it should.
      again, and look at what Almamu's renderer does with this one.
    - **Alien Romulus' specks round the mouse:** Windows draws them fine. If the
      cause is still not found, they stay left out.
-   - **Blue Dawn:** the weaker sun and the larger flare.
-   - **Battlefield:** which animation is not played (a keyframed `phase`), and play it.
+   - **Blue Dawn:** the weaker sun and the larger flare. **6 November, found so
+     far:** the sun's core is 174 against Windows' 181 over 40 s, so hardly
+     weaker; the difference is a white blob, 25 px across at 2560x1440, that
+     never moves from the lens flare system's origin (2012, 1597) -- 249 there
+     against 115 on Windows, where nothing stays put and the flare's dots turn
+     round the sun. The blob is the parent system's own halos (`Lens_Flare.json`,
+     children taken out and it stays). They have no `movement`, so they stay
+     where they are born, in Almamu's renderer too, and the editor tags
+     attract and turbulence "Movement operator required": nothing to fix there.
+     Open: what puts Windows' halos elsewhere. Candidates are the parallax --
+     the object has `parallaxDepth` 1.5 and the recording's mouse sits up and to
+     the right of the sun (1877, 150), where ours leans the background so that
+     the sun moves and the blob moves away from it -- and the `angles` script,
+     which pivots the layer about `size x scale x (0, -0.5)`, nothing for a
+     particle layer here.
+   - Done: **Battlefield** has nothing unplayed. Its `phase` has an
+     `animation` with options and a `previewvalue` and no keyframes at all, so
+     the value is the 0 written beside it; the pulse it offsets (`effects/pulse`,
+     `sin(time x speed + phase)`) runs, and the logo swings with the same 6.3 s
+     period as the recording, two or three levels brighter.
    - Then the Settings tab and **Wallpaper Engine's quality presets**, globally and
      for one wallpaper -- Low/Medium/High/Ultra: frame rate, MSAA,
      post-processing, reflections, texture resolution. The user's word: very
@@ -2417,8 +2435,7 @@ the file. Everything after it should.
 
 - Against the Windows recordings on 31 October, by eye, 39 scenes and 5 web
   pages (Mourning for Icarus, Blue Dawn, Dark Core, Diablo 4 and StarCraft: Shakuras
-  have no recording). Sheets in `~/WallFlux-ukazky/2026-10-31/<id>/`. Left: Battlefield's one
-  keyframed `phase` is not played; SCP's `chromatic_aberration` still does not build; Tomb Raider has some pink haze at
+  have no recording). Sheets in `~/WallFlux-ukazky/2026-10-31/<id>/`. Left: SCP's `chromatic_aberration` still does not build; Tomb Raider has some pink haze at
   her feet at some moments, from the torch's red smoke; Terminator Factory's sky is
   a little brighter.
 
