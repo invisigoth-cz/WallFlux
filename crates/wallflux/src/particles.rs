@@ -881,6 +881,26 @@ impl System {
         for field in &mut start.turbulent {
             field.speed = times(field.speed, speed);
         }
+        // The rest of what `wallpaper64.exe` binds the scene's `size` and
+        // `speed` to (`FUN_1401c5490`, each step's entries reading 0xcc and
+        // 0xd4 of the override): `size` the ends of every `sizechange` as well
+        // as `sizerandom`, so a step that grows a particle grows it from the
+        // scene's size; `speed` the pull of `controlpointattract`, the speeds of
+        // a vortex and of `turbulence`, and the frequency of `oscillateposition`.
+        let size = over.size.value;
+        for operator in &mut operators {
+            match operator {
+                Operator::SizeChange(ramp) => {
+                    ramp.from *= size;
+                    ramp.to *= size;
+                }
+                Operator::Attract { strength, .. } => *strength *= speed,
+                Operator::Vortex(vortex) => vortex.speed = times(vortex.speed, speed),
+                Operator::Turbulence { field, .. } => field.speed = times(field.speed, speed),
+                Operator::OscillatePosition { wave, .. } => wave.frequency = times(wave.frequency, speed),
+                _ => {}
+            }
+        }
         let emitters = definition
             .emitters
             .iter()
@@ -2685,6 +2705,38 @@ mod tests {
         slow.advance(0.1, &Spectrum::SILENT);
         let now = slow.live.iter().find(|p| p.serial == serial).unwrap().position[0];
         assert!((now - before - 1.0).abs() < 0.01, "{}", now - before);
+    }
+
+    /// The scene's `size` reaches every `sizechange` and its `speed` every pull,
+    /// swirl, turbulence and sway, as `wallpaper64.exe` binds them: Romulus'
+    /// specks, at 0.51 and 0.5, are that much smaller and slower again.
+    #[test]
+    fn a_scenes_size_and_speed_reach_the_steps_that_use_them() {
+        let definition = ParticleSystem::parse(
+            br#"{"maxcount":1,"controlpoint":[{"id":0}],
+                "operator":[{"name":"sizechange","startvalue":0,"endvalue":1.8},
+                            {"name":"controlpointattract","scale":-600,"threshold":50},
+                            {"name":"vortex","speedinner":300,"speedouter":0},
+                            {"name":"turbulence","speedmin":10,"speedmax":20},
+                            {"name":"oscillateposition","frequencymin":1,"frequencymax":5}]}"#,
+        )
+        .unwrap();
+        let mut over = InstanceOverride::default();
+        over.size.value = 0.5;
+        over.speed.value = 2.0;
+        let s = System::new(&definition, &over, 1);
+        for operator in &s.operators {
+            match operator {
+                Operator::SizeChange(r) => assert_eq!((r.from, r.to), (0.0, 0.9)),
+                Operator::Attract { strength, .. } => assert_eq!(*strength, -1200.0),
+                Operator::Vortex(v) => assert_eq!((v.speed.min, v.speed.max), (600.0, 0.0)),
+                Operator::Turbulence { field, .. } => assert_eq!((field.speed.min, field.speed.max), (20.0, 40.0)),
+                Operator::OscillatePosition { wave, .. } => {
+                    assert_eq!((wave.frequency.min, wave.frequency.max), (2.0, 10.0))
+                }
+                _ => {}
+            }
+        }
     }
 
     /// `offset` turns the start about `right` the way a negative angle turns
