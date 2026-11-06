@@ -1448,14 +1448,18 @@ impl System {
                             particle.rotation[axis] += particle.spin[axis] * dt;
                         }
                     }
-                    // The same pull all the way out to half the reach the file
-                    // states, then none: Almamu's reading, and Romulus' pointer
-                    // says -600 inside 50 and 500 inside 5000, a ring of specks.
+                    // As `wallpaper64.exe` pulls (`0x140241630`): the whole
+                    // strength at the point, none at the reach the file states
+                    // -- all of it, not half -- and, as `flags` has it unless
+                    // told otherwise, never further than the particle is from
+                    // the point. Romulus' pointer says -600 inside 50 and 500
+                    // inside 5000.
                     Operator::Attract {
                         toward,
                         strength,
                         reach,
                         pointer: follows,
+                        no_overshoot,
                     } => {
                         let at = match (follows, pointer) {
                             (false, _) => *toward,
@@ -1463,10 +1467,12 @@ impl System {
                             (true, None) => continue,
                         };
                         let away: [f32; 3] = std::array::from_fn(|i| particle.position[i] - at[i]);
-                        let distance =
-                            (away[0] * away[0] + away[1] * away[1] + away[2] * away[2]).sqrt();
-                        if distance > f32::EPSILON && distance < reach / 2.0 {
-                            let force = strength * dt;
+                        let distance = length(away);
+                        if distance > f32::EPSILON && distance < *reach {
+                            let mut force = strength * (1.0 - distance / reach) * dt;
+                            if *no_overshoot && distance < force {
+                                force = distance;
+                            }
                             for (axis, away) in away.iter().enumerate() {
                                 particle.velocity[axis] -= away / distance * force;
                             }
@@ -3345,6 +3351,38 @@ mod tests {
         s.live[0].velocity = [0.0; 3];
         s.advance(0.1, &Spectrum::SILENT);
         s.live[0].velocity
+    }
+
+    /// A particle at `x` on the way to a point at nought, after a tenth of a
+    /// second of `controlpointattract` with `extra` in the step.
+    fn pulled_from(x: f32, extra: &str) -> f32 {
+        let mut s = system(&format!(
+            r#"{{"maxcount":1,"controlpoint":[{{"id":0}}],
+                "emitter":[{{"name":"boxrandom","rate":1000,"distancemax":0}}],
+                "initializer":[{{"name":"lifetimerandom","min":10,"max":10}},
+                               {{"name":"velocityrandom","min":"0 0 0","max":"0 0 0"}}],
+                "operator":[{{"name":"movement"}},
+                            {{"name":"controlpointattract","scale":100,"threshold":400{extra}}}]}}"#,
+        ));
+        s.advance(1.0 / 60.0, &Spectrum::SILENT);
+        s.live[0].position = [x, 0.0, 0.0];
+        s.live[0].velocity = [0.0; 3];
+        s.advance(0.1, &Spectrum::SILENT);
+        s.live[0].velocity[0]
+    }
+
+    /// The whole pull at the point, half of it half way to the reach, none past
+    /// it -- the reach the file states, not half of it -- as `wallpaper64.exe`
+    /// pulls; and never further than the particle is from the point, unless
+    /// `flags` drops that.
+    #[test]
+    fn a_pull_weakens_out_to_its_reach() {
+        assert!((pulled_from(200.0, "") + 5.0).abs() < 0.01, "half way: {}", pulled_from(200.0, ""));
+        assert!((pulled_from(300.0, "") + 2.5).abs() < 0.01, "three quarters: {}", pulled_from(300.0, ""));
+        assert_eq!(pulled_from(450.0, ""), 0.0, "past the reach");
+        // Two units from the point, a pull of nearly ten is held to two.
+        assert!((pulled_from(2.0, "") + 2.0).abs() < 0.01, "{}", pulled_from(2.0, ""));
+        assert!(pulled_from(2.0, r#","flags":0"#) < -9.0);
     }
 
     #[test]

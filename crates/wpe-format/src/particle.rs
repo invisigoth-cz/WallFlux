@@ -581,7 +581,8 @@ pub enum Operator {
     /// Swirls a particle about the system's origin.
     Vortex(Vortex),
     /// Pulls a particle towards a point, or pushes it away where the
-    /// strength is negative. Nothing past `reach` feels it.
+    /// strength is negative: the whole strength at the point, none at
+    /// `reach`, a straight line between.
     Attract {
         /// Where the point is -- or, when it follows the pointer, how far
         /// from the pointer.
@@ -590,6 +591,9 @@ pub enum Operator {
         reach: f32,
         /// The point rides on the mouse.
         pointer: bool,
+        /// Bit 1 of the step's `flags`, on unless the file says otherwise: a
+        /// pull never carries a particle further than it is from the point.
+        no_overshoot: bool,
     },
     /// Beats a particle's alpha down and back up again.
     OscillateAlpha(Oscillation),
@@ -977,18 +981,23 @@ impl ParticleSystem {
                             .push("operator controlpointattract has no such control point".into());
                         continue;
                     };
-                    // A thousand when the file says nothing, and a pull of a
-                    // hundred: Almamu's reading of the engine's defaults.
-                    let reach = num(step, "threshold", 1000.0);
-                    let origin = vector(step, "origin", [0.0; 3]);
+                    // Defaults out of `wallpaper64.exe` (`FUN_1401bdee0`, a flat
+                    // scene's side): a pull of 512 out to 512, and `flags` 2.
+                    // It reads an `offset` and leaves it out of the pull
+                    // (`0x140241630`), and reads no `origin` at all -- which is
+                    // what the files here write, two of them in Blue Dawn not
+                    // nought.
+                    let reach = num(step, "threshold", 512.0);
+                    let flags = num(step, "flags", 2.0) as u32;
                     // A point on the mouse is where the mouse is; its resting
                     // offset is where the editor happened to leave it.
                     let base = if pointer { [0.0; 3] } else { at };
                     Operator::Attract {
-                        toward: std::array::from_fn(|i| base[i] + origin[i]),
-                        strength: num(step, "scale", 100.0),
+                        toward: base,
+                        strength: num(step, "scale", 512.0),
                         reach,
                         pointer,
+                        no_overshoot: flags & 2 != 0,
                     }
                 }
                 "vortex" | "vortex_v2" => Operator::Vortex(Vortex {
@@ -1928,6 +1937,7 @@ mod tests {
                     strength: -10000.0,
                     reach: 128.0,
                     pointer: true,
+                    no_overshoot: true,
                 }],
                 "{point}"
             );
@@ -1949,6 +1959,8 @@ mod tests {
     }
 
     #[test]
+    /// The point is the control point's, and an `origin` beside it is not read:
+    /// `wallpaper64.exe` knows the key as `offset`, and leaves even that out.
     fn attracting_to_a_point_that_stays_put_reads_it() {
         let json = br#"{
             "material": "m.json", "maxcount": 10,
@@ -1961,10 +1973,11 @@ mod tests {
         assert_eq!(
             p.operators,
             [Operator::Attract {
-                toward: [100.0, 250.0, 0.0],
+                toward: [100.0, 200.0, 0.0],
                 strength: -10000.0,
                 reach: 128.0,
                 pointer: false,
+                no_overshoot: true,
             }]
         );
         assert!(p.unsupported.is_empty());
