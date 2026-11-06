@@ -83,7 +83,11 @@ Item {
         picker.requestActivate();
     }
 
-    // One wallpaper per screen. The model is Qt's own list of screens, so
+    /// What the first screen draws, which every other one shows.
+    readonly property Item firstPicture: surfaces.count > 0 && surfaces.objectAt(0)
+                                         ? surfaces.objectAt(0).picture : null
+
+    // One window per screen. The model is Qt's own list of screens, so
     // plugging a monitor in builds another surface and unplugging one
     // takes its surface with it -- there is nothing here to keep in step
     // with the compositor.
@@ -107,11 +111,17 @@ Item {
 
         delegate: WallpaperSurface {
             required property var modelData
+            required property int index
 
             onScreen: modelData
-            showingWeb: root.showingWeb
-            showingVideo: root.showingVideo
-            showingScene: root.showingScene
+            // The first screen works the wallpaper out and the others show
+            // its picture, as Wallpaper Engine's "Clone single wallpaper".
+            primary: index === 0
+            mirrorOf: index === 0 ? null : root.firstPicture
+            cloned: index === 0 && surfaces.count > 1
+            showingWeb: index === 0 && root.showingWeb
+            showingVideo: index === 0 && root.showingVideo
+            showingScene: index === 0 && root.showingScene
             playing: root.playing
             silent: root.silent
             covered: root.covered
@@ -190,7 +200,8 @@ Item {
         }
 
         root.arriving = id;
-        root.waiting = surfaces.count;
+        // Only the first screen holds still: the others show its picture.
+        root.waiting = 1;
 
         // Only the ways that hold a *picture* need rescuing. Going out
         // through black holds nothing: its own animation says when it is
@@ -200,8 +211,7 @@ Item {
         // meant to be the darkest moment of it.
         if (root.fading !== "black")
             rescue.restart();
-        for (let i = 0; i < surfaces.count; ++i)
-            surfaces.objectAt(i).holdStill(root.fading, Playlists.transitionMs);
+        surfaces.objectAt(0).holdStill(root.fading, Playlists.transitionMs);
     }
 
     /// One screen is holding. The last one to say so is what lets the
@@ -225,8 +235,8 @@ Item {
 
         if (id !== "")
             Wallpapers.select(id);
-        for (let i = 0; i < surfaces.count; ++i)
-            surfaces.objectAt(i).release(how, Playlists.transitionMs);
+        if (surfaces.count > 0)
+            surfaces.objectAt(0).release(how, Playlists.transitionMs);
     }
 
     /// The screen that never answered. A grab comes back only while the

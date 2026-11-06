@@ -92,6 +92,8 @@ qt_add_qml_module(wallflux
         src/screencover.cpp
         src/kwinscript.h
         src/kwinscript.cpp
+        src/mirror.h
+        src/mirror.cpp
         src/pointer.h
         src/pointer.cpp
         src/desktop.h
@@ -222,6 +224,14 @@ if(Qt6Test_FOUND)
     target_link_libraries(tst_sceneview PRIVATE
         Qt6::OpenGL Qt6::Qml Qt6::Quick Qt6::Test wallflux_scene)
     add_test(NAME sceneview COMMAND tst_sceneview)
+
+    qt_add_executable(tst_mirror
+        tests/tst_mirror.cpp
+        src/mirror.cpp
+    )
+    target_include_directories(tst_mirror PRIVATE src)
+    target_link_libraries(tst_mirror PRIVATE Qt6::OpenGL Qt6::Qml Qt6::Quick Qt6::Test)
+    add_test(NAME mirror COMMAND tst_mirror)
 
     qt_add_executable(tst_screencover
         tests/tst_screencover.cpp

@@ -39,6 +39,22 @@ Window {
     /// How loud a video plays, 0 to 1.
     required property real volume
 
+    /// Whether this screen works the wallpaper out, or shows the picture the
+    /// first one worked out -- Wallpaper Engine's "Clone single wallpaper".
+    /// One simulation, one video, one page, however many screens, and all of
+    /// them in step.
+    required property bool primary
+
+    /// The first screen's picture, which every other screen shows.
+    property Item mirrorOf: null
+
+    /// Whether other screens show this one's picture. That is what makes it
+    /// a texture, which costs a copy and is not made for nobody.
+    property bool cloned: false
+
+    /// What this screen draws, for the others to show.
+    readonly property Item picture: content
+
     screen: surface.onScreen
 
     onCoveredChanged: {
@@ -173,221 +189,237 @@ Window {
         }
     }
 
-    WebEngineView {
-        id: web
+    // Everything the screen shows, gathered so that it can be one texture
+    // for the other screens -- the transitions included, so that a fade is
+    // worked out once too.
+    Item {
+        id: content
 
         anchors.fill: parent
-        visible: surface.showingWeb && !surface.covered
-        // A web wallpaper is a page and can make noise of its own, so the
-        // switch has to reach this one too, not just the video.
-        audioMuted: surface.silent
-        // Already a file:// URL. The path was turned into one in C++, where
-        // the spaces, brackets and Chinese characters these file names carry
-        // get escaped properly; pasting "file://" onto the front of a plain
-        // path here would break exactly those.
-        url: surface.showingWeb ? Wallpapers.current.source : "about:blank"
+        visible: surface.primary
+        layer.enabled: surface.cloned
 
-        /// Whether the page asked to hear the speakers.
-        property bool listens: false
+        WebEngineView {
+            id: web
 
-        settings.playbackRequiresUserGesture: false
+            anchors.fill: parent
+            visible: surface.showingWeb && !surface.covered
+            // A web wallpaper is a page and can make noise of its own, so the
+            // switch has to reach this one too, not just the video.
+            audioMuted: surface.silent
+            // Already a file:// URL. The path was turned into one in C++, where
+            // the spaces, brackets and Chinese characters these file names carry
+            // get escaped properly; pasting "file://" onto the front of a plain
+            // path here would break exactly those.
+            url: surface.showingWeb ? Wallpapers.current.source : "about:blank"
 
-        // What Wallpaper Engine gives every page. It has to be there before
-        // the page's own scripts run, which call it while they load.
-        userScripts.collection: [{
-            name: "wallpaper-engine",
-            injectionPoint: WebEngineScript.DocumentCreation,
-            worldId: WebEngineScript.MainWorld,
-            sourceCode: "window.wallpaperRegisterAudioListener = function (listener) { window.wallfluxHear = listener; };"
-        }, {
-            // A page draws as often as it asks for a frame, which Chromium
-            // grants at the screen's 144 a second. Fifteen, as a scene: frames
-            // that come sooner than a fifteenth after the last are passed over.
-            // Not a timer -- Chromium runs a frame's callbacks well after the
-            // time it hands them, and a timer counted from that time ran at
-            // sixty. CSS animations and video are not held.
-            name: "fifteen-a-second",
-            injectionPoint: WebEngineScript.DocumentCreation,
-            worldId: WebEngineScript.MainWorld,
-            sourceCode: `(function () {
-                const frame = window.requestAnimationFrame.bind(window);
-                let waiting = new Map(), next = 1, asked = false, last = -Infinity;
-                function tick(now) {
-                    if (now - last < 1000 / 15 - 2) {
-                        frame(tick);
-                        return;
+            /// Whether the page asked to hear the speakers.
+            property bool listens: false
+
+            settings.playbackRequiresUserGesture: false
+
+            // What Wallpaper Engine gives every page. It has to be there before
+            // the page's own scripts run, which call it while they load.
+            userScripts.collection: [{
+                name: "wallpaper-engine",
+                injectionPoint: WebEngineScript.DocumentCreation,
+                worldId: WebEngineScript.MainWorld,
+                sourceCode: "window.wallpaperRegisterAudioListener = function (listener) { window.wallfluxHear = listener; };"
+            }, {
+                // A page draws as often as it asks for a frame, which Chromium
+                // grants at the screen's 144 a second. Fifteen, as a scene: frames
+                // that come sooner than a fifteenth after the last are passed over.
+                // Not a timer -- Chromium runs a frame's callbacks well after the
+                // time it hands them, and a timer counted from that time ran at
+                // sixty. CSS animations and video are not held.
+                name: "fifteen-a-second",
+                injectionPoint: WebEngineScript.DocumentCreation,
+                worldId: WebEngineScript.MainWorld,
+                sourceCode: `(function () {
+                    const frame = window.requestAnimationFrame.bind(window);
+                    let waiting = new Map(), next = 1, asked = false, last = -Infinity;
+                    function tick(now) {
+                        if (now - last < 1000 / 15 - 2) {
+                            frame(tick);
+                            return;
+                        }
+                        asked = false;
+                        last = now;
+                        const due = waiting;
+                        waiting = new Map();
+                        due.forEach(callback => callback(now));
                     }
-                    asked = false;
-                    last = now;
-                    const due = waiting;
-                    waiting = new Map();
-                    due.forEach(callback => callback(now));
-                }
-                window.requestAnimationFrame = function (callback) {
-                    const id = next++;
-                    waiting.set(id, callback);
-                    if (!asked) {
-                        asked = true;
-                        frame(tick);
-                    }
-                    return id;
-                };
-                window.cancelAnimationFrame = id => { waiting.delete(id); };
-            })();`
-        }]
+                    window.requestAnimationFrame = function (callback) {
+                        const id = next++;
+                        waiting.set(id, callback);
+                        if (!asked) {
+                            asked = true;
+                            frame(tick);
+                        }
+                        return id;
+                    };
+                    window.cancelAnimationFrame = id => { waiting.delete(id); };
+                })();`
+            }]
 
-        // Unasked, a page draws its own defaults: Perfect Wallpaper shows its
-        // first picture whatever its preset says, and neither clock nor ring.
-        onLoadingChanged: request => {
-            web.listens = false;
-            if (request.status !== WebEngineView.LoadSucceededStatus || !surface.showingWeb)
-                return;
-            web.runJavaScript("window.wallpaperPropertyListener && window.wallpaperPropertyListener.applyUserProperties && window.wallpaperPropertyListener.applyUserProperties("
-                              + (Wallpapers.current.properties || "{}") + "); !!window.wallfluxHear",
-                              heard => web.listens = !!heard);
+            // Unasked, a page draws its own defaults: Perfect Wallpaper shows its
+            // first picture whatever its preset says, and neither clock nor ring.
+            onLoadingChanged: request => {
+                web.listens = false;
+                if (request.status !== WebEngineView.LoadSucceededStatus || !surface.showingWeb)
+                    return;
+                web.runJavaScript("window.wallpaperPropertyListener && window.wallpaperPropertyListener.applyUserProperties && window.wallpaperPropertyListener.applyUserProperties("
+                                  + (Wallpapers.current.properties || "{}") + "); !!window.wallfluxHear",
+                                  heard => web.listens = !!heard);
+            }
+
+            // Read only while a page wants it and is on show: listening puts the
+            // microphone icon in the tray, see the renderer's audio.
+            Timer {
+                interval: 33
+                repeat: true
+                running: web.listens && web.visible
+                onTriggered: web.runJavaScript("window.wallfluxHear(" + JSON.stringify(SceneSounds.speakers()) + ")")
+            }
+
+            // Frozen, not merely hidden: a hidden page still runs its timers,
+            // and these wallpapers are animation loops that would go on burning
+            // a core behind a fullscreen window. Chromium will not freeze a page
+            // that is still on screen, which is why this follows the visibility
+            // rather than the cover itself -- by the time the view is hidden it
+            // can be frozen, and it is woken again before it is shown.
+            onVisibleChanged: web.lifecycleState = web.visible
+                                  ? WebEngineView.LifecycleState.Active
+                                  : WebEngineView.LifecycleState.Frozen
         }
 
-        // Read only while a page wants it and is on show: listening puts the
-        // microphone icon in the tray, see the renderer's audio.
-        Timer {
-            interval: 33
-            repeat: true
-            running: web.listens && web.visible
-            onTriggered: web.runJavaScript("window.wallfluxHear(" + JSON.stringify(SceneSounds.speakers()) + ")")
+        // Video wallpapers are short clips meant to run on end. Their sound --
+        // where they have any -- plays, which is what Wallpaper Engine does too;
+        // the switch for it belongs to the interface, once there is one.
+        //
+        // A player and a surface rather than the `Video` convenience item,
+        // which wraps exactly these two and hides the one property this needs:
+        // `mediaStatus`. Its `stopped` signal is not a stand-in -- it fires
+        // when a source is swapped as well as when a clip ends, so a playlist
+        // turning from one video to another would have turned twice.
+        VideoOutput {
+            id: video
+
+            anchors.fill: parent
+            visible: surface.showingVideo
+            // A wallpaper fills the screen; the clip's own shape gives way rather
+            // than leaving bars down the sides.
+            fillMode: VideoOutput.PreserveAspectCrop
         }
 
-        // Frozen, not merely hidden: a hidden page still runs its timers,
-        // and these wallpapers are animation loops that would go on burning
-        // a core behind a fullscreen window. Chromium will not freeze a page
-        // that is still on screen, which is why this follows the visibility
-        // rather than the cover itself -- by the time the view is hidden it
-        // can be frozen, and it is woken again before it is shown.
-        onVisibleChanged: web.lifecycleState = web.visible
-                              ? WebEngineView.LifecycleState.Active
-                              : WebEngineView.LifecycleState.Frozen
+        MediaPlayer {
+            id: player
+
+            videoOutput: video
+            source: surface.showingVideo ? Wallpapers.current.source : ""
+            // Round and round, unless a playlist is waiting for the end of it:
+            // a video told to loop for ever never reports an end, so there
+            // would be nothing to turn on.
+            loops: Playlists.changesOnVideoEnd ? 1 : MediaPlayer.Infinite
+
+            audioOutput: AudioOutput {
+                muted: surface.silent
+                // Set from the slider on the wallpaper's own card in the picker.
+                volume: surface.volume
+            }
+
+            // autoPlay starts the first file and no other: hand it a second one
+            // and it loads it, says nothing, reports no error and sits there
+            // stopped. Measured, not guessed -- twenty-four switches gave one
+            // start with autoPlay and twenty-five with this. Switching wallpaper
+            // is the whole point of the picker, so it cannot be left to that.
+            onSourceChanged: {
+                if (surface.showingVideo && !surface.covered)
+                    player.play();
+            }
+
+            onMediaStatusChanged: {
+                if (player.mediaStatus !== MediaPlayer.EndOfMedia)
+                    return;
+
+                // Told to turn when the video ends, so that is what its end
+                // means. The playlist picks the next one and `onPlays` puts it
+                // on, the same way a click does.
+                if (Playlists.changesOnVideoEnd)
+                    Playlists.next();
+
+                // Then play whatever is on the screen now. Usually the next
+                // wallpaper, which `onSourceChanged` has already started and
+                // which this leaves alone -- but a playlist of one wallpaper
+                // turns to itself, and `select()` stays silent when the choice
+                // has not changed, so without this the video would sit there
+                // on its last frame for good.
+                if (surface.showingVideo && !surface.covered)
+                    player.play();
+            }
+
+            onErrorOccurred: (error, errorString) =>
+                console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
+        }
+
+        // A scene is drawn by the renderer under crates/, into this item, on
+        // the scene graph's own thread. Covered, its clock stops and nothing is
+        // drawn, which is what a video's pause is for the player above.
+        SceneView {
+            id: scene
+
+            anchors.fill: parent
+            visible: surface.showingScene
+            source: surface.showingScene ? Wallpapers.current.source : ""
+            running: surface.showingScene && !surface.covered
+            // The desktop's coordinates less where this screen starts on it,
+            // which is this item's own: it fills a surface that fills the screen.
+            pointer: Pointer.known && surface.onScreen
+                     ? Qt.point(Pointer.position.x - surface.onScreen.virtualX,
+                                Pointer.position.y - surface.onScreen.virtualY)
+                     : undefined
+
+            onErrorChanged: {
+                if (scene.error !== "")
+                    console.warn("wallflux: cannot draw", Wallpapers.current.title, "--", scene.error)
+            }
+        }
+
+        // The two things a transition is made of, over everything else and in
+        // this order: the picture of the wallpaper that is leaving, and the
+        // black that one of the transitions goes out through.
+        //
+        // Neither takes any input -- the whole window is a background surface
+        // that takes none -- and both are nothing at all until a transition
+        // runs.
+        Image {
+            id: leaving
+
+            anchors.fill: parent
+            z: 1
+            opacity: 0
+            visible: leaving.opacity > 0 && leaving.source !== ""
+            fillMode: Image.PreserveAspectCrop
+            // The grab is the size of the window, so this is drawing it back
+            // at the size it was taken at; smoothing it would only cost.
+            smooth: false
+            cache: false
+        }
+
+        Rectangle {
+            id: veil
+
+            anchors.fill: parent
+            z: 2
+            color: "black"
+            opacity: 0
+            visible: veil.opacity > 0
+        }
     }
 
-    // Video wallpapers are short clips meant to run on end. Their sound --
-    // where they have any -- plays, which is what Wallpaper Engine does too;
-    // the switch for it belongs to the interface, once there is one.
-    //
-    // A player and a surface rather than the `Video` convenience item,
-    // which wraps exactly these two and hides the one property this needs:
-    // `mediaStatus`. Its `stopped` signal is not a stand-in -- it fires
-    // when a source is swapped as well as when a clip ends, so a playlist
-    // turning from one video to another would have turned twice.
-    VideoOutput {
-        id: video
-
+    Mirror {
         anchors.fill: parent
-        visible: surface.showingVideo
-        // A wallpaper fills the screen; the clip's own shape gives way rather
-        // than leaving bars down the sides.
-        fillMode: VideoOutput.PreserveAspectCrop
+        visible: !surface.primary
+        source: surface.mirrorOf
     }
-
-    MediaPlayer {
-        id: player
-
-        videoOutput: video
-        source: surface.showingVideo ? Wallpapers.current.source : ""
-        // Round and round, unless a playlist is waiting for the end of it:
-        // a video told to loop for ever never reports an end, so there
-        // would be nothing to turn on.
-        loops: Playlists.changesOnVideoEnd ? 1 : MediaPlayer.Infinite
-
-        audioOutput: AudioOutput {
-            muted: surface.silent
-            // Set from the slider on the wallpaper's own card in the picker.
-            volume: surface.volume
-        }
-
-        // autoPlay starts the first file and no other: hand it a second one
-        // and it loads it, says nothing, reports no error and sits there
-        // stopped. Measured, not guessed -- twenty-four switches gave one
-        // start with autoPlay and twenty-five with this. Switching wallpaper
-        // is the whole point of the picker, so it cannot be left to that.
-        onSourceChanged: {
-            if (surface.showingVideo && !surface.covered)
-                player.play();
-        }
-
-        onMediaStatusChanged: {
-            if (player.mediaStatus !== MediaPlayer.EndOfMedia)
-                return;
-
-            // Told to turn when the video ends, so that is what its end
-            // means. The playlist picks the next one and `onPlays` puts it
-            // on, the same way a click does.
-            if (Playlists.changesOnVideoEnd)
-                Playlists.next();
-
-            // Then play whatever is on the screen now. Usually the next
-            // wallpaper, which `onSourceChanged` has already started and
-            // which this leaves alone -- but a playlist of one wallpaper
-            // turns to itself, and `select()` stays silent when the choice
-            // has not changed, so without this the video would sit there
-            // on its last frame for good.
-            if (surface.showingVideo && !surface.covered)
-                player.play();
-        }
-
-        onErrorOccurred: (error, errorString) =>
-            console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
-    }
-
-    // A scene is drawn by the renderer under crates/, into this item, on
-    // the scene graph's own thread. Covered, its clock stops and nothing is
-    // drawn, which is what a video's pause is for the player above.
-    SceneView {
-        id: scene
-
-        anchors.fill: parent
-        visible: surface.showingScene
-        source: surface.showingScene ? Wallpapers.current.source : ""
-        running: surface.showingScene && !surface.covered
-        // The desktop's coordinates less where this screen starts on it,
-        // which is this item's own: it fills a surface that fills the screen.
-        pointer: Pointer.known && surface.onScreen
-                 ? Qt.point(Pointer.position.x - surface.onScreen.virtualX,
-                            Pointer.position.y - surface.onScreen.virtualY)
-                 : undefined
-
-        onErrorChanged: {
-            if (scene.error !== "")
-                console.warn("wallflux: cannot draw", Wallpapers.current.title, "--", scene.error)
-        }
-    }
-
-    // The two things a transition is made of, over everything else and in
-    // this order: the picture of the wallpaper that is leaving, and the
-    // black that one of the transitions goes out through.
-    //
-    // Neither takes any input -- the whole window is a background surface
-    // that takes none -- and both are nothing at all until a transition
-    // runs.
-    Image {
-        id: leaving
-
-        anchors.fill: parent
-        z: 1
-        opacity: 0
-        visible: leaving.opacity > 0 && leaving.source !== ""
-        fillMode: Image.PreserveAspectCrop
-        // The grab is the size of the window, so this is drawing it back
-        // at the size it was taken at; smoothing it would only cost.
-        smooth: false
-        cache: false
-    }
-
-    Rectangle {
-        id: veil
-
-        anchors.fill: parent
-        z: 2
-        color: "black"
-        opacity: 0
-        visible: veil.opacity > 0
-    }
-
 }

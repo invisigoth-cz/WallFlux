@@ -168,6 +168,16 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   display settings -- and gives each a switch. One wallpaper, drawn on the
   ticked ones; not a wallpaper per screen.
 
+  **Worked out once, as Wallpaper Engine's "Clone single wallpaper".** The
+  first ticked screen plays the wallpaper -- the scene, the video, the page and
+  the transitions -- with its picture as a layer, and every other screen is a
+  `Mirror` showing that texture, cropped to fill. Until 6 November each screen
+  ran a simulation, a decoder and a page of its own: twice the CPU on two
+  screens (Space Visualizer 13 % of a core against 7 now, 6 on one), a video's
+  sound twice over, and the screens not in step. Checked in `kwin_wayland
+  --virtual --output-count 2` under `dbus-run-session`, so that the real
+  KWin's scripts are left alone: the two screens' grabs identical to the pixel.
+
   **The screens are Qt's own**, `Qt.application.screens`. No `xrandr`, no
   `wlr-randr`, no `kscreen-doctor`, nobody's output parsed: Qt names a
   screen after its connector, which is the same name KDE's display
@@ -260,6 +270,8 @@ src/tags.h            Tags: what a workshop tag is called, and the genres
 src/tags.cpp          reads Wallpaper Engine's locale/, 36 languages
 src/screencover.h     ScreenCover: is a window covering the wallpaper
 src/screencover.cpp   a script loaded into KWin, which calls back over D-Bus
+src/mirror.h          Mirror: the first screen's picture on another screen
+src/mirror.cpp        a texture shared between two windows' contexts, fenced
 src/pointer.h         Pointer: where the mouse is, for the scenes
 src/pointer.cpp       another KWin script, loaded only while it is watched
 src/kwinscript.h      KWinScript: a script run inside KWin, shared by both
@@ -302,6 +314,8 @@ tests/tst_playlists.cpp       what a playlist remembers and how long a
                               wallpaper stays -- five seconds of suite time
                               on purpose, see below
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
+tests/tst_mirror.cpp          one window's picture in another, the right way
+                              up and cropped, and kept up to date
 tests/tst_sceneview.cpp       a scene drawn through the item, checked against
                               the same scene drawn directly -- and the right
                               way up
@@ -475,6 +489,14 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   leaves no array bound; `survivesQtPuttingItsStateBack` fails without that
   (10.4 apart). **A picture from `shot` says nothing about the desktop
   where state between frames is concerned.**
+
+- **Two windows read each other's textures only if `main()` asks for it.**
+  `Qt::AA_ShareOpenGLContexts`, before the application is built. QtWebEngine
+  used to set it and in Qt 6.12 does not: measured, the two screens' contexts
+  were in different share groups, the mirror's texture number named some other
+  texture of its own, and the second screen came out black with no error.
+  `tst_mirror` sets it as `main()` does, so it cannot see this; the two-screen
+  check in a virtual KWin can.
 
 - **The scene graph has to be OpenGL, and is told so.** `main()` sets it
   before any window exists. It is OpenGL on this machine without being
@@ -2223,10 +2245,8 @@ the file. Everything after it should.
 4. **The list as the user set it on 6 November, in this order, and only this.**
    Done that day: fifteen frames a second and no thinning, both as Wallpaper
    Engine (see the frame-rate trap).
-   - **Several screens as Wallpaper Engine's "Clone single wallpaper"**: the scene
-     worked out once and the same picture on every ticked screen, where each
-     screen now runs a simulation of its own -- twice the CPU on two screens, and
-     the two not in step.
+   - Done: several screens as Wallpaper Engine's "Clone single wallpaper" (see
+     the Displays entry under What works today).
    - **Space Visualizer:** its answer to the music and its sky (entry below).
    - **DOOM's D and M** following the music at 0.56: take the wallpaper apart
      again, and look at what Almamu's renderer does with this one.

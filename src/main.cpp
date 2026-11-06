@@ -60,6 +60,13 @@ int main(int argc, char *argv[])
     // Vulkan elsewhere, and the scenes would then draw nothing at all.
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
+    // Every screen after the first shows the first one's picture, which is a
+    // texture of another window's context; only contexts that share can read
+    // each other's. QtWebEngine no longer asks for this itself -- measured:
+    // without it the two windows were in different share groups and the
+    // second screen read whatever its own texture of that number held.
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+
     // A wallpaper is somebody else's JavaScript, and its console is its own
     // business: one of the three here reports a WebGL complaint several
     // hundred times a minute and would otherwise bury everything we say.
