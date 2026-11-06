@@ -2316,6 +2316,23 @@ the file. Everything after it should.
      shader takes as `max(minlength, min(speed x length, maxlength))` sizes --
      we hand it the same three -- so a still speck is a sliver on Windows; what
      makes ours larger is the size or the speed it is handed, not found yet.
+     **Found the same day: the override reaches more than we bound.**
+     `FUN_1401c5490` builds the bindings from a placed system's
+     `instanceoverride` (entries writing 0xc8 to 0xdc at +0x14/+0x18): `count`
+     the emitters' rates and the sequences' counts; `lifetime`
+     `lifetimerandom`; `size` **`sizerandom` and both ends of every
+     `sizechange`**; `speed` the emitters' and `velocityrandom`'s and
+     `turbulentvelocityrandom`'s speeds and **`controlpointattract`'s scale,
+     both vortices' speeds, `turbulence`'s speeds and `oscillateposition`'s
+     frequencies**; `rate` also both turbulences' `timescale`. Binding the bold
+     ones, Romulus' specks (size 0.51, speed 0.5) came out as the recording's
+     sparse small dots with nothing fitted; Space Visualizer's swarm (speed 2)
+     streams wider towards the sun, its bright rim weaker. On the branch
+     `instance-jako-wpe`, not main: a sweep moved 16 of 41 pictures, most by
+     under half a level; Gears against its recording 5.85 to 5.07 levels off on
+     average and 2.05 to 0.98 in its swing, Dark Angels 8.31 to 7.85. The
+     `rate` to `timescale` binding is not taken: `rate` already runs a system's
+     whole clock here, and whether it does both in the engine is not known.
    - **Blue Dawn:** the weaker sun and the larger flare. **6 November, found so
      far:** the sun's core is 174 against Windows' 181 over 40 s, so hardly
      weaker; the difference is a white blob, 25 px across at 2560x1440, that
