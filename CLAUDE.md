@@ -2283,8 +2283,18 @@ the file. Everything after it should.
      table at `0x1401ee5bd`; the layer's own at `0x1401e05d2`: origin 0x128,
      scale 0x134, angles 0x140, parallaxDepth 0x170), so `thisLayer.size` is
      undefined for this one, and `lib.sceneScript.d.ts` declares only
-     `Vec3(x: Number|Vec2|String, ...)` -- what `new Vec3(undefined)` gives in
-     Wallpaper Engine is not known.
+     `Vec3(x: Number|Vec2|String, ...)`.
+
+     **The script is ruled out too.** Wallpaper Engine's script classes are
+     JavaScript on the disk, `assets/scripts/jsclasses/baseclasses.js` (named in
+     `scenescript64.dll`), and its `Vec3` gives (0, 0, 0) for `undefined` and
+     z = 0 for two numbers -- so the pivot is nought there as here, and the
+     script only turns the system about its origin. **That file is the reference
+     for every script class**; `host.js` should be checked against it. Also
+     tried: the background's parallax shift in the recording, by phase
+     correlation (up to 27 screen px, so the mouse did move); counting the
+     flare's bright spots against the sun, which the clouds and stars drown.
+     Still open: what puts the system's middle on the sun in Wallpaper Engine.
    - Done: **Battlefield** has nothing unplayed. Its `phase` has an
      `animation` with options and a `previewvalue` and no keyframes at all, so
      the value is the 0 written beside it; the pulse it offsets (`effects/pulse`,
