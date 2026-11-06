@@ -1019,6 +1019,23 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   2500, `speedouter` nought, axis "0 0 1"; 30 vortices here leave some out, and
   read as nought they swirled at their inner speed everywhere.
 
+  **How it pushes is `wallpaper64.exe`'s, read off its step** (`0x1402432e2`, four
+  particles at a time; the record laid out by `0x1401cd8a2`): the way from the
+  middle -- control point plus `offset` -- less the part along the axis **only
+  where bit 0 of `flags` is set**, made of length one; the distance is that way's
+  length; the speed is the inner one plus `clamp((d - inner) / (outer - inner))`
+  times the difference, both speeds times the sound and the step's time; and the
+  velocity gains `normal x axis x speed`, **not made of length one again**, with
+  the axis normalised when the file is read. So a particle out along the axis is
+  hardly pushed, and "1 1 1" -- twenty of the library's 31 vortices -- is a third
+  of a turn about each axis, not a stronger one. Until 6 November ours measured
+  from the axis always and pushed at full speed whatever the angle: Space
+  Visualizer's stars, which fly along their axis, rose at about 20 degrees where
+  Windows has 15, and 18 now. Snow Lights, Augmentation and DOOM against their
+  recordings: the same to the hundredth, frames 0.16 to 0.44 of a level apart.
+  No vortex here sets `flags`, `offset` or `controlpoint`, so those two are not
+  read yet.
+
 - **A vortex is a sideways push, and `controlpointattract` a constant pull within half
   its `threshold`.** Almamu's reading of both. Augmentation's 8000 as degrees a second
   was a turn and a half a frame and drew straight spikes; as a push held back by its
@@ -2383,7 +2400,9 @@ the file. Everything after it should.
      `Stars` streaks** rise at a median of 33 degrees here and 16 on Windows:
      their vortex (50 inside, 100 outside, bands 5 to 9) is measured from its
      middle while they fly thousands along its axis, so it pushes them at its
-     outer speed all the way. Measured from the axis instead: 26, Augmentation
+     outer speed all the way. (Superseded on 6 November: `wallpaper64.exe` measures
+     from the middle and weakens the push with the angle, see the vortex trap.)
+     Measured from the axis instead: 26, Augmentation
      the same to the byte, DOOM and Snow Lights moved by less than a hundredth
      of a level against their recordings. Cutting a vortex off past its outer
      distance gave 17 but would stop Augmentation's swirl, which states

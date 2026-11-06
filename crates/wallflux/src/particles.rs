@@ -1476,18 +1476,22 @@ impl System {
                     // drag holds to a speed: Augmentation's eye asks for 8000 and
                     // swirls on the beat. As degrees a second that was a turn and
                     // a half a frame, and a mess of straight spikes.
+                    // As `wallpaper64.exe` steps it (`0x1402432e2`, four particles
+                    // at a time): the way from the middle -- less the part along
+                    // the axis only where `flags` asks -- made of length one,
+                    // crossed with the axis and pushed by the speed at that
+                    // distance. The cross is not made of length one again, so a
+                    // particle out along the axis is hardly pushed at all:
+                    // Space Visualizer's stars fly along theirs.
                     Operator::Vortex(vortex) => {
-                        // The turn goes the other way from the axis's own: Space
-                        // Visualizer's stars, turned about y and swirled about
-                        // z, rise to the right on Windows and fell to it here.
-                        // DOOM and Snow Lights did not move by a fifth of a level.
-                        let round = cross(particle.position, vortex.axis);
-                        let length = round.iter().map(|v| v * v).sum::<f32>().sqrt();
-                        if length > 1e-3 {
-                            let push = vortex_speed(vortex, particle.position)
-                                * loudness(vortex.audio, sound)
-                                * dt
-                                / length;
+                        let along = if vortex.around_axis { dot(particle.position, vortex.axis) } else { 0.0 };
+                        let away: [f32; 3] =
+                            std::array::from_fn(|i| particle.position[i] - vortex.axis[i] * along);
+                        let distance = length(away);
+                        if distance > 1e-3 {
+                            let normal = away.map(|v| v / distance);
+                            let push = vortex_speed(vortex, distance) * loudness(vortex.audio, sound) * dt;
+                            let round = cross(normal, vortex.axis);
                             for axis in 0..3 {
                                 particle.velocity[axis] += round[axis] * push;
                             }
@@ -1972,31 +1976,11 @@ fn wave_between(wave: &Oscillation, wobble: [f32; 3], time: f32) -> f32 {
     wave.scale.min + (wave.scale.max - wave.scale.min) * (swing + 1.0) / 2.0
 }
 
-/// How hard a vortex pushes a particle at its distance from the centre.
-fn vortex_speed(vortex: &Vortex, position: [f32; 3]) -> f32 {
-    // From the axis it turns about, not from its middle. Space Visualizer's
-    // stars fly thousands along the axis of their vortex: counted from the
-    // middle they were soon past its outer distance and pushed at its outer
-    // speed for the rest of the way, and rose across the sky at 33 degrees
-    // where Windows has 16; from the axis, 26. Augmentation, whose particles
-    // lie across their axis, comes out the same to the byte.
-    let axis = vortex.axis;
-    let long = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
-    let along = if long > f32::EPSILON {
-        (position[0] * axis[0] + position[1] * axis[1] + position[2] * axis[2]) / long
-    } else {
-        0.0
-    };
-    let distance = (position[0] * position[0] + position[1] * position[1] + position[2] * position[2]
-        - along * along)
-        .max(0.0)
-        .sqrt();
+/// How hard a vortex pushes at `distance`: the inner speed out to the inner
+/// distance, the outer one from the outer distance on, a straight line between.
+fn vortex_speed(vortex: &Vortex, distance: f32) -> f32 {
     let span = vortex.distance.max - vortex.distance.min;
-    let at = if span > 0.0 {
-        ((distance - vortex.distance.min) / span).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
+    let at = if span > 0.0 { ((distance - vortex.distance.min) / span).clamp(0.0, 1.0) } else { 0.0 };
     vortex.speed.min + (vortex.speed.max - vortex.speed.min) * at
 }
 
@@ -3371,17 +3355,33 @@ mod tests {
         assert!(pushed_by_vortex("-90")[1] > 8.0, "a negative speed goes the other way");
     }
 
-    /// Along its axis a particle is as near the vortex as where it started.
+    /// Out along its axis a particle is far from the vortex and hardly turned,
+    /// as `wallpaper64.exe` has it; told by `flags` to measure from the axis,
+    /// it is as near as where it started.
     #[test]
-    fn a_vortex_measures_from_its_axis() {
-        let vortex = Vortex {
+    fn a_vortex_measures_from_its_middle_unless_told_otherwise() {
+        let vortex = |around_axis| Vortex {
             audio: None,
             axis: [0.0, 0.0, 1.0],
+            around_axis,
             distance: Range { min: 100.0, max: 200.0 },
             speed: Range { min: 10.0, max: 20.0 },
         };
-        assert_eq!(vortex_speed(&vortex, [50.0, 0.0, 5000.0]), 10.0);
-        assert_eq!(vortex_speed(&vortex, [150.0, 0.0, -5000.0]), 15.0);
+        let push = |v: &Vortex, p: [f32; 3]| {
+            let along = if v.around_axis { dot(p, v.axis) } else { 0.0 };
+            let away: [f32; 3] = std::array::from_fn(|i| p[i] - v.axis[i] * along);
+            let d = length(away);
+            let r = cross(away.map(|x| x / d), v.axis);
+            (vortex_speed(v, d), length(r) * vortex_speed(v, d))
+        };
+        // From the middle: 5000 out, the outer speed, and nearly along the axis.
+        let (speed, pushed) = push(&vortex(false), [150.0, 0.0, 5000.0]);
+        assert_eq!(speed, 20.0);
+        assert!(pushed < 1.0, "pushed {pushed}");
+        // From the axis: 150 out, half way, and straight across it.
+        let (speed, pushed) = push(&vortex(true), [150.0, 0.0, 5000.0]);
+        assert_eq!(speed, 15.0);
+        assert!((pushed - 15.0).abs() < 1e-3, "pushed {pushed}");
     }
 
     #[test]

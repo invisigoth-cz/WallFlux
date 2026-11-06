@@ -506,7 +506,11 @@ pub struct Collision {
 pub struct Vortex {
     /// Set where the speed of the swirl follows the sound.
     pub audio: Option<AudioResponse>,
+    /// Of length one, as `wallpaper64.exe` makes it when it reads the file.
     pub axis: [f32; 3],
+    /// Bit 0 of the step's `flags`: measure a particle's distance from the
+    /// axis rather than from the vortex's middle. Off unless the file says so.
+    pub around_axis: bool,
     /// Where the inner and outer speeds apply.
     pub distance: Range<f32>,
     /// Degrees a second at the inner and outer distances, straight-lined
@@ -992,7 +996,13 @@ impl ParticleSystem {
                     // Defaults out of `wallpaper64.exe` (`0x1401bf0a0`, a flat
                     // scene's side of each `test sil,sil`): within 500 at 2500,
                     // nothing from 650 out.
-                    axis: vector(step, "axis", [0.0, 0.0, 1.0]),
+                    // Normalised there too, and "0 0 1" when it has no length.
+                    axis: {
+                        let axis = vector(step, "axis", [0.0, 0.0, 1.0]);
+                        let long = axis.iter().map(|v| v * v).sum::<f32>().sqrt();
+                        if long > 1e-6 { axis.map(|v| v / long) } else { [0.0, 0.0, 1.0] }
+                    },
+                    around_axis: num(step, "flags", 0.0) as u32 & 1 == 1,
                     distance: Range {
                         min: num(step, "distanceinner", 500.0),
                         max: num(step, "distanceouter", 650.0),
