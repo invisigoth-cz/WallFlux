@@ -1966,16 +1966,17 @@ fn build_particles(
 const SCRIPT_STEP: f32 = 1.0 / 30.0;
 const MOST_SCRIPT_STEPS: f32 = 300.0;
 
-/// How many particles a scene may keep alive at once before it is thinned.
+/// How many particles a scene may keep alive at once before it is thinned:
+/// as many as it asks for.
 ///
-/// The most that still keeps the heaviest scenes here at 60 frames a second
-/// at 2560x1440 on a Ryzen 9 5900X and an RX 6900 XT, the systems stepped in
-/// parallel: Space Visualizer and DOOM 15.9 and 15.8 ms a frame with loud
-/// music, where 76 000 took Space Visualizer to 18.6. A particle costs about
-/// a third of a microsecond to step. Five wallpapers here ask for more --
-/// Snow Lights 25 490, Rainbow Six 50 201, Gears 75 681, Space Visualizer
-/// 167 917, DOOM 177 307 -- and every other one for under 24 000.
-pub const DEFAULT_BUDGET: usize = 48_000;
+/// Wallpaper Engine never thins a scene -- none of its quality presets touches
+/// particles, and `wallpaper64.exe` reads nothing about them with its settings;
+/// a heavy scene simply gets fewer frames. So neither does the program, which
+/// draws fifteen a second as Wallpaper Engine does by default. Unthinned, Space
+/// Visualizer (167 917) and DOOM (177 307), the heaviest here, step in about
+/// half of 62 and 67 ms on a Ryzen 9 5900X. The thinning stays for `shot` and
+/// `clip`, which take a budget to compare against.
+pub const DEFAULT_BUDGET: usize = usize::MAX;
 
 /// Holds the largest systems in a scene down until the scene fits.
 ///

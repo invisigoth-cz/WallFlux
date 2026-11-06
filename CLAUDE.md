@@ -801,6 +801,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **`starttime` is how far ahead a system begins, not a delay.**
   `magic_charge_rays` says 15 and its rays are there from the first frame.
 
+- **The program does not thin any more, as Wallpaper Engine never does** (6
+  November): `DEFAULT_BUDGET` is `usize::MAX`, and the thinning below is only
+  what `shot` and `clip` do when handed a budget. Unthinned at 2560x1440 with
+  loud music, 600 frames: Space Visualizer 30.3 ms a frame with 137 253 alive
+  (17.5 at 48 000), DOOM 25.8 with 167 422 (15.9) -- inside the 66 ms a frame
+  has at fifteen a second. The two passages after this one are history.
+
 - **Thinning takes from the largest systems, not from all of them.** Scaled
   alike to fit the budget, Gears of War's 75 620 particles left its eyes' two
   torches 13 flames of 41: white over 3.0 % of the area round the eyes, against
