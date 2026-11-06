@@ -2548,9 +2548,28 @@ the file. Everything after it should.
      kicks at 21.5, 24.4 and 29.3 s, which show in our band 1. So in Wallpaper
      Engine the wub reads far below whatever the evening out divides by. And
      **Windows' output device was 5.1**: the recording carries six channels,
-     FL and FR with the music, BL and BR a tenth of it, FC and LFE silent. How
-     `wallpaper64.exe` folds a six-channel loopback into its two meters was
-     not read; it is the next thing to look at.
+     FL and FR with the music, BL and BR a tenth of it, FC and LFE silent.
+     `FUN_1400d02b0` takes channel 0 and channel 1 of the loopback's own
+     format and nothing else (`data[i * channels]` and `+ 1`, as `sample x 127
+     + 127`), so the recording's FL and FR are what it heard. The user's Linux
+     is 5.1 as well and stays so: measured with a tone at -50 dB from `pacat`
+     and from `pw-play`, PipeWire upmixes nothing into the 5.1 sink here, and
+     the meter's two channels off its monitor are FL and FR to the sample.
+     Only a source that is itself 5.1 would differ -- downmixed by us, read
+     front-only by Wallpaper Engine. Not changed.
+
+     **Then the letters were drawn at the wrong rate.** `clip` drew thirty
+     frames a second, and the evening out is stepped by the frame's time: at
+     fifteen it does not ease at all (twenty a second times a fifteenth is over
+     one). The same DOOM minute at fifteen, as the desktop has drawn since
+     6 November: D follows Windows at 0.62 (was 0.56), M 0.64 (0.58), the Os
+     0.78 and 0.75, levels 1 to 2 under Windows' where they were 3.5, swing
+     0.89 to 0.98. `clip` draws fifteen now. Simulated on the meter's real 64
+     entries (`examples/meter.rs` prints every reading of a sound file), no
+     other band range, entry offset, floor or envelope speed beats the file's
+     own bands 0 and 1 by more than a hundredth; our own letters follow our own
+     bands at 0.70, which is about the ceiling the other effects on the letters
+     leave. So what is left of the D and the M is not in the meter.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.

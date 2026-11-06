@@ -52,9 +52,11 @@ mod video;
 
 use render::Scene;
 
-/// Frames a second. Enough to see a beat land without making a file nobody
-/// wants to send anywhere.
-const FPS: u32 = 30;
+/// Frames a second: the desktop's fifteen, as Wallpaper Engine's. The way a
+/// scene evens out the music is stepped by the frame's own time, so a clip at
+/// thirty heard DOOM otherwise than the desktop does -- its letters followed
+/// Windows at 0.44 drawn at thirty, and at 0.56 at fifteen.
+const FPS: u32 = 15;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
