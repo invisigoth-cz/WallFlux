@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.1] — 2026-11-06
+
+### Fixed
+
+- **A particle vortex pushes as Wallpaper Engine's does**, read off
+  `wallpaper64.exe`: a particle's distance is from the vortex's middle (from
+  its axis only where the file's `flags` say so), the axis is normalised, and
+  the push weakens with the angle between the particle and the axis. Space
+  Visualizer's red star streaks cross the sky flatter, nearer Windows'. Snow
+  Lights, Augmentation and DOOM come out the same against their recordings.
+
 ## [0.25.0] — 2026-11-06
 
 ### Changed
@@ -1165,7 +1176,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.1...HEAD
+[0.25.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.3...v0.25.0
 [0.24.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.2...v0.24.3
 [0.24.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.1...v0.24.2
