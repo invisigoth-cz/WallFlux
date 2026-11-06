@@ -199,6 +199,41 @@ Window {
             injectionPoint: WebEngineScript.DocumentCreation,
             worldId: WebEngineScript.MainWorld,
             sourceCode: "window.wallpaperRegisterAudioListener = function (listener) { window.wallfluxHear = listener; };"
+        }, {
+            // A page draws as often as it asks for a frame, which Chromium
+            // grants at the screen's 144 a second. Fifteen, as a scene: frames
+            // that come sooner than a fifteenth after the last are passed over.
+            // Not a timer -- Chromium runs a frame's callbacks well after the
+            // time it hands them, and a timer counted from that time ran at
+            // sixty. CSS animations and video are not held.
+            name: "fifteen-a-second",
+            injectionPoint: WebEngineScript.DocumentCreation,
+            worldId: WebEngineScript.MainWorld,
+            sourceCode: `(function () {
+                const frame = window.requestAnimationFrame.bind(window);
+                let waiting = new Map(), next = 1, asked = false, last = -Infinity;
+                function tick(now) {
+                    if (now - last < 1000 / 15 - 2) {
+                        frame(tick);
+                        return;
+                    }
+                    asked = false;
+                    last = now;
+                    const due = waiting;
+                    waiting = new Map();
+                    due.forEach(callback => callback(now));
+                }
+                window.requestAnimationFrame = function (callback) {
+                    const id = next++;
+                    waiting.set(id, callback);
+                    if (!asked) {
+                        asked = true;
+                        frame(tick);
+                    }
+                    return id;
+                };
+                window.cancelAnimationFrame = id => { waiting.delete(id); };
+            })();`
         }]
 
         // Unasked, a page draws its own defaults: Perfect Wallpaper shows its

@@ -7,6 +7,7 @@
 #include <QPointF>
 #include <QQmlEngine>
 #include <QQuickFramebufferObject>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 
@@ -63,11 +64,13 @@ signals:
 private:
     friend class SceneRenderer;
     void setError(const QString &error);
+    void pace();
 
     QUrl m_source;
     bool m_running = true;
     QString m_error;
     std::optional<QPointF> m_pointer;
+    QTimer m_frames;
 };
 
 /// The music a scene wallpaper plays.

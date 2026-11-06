@@ -20,6 +20,7 @@
 #include <QPointer>
 #include <QQuickOpenGLUtils>
 #include <QStandardPaths>
+#include <QTimer>
 
 #include <utility>
 
@@ -121,9 +122,6 @@ public:
         // that nobody touched them. Forgetting this shows up in the picker,
         // not in the wallpaper.
         QQuickOpenGLUtils::resetOpenGLState();
-
-        if (m_scene && m_running)
-            update();
     }
 
 private:
@@ -196,6 +194,25 @@ SceneView::SceneView(QQuickItem *parent)
     // OpenGL draws from the bottom up, and Qt shows this framebuffer as it
     // is: without this every scene came out upside down.
     setMirrorVertically(true);
+
+    // A scene is drawn this often and no more. Asking for the next frame the
+    // moment one was drawn ran at the screen's 144 a second, for a wallpaper.
+    // Fifteen is Wallpaper Engine's own default: its welcome dialog picks the
+    // Medium preset, which is 15 (Low 10, High 25, Ultra 30).
+    // ponytail: fixed at 15 until the Settings tab offers the four.
+    m_frames.setInterval(1000 / 15);
+    m_frames.setTimerType(Qt::PreciseTimer);
+    connect(&m_frames, &QTimer::timeout, this, [this] { update(); });
+}
+
+/// Ticks while there is a scene to move: not while it is held, not with
+/// nothing to show, and not once it has failed.
+void SceneView::pace()
+{
+    if (m_running && !m_source.isEmpty() && m_error.isEmpty())
+        m_frames.start();
+    else
+        m_frames.stop();
 }
 
 QQuickFramebufferObject::Renderer *SceneView::createRenderer() const
@@ -209,6 +226,10 @@ void SceneView::setSource(const QUrl &source)
         return;
     m_source = source;
     emit sourceChanged();
+    // A new scene may draw where the last one failed; the renderer says so
+    // again if it does not.
+    setError({});
+    pace();
     update();
 }
 
@@ -218,6 +239,7 @@ void SceneView::setRunning(bool running)
         return;
     m_running = running;
     emit runningChanged();
+    pace();
     update();
 }
 
@@ -242,6 +264,7 @@ void SceneView::setError(const QString &error)
         return;
     m_error = error;
     emit errorChanged();
+    pace();
 }
 
 SceneSounds::SceneSounds(QObject *parent)

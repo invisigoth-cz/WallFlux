@@ -826,11 +826,32 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   Romulus 16, Snow Lights 15, Gears 16, in 60 fps video. Wallpaper Engine's
   `config.json` says `"fps": 15` for this user. That is how it keeps 170 000
   particles going -- four times the time a frame that 60 has -- and it is why
-  motion in those recordings steps. **This program has no cap at all**:
-  `SceneView` asks for the next frame as soon as one is drawn, which on this
-  machine's 144 Hz screen is as fast as the scene can go. Wallpaper Engine's
-  settings offer a limit of 15 to 120 and switches for particles and effects;
-  so does Almamu's renderer. Taken up as the Settings tab's first content.
+  motion in those recordings steps.
+
+  **This program draws fifteen a second, scenes and web pages alike, as
+  Wallpaper Engine does by default.** Its welcome dialog sets the Medium preset
+  (`qualityPreset="medium"` in `ui/dist/scripts/scripts.js`), and
+  `getQualityPreset` makes Low 10, Medium 15, High 25 and Ultra 30 frames a
+  second; the settings warn above 30. **No preset touches particles** -- they
+  set MSAA, post-processing, reflections, shadows and volumetrics -- and
+  `wallpaper64.exe` reads `fps` with the rest of the general settings
+  (`FUN_1401154c0`, into `+0x18c`) and nothing about particles. Its limiter is
+  in the main loop round `0x1401135fa`: after a frame, `Sleep` for what is left
+  of the second shared out over the frames still owed in it
+  (`QueryPerformanceCounter`), and no limit at all at 0. So Wallpaper Engine
+  never thins a scene: a heavy one simply gets fewer frames. Thinning more at a
+  higher rate is ours, decided on 6 November so a heavy scene stays smooth and
+  cheap. The Settings tab is to offer the four rates.
+
+  A scene is paced by a timer on `SceneView`, not by the renderer asking again
+  as soon as it has drawn, which ran at the screen's 144;
+  `drawsFifteenTimesASecond` counted 288 frames in two seconds that way. A
+  page's `requestAnimationFrame` is wrapped in `WallpaperSurface.qml` to pass
+  over frames that come sooner than a fifteenth after the last. **Not with a
+  timer**: Chromium runs a frame's callbacks about 12 ms after the time it
+  hands them, and a timer counted from that time ran at sixty when thirty was
+  asked for. CSS animations and video are not held. Measured: 15.3 a second in
+  a page.
 
   **Stepping one system's particles on several threads was tried and taken
   out.** Moving the loop into a closure to share it out made it slower on one

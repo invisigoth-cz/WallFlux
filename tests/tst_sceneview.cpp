@@ -259,6 +259,36 @@ private slots:
         QVERIFY(file.filePath().endsWith(QStringLiteral(".mp3")));
     }
 
+    /// A running scene is drawn fifteen times a second, not as often as the
+    /// screen would let it. Counted over two seconds, with room for a timer
+    /// that lands between two frames of the screen.
+    void drawsFifteenTimesASecond()
+    {
+        const QUrl source = scenes().value(QStringLiteral("2149578679"));
+        if (source.isEmpty())
+            QSKIP("Blue Dawn is not on this machine");
+
+        QQuickWindow window;
+        window.resize(320, 180);
+        SceneView view(window.contentItem());
+        view.setSize(QSizeF(320, 180));
+        view.setSource(source);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTest::qWait(500);
+
+        QSignalSpy frames(&window, &QQuickWindow::frameSwapped);
+        QTest::qWait(2000);
+        QVERIFY2(frames.size() >= 25 && frames.size() <= 34, qPrintable(QString::number(frames.size())));
+
+        // And not at all while it is held.
+        view.setRunning(false);
+        QTest::qWait(200);
+        frames.clear();
+        QTest::qWait(1000);
+        QVERIFY2(frames.size() <= 1, qPrintable(QString::number(frames.size())));
+    }
+
     /// Where the mouse is reaches the scene. Three of Blue Dawn side by
     /// side, running together: the outer two with the mouse on the left,
     /// which have to agree, and the middle one with it on the right, which
