@@ -2220,7 +2220,31 @@ the file. Everything after it should.
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Next, as the user left them on 4 November** (0.23.2 released: a scene's
+4. **The list as the user set it on 6 November, in this order, and only this.**
+   Done that day: fifteen frames a second and no thinning, both as Wallpaper
+   Engine (see the frame-rate trap).
+   - **Several screens as Wallpaper Engine's "Clone single wallpaper"**: the scene
+     worked out once and the same picture on every ticked screen, where each
+     screen now runs a simulation of its own -- twice the CPU on two screens, and
+     the two not in step.
+   - **Space Visualizer:** its answer to the music and its sky (entry below).
+   - **DOOM's D and M** following the music at 0.56: take the wallpaper apart
+     again, and look at what Almamu's renderer does with this one.
+   - **Alien Romulus' specks round the mouse:** Windows draws them fine. If the
+     cause is still not found, they stay left out.
+   - **Blue Dawn:** the weaker sun and the larger flare.
+   - **Battlefield:** which animation is not played (a keyframed `phase`), and play it.
+   - Then the Settings tab and **Wallpaper Engine's quality presets**, globally and
+     for one wallpaper -- Low/Medium/High/Ultra: frame rate, MSAA,
+     post-processing, reflections, texture resolution. The user's word: very
+     important, since it reaches into what the GPU is asked for.
+
+   **Not to be worked on, by the user's word on 6 November -- fine to their eye:**
+   Dark Angels, Gears of War (its "bubble" included), SCP Terminal Lockdown (its
+   `chromatic_aberration` too), Tomb Raider's occasional pink haze, Terminator
+   Factory's slightly brighter sky, Ender Spartan.
+
+5. **Next, as the user left them on 4 November** (0.23.2 released: a scene's
    particle `count`, the perspective field of view and the instance colour as
    Wallpaper Engine has them, a step hearing its loudest band and a trail's cap.
    Confirmed by the user that day: Snow Lights, Augmentation, Gears, Dark Angels,
@@ -2362,10 +2386,7 @@ the file. Everything after it should.
      removed as it does, Remove after a late Steam, music on a random first track.
 
    Older, still open:
-   - **Dark Angels:** the straight edge is gone (see the trap on `right`). Its flash is still paler than the video's orange.
-   - **Gears of War:** the user's "bubble" at 28 to 30 s of the 64 s recording. The
-     Spectacle file is a player showing that recording. Not told apart from our ripple
-     at contact-sheet size, so not found.
+   - Dark Angels and Gears of War: closed by the user on 6 November.
    - **Star Destroyer's** clouds and **Tomb Raider's** torch measured over time against
      their recordings: 80/21/12 against 75/21/12, and a white core in red with no yellow
      in either. Left alone, though the user remembered orange and yellow.
