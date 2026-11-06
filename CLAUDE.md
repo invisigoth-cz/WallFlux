@@ -2292,8 +2292,30 @@ the file. Everything after it should.
      kissfft, `0.35 log10`, its own weighting curve and eases at 0.3 -- a
      visualiser, so no second opinion on the bass. Still open: why our band 0
      holds near 0.79 through DOOM's rumble where Windows' D and M follow it.
+     **The wallpaper's own bass tracking is its particles**: no scripts at all,
+     and round the D and the M every system that listens -- the Torches, both
+     Smoke clouds D, `new_particle_system_3` -- states no band range, so hears
+     bands 0 and 1, both ears, bounds "0.9 1"; the Os' torches hear 10 to 14
+     and 10 to 15. `0x14022a8a0` reads 16 entries an ear (the right 0x40 bytes
+     after the left), mode 3 the largest of left plus right halved -- as ours.
+     So the letters, effects and flames alike, all come back to the meter's two
+     lowest bands of sixteen.
    - **Alien Romulus' specks round the mouse:** Windows draws them fine. If the
      cause is still not found, they stay left out.
+     **6 November:** `controlpointattract` read off `wallpaper64.exe`
+     (`0x140241630`, defaults `FUN_1401bdee0`): the whole strength at the point,
+     none at the full `threshold`, a straight line between, never past the
+     particle with `flags` bit 1 (on by default), 512 and 512 when unstated, and
+     the file's `origin` not read (the engine's key is `offset`, left out of the
+     pull). On the branch `pritahovani-jako-wpe`, not main: it changes the mouse
+     in seven approved wallpapers. Drawn with it and the recording's cursor
+     track, the specks land where Windows' do and are still clusters several
+     pixels across where Windows has dots of two or three. The system is
+     `animationmode` `randomframe` but its texture carries no sheet (no `TEXS`),
+     and it draws as a `spritetrail` (0.05, at most 1) whose length the stock
+     shader takes as `max(minlength, min(speed x length, maxlength))` sizes --
+     we hand it the same three -- so a still speck is a sliver on Windows; what
+     makes ours larger is the size or the speed it is handed, not found yet.
    - **Blue Dawn:** the weaker sun and the larger flare. **6 November, found so
      far:** the sun's core is 174 against Windows' 181 over 40 s, so hardly
      weaker; the difference is a white blob, 25 px across at 2560x1440, that
