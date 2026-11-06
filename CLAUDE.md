@@ -2291,7 +2291,9 @@ the file. Everything after it should.
    vortex at `0x1402432e2` resolves to none), so disassemble the region with
    `objdump -d -M intel --start-address=0x140200000
    --stop-address=0x140260000` and look for loads at the record's offsets;
-   the attract step is at `0x140241630`. Check each finding by drawing the
+   the attract step is at `0x140241630`. Ghidra's analysis is saved as
+   `~/WallFlux-ukazky/2026-11-06/wallpaper64.rea-snapshot` (REA `open_binary`
+   with `snapshot_path`), which saves the auto-analysis wait. Check each finding by drawing the
    swarm alone (`~/WallFlux-ukazky/2026-11-06/nastroje/README.txt`: copies of
    the scene with one preset changed, motion maps beside Windows) and then
    the whole library in a sweep, since a step's meaning changes every scene
