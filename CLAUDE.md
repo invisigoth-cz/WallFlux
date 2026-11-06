@@ -2539,6 +2539,18 @@ the file. Everything after it should.
      meter's input three and ten times louder before the evening out (D
      followed at 0.23 and 0.09), and the bins read as at 48 kHz, 25 Hz apart
      (0.54). So the D's and the M's 0.56 is still unexplained.
+
+     **6 November, plotted against time** (Windows' letters over our bands,
+     `Doom_2026.11.03`): from 13 s the music is a sub-bass wub at 34 to 37 Hz,
+     amplitude 0.06 to 0.13, in plateaus of 1.5 s every 2.1 s. Our raw band 0
+     reads 0.6 through each plateau and the evening out lifts it to about one;
+     **Windows' D and M ignore the plateaus altogether** and light only on the
+     kicks at 21.5, 24.4 and 29.3 s, which show in our band 1. So in Wallpaper
+     Engine the wub reads far below whatever the evening out divides by. And
+     **Windows' output device was 5.1**: the recording carries six channels,
+     FL and FR with the music, BL and BR a tenth of it, FC and LFE silent. How
+     `wallpaper64.exe` folds a six-channel loopback into its two meters was
+     not read; it is the next thing to look at.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.
