@@ -2265,8 +2265,33 @@ the file. Everything after it should.
    - Done: several screens as Wallpaper Engine's "Clone single wallpaper" (see
      the Displays entry under What works today).
    - **Space Visualizer:** its answer to the music and its sky (entry below).
+     **6 November**, unthinned and against the user's recording with its sound,
+     averaged over a minute: the planet follows Windows at 0.92, the lava at
+     0.98, the sky's mean colours within a level or two; the vortex fix (see
+     its trap) laid the red star streaks flatter. **Left: the swarm.** On
+     Windows a wide veil of fine red dust streams from the whole small planet
+     towards the sun; ours is a narrow bright plume curling round its right
+     edge. All five `particle_0x_*_response` systems keep control point 1 on the
+     mouse (`locktopointer`) and push away from it at -10000 within a
+     `threshold` of 128; the recording's cursor sits still on the small planet
+     at (0.4504, 0.4479) of the screen, and drawn with it there ours did not
+     change -- nor with the mouse handed to these world-space systems unscaled
+     (they are at 1.4 and 1.5, and `point_at` passes it through the object's
+     whole matrix, the ponytail in `stand_at`). That change was taken out again:
+     it showed nothing and would move DOOM's, Rainbow Six's, Snow Lights' and
+     3330497043's systems under the mouse.
    - **DOOM's D and M** following the music at 0.56: take the wallpaper apart
-     again, and look at what Almamu's renderer does with this one.
+     again, and look at what Almamu's renderer does with this one. **6 November:**
+     the letters' audio is `effects/pulse` with AUDIOPROCESSING 3 and no
+     `frequencymin`/`frequencymax`, so bands 0 to 1 by the shader's defaults,
+     `smoothstep(0.5, 1.5)`, amount 1 (the O's 2 and 5); their values are keyed
+     by the editor's labels (`ui_editor_properties_audio_bounds` and so on),
+     which we read through `named_by`. D's `shake` hears the left ear alone (1),
+     M's the right (2). Almamu has nothing for this wallpaper and no Wallpaper
+     Engine meter: `PulseAudioPlaybackRecorder.cpp` takes bins `band x 2` of a
+     kissfft, `0.35 log10`, its own weighting curve and eases at 0.3 -- a
+     visualiser, so no second opinion on the bass. Still open: why our band 0
+     holds near 0.79 through DOOM's rumble where Windows' D and M follow it.
    - **Alien Romulus' specks round the mouse:** Windows draws them fine. If the
      cause is still not found, they stay left out.
    - **Blue Dawn:** the weaker sun and the larger flare. **6 November, found so
