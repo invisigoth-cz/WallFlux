@@ -6,6 +6,33 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-11-06
+
+### Changed
+
+- **Wallpapers are drawn fifteen times a second**, scenes and web pages alike,
+  where a scene used to be drawn as fast as the screen would take it -- 144 a
+  second on a 144 Hz monitor -- for a wallpaper. Fifteen is Wallpaper Engine's
+  own default: its first-run dialog picks the Medium preset, and its presets
+  are 10, 15, 25 and 30. Video plays at its own rate, as before.
+- **No scene loses particles any more.** Scenes over 48 000 particles were
+  thinned; Wallpaper Engine never thins one, and at fifteen frames a second the
+  heaviest here fit whole -- Space Visualizer 30 ms a frame and DOOM 26 at
+  2560x1440 with loud music, of the 66 ms a frame has. Space Visualizer,
+  DOOM, Gears of War and Rainbow Six Siege are the four that change.
+- **Several screens show one wallpaper worked out once**, as Wallpaper
+  Engine's "Clone single wallpaper": the first ticked screen plays it and the
+  others show its picture, cropped to their shape. Each screen used to run the
+  scene, the video or the page all over again -- twice the CPU on two screens,
+  a video's sound twice over, and the screens never in step. Measured on two
+  virtual screens with Space Visualizer: 7 % of a core against 13.
+
+### Fixed
+
+- **A second screen can show the first one's picture at all**: the windows'
+  OpenGL contexts are told to share, which QtWebEngine no longer asks for by
+  itself in Qt 6.12.
+
 ## [0.24.3] — 2026-11-05
 
 ### Changed
@@ -1138,7 +1165,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.3...v0.25.0
 [0.24.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.2...v0.24.3
 [0.24.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.1...v0.24.2
 [0.24.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.24.0...v0.24.1
