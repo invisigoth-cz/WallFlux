@@ -16,6 +16,7 @@ Q_LOGGING_CATEGORY(lcAudio, "wallflux.audio")
 namespace {
 
 constexpr auto PactlCommand = "pactl";
+constexpr auto PwDumpCommand = "pw-dump";
 
 /// The process that started this one, or 0 where that cannot be read.
 ///
@@ -92,28 +93,36 @@ bool isOurs(const QJsonObject &properties, qint64 ourPid, const QString &ourName
 
 } // namespace
 
-bool OtherAudio::othersPlaying(const QByteArray &sinkInputsJson, qint64 ourPid,
+bool OtherAudio::othersPlaying(const QByteArray &pwDumpJson, qint64 ourPid,
                                const QString &ourName)
 {
     QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(sinkInputsJson, &error);
+    const QJsonDocument document = QJsonDocument::fromJson(pwDumpJson, &error);
     if (error.error != QJsonParseError::NoError || !document.isArray()) {
-        qCWarning(lcAudio) << "cannot read what pactl said:" << error.errorString();
+        qCWarning(lcAudio) << "cannot read what pw-dump said:" << error.errorString();
         return false;
     }
 
-    const QJsonArray streams = document.array();
-    for (const QJsonValue &value : streams) {
-        const QJsonObject stream = value.toObject();
+    const QJsonArray objects = document.array();
+    for (const QJsonValue &value : objects) {
+        const QJsonObject info = value.toObject().value(QLatin1StringView("info")).toObject();
+        const QJsonObject properties = info.value(QLatin1StringView("props")).toObject();
+        if (properties.value(QLatin1StringView("media.class")).toString()
+            != QLatin1StringView("Stream/Output/Audio"))
+            continue;
 
-        // A paused player keeps its stream open and corked. That is not
-        // somebody playing something.
-        if (stream.value(QLatin1StringView("corked")).toBool())
+        // Only a node PipeWire is running is making a sound. pactl's
+        // `corked` is not enough: speech-dispatcher keeps a stream open and
+        // uncorked for as long as it runs, PipeWire pauses it after five
+        // seconds of nothing (`pulse.idle.timeout` in pipewire-pulse.conf),
+        // and pactl goes on calling it uncorked -- measured, a wallpaper
+        // silent all afternoon because of it. A paused player is "idle" too.
+        if (info.value(QLatin1StringView("state")).toString() != QLatin1StringView("running"))
             continue;
 
         // A stream we cannot place is somebody else's by default: better to
         // quieten the wallpaper than to talk over whatever it is.
-        if (isOurs(stream.value(QLatin1StringView("properties")).toObject(), ourPid, ourName))
+        if (isOurs(properties, ourPid, ourName))
             continue;
 
         return true;
@@ -132,7 +141,9 @@ OtherAudio::OtherAudio(QObject *parent)
     connect(&m_query, &QProcess::finished, this, &OtherAudio::readAnswer);
 
     // Every line pactl prints is a change to something; the ones about sink
-    // inputs are the ones that mean a program started or stopped playing.
+    // inputs are the ones that mean a program started or stopped playing --
+    // a stream PipeWire pauses for being idle, or wakes again, included:
+    // measured, each is a 'change' on its sink-input.
     connect(&m_subscription, &QProcess::readyReadStandardOutput, this, [this]() {
         const QByteArray events = m_subscription.readAllStandardOutput();
         if (events.contains("sink-input"))
@@ -155,22 +166,20 @@ OtherAudio::OtherAudio(QObject *parent)
 
 void OtherAudio::look()
 {
-    // One at a time: a burst that arrives while pactl is still answering is
+    // One at a time: a burst that arrives while pw-dump is still answering is
     // waited out rather than piled on top of it.
     if (m_query.state() != QProcess::NotRunning) {
         m_settle.start();
         return;
     }
 
-    m_query.start(QLatin1StringView(PactlCommand),
-                  {QStringLiteral("--format=json"), QStringLiteral("list"),
-                   QStringLiteral("sink-inputs")});
+    m_query.start(QLatin1StringView(PwDumpCommand), {QStringLiteral("--no-colors")});
 }
 
 void OtherAudio::readAnswer()
 {
     if (m_query.exitStatus() != QProcess::NormalExit || m_query.exitCode() != 0) {
-        qCWarning(lcAudio) << "pactl could not list what is playing:"
+        qCWarning(lcAudio) << "pw-dump could not list what is playing:"
                            << m_query.readAllStandardError().trimmed();
         return;
     }

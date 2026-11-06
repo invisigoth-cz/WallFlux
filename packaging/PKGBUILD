@@ -21,9 +21,10 @@ options=('!lto')
 # the only way to reach the picker, and it is a name out of the icon theme
 # rather than a file we ship.
 #
-# libpulse is here for the `pactl` program rather than for the library. It
-# is what tells us another program is using the speakers, and being a
-# program it is not something the linker would ever mention.
+# libpulse is here for the `pactl` program as well as for the library, and
+# pipewire for `pw-dump`: between them they tell us another program is using
+# the speakers, and being programs they are not something the linker would
+# ever mention.
 #
 # steamworks-sdk is Valve's own, out of the AUR, and it is the only thing
 # on a Linux machine that carries libsteam_api.so -- the flat C API that
@@ -45,7 +46,7 @@ options=('!lto')
 # for pactl: ffprobe reads a video wallpaper's size, and a scene's own
 # videos are decoded by ffmpeg run beside the renderer. qt6-multimedia
 # brings it too, but that is its business; this is ours.
-depends=('breeze-icons' 'ffmpeg' 'layer-shell-qt' 'libpulse' 'qt6-base'
+depends=('breeze-icons' 'ffmpeg' 'layer-shell-qt' 'libpulse' 'pipewire' 'qt6-base'
          'qt6-declarative' 'qt6-multimedia' 'qt6-webengine'
          'steamworks-sdk')
 # qt6-tools is here for lrelease, which compiles the Czech catalogue into the

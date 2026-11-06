@@ -263,7 +263,7 @@ src/language.cpp      installs a QTranslator and retranslates the engine
 src/playlists.h       Playlists: wallpapers that take turns, and the file
 src/playlists.cpp     reading and writing ~/.config/WallFlux/wallflux/
 src/otheraudio.h      OtherAudio: is another program using the speakers
-src/otheraudio.cpp    reading `pactl --format=json list sink-inputs`
+src/otheraudio.cpp    `pactl subscribe` for when, `pw-dump` for what is running
 src/steamworks.h      Steamworks: can the workshop be asked, and the way in
 src/steamworks.cpp    dlopen of libsteam_api.so, by name, nothing linked
 src/tags.h            Tags: what a workshop tag is called, and the genres
@@ -307,7 +307,7 @@ qml/steamprofile.js   who made a workshop item, and who that account is:
 qml/RoundedButton.qml a button with its corners off -- every button here
 qml/RoundedTool.qml   the same corners for an icon on its own
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
-tests/tst_otheraudio.cpp      reading pactl's answer, no sound card needed
+tests/tst_otheraudio.cpp      reading pw-dump's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
 tests/tst_pointer.cpp         known only while watched, the same way
 tests/tst_playlists.cpp       what a playlist remembers and how long a
@@ -1508,6 +1508,17 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   the point of the PKGBUILD not being in the root.)
 - **`makepkg` builds from git, not from the working tree.** Commit first,
   then `makepkg -f`, then `pacman -U`, or the package carries old code.
+- **An uncorked stream is not a stream that plays, and pactl cannot tell them
+  apart.** speech-dispatcher's `sd_dummy` holds a stream open for as long as it
+  runs; PipeWire pauses it after five seconds of underrun (`pulse.idle.timeout`,
+  a rule for `~speech-dispatcher.*` in the stock `pipewire-pulse.conf`), and
+  `pactl list sink-inputs` goes on reporting `corked: false`. Read that way,
+  every wallpaper of every kind was silent from the moment it started on
+  6 November -- reported as "no sound in 0.25.2", which no version had caused.
+  So the stream is judged by its node's state in `pw-dump`, `running` or not;
+  `pactl subscribe` still says when to look, since a node pausing or waking
+  is a `change` on its sink-input -- measured with a silent `pacat
+  --client-name=speech-dispatcher-test`.
 - **The wallpaper's own sound stream carries no pid.** Qt plays a video as a
   native PipeWire client, and the stream has no `application.process.id` at
   all -- only `client.id` and a `node.name` of `wallflux`. `othersPlaying()`
