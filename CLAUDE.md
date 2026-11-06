@@ -2272,7 +2272,32 @@ the file. Everything after it should.
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **The list as the user set it on 6 November, in this order, and only this.**
+4. **Start here next time (the user's word, 6 November evening): read the
+   particle step out of `wallpaper64.exe` until particles move as Wallpaper
+   Engine moves them.** Nothing else first. Space Visualizer's swarm is the
+   case that shows it (entry below and its 6 November paragraph). What to
+   read, in order:
+   - **`movement`** -- gravity and drag. Built in `FUN_1401c5490` at
+     `0x1401cb35e`: a record of 0x20 (allocated by `FUN_1401d89b0`), gravity
+     at +0/+4/+8, `flags` at +0xc, drag at +0x10. Our drag
+     (`velocity /= 1 + drag dt`) is a guess. Find the step that reads +0x10.
+   - **`colorchange`** -- whether it multiplies the born colour (ours,
+     Almamu's) or replaces it. Built just after the string at `0x1401cbb93`
+     (`FUN_1401d8a70`); `startvalue` and `endvalue` follow.
+   - Then the other steps the swarm uses -- `turbulence`, `vortex` with axis
+     "1 1 1" (z grows here in a flat scene: check whether Wallpaper Engine
+     keeps z), `alphafade` -- against what `particles.rs` does.
+   **How to find a step:** the update code is not a Ghidra procedure (the
+   vortex at `0x1402432e2` resolves to none), so disassemble the region with
+   `objdump -d -M intel --start-address=0x140200000
+   --stop-address=0x140260000` and look for loads at the record's offsets;
+   the attract step is at `0x140241630`. Check each finding by drawing the
+   swarm alone (`~/WallFlux-ukazky/2026-11-06/nastroje/README.txt`: copies of
+   the scene with one preset changed, motion maps beside Windows) and then
+   the whole library in a sweep, since a step's meaning changes every scene
+   that has it.
+
+5. **The list as the user set it on 6 November, in this order, and only this.**
    Done that day: fifteen frames a second and no thinning, both as Wallpaper
    Engine (see the frame-rate trap).
    - Done: several screens as Wallpaper Engine's "Clone single wallpaper" (see
@@ -2425,7 +2450,7 @@ the file. Everything after it should.
    `chromatic_aberration` too), Tomb Raider's occasional pink haze, Terminator
    Factory's slightly brighter sky, Ender Spartan.
 
-5. **Next, as the user left them on 4 November** (0.23.2 released: a scene's
+6. **Next, as the user left them on 4 November** (0.23.2 released: a scene's
    particle `count`, the perspective field of view and the instance colour as
    Wallpaper Engine has them, a step hearing its loudest band and a trail's cap.
    Confirmed by the user that day: Snow Lights, Augmentation, Gears, Dark Angels,
