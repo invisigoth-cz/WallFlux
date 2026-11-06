@@ -2293,6 +2293,28 @@ the file. Everything after it should.
      whole matrix, the ponytail in `stand_at`). That change was taken out again:
      it showed nothing and would move DOOM's, Rainbow Six's, Snow Lights' and
      3330497043's systems under the mouse.
+
+     **6 November, later, drawn at fifteen** (as the desktop): the swarm is
+     `REFRACT` with an overbright of 5, so it shows only where something
+     bright is behind it -- over the black sky it is nothing, which is why it
+     reads as a "veil" over the small planet's face on Windows. Its birth ring
+     is right: `distancemax` defaults to 256 in `wallpaper64.exe` too
+     (`FUN_1401b9100`, `0x43800000` on a flat scene's side), and drawn alone
+     ours is born at 179 screen pixels of 1280, where Windows' arc of specks
+     is. Ruled out, each drawn and mapped against the recording: the vortex,
+     the turbulence and the pull switched off; the pull with the recording's
+     mouse, as read and with its sign turned over (identical to the pixel: no
+     particle comes within its 128); the instance `rate` taken out. A third
+     of the drag gives straighter strokes at Windows' 45 degrees, but our
+     drag was fitted to this wallpaper's sparks and the binary's `movement`
+     step was not found (the record is gravity at +0 and drag at +0x10,
+     built at `0x1401cb35e`). Without the instance colour the strokes over
+     the face come out white as on Windows, but by numbers over 12 s the
+     face is within 1 to 4 levels of Windows either way and moves 25 to 35 %
+     less (above its darkest: Windows 13.7/11.4/10.4 on the right of the
+     face, ours 10.5/7.8/6.8, without the colour 11.1/9.5/8.3). Almamu
+     multiplies a `colorchange` by the colour a particle was born with, as
+     we do. Nothing changed.
    - **DOOM's D and M** following the music at 0.56: take the wallpaper apart
      again, and look at what Almamu's renderer does with this one. **6 November:**
      the letters' audio is `effects/pulse` with AUDIOPROCESSING 3 and no
