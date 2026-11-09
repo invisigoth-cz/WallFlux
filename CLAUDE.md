@@ -170,7 +170,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   `Hidden=true` when off), the tray icon, starting minimised, minimising on
   close (off, closing quits), and a reset. *Audio*: volume, mute (the status
   bar's own), quiet while another program plays, quiet under a maximised
-  window. *Performance / Display*: frame rate (10/15/25/30), default scaling
+  window. *Performance / Display*: Wallpaper Engine's four quality presets
+  (Low 10 fps, no MSAA, no glow; Medium 15; High 25 and MSAA 2x; Ultra 30),
+  which set the next three at once and light none once those are changed by
+  hand -- frame rate (10/15/25/30), smooth edges (MSAA off/2/4/8, the
+  `SceneView`'s framebuffer, made again when it changes), the glow (see the
+  post-processing trap) -- then texture resolution (half drops the top
+  mipmap; a picture stored without mipmaps stays whole), default scaling
   (default and fill crop, fit adds bars, stretch -- `transform::set_scaling`
   for scenes, the `VideoOutput`'s fill mode for videos; a mirrored screen
   still crops), the music, the mouse, parallax, particles, and the usage
@@ -1706,6 +1712,18 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   downs and tick boxes in the left, and the whole panel looking shuffled
   rather than broken. It reads as four separate complaints about
   alignment, and it is one odd cell. Count the cells.
+
+- **Wallpaper Engine's "post-processing" is the scene's bloom and nothing
+  else.** `postprocessing: "disabled"` clears bit 0x40 of the window's flags
+  (`FUN_14010df40`), and the one place the scene tests it (`0x140180a41`)
+  guards `FUN_140183610`, which is the bloom's three passes or, with 0x2000,
+  the HDR bloom's ladder. An effect on a layer -- motion blur included -- is
+  drawn whatever the setting. "ultra" sets 0x2000 only for a scene whose
+  `general` asks for both `bloom` and HDR; none here does, so Ultra is High at
+  thirty. Two packages here have bloom at all.
+
+  **And a wallpaper's own preset is the picker's `qualityOf`**, by id, read
+  by `drawnWith` for whatever is on show; the panel's drop down writes it.
 
 - **A `Switch` with its padding taken away is nought wide.** Fusion counts
   its width from the padding and the indicator's place in it, so the pill

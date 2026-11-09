@@ -39,6 +39,7 @@ static EARS: OnceLock<Option<Audio>> = OnceLock::new();
 static MUSIC: AtomicBool = AtomicBool::new(true);
 static PARALLAX: AtomicBool = AtomicBool::new(true);
 static PARTICLES: AtomicBool = AtomicBool::new(true);
+static BLOOM: AtomicBool = AtomicBool::new(true);
 
 /// Sets what every scene may do, as the Settings tab says: draw `fps`
 /// pictures a second, follow the `music`, lean with the mouse (`parallax`),
@@ -46,8 +47,18 @@ static PARTICLES: AtomicBool = AtomicBool::new(true);
 /// 0 cropped to fill, 1 fitted with bars, 2 stretched. Without the music
 /// nothing listens to the speakers, so Plasma's microphone icon stays away.
 #[unsafe(no_mangle)]
-pub extern "C" fn wallflux_options(fps: u32, music: bool, parallax: bool, particles: bool, scaling: u32) {
+pub extern "C" fn wallflux_options(
+    fps: u32,
+    music: bool,
+    parallax: bool,
+    particles: bool,
+    scaling: u32,
+    bloom: bool,
+    half_textures: bool,
+) {
     crate::transform::set_scaling(scaling.min(u8::MAX as u32) as u8);
+    crate::texture::HALF.store(half_textures, Ordering::Relaxed);
+    BLOOM.store(bloom, Ordering::Relaxed);
     FPS.store(fps.clamp(1, 240), Ordering::Relaxed);
     MUSIC.store(music, Ordering::Relaxed);
     PARALLAX.store(parallax, Ordering::Relaxed);
@@ -177,7 +188,11 @@ pub unsafe extern "C" fn wallflux_scene_draw(
     {
         this.scene.hear(ears.bands());
     }
-    this.scene.set_options(PARALLAX.load(Ordering::Relaxed), PARTICLES.load(Ordering::Relaxed));
+    this.scene.set_options(
+        PARALLAX.load(Ordering::Relaxed),
+        PARTICLES.load(Ordering::Relaxed),
+        BLOOM.load(Ordering::Relaxed),
+    );
     let drawn = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: the context is current, as the caller promised.
         unsafe {

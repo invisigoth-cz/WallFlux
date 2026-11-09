@@ -130,7 +130,10 @@ Item {
             silent: root.silent
             covered: root.covered
             volume: picker.volume
-            fps: picker.fps
+            fps: picker.drawnWith.fps
+            msaa: picker.drawnWith.msaa
+            bloom: picker.drawnWith.bloom
+            halfTextures: picker.halfTextures
             music: picker.music
             parallax: picker.parallax
             particles: picker.particles

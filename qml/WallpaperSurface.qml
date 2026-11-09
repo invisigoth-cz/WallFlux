@@ -45,6 +45,10 @@ Window {
     property bool particles: true
     /// `default`, `fill`, `fit` or `stretch`; see the picker.
     property string scaling: "default"
+    /// Quality, for scenes; see the picker.
+    property int msaa: 0
+    property bool bloom: true
+    property bool halfTextures: false
 
     /// Whether this screen works the wallpaper out, or shows the picture the
     /// first one worked out -- Wallpaper Engine's "Clone single wallpaper".
@@ -387,6 +391,9 @@ Window {
             parallax: surface.parallax
             particles: surface.particles
             scaling: surface.scaling === "fit" ? 1 : surface.scaling === "stretch" ? 2 : 0
+            msaa: surface.msaa
+            bloom: surface.bloom
+            halfTextures: surface.halfTextures
             // The desktop's coordinates less where this screen starts on it,
             // which is this item's own: it fills a surface that fills the screen.
             pointer: Pointer.known && surface.onScreen

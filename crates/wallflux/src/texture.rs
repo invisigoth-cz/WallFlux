@@ -30,6 +30,15 @@ const COMPRESSED_RGBA_S3TC_DXT1: u32 = 0x83F1;
 const COMPRESSED_RGBA_S3TC_DXT3: u32 = 0x83F2;
 const COMPRESSED_RGBA_S3TC_DXT5: u32 = 0x83F3;
 
+/// Whether a picture is loaded a level down its mipmaps -- half as wide and
+/// half as high -- as Wallpaper Engine's "high performance" texture
+/// resolution. Read when a texture is made, so it reaches scenes loaded
+/// after it changes.
+///
+/// ponytail: only a picture that carries mipmaps gets smaller; one stored
+/// as a single level stays whole rather than being scaled here.
+pub static HALF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub struct Texture {
     id: glow::Texture,
     pub width: u32,
@@ -68,6 +77,11 @@ impl Texture {
         if mips.is_empty() {
             return Err("texture has no mipmaps".into());
         }
+        let first = mips.first().map_or((0, 0), |m| (m.width, m.height));
+        let mips = match HALF.load(std::sync::atomic::Ordering::Relaxed) && mips.len() > 1 {
+            true => &mips[1..],
+            false => &mips[..],
+        };
 
         let id = unsafe { gl.create_texture() }.map_err(|e| format!("create texture: {e}"))?;
         unsafe {
@@ -123,14 +137,16 @@ impl Texture {
             gl.bind_texture(glow::TEXTURE_2D, None);
         }
 
+        // The sizes the file states, whichever level is on the GPU: they
+        // place the picture, and a smaller copy covers the same ground.
         Ok(Self {
             id,
-            width: mips[0].width,
-            height: mips[0].height,
+            width: first.0,
+            height: first.1,
             // For a sheet the header's size is one frame rather than the whole
             // image, so the page's own size is the one to report.
             image_size: match source.sprite {
-                Some(_) => (mips[0].width, mips[0].height),
+                Some(_) => first,
                 None => source.image_size,
             },
             format: match source.free_image {

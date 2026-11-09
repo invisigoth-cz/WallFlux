@@ -10,6 +10,11 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Delete** in the library's grid removes the wallpaper with the ring on
   it, after asking.
+- **Quality presets**, Wallpaper Engine's Low, Medium, High and Ultra,
+  under Performance / Display: frame rate, smoothed edges (MSAA) and the
+  glow at once, each also on its own. A wallpaper can have a preset of its
+  own, picked in the panel beside the grid.
+- **Texture resolution**: half loads a scene's pictures at half their size.
 
 ### Changed
 

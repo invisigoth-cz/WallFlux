@@ -151,6 +151,67 @@ Window {
     /// with bars, or `stretch`.
     property string scaling: "default"
 
+    /// Quality, as Wallpaper Engine's: samples a pixel for smoothing edges
+    /// (0, 2, 4, 8), whether a scene may glow -- its "post-processing",
+    /// which reaches the bloom and nothing else -- and pictures at half
+    /// their size. With `fps`, the first two are what a preset sets.
+    property int msaa: 0
+    property bool bloom: true
+    property bool halfTextures: false
+    /// A wallpaper's own preset, by its id, over the settings.
+    property var qualityOf: ({})
+
+    /// Wallpaper Engine's four, out of `getQualityPreset` in its
+    /// `ui/dist/scripts/scripts.js`. Ultra's own difference there is HDR
+    /// bloom, which no scene here asks for, so it is High at thirty.
+    readonly property var presets: ({
+        low: { fps: 10, msaa: 0, bloom: false },
+        medium: { fps: 15, msaa: 0, bloom: true },
+        high: { fps: 25, msaa: 2, bloom: true },
+        ultra: { fps: 30, msaa: 2, bloom: true }
+    })
+    /// Which preset the settings are, or empty when they are somebody's own.
+    readonly property string quality: {
+        for (const name in picker.presets) {
+            const p = picker.presets[name];
+            if (p.fps === picker.fps && p.msaa === picker.msaa && p.bloom === picker.bloom)
+                return name;
+        }
+        return "";
+    }
+    function usePreset(name) {
+        const p = picker.presets[name];
+        picker.fps = p.fps;
+        picker.msaa = p.msaa;
+        picker.bloom = p.bloom;
+    }
+    /// What the wallpaper on show is drawn with: its own preset where it
+    /// has one, the settings where it has not.
+    readonly property var drawnWith: {
+        const own = picker.presets[picker.qualityOf[Wallpapers.current.id]];
+        return own ? own : { fps: picker.fps, msaa: picker.msaa, bloom: picker.bloom };
+    }
+    /// A new map, not the old one changed: see the trap about putting an
+    /// answer back.
+    function setQualityOf(id, name) {
+        const all = Object.assign({}, picker.qualityOf);
+        if (name)
+            all[id] = name;
+        else
+            delete all[id];
+        picker.qualityOf = all;
+    }
+    /// What a preset is called; `language` is never read, see the trap.
+    function qualityName(name, language) {
+        switch (name) {
+        case "low": return qsTr("Low");
+        case "medium": return qsTr("Medium");
+        case "high": return qsTr("High");
+        case "ultra": return qsTr("Ultra");
+        default: return qsTr("As in Settings");
+        }
+    }
+
     // The one place anything here is remembered between runs, besides the
     // playlists: ~/.config/WallFlux/wallflux.conf. The wallpaper itself is
     // still not -- nothing plays at startup, by design.
@@ -167,6 +228,10 @@ Window {
         property alias quietForOthers: picker.quietForOthers
         property alias quietUnderWindows: picker.quietUnderWindows
         property alias scaling: picker.scaling
+        property alias msaa: picker.msaa
+        property alias bloom: picker.bloom
+        property alias halfTextures: picker.halfTextures
+        property alias qualityOf: picker.qualityOf
         property alias muted: picker.muted
         property alias volume: picker.volume
         property alias fps: picker.fps
@@ -2419,6 +2484,52 @@ Window {
                         tags: picker.tagsOf(picker.inspected, Language.czech)
                         author: picker.inspectedAuthor
                         onAuthorAsked: picker.everythingByTheAuthor()
+
+                        // This wallpaper's own quality, over the settings:
+                        // a heavy scene on Low while the rest stay High.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.bottomMargin: 6
+                            visible: !!picker.inspected && picker.inspected.playable
+                            spacing: 10
+
+                            Label {
+                                text: qsTr("Quality")
+                                Layout.fillWidth: true
+                            }
+
+                            ComboBox {
+                                id: ownQuality
+
+                                readonly property string held: picker.inspected
+                                    ? (picker.qualityOf[picker.inspected.id] || "") : ""
+
+                                Layout.preferredWidth: 170
+                                // The words as they go into the file, which
+                                // never change; see the trap about
+                                // translating a drop down's model.
+                                model: ["", "low", "medium", "high", "ultra"]
+                                currentIndex: Math.max(0, ownQuality.model.indexOf(ownQuality.held))
+                                displayText: picker.qualityName(ownQuality.model[ownQuality.currentIndex],
+                                                                Language.czech)
+                                onActivated: (index) => {
+                                    picker.setQualityOf(picker.inspected.id, ownQuality.model[index]);
+                                    // Picking a row breaks the binding; the
+                                    // next wallpaper in the panel needs it.
+                                    ownQuality.currentIndex = Qt.binding(
+                                        () => Math.max(0, ownQuality.model.indexOf(ownQuality.held)));
+                                }
+
+                                delegate: ItemDelegate {
+                                    required property string modelData
+                                    required property int index
+
+                                    width: ownQuality.width
+                                    text: picker.qualityName(modelData, Language.czech)
+                                    highlighted: ownQuality.highlightedIndex === index
+                                }
+                            }
+                        }
 
                         RoundedButton {
                             id: giveBack

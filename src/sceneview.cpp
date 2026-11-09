@@ -46,7 +46,11 @@ public:
 
     QOpenGLFramebufferObject *createFramebufferObject(const QSize &size) override
     {
-        return new QOpenGLFramebufferObject(size);
+        // Smoothing edges is the framebuffer's: the scene draws its layers
+        // straight into it, and Qt resolves it before anybody reads it.
+        QOpenGLFramebufferObjectFormat format;
+        format.setSamples(m_samples);
+        return new QOpenGLFramebufferObject(size, format);
     }
 
     /// The one moment both threads are still, so the only place the item is
@@ -65,6 +69,19 @@ public:
             m_reload = true;
         }
         m_running = view->m_running;
+
+        // A framebuffer's samples are fixed when it is made, so another
+        // number is another framebuffer.
+        if (view->m_msaa != m_samples) {
+            m_samples = view->m_msaa;
+            invalidateFramebufferObject();
+        }
+        // Pictures are loaded once, so another size is the scene again.
+        if (view->m_halfTextures != m_half) {
+            m_half = view->m_halfTextures;
+            if (!m_folder.isEmpty())
+                m_reload = true;
+        }
 
         // As a fraction of the item, which is what the renderer wants and
         // what stays true of a framebuffer drawn at another size.
@@ -173,6 +190,8 @@ private:
     QElapsedTimer m_clock;
     double m_seconds = 0;
     bool m_reload = false;
+    int m_samples = 0;
+    bool m_half = false;
     bool m_running = true;
     /// Where the mouse is, as a fraction of the item, and whether the scene
     /// has been told.
@@ -252,10 +271,38 @@ void SceneView::setScaling(int scaling)
 
 /// The renderer keeps these for every scene; a plain store, safe from any
 /// thread, read when each frame is drawn.
+void SceneView::setMsaa(int msaa)
+{
+    msaa = msaa >= 8 ? 8 : msaa >= 4 ? 4 : msaa >= 2 ? 2 : 0;
+    if (msaa == m_msaa)
+        return;
+    m_msaa = msaa;
+    handOptionsOn();
+    update();
+}
+
+void SceneView::setBloom(bool bloom)
+{
+    if (bloom == m_bloom)
+        return;
+    m_bloom = bloom;
+    handOptionsOn();
+    update();
+}
+
+void SceneView::setHalfTextures(bool half)
+{
+    if (half == m_halfTextures)
+        return;
+    m_halfTextures = half;
+    handOptionsOn();
+    update();
+}
+
 void SceneView::handOptionsOn()
 {
     wallflux_options(static_cast<uint32_t>(m_fps), m_music, m_parallax, m_particles,
-                     static_cast<uint32_t>(m_scaling));
+                     static_cast<uint32_t>(m_scaling), m_bloom, m_halfTextures);
     emit optionsChanged();
 }
 

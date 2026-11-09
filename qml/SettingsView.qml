@@ -41,10 +41,29 @@ Item {
 
     /// Wallpaper Engine's presets, by the pictures a second each draws.
     readonly property var rates: [
-        { value: 10, name: qsTr("Low") + " · 10" },
-        { value: 15, name: qsTr("Medium") + " · 15" },
-        { value: 25, name: qsTr("High") + " · 25" },
-        { value: 30, name: qsTr("Ultra") + " · 30" }
+        { value: 10, name: "10" },
+        { value: 15, name: "15" },
+        { value: 25, name: "25" },
+        { value: 30, name: "30" }
+    ]
+
+    readonly property var qualities: [
+        { value: "low", name: qsTr("Low") },
+        { value: "medium", name: qsTr("Medium") },
+        { value: "high", name: qsTr("High") },
+        { value: "ultra", name: qsTr("Ultra") }
+    ]
+
+    readonly property var smoothings: [
+        { value: 0, name: qsTr("Off") },
+        { value: 2, name: "2×" },
+        { value: 4, name: "4×" },
+        { value: 8, name: "8×" }
+    ]
+
+    readonly property var textureSizes: [
+        { value: false, name: qsTr("Full") },
+        { value: true, name: qsTr("Half") }
     ]
 
     readonly property var scalings: [
@@ -113,6 +132,10 @@ Item {
         p.particles = true;
         p.usage = false;
         p.scaling = "default";
+        p.msaa = 0;
+        p.bloom = true;
+        p.halfTextures = false;
+        p.qualityOf = {};
     }
 
     // A section opened slides in and fades up, rather than appearing.
@@ -597,15 +620,67 @@ Item {
 
                 Setting {
                     home: 2
+                    title: qsTr("Quality")
+                    about: qsTr("Wallpaper Engine's presets, setting the three below at once. Changed "
+                                + "one by one they are your own, and no preset is lit. A wallpaper can "
+                                + "have a preset of its own in the panel beside the grid.")
+
+                    Choice {
+                        options: view.qualities
+                        current: view.picker.quality
+                        onChosen: (value) => view.picker.usePreset(value)
+                    }
+                }
+
+                Setting {
+                    home: 2
                     title: qsTr("Frame rate")
-                    about: qsTr("Pictures a second, for scenes and web wallpapers, as Wallpaper Engine's "
-                                + "presets. More is smoother and costs more; a heavy scene that cannot "
-                                + "keep up simply draws fewer.")
+                    about: qsTr("Pictures a second, for scenes and web wallpapers. More is smoother and "
+                                + "costs more; a heavy scene that cannot keep up simply draws fewer.")
 
                     Choice {
                         options: view.rates
                         current: view.picker.fps
                         onChosen: (value) => view.picker.fps = value
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("Smooth edges (MSAA)")
+                    about: qsTr("Samples a pixel, for the edges of turned layers and particles in "
+                                + "scenes. More is smoother and asks more of the graphics card.")
+
+                    Choice {
+                        options: view.smoothings
+                        current: view.picker.msaa
+                        onChosen: (value) => view.picker.msaa = value
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("Glow (post-processing)")
+                    about: qsTr("The glow round bright places that some scenes ask for. Wallpaper "
+                                + "Engine's Low turns it off, and nothing else with it.")
+
+                    Toggle {
+                        value: view.picker.bloom
+                        onChanged: (to) => view.picker.bloom = to
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("Texture resolution")
+                    about: qsTr("Half loads a scene's pictures at half their width and height: less "
+                                + "memory on the graphics card, a little softer. The scene on show is "
+                                + "loaded again.")
+
+                    Choice {
+                        options: view.textureSizes
+                        current: view.picker.halfTextures
+                        onChosen: (value) => view.picker.halfTextures = value
                     }
                 }
 

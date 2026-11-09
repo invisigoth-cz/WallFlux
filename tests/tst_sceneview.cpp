@@ -13,6 +13,7 @@
 #include <QGuiApplication>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
+#include <QScopeGuard>
 #include <QOpenGLFramebufferObject>
 #include <QQuickOpenGLUtils>
 #include <QQuickWindow>
@@ -133,8 +134,22 @@ private slots:
 
     /// Warhammer: effects, composition layers, a post-processing layer and
     /// particles -- most of what the renderer does, in one picture.
+    /// The same picture whatever the quality: smoothed edges through a
+    /// multisampled framebuffer, which Qt resolves, and pictures at half
+    /// their size. Either one drawn black or upside down is what to catch.
+    void drawsASceneIntoTheItem_data()
+    {
+        QTest::addColumn<int>("msaa");
+        QTest::addColumn<bool>("half");
+        QTest::newRow("as it is") << 0 << false;
+        QTest::newRow("edges smoothed") << 4 << false;
+        QTest::newRow("pictures halved") << 0 << true;
+    }
+
     void drawsASceneIntoTheItem()
     {
+        QFETCH(int, msaa);
+        QFETCH(bool, half);
         const QUrl source = scenes().value(QStringLiteral("3356737002"));
         if (source.isEmpty())
             QSKIP("Warhammer is not on this machine");
@@ -143,6 +158,11 @@ private slots:
         window.resize(640, 360);
         SceneView view(window.contentItem());
         view.setSize(QSizeF(640, 360));
+        view.setMsaa(msaa);
+        // A store every scene reads, the direct drawing below included, so
+        // it is put back for the tests after this one.
+        view.setHalfTextures(half);
+        const auto putBack = qScopeGuard([&] { view.setHalfTextures(false); });
         // Standing still at nought seconds, so the picture is one moment and
         // not whichever moment the grab happened to land on.
         view.setRunning(false);

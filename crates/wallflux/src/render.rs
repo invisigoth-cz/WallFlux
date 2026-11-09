@@ -655,6 +655,10 @@ pub struct Scene {
     /// the Settings tab says; see [`set_options`](Self::set_options).
     parallax_on: bool,
     particles_on: bool,
+    /// Whether the glow may be drawn: Wallpaper Engine's post-processing,
+    /// which its Low preset turns off and which reaches the scene's bloom
+    /// and nothing else (`wallpaper64.exe`, `0x140180a41`).
+    bloom_on: bool,
     /// Set when the scene turns on its glow.
     bloom: Option<Bloom>,
     /// The videos the scene's images play, one player for each, however
@@ -1162,6 +1166,7 @@ impl Scene {
             pointer: None,
             parallax_on: true,
             particles_on: true,
+            bloom_on: true,
             buffers,
             simulated: 0.0,
             heard: Spectrum::SILENT,
@@ -1201,9 +1206,10 @@ impl Scene {
     /// What the Settings tab allows: the layers leaning with the mouse, and
     /// the particle systems at all. Switched off they are neither stepped
     /// nor drawn, which is what makes it worth a switch.
-    pub fn set_options(&mut self, parallax: bool, particles: bool) {
+    pub fn set_options(&mut self, parallax: bool, particles: bool, bloom: bool) {
         self.parallax_on = parallax;
         self.particles_on = particles;
+        self.bloom_on = bloom;
     }
 
     /// Says where the mouse is: a fraction of an output of size `output`
@@ -1526,7 +1532,7 @@ impl Scene {
                 (Drawing::Particles(_), None) => {}
             }
         }
-        if let (Some(bloom), Some(frame)) = (&mut self.bloom, &self.frame) {
+        if let (true, Some(bloom), Some(frame)) = (self.bloom_on, &mut self.bloom, &self.frame) {
             unsafe {
                 gl.bind_vertex_array(Some(self.quad));
                 bloom.draw(gl, frame, self.buffer, screen, output, time, &self.white, &self.sound);

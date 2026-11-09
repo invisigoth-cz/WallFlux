@@ -50,6 +50,11 @@ class SceneView : public QQuickFramebufferObject
     /// How a scene meets a screen of another shape: 0 cropped to fill it,
     /// 1 fitted inside it with bars, 2 stretched to it.
     Q_PROPERTY(int scaling READ scaling WRITE setScaling NOTIFY optionsChanged)
+    /// The quality preset's three: samples a pixel for smoothing edges (0, 2,
+    /// 4 or 8), whether a scene may glow, and pictures at half their size.
+    Q_PROPERTY(int msaa READ msaa WRITE setMsaa NOTIFY optionsChanged)
+    Q_PROPERTY(bool bloom READ bloom WRITE setBloom NOTIFY optionsChanged)
+    Q_PROPERTY(bool halfTextures READ halfTextures WRITE setHalfTextures NOTIFY optionsChanged)
 
 public:
     explicit SceneView(QQuickItem *parent = nullptr);
@@ -75,6 +80,12 @@ public:
     void setParticles(bool particles);
     int scaling() const { return m_scaling; }
     void setScaling(int scaling);
+    int msaa() const { return m_msaa; }
+    void setMsaa(int msaa);
+    bool bloom() const { return m_bloom; }
+    void setBloom(bool bloom);
+    bool halfTextures() const { return m_halfTextures; }
+    void setHalfTextures(bool half);
 
 signals:
     void sourceChanged();
@@ -99,6 +110,9 @@ private:
     bool m_parallax = true;
     bool m_particles = true;
     int m_scaling = 0;
+    int m_msaa = 0;
+    bool m_bloom = true;
+    bool m_halfTextures = false;
 };
 
 /// The music a scene wallpaper plays.
