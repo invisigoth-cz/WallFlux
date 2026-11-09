@@ -1841,7 +1841,7 @@ fn load_particles(
                 if let Drawing::Particles(system) = &mut objects[made].drawing {
                     match answer.kind {
                         ChildKind::EventFollow => system.ride_along(child.maxcount),
-                        _ => system.wait_for_parent(),
+                        _ => system.burst_per_event(child.maxcount),
                     }
                 }
                 objects[made].answers = Some(answer);

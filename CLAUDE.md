@@ -537,6 +537,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   lines. With the size: Star Citizen 7.62 to 6.94 levels off its recording,
   Terminator Resistance 3.73 to 3.22, Blue Dawn and the rest unmoved.
 
+  **And a child that bursts at its parent's events is a whole system per
+  event**, up to the child entry's `maxcount` of them at once (missing, it
+  reads as nought and nothing stops it): `FUN_140236cd0` starts one for each
+  particle born. One shared pool let a new burst have only what the last ones
+  left; `burst_per_event` gives each burst the file's `maxcount`. Space
+  Visualizer's sparks against Windows, the brightest half-percent of what
+  they add: 42/72/22 against 49/75/25 for the white ones, 48/25/17 against
+  64/30/15 for the red (94/31/18 before the size went down).
+
 - **A scene's y runs up, and its angles are radians.** Origin in the
   bottom-left corner: rain falls at a y of -10 000, snow at -50 to -90, a
   torch's embers rise on +10, and Space Marine II's aliens -- cut out of

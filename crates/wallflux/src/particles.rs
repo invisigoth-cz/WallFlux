@@ -68,6 +68,10 @@ const MAX_STEP: f32 = 0.1;
 const MOST_AHEAD: f32 = 30.0;
 const AHEAD_STEPS: f32 = 30.0;
 
+/// The most particles a child bursting at its parent's events keeps for all
+/// its bursts together.
+const EVENT_POOLS: usize = 100_000;
+
 /// The frame the pushes are fully felt at: a fortieth of a second.
 const DRAG_FRAME: f32 = 0.025;
 
@@ -790,6 +794,9 @@ pub struct System {
     /// rides with, and at most how many.
     hosts: Vec<Host>,
     ride_limit: usize,
+    /// The most one burst lets out: the file's `maxcount`, the pool of the
+    /// one system Wallpaper Engine starts for each event.
+    per_burst: usize,
 }
 
 /// One of a parent's particles a child rides along with.
@@ -1023,6 +1030,7 @@ impl System {
             serials: 0,
             hosts: Vec::new(),
             ride_limit: 0,
+            per_burst: usize::MAX,
         }
     }
 
@@ -1044,6 +1052,21 @@ impl System {
     /// Stops the system emitting on its own: it waits to be told where.
     pub fn wait_for_parent(&mut self) {
         self.waits = true;
+    }
+
+    /// Waits to be told where, as a burst for each event of the parent, each
+    /// with a pool of its own. `wallpaper64.exe` (`FUN_140236cd0`) starts a
+    /// whole system for every particle the parent lets out, up to the child's
+    /// `maxcount` of them at once; a burst sharing one pool with the bursts
+    /// before it got what they had left. Space Visualizer's spark trails
+    /// live up to a minute at their slow clock, and each new fan had a few
+    /// lines where Windows has fifty.
+    pub fn burst_per_event(&mut self, systems: usize) {
+        self.waits = true;
+        self.per_burst = self.maxcount;
+        // ponytail: every event's pool is kept, however few are in use; a
+        // file with a large `maxcount` is held to EVENT_POOLS altogether.
+        self.maxcount = self.maxcount.saturating_mul(systems.max(1)).min(EVENT_POOLS.max(self.maxcount));
     }
 
     /// Sets how fast the system's time runs, as the scene's override would.
@@ -1075,9 +1098,10 @@ impl System {
 
     fn burst(&mut self, at: [f32; 3], host: Option<u32>, from: Option<Snapshot>, sound: &Spectrum) {
         let emitters = std::mem::take(&mut self.emitters);
+        let most = self.live.len().saturating_add(self.per_burst).min(self.maxcount);
         for (emitter, _) in &emitters {
             for _ in 0..emitter.instantaneous {
-                if self.live.len() >= self.maxcount {
+                if self.live.len() >= most {
                     break;
                 }
                 self.spawn_at(emitter, at, host, from.as_ref(), sound);
@@ -2975,6 +2999,26 @@ mod tests {
         child.burst_at(died[0], &Spectrum::SILENT);
         assert_eq!(child.count(), 20);
         assert!(child.live.iter().all(|p| p.position == [100.0, 50.0, 0.0]));
+    }
+
+    /// Every burst gets a pool of the file's size, as Wallpaper Engine starts a
+    /// system for each event: a burst of 80 into a `maxcount` of 50 is held
+    /// to 50, three of them make 150, and a fourth finds no system free.
+    #[test]
+    fn each_burst_has_a_pool_of_its_own() {
+        let mut child = system(
+            r#"{"maxcount":50,"emitter":[{"name":"sphererandom","rate":0,"instantaneous":80,"distancemax":0}],
+                "initializer":[{"name":"lifetimerandom","min":100,"max":100}]}"#,
+        );
+        child.burst_per_event(3);
+        let at = Snapshot::at([0.0; 3]);
+        child.burst_at(at, &Spectrum::SILENT);
+        assert_eq!(child.count(), 50);
+        child.burst_at(at, &Spectrum::SILENT);
+        child.burst_at(at, &Spectrum::SILENT);
+        assert_eq!(child.count(), 150);
+        child.burst_at(at, &Spectrum::SILENT);
+        assert_eq!(child.count(), 150);
     }
 
     /// A shooting star's glow: born with the star, carried with it, gone when
