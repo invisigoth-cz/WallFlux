@@ -209,6 +209,36 @@ Window {
         return !!one && /^\d+$/.test(one.id);
     }
 
+    /// Whether a wallpaper can be given back from here. Steam owns a
+    /// workshop item's folder, so Steam is what takes it away: without it
+    /// running there is nothing to do but delete somebody's files behind
+    /// Steam's back, and they would come back the next time it looked. One
+    /// of Wallpaper Engine's own needs no Steam: it is hidden.
+    function canRemove(one) {
+        return !!one && (one.official || (picker.fromWorkshop(one) && Steamworks.available));
+    }
+
+    /// Gives a wallpaper back -- the panel's Remove and the Delete key both
+    /// come here, each after asking.
+    function remove(one) {
+        if (!picker.canRemove(one))
+            return;
+        // Taking the file out from under a player that is drawing it
+        // leaves a black screen with no reason given.
+        if (Wallpapers.current.id === one.id)
+            Wallpapers.clear();
+        // Two halves of the same thing: Steam lets go of it, and the
+        // folder goes. Steam leaves the folder exactly where it is --
+        // measured -- so the second half is ours.
+        if (!one.official)
+            Steamworks.remove(one.id);
+        Wallpapers.discard(one.id);
+        if (picker.inspected && picker.inspected.id === one.id) {
+            details.open = false;
+            picker.inspected = null;
+        }
+    }
+
     /// Which card the ring is on, as an id rather than as a row.
     ///
     /// A GridView puts its own `currentIndex` back to nought every time
@@ -1445,6 +1475,79 @@ Window {
         }
     }
 
+    /// Delete's question: whether this wallpaper is really to go.
+    Popup {
+        id: removing
+
+        property var one: null
+
+        anchors.centerIn: parent
+        modal: true
+        // See the trap about CloseOnEscape: a popup with no field to put
+        // the cursor in has to be told to take the keyboard.
+        focus: true
+        padding: 18
+        implicitWidth: 420
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        onClosed: grid.forceActiveFocus()
+
+        function confirm() {
+            const one = removing.one;
+            removing.close();
+            picker.remove(one);
+        }
+
+        background: Rectangle {
+            color: picker.palette.base
+            border.color: picker.palette.mid
+            border.width: 1
+            radius: 14
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 16
+            focus: true
+            Keys.onReturnPressed: removing.confirm()
+            Keys.onEnterPressed: removing.confirm()
+
+            Label {
+                text: qsTr("Remove the wallpaper?")
+                font.pixelSize: 17
+                font.weight: Font.Bold
+            }
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: !removing.one ? ""
+                    : removing.one.official
+                      ? qsTr("“%1” will be hidden, as Wallpaper Engine hides its own.")
+                            .arg(removing.one.title)
+                      : qsTr("“%1” will be unsubscribed in Steam and deleted from the disk.")
+                            .arg(removing.one.title)
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Item { Layout.fillWidth: true }
+
+                RoundedButton {
+                    text: qsTr("Remove")
+                    icon.name: "edit-delete"
+                    accent: "#c0392b"
+                    onClicked: removing.confirm()
+                }
+
+                RoundedButton {
+                    text: qsTr("Cancel")
+                    onClicked: removing.close()
+                }
+            }
+        }
+    }
+
     /// What to call the playlist being saved.
     Popup {
         id: saving
@@ -2246,6 +2349,16 @@ Window {
                                 if (one)
                                     picker.apply(one.id);
                             }
+                            // Delete asks first, in a window of its own: a
+                            // key is easier to press by mistake than a
+                            // button that has to be clicked twice.
+                            Keys.onDeletePressed: {
+                                const one = grid.here();
+                                if (picker.canRemove(one)) {
+                                    removing.one = one;
+                                    removing.open();
+                                }
+                            }
                             Keys.onSpacePressed: {
                                 const one = grid.here();
                                 if (one && one.playable)
@@ -2324,38 +2437,17 @@ Window {
                             // Red, because it is the one thing in this
                             // window that takes something away.
                             accent: "#c0392b"
-                            // Steam owns a workshop item's folder, so Steam
-                            // is what takes it away. Without it running there
-                            // is nothing this could do but delete somebody's
-                            // files behind Steam's back, which would come
-                            // back the next time it looked. One of Wallpaper
-                            // Engine's own needs no Steam: it is hidden.
+                            // See `canRemove`: shown for what could be given
+                            // back, and live only while it can be now.
                             visible: giveBack.official || picker.fromWorkshop(picker.inspected)
-                            enabled: giveBack.official || Steamworks.available
+                            enabled: picker.canRemove(picker.inspected)
                             onClicked: {
-                                const going = picker.inspected;
-                                if (!going)
-                                    return;
                                 if (!giveBack.asking) {
                                     giveBack.asking = true;
                                     return;
                                 }
                                 giveBack.asking = false;
-                                // Taking the file out from under a player
-                                // that is drawing it leaves a black screen
-                                // with no reason given.
-                                if (Wallpapers.current.id === going.id)
-                                    Wallpapers.clear();
-                                // Two halves of the same thing: Steam
-                                // lets go of it, and the folder goes.
-                                // Steam leaves the folder exactly where it
-                                // is -- measured -- so the second half is
-                                // ours.
-                                if (!going.official)
-                                    Steamworks.remove(going.id);
-                                Wallpapers.discard(going.id);
-                                details.open = false;
-                                picker.inspected = null;
+                                picker.remove(picker.inspected);
                             }
 
                             // Another wallpaper in the panel takes the

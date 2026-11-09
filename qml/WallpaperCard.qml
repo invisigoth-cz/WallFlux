@@ -109,10 +109,11 @@ Item {
 
         anchors.top: parent.top
         anchors.left: parent.left
-        anchors.margins: 14
-        width: 22
-        height: 22
-        radius: 6
+        anchors.margins: 10
+        // Small, as tick boxes are; the click reaches a little past it.
+        width: 16
+        height: 16
+        radius: 4
         visible: card.usable && (pointer.hovered || card.ticked || card.showTick)
         // White with a black edge, blue with a black edge when it is
         // ticked -- fixed colours rather than the palette's, because this
@@ -125,7 +126,7 @@ Item {
         Label {
             anchors.centerIn: parent
             text: "✓"
-            font.pixelSize: 13
+            font.pixelSize: 11
             font.weight: Font.Bold
             visible: card.ticked
             color: "#ffffff"
@@ -133,6 +134,7 @@ Item {
 
         MouseArea {
             anchors.fill: parent
+            anchors.margins: -5
             cursorShape: Qt.PointingHandCursor
             onClicked: card.tickAsked()
         }

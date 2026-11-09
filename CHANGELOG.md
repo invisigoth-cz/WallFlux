@@ -6,6 +6,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Delete** in the library's grid removes the wallpaper with the ring on
+  it, after asking.
+
+### Changed
+
+- The tick box on a card is smaller.
+
 ## [0.29.0] — 2026-11-09
 
 ### Added
