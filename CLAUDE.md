@@ -2402,11 +2402,35 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **The Settings tab, reworked and filled out** (the user's word, 9
-   November: a first version now, changed later). Waiting for it: Wallpaper
-   Engine's quality presets beyond the frame rate (MSAA, post-processing,
-   texture size), globally and for one wallpaper; and the wallpaper backlog
-   kept in memory (`backlog-tapet-9-11`), to be come back to.
+**The user's word on 9 November, evening: at the start of the next session,
+even when all they write is "pokračujeme", list everything below that is
+open and let them choose. Do not pick for them.** 0.33.0 was released that
+day; everything asked for on 9 November is in it.
+
+0. **Waiting on decisions of the user's:**
+   - **Making the repository public.** Asked and answered "not yet" on
+     9 November. Until it is, Settings > General > Updates says 404 and
+     WallFlux cannot update itself. History checked: no secrets; the e-mail
+     and one commit's full name would be public.
+   - **Favourites** (a star on a card, a filter): being considered.
+   - **A quick menu on the tray icon** (pause, next wallpaper, mute, the
+     last few wallpapers): proposed, not answered.
+   - Not tried by eye yet: properties on a web wallpaper changing live,
+     pausing for another program's focus on the desktop, anything on a
+     battery (this machine has none), installing an update end to end
+     (needs the repository public and a newer release).
+
+1. **The wallpaper backlog of 9 November** (memory `backlog-tapet-9-11`):
+   Augmentation's bolts blue where Windows has them white-violet, Space
+   Visualizer's spark fans fewer a minute, DOOM's D and M at 0.75, red specks
+   in Star Citizen (unchecked), Alien Isolation's reflections and lit
+   particles; formats nothing here uses yet (`controlpointangle*`,
+   `brightness`, `movement` flags bit 0, `alphafade` and `oscillate*`
+   against the binary, what scene scripts cannot reach); Blue Dawn's hand
+   offset to take out once its cause is found. Outside the wallpapers: a
+   playlist cannot be renamed, the COMPATIBILITY filter section is a
+   placeholder, and a scene loaded again for a changed property starts its
+   clock over.
 
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
