@@ -40,6 +40,13 @@ class SceneView : public QQuickFramebufferObject
     /// is its own: a layer that leans away, a particle force that clears a
     /// hole round the pointer.
     Q_PROPERTY(QVariant pointer READ pointer WRITE setPointer NOTIFY pointerChanged)
+    /// What the Settings tab allows: pictures a second, and whether a scene
+    /// follows the music, leans with the mouse and has particles. They hold
+    /// for every scene at once, so each view hands all four on together.
+    Q_PROPERTY(int fps READ fps WRITE setFps NOTIFY optionsChanged)
+    Q_PROPERTY(bool music READ music WRITE setMusic NOTIFY optionsChanged)
+    Q_PROPERTY(bool parallax READ parallax WRITE setParallax NOTIFY optionsChanged)
+    Q_PROPERTY(bool particles READ particles WRITE setParticles NOTIFY optionsChanged)
 
 public:
     explicit SceneView(QQuickItem *parent = nullptr);
@@ -55,22 +62,37 @@ public:
     QVariant pointer() const { return m_pointer ? QVariant(*m_pointer) : QVariant(); }
     void setPointer(const QVariant &pointer);
 
+    int fps() const { return m_fps; }
+    void setFps(int fps);
+    bool music() const { return m_music; }
+    void setMusic(bool music);
+    bool parallax() const { return m_parallax; }
+    void setParallax(bool parallax);
+    bool particles() const { return m_particles; }
+    void setParticles(bool particles);
+
 signals:
     void sourceChanged();
     void runningChanged();
     void errorChanged();
     void pointerChanged();
+    void optionsChanged();
 
 private:
     friend class SceneRenderer;
     void setError(const QString &error);
     void pace();
+    void handOptionsOn();
 
     QUrl m_source;
     bool m_running = true;
     QString m_error;
     std::optional<QPointF> m_pointer;
     QTimer m_frames;
+    int m_fps = 15;
+    bool m_music = true;
+    bool m_parallax = true;
+    bool m_particles = true;
 };
 
 /// The music a scene wallpaper plays.

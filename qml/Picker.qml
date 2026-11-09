@@ -4,6 +4,7 @@
 
 pragma ComponentBehavior: Bound
 
+import QtCore
 import QtQuick
 import QtQuick.Window
 // The Fusion style by name rather than through QQuickStyle: it is the one
@@ -46,6 +47,45 @@ Window {
     /// Which way the colours go. Dark to start with, because a wallpaper
     /// picker is a window full of pictures.
     property bool dark: true
+
+    /// What the Settings tab sets, read by Main.qml for every screen.
+    /// Pictures a second: Wallpaper Engine's presets give 10, 15, 25 and 30,
+    /// and its welcome dialog picks 15.
+    property int fps: 15
+    /// Whether a wallpaper may follow the music the speakers are playing.
+    property bool music: true
+    /// Whether a scene may follow the mouse: lean its layers, push its particles.
+    property bool mouse: true
+    property bool parallax: true
+    property bool particles: true
+    /// Whether the window is tinted by the wallpaper it is showing.
+    property bool tint: true
+
+    // The one place anything here is remembered between runs, besides the
+    // playlists: ~/.config/WallFlux/wallflux.conf. The wallpaper itself is
+    // still not -- nothing plays at startup, by design.
+    Settings {
+        id: remembered
+
+        category: "settings"
+        property alias dark: picker.dark
+        property alias muted: picker.muted
+        property alias volume: picker.volume
+        property alias fps: picker.fps
+        property alias music: picker.music
+        property alias mouse: picker.mouse
+        property alias parallax: picker.parallax
+        property alias particles: picker.particles
+        property alias tint: picker.tint
+        property bool czech: false
+        property var screens: []
+    }
+
+    Component.onCompleted: Language.czech = remembered.czech
+    Connections {
+        target: Language
+        function onCzechChanged() { remembered.czech = Language.czech; }
+    }
 
     /// The one the details panel is about, or null while it is shut.
     property var inspected: null
@@ -1405,6 +1445,8 @@ Window {
     /// whichever tab is being looked at, and nothing at all while both
     /// are shut.
     readonly property url ambient: {
+        if (!picker.tint)
+            return "";
         if (tabs.currentIndex === 0)
             return details.open && picker.inspected ? picker.inspected.preview : "";
         if (tabs.currentIndex === 1 && steam.item)
@@ -2319,22 +2361,20 @@ Window {
                 // Every screen to begin with. Done here rather than as a
                 // default on the view, because the list of screens is not
                 // there yet when the view is built.
+                // Or the ones ticked last time, those of them still plugged in.
                 Component.onCompleted: {
                     const names = [];
                     const all = Qt.application.screens;
                     for (let i = 0; i < all.length; ++i)
                         names.push(all[i].name);
-                    displays.wanted = names;
+                    const kept = (remembered.screens || []).filter((name) => names.indexOf(name) >= 0);
+                    displays.wanted = kept.length > 0 ? kept : names;
                 }
+                onWantedChanged: remembered.screens = displays.wanted
             }
 
-            // The one that is not built yet.
-            Label {
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                opacity: 0.5
-                font.pixelSize: 18
-                text: qsTr("Coming soon")
+            SettingsView {
+                picker: picker
             }
         }
 

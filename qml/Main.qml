@@ -74,7 +74,7 @@ Item {
     Binding {
         target: Pointer
         property: "watching"
-        value: root.showingScene && !root.covered
+        value: root.showingScene && !root.covered && picker.mouse
     }
 
     function showPicker() {
@@ -126,6 +126,10 @@ Item {
             silent: root.silent
             covered: root.covered
             volume: picker.volume
+            fps: picker.fps
+            music: picker.music
+            parallax: picker.parallax
+            particles: picker.particles
             onHeld: root.oneIsHolding()
         }
     }

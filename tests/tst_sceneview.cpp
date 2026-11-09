@@ -281,6 +281,14 @@ private slots:
         QTest::qWait(2000);
         QVERIFY2(frames.size() >= 25 && frames.size() <= 34, qPrintable(QString::number(frames.size())));
 
+        // As often as the Settings tab says: Ultra is thirty.
+        view.setFps(30);
+        QTest::qWait(300);
+        frames.clear();
+        QTest::qWait(2000);
+        QVERIFY2(frames.size() >= 52 && frames.size() <= 66, qPrintable(QString::number(frames.size())));
+        view.setFps(15);
+
         // And not at all while it is held.
         view.setRunning(false);
         QTest::qWait(200);

@@ -38,6 +38,11 @@ Window {
 
     /// How loud a video plays, 0 to 1.
     required property real volume
+    /// What the Settings tab allows, for every scene and page alike.
+    property int fps: 15
+    property bool music: true
+    property bool parallax: true
+    property bool particles: true
 
     /// Whether this screen works the wallpaper out, or shows the picture the
     /// first one worked out -- Wallpaper Engine's "Clone single wallpaper".
@@ -227,19 +232,20 @@ Window {
                 sourceCode: "window.wallpaperRegisterAudioListener = function (listener) { window.wallfluxHear = listener; };"
             }, {
                 // A page draws as often as it asks for a frame, which Chromium
-                // grants at the screen's 144 a second. Fifteen, as a scene: frames
-                // that come sooner than a fifteenth after the last are passed over.
+                // grants at the screen's 144 a second. As often as a scene, by the
+                // Settings tab: frames that come sooner are passed over. A change
+                // reaches the next page loaded, not the one on show.
                 // Not a timer -- Chromium runs a frame's callbacks well after the
                 // time it hands them, and a timer counted from that time ran at
                 // sixty. CSS animations and video are not held.
-                name: "fifteen-a-second",
+                name: "frame-rate",
                 injectionPoint: WebEngineScript.DocumentCreation,
                 worldId: WebEngineScript.MainWorld,
                 sourceCode: `(function () {
                     const frame = window.requestAnimationFrame.bind(window);
                     let waiting = new Map(), next = 1, asked = false, last = -Infinity;
                     function tick(now) {
-                        if (now - last < 1000 / 15 - 2) {
+                        if (now - last < 1000 / ${surface.fps} - 2) {
                             frame(tick);
                             return;
                         }
@@ -278,7 +284,7 @@ Window {
             Timer {
                 interval: 33
                 repeat: true
-                running: web.listens && web.visible
+                running: web.listens && web.visible && surface.music
                 onTriggered: web.runJavaScript("window.wallfluxHear(" + JSON.stringify(SceneSounds.speakers()) + ")")
             }
 
@@ -372,6 +378,10 @@ Window {
             visible: surface.showingScene
             source: surface.showingScene ? Wallpapers.current.source : ""
             running: surface.showingScene && !surface.covered
+            fps: surface.fps
+            music: surface.music
+            parallax: surface.parallax
+            particles: surface.particles
             // The desktop's coordinates less where this screen starts on it,
             // which is this item's own: it fills a surface that fills the screen.
             pointer: Pointer.known && surface.onScreen

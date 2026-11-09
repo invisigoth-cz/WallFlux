@@ -14,9 +14,10 @@
 use std::ffi::{CStr, c_char, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::audio::Audio;
-use crate::render::{DEFAULT_BUDGET, Scene};
+use crate::render::{DEFAULT_BUDGET, FPS, Scene};
 use glow::HasContext;
 
 /// What the C side holds: the scene, and the GL functions it was loaded with.
@@ -32,6 +33,24 @@ pub struct WallfluxScene {
 /// see `audio` for why. `None` where there is no sound server, and the
 /// scenes run as they would in a silent room.
 static EARS: OnceLock<Option<Audio>> = OnceLock::new();
+
+/// What the Settings tab allows every scene: following the music, leaning
+/// with the mouse, and particles at all. See `wallflux_options`.
+static MUSIC: AtomicBool = AtomicBool::new(true);
+static PARALLAX: AtomicBool = AtomicBool::new(true);
+static PARTICLES: AtomicBool = AtomicBool::new(true);
+
+/// Sets what every scene may do, as the Settings tab says: draw `fps`
+/// pictures a second, follow the `music`, lean with the mouse (`parallax`)
+/// and have `particles`. Without the music nothing listens to the speakers,
+/// so Plasma's microphone icon stays away as well.
+#[unsafe(no_mangle)]
+pub extern "C" fn wallflux_options(fps: u32, music: bool, parallax: bool, particles: bool) {
+    FPS.store(fps.clamp(1, 240), Ordering::Relaxed);
+    MUSIC.store(music, Ordering::Relaxed);
+    PARALLAX.store(parallax, Ordering::Relaxed);
+    PARTICLES.store(particles, Ordering::Relaxed);
+}
 
 /// Looks up an OpenGL function by name, as Qt's context does.
 pub type Loader = unsafe extern "C" fn(name: *const c_char, user: *mut c_void) -> *const c_void;
@@ -149,11 +168,14 @@ pub unsafe extern "C" fn wallflux_scene_draw(
     if this.broken {
         return false;
     }
-    if this.scene.listens()
+    if !MUSIC.load(Ordering::Relaxed) {
+        this.scene.hear(wpe_format::particle::Spectrum::SILENT);
+    } else if this.scene.listens()
         && let Some(ears) = EARS.get_or_init(Audio::start)
     {
         this.scene.hear(ears.bands());
     }
+    this.scene.set_options(PARALLAX.load(Ordering::Relaxed), PARTICLES.load(Ordering::Relaxed));
     let drawn = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: the context is current, as the caller promised.
         unsafe {

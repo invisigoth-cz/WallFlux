@@ -51,6 +51,7 @@ set_source_files_properties(qml/PlaylistBar.qml PROPERTIES QT_RESOURCE_ALIAS Pla
 set_source_files_properties(qml/WallpaperSurface.qml PROPERTIES QT_RESOURCE_ALIAS WallpaperSurface.qml)
 set_source_files_properties(qml/SceneSound.qml PROPERTIES QT_RESOURCE_ALIAS SceneSound.qml)
 set_source_files_properties(qml/DisplaysView.qml PROPERTIES QT_RESOURCE_ALIAS DisplaysView.qml)
+set_source_files_properties(qml/SettingsView.qml PROPERTIES QT_RESOURCE_ALIAS SettingsView.qml)
 set_source_files_properties(qml/steamprofile.js PROPERTIES QT_RESOURCE_ALIAS steamprofile.js)
 
 # The QML lives in the binary rather than beside it, so the program runs from
@@ -80,8 +81,11 @@ qt_add_qml_module(wallflux
         qml/WallpaperSurface.qml
         qml/SceneSound.qml
         qml/DisplaysView.qml
+        qml/SettingsView.qml
         qml/steamprofile.js
     SOURCES
+        src/autostart.h
+        src/autostart.cpp
         src/otheraudio.h
         src/otheraudio.cpp
         src/playlists.h
@@ -188,6 +192,14 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_wallpapercore PRIVATE crates/wallflux/include)
     target_link_libraries(tst_wallpapercore PRIVATE Qt6::Qml Qt6::Test wallflux_scene)
     add_test(NAME wallpapercore COMMAND tst_wallpapercore)
+
+    qt_add_executable(tst_autostart
+        tests/tst_autostart.cpp
+        src/autostart.cpp
+    )
+    target_include_directories(tst_autostart PRIVATE src)
+    target_link_libraries(tst_autostart PRIVATE Qt6::Qml Qt6::Test)
+    add_test(NAME autostart COMMAND tst_autostart)
 
     qt_add_executable(tst_playlists
         tests/tst_playlists.cpp

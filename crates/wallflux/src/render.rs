@@ -10,6 +10,7 @@
 //! the order they are meant to stack.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use glow::HasContext;
 use wpe_format::particle::ChildKind;
@@ -650,6 +651,10 @@ pub struct Scene {
     zoom: f32,
     lighting: wpe_format::scene::Lighting,
     pointer: Option<(f32, f32)>,
+    /// Whether the mouse may lean the layers and the particles be drawn, as
+    /// the Settings tab says; see [`set_options`](Self::set_options).
+    parallax_on: bool,
+    particles_on: bool,
     /// Set when the scene turns on its glow.
     bloom: Option<Bloom>,
     /// The videos the scene's images play, one player for each, however
@@ -1155,6 +1160,8 @@ impl Scene {
             zoom: file.general.zoom,
             lighting: wpe_format::scene::Lighting::read(bytes),
             pointer: None,
+            parallax_on: true,
+            particles_on: true,
             buffers,
             simulated: 0.0,
             heard: Spectrum::SILENT,
@@ -1189,6 +1196,14 @@ impl Scene {
                 || object.effects.iter().filter_map(|step| step.pass.as_ref()).any(|pass| pass.hears)
                 || matches!(&object.drawing, Drawing::Particles(system) if system.listens())
         }) || self.scripts.as_ref().is_some_and(Scripts::listens)
+    }
+
+    /// What the Settings tab allows: the layers leaning with the mouse, and
+    /// the particle systems at all. Switched off they are neither stepped
+    /// nor drawn, which is what makes it worth a switch.
+    pub fn set_options(&mut self, parallax: bool, particles: bool) {
+        self.parallax_on = parallax;
+        self.particles_on = particles;
     }
 
     /// Says where the mouse is: a fraction of an output of size `output`
@@ -1385,14 +1400,14 @@ impl Scene {
             gl.disable(glow::CULL_FACE);
         }
         let drift = match &mut self.parallax {
-            Some(p) => {
+            Some(p) if self.parallax_on => {
                 let ease = (p.delay * (time - p.eased_at)).clamp(0.0, 1.0);
                 p.eased_at = time;
                 let goal = p.aim.map(|a| a * p.amount * p.influence);
                 p.drift = std::array::from_fn(|i| p.drift[i] + (goal[i] - p.drift[i]) * ease);
                 Some((p.drift, p.amount))
             }
-            None => None,
+            _ => None,
         };
         let width = self.scene_size.0 as f32;
         let kept: BTreeMap<i64, &Target> = self
@@ -1481,6 +1496,7 @@ impl Scene {
                         }
                     }
                 },
+                (Drawing::Particles(_), _) if !self.particles_on => {}
                 (Drawing::Particles(system), Some(buffers)) => unsafe {
                     // Taken for each system that wants it, since the one
                     // before it is part of what it refracts.
@@ -1639,6 +1655,10 @@ impl Scene {
         if time - self.simulated < 1e-4 {
             return;
         }
+        if !self.particles_on {
+            self.simulated = time;
+            return;
+        }
         if steps > most {
             self.simulated = time - most as f32 * STEP;
             steps = most;
@@ -1646,9 +1666,7 @@ impl Scene {
         let slice = (time - self.simulated) / steps as f32;
         // Drag is reckoned by the frame. Catching up -- `settle`, or a window
         // uncovered -- is a run of the desktop's frames, not one long one.
-        // ponytail: fifteen as the desktop draws; hand the rate in when the
-        // Settings tab offers the four.
-        let frame = (time - self.simulated).min(1.0 / 15.0);
+        let frame = (time - self.simulated).min(1.0 / FPS.load(Ordering::Relaxed).max(1) as f32);
         for object in &mut self.objects {
             let middle = middle_of(object.origin, object.anchor, object.size, object.scale, object.angles[2]);
             let model = transform::model(middle, object.size, object.scale, object.angles);
@@ -3890,6 +3908,11 @@ pub(crate) fn scene_entry(project: Option<&[u8]>) -> String {
 /// while they came out as splats, draw as Windows' once a placed system's
 /// `size` and `speed` reached its `sizechange` and its pull.
 const LEFT_OUT: &[(&str, i64)] = &[];
+
+/// How many pictures a second the desktop draws, as the Settings tab says:
+/// Wallpaper Engine's presets give 10, 15, 25 and 30, and 15 is its default.
+/// What a frame lasts decides how hard drag and the other pushes are felt.
+pub static FPS: AtomicU32 = AtomicU32::new(15);
 
 /// Objects Wallpaper Engine draws somewhere other than their file says, for a
 /// reason not found, moved by hand by the user's decision of 9 November: (the

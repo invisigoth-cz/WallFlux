@@ -159,9 +159,24 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   - A playlist does not cycle at all while Wallpaper Engine's own window is
     open.
 - **A picker with its sections across the top**: Installed, Steam,
-  Displays, Settings, centred. The first two are built; the other two say
-  "Coming soon" and are there because naming them is what decides where
-  the next piece of work goes.
+  Displays, Settings, centred, all four built.
+- **A Settings tab, in sections down its left** (as linux-wallpaper-engine-ux
+  has them, the user's choice of 9 November; more sections later, and the
+  contents to be reworked). *Appearance*: the dark theme, the window tinted
+  by the wallpaper. *System*: pictures a second (Wallpaper Engine's 10, 15,
+  25, 30 -- scenes through `SceneView.fps`, pages through the
+  `requestAnimationFrame` wrapper, which takes a change at the next page
+  loaded), following the music, the mouse, parallax and particles (the
+  last three and the music through `wallflux_options`, global in the
+  renderer; without the music nothing listens, so Plasma's microphone icon
+  stays away). *General*: the language, the wallpaper's sound and volume,
+  starting at login (`Autostart`: an entry of the user's own in
+  `~/.config/autostart`, `Hidden=true` when off, which the XDG rules put in
+  place of the package's in `/etc/xdg/autostart`), and a reset. Every row
+  works; nothing is a placeholder. **Remembered between runs** in
+  `~/.config/WallFlux/wallflux.conf` through QtCore's `Settings` in
+  `Picker.qml`, with the ticked screens as well -- not the wallpaper, which
+  still does not play at startup.
 - **A wallpaper on every screen that is ticked for it.** The Displays tab
   draws the monitors as they are arranged -- read off their positions on
   the shared desktop, so it is the arrangement somebody set up in their own
@@ -282,6 +297,10 @@ qml/SceneSound.qml    one sound object of a scene, played as it asks
 qml/WallpaperSurface.qml  one screen's wallpaper: the layer-shell window,
                       the web view, the player, and what a transition
                       holds over them
+qml/SettingsView.qml  the Settings tab: sections down the left, a row to a
+                      setting; the values live on the picker
+src/autostart.h       Autostart: starting at login, by the user's own entry
+src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
 qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
                       switch for each
 qml/Picker.qml        the picker window: header, search, grid, footer
@@ -314,6 +333,7 @@ tests/tst_playlists.cpp       what a playlist remembers and how long a
                               wallpaper stays -- five seconds of suite time
                               on purpose, see below
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
+tests/tst_autostart.cpp       the user's entry written hidden and not
 tests/tst_mirror.cpp          one window's picture in another, the right way
                               up and cropped, and kept up to date
 tests/tst_sceneview.cpp       a scene drawn through the item, checked against
@@ -372,8 +392,9 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
 - `Tags`: `genres` (25), `types`, `ratings`, `resolutions`, `properties`;
   `name(tag, locale)`, `labelled(tags, locale)`
 
-`Playlists` is another singleton of that module, and the only thing in
-this program that remembers anything between runs:
+`Playlists` is another singleton of that module, and, with the settings
+`Picker.qml` keeps in `wallflux.conf`, the only thing in this program that
+remembers anything between runs:
 
 - `all` (each `{ name, ids, hours, minutes, seconds, shuffle, videoEnds,
   whilePaused, alwaysFirst, transition, transitionMs }`), `playing` (a
@@ -2286,8 +2307,11 @@ the file. Everything after it should.
 
 ## Open, in the order they are likely to be taken
 
-1. **Displays and Settings**, the two remaining tabs. Nothing has been
-   asked for in either of them yet.
+1. **The Settings tab, reworked and filled out** (the user's word, 9
+   November: a first version now, changed later). Waiting for it: Wallpaper
+   Engine's quality presets beyond the frame rate (MSAA, post-processing,
+   texture size), globally and for one wallpaper; and the wallpaper backlog
+   kept in memory (`backlog-tapet-9-11`), to be come back to.
 
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+#include <algorithm>
 #include <clocale>
 #include "sceneview.h"
 
@@ -199,10 +200,52 @@ SceneView::SceneView(QQuickItem *parent)
     // moment one was drawn ran at the screen's 144 a second, for a wallpaper.
     // Fifteen is Wallpaper Engine's own default: its welcome dialog picks the
     // Medium preset, which is 15 (Low 10, High 25, Ultra 30).
-    // ponytail: fixed at 15 until the Settings tab offers the four.
-    m_frames.setInterval(1000 / 15);
+    // The Settings tab offers the four; see setFps().
+    m_frames.setInterval(1000 / m_fps);
     m_frames.setTimerType(Qt::PreciseTimer);
     connect(&m_frames, &QTimer::timeout, this, [this] { update(); });
+}
+
+void SceneView::setFps(int fps)
+{
+    fps = std::clamp(fps, 1, 240);
+    if (fps == m_fps)
+        return;
+    m_fps = fps;
+    m_frames.setInterval(1000 / m_fps);
+    handOptionsOn();
+}
+
+void SceneView::setMusic(bool music)
+{
+    if (music == m_music)
+        return;
+    m_music = music;
+    handOptionsOn();
+}
+
+void SceneView::setParallax(bool parallax)
+{
+    if (parallax == m_parallax)
+        return;
+    m_parallax = parallax;
+    handOptionsOn();
+}
+
+void SceneView::setParticles(bool particles)
+{
+    if (particles == m_particles)
+        return;
+    m_particles = particles;
+    handOptionsOn();
+}
+
+/// The renderer keeps these for every scene; a plain store, safe from any
+/// thread, read when each frame is drawn.
+void SceneView::handOptionsOn()
+{
+    wallflux_options(static_cast<uint32_t>(m_fps), m_music, m_parallax, m_particles);
+    emit optionsChanged();
 }
 
 /// Ticks while there is a scene to move: not while it is held, not with
