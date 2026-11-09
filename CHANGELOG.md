@@ -15,9 +15,6 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   off), the status bar says when one is out, and Install fetches its Arch
   package and installs it with pacman through the desktop's own password
   window, after which WallFlux starts again with its window open.
-
-### Added
-
 - **Updates from the workshop.** A wallpaper whose author has published a
   newer version than the one on the disk says Update on its card, the panel
   has an Update button with its progress, and Update all fetches every one
