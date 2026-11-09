@@ -68,6 +68,41 @@ const MAX_STEP: f32 = 0.1;
 const MOST_AHEAD: f32 = 30.0;
 const AHEAD_STEPS: f32 = 30.0;
 
+/// The frame the pushes are fully felt at: a fortieth of a second.
+const DRAG_FRAME: f32 = 0.025;
+
+/// How much of a step's time drag, turbulence, a vortex and a pull are felt
+/// over, in a frame this long. `wallpaper64.exe` (`FUN_140236cd0`) hands its
+/// operators two times: the step, which gravity and the move take, and the
+/// step times `min(0.025 / frame, 1)^0.7`, which the pushes take -- the frame
+/// being the one the scene keeps at +0x15c. At fifteen a second, 0.50.
+fn felt(frame: f32) -> f32 {
+    (DRAG_FRAME / frame).min(1.0).powf(0.7)
+}
+
+/// What drag leaves of a velocity over `slice` seconds of the system's time,
+/// as Wallpaper Engine has it. It runs a frame's operators once -- twice at
+/// half the time when it is held to 20 frames a second or fewer -- and after
+/// each step multiplies the velocity by `1 - min(drag x step x felt,
+/// 0.99999988)` (the `movement` case of `0x14023fbc0`). Our steps are
+/// sixtieths, so that factor is spread over them: over a whole frame it comes
+/// to the same, and at 15 a second it is about half the drag a plain
+/// `1 / (1 + drag x dt)` gave.
+fn drag_left(drag: f32, slice: f32, frame: f32, clock: f32) -> f32 {
+    if drag <= 0.0 || slice <= 0.0 {
+        return 1.0;
+    }
+    // ponytail: the frame rate is told by the frame's length, where Wallpaper
+    // Engine reads its setting; the same thing at a steady fifteen.
+    let halves = if frame >= 1.0 / 20.0 { 2.0 } else { 1.0 };
+    let step = frame / halves * clock;
+    if step <= 0.0 {
+        return 1.0;
+    }
+    let kept = 1.0 - (drag * step * felt(frame)).min(0.999_999_9);
+    kept.powf(slice / step)
+}
+
 struct Particle {
     position: [f32; 3],
     /// Where this particle has been, oldest first, for a system whose
@@ -733,6 +768,9 @@ pub struct System {
     pointer_velocity: [f32; 3],
     /// Where it was at the last step.
     pointer_was: Option<[f32; 3]>,
+    /// How long the frame being drawn lasts, in seconds of the clock on the
+    /// wall: Wallpaper Engine's drag is reckoned by it (see `Movement`).
+    frame: f32,
     /// The edges of the scene, in the system's own space, for what collides
     /// with them.
     scene: Option<Range<[f32; 3]>>,
@@ -976,6 +1014,7 @@ impl System {
             pointer: None,
             pointer_velocity: [0.0; 3],
             pointer_was: None,
+            frame: DRAG_FRAME,
             scene: None,
             steps: 0,
             burst: false,
@@ -1289,6 +1328,13 @@ impl System {
         }
     }
 
+    /// Says how long the frame now being drawn lasts, which drag is reckoned by.
+    pub fn frame_lasts(&mut self, seconds: f32) {
+        if seconds > 0.0 {
+            self.frame = seconds;
+        }
+    }
+
     /// Whether this system draws as ribbons rather than loose quads.
     pub fn is_rope(&self) -> bool {
         !matches!(self.ribbon, Ribbon::None)
@@ -1377,6 +1423,11 @@ impl System {
         };
         let scene = self.scene;
         let hosts = &self.hosts;
+        let (frame, clock) = (self.frame, self.clock);
+        // The pushes -- turbulence, a vortex, a pull -- are felt over this
+        // much time, as drag is: `wallpaper64.exe` hands its operators the
+        // step and this second time, and gravity and the move take the first.
+        let felt_dt = dt * felt(frame);
         // A system in world space feels its gravity at its object's size but
         // not at its object's turn. Space Visualizer's spark trails say "500
         // 1500" on objects 0.6 by 0.3 turned -43 degrees, and on Windows each
@@ -1431,14 +1482,14 @@ impl System {
                             particle.position = std::array::from_fn(|i| from[i] + line[i] * t);
                         }
                     }
+                    // Gravity, then the move, then drag -- in that order, as
+                    // `wallpaper64.exe` does it.
                     Operator::Movement { gravity, drag } => {
+                        let kept = drag_left(*drag, dt, frame, clock);
                         for (axis, gravity) in gravity.iter().enumerate() {
                             particle.velocity[axis] += gravity * pull[axis] * dt;
-                            // Drag as a proportion shed per second, which stays
-                            // stable whatever the frame rate and never reverses
-                            // the velocity the way `1 - drag * dt` would.
-                            particle.velocity[axis] /= 1.0 + drag * dt;
                             particle.position[axis] += particle.velocity[axis] * pace * dt;
+                            particle.velocity[axis] *= kept;
                         }
                     }
                     // It pushes: the field accelerates the particle. Read as a
@@ -1456,7 +1507,7 @@ impl System {
                             + (field.speed.max - field.speed.min) * particle.drift)
                             * loudness(field.audio, sound);
                         for (axis, mask) in mask.iter().enumerate() {
-                            particle.velocity[axis] += along[axis] * mask * speed * dt;
+                            particle.velocity[axis] += along[axis] * mask * speed * felt_dt;
                         }
                     }
                     // A spin only turns once something drives it, which is
@@ -1489,7 +1540,7 @@ impl System {
                         let away: [f32; 3] = std::array::from_fn(|i| particle.position[i] - at[i]);
                         let distance = length(away);
                         if distance > f32::EPSILON && distance < *reach {
-                            let mut force = strength * (1.0 - distance / reach) * dt;
+                            let mut force = strength * (1.0 - distance / reach) * felt_dt;
                             if *no_overshoot && distance < force {
                                 force = distance;
                             }
@@ -1516,7 +1567,7 @@ impl System {
                         let distance = length(away);
                         if distance > 1e-3 {
                             let normal = away.map(|v| v / distance);
-                            let push = vortex_speed(vortex, distance) * loudness(vortex.audio, sound) * dt;
+                            let push = vortex_speed(vortex, distance) * loudness(vortex.audio, sound) * felt_dt;
                             let round = cross(normal, vortex.axis);
                             for axis in 0..3 {
                                 particle.velocity[axis] += round[axis] * push;
@@ -3034,6 +3085,23 @@ mod tests {
         run(&mut s, 1.0, 1.0 / 60.0);
         let [x, y, _] = s.live[0].position;
         assert!((-13.5..=-11.5).contains(&y) && x.abs() < 0.01, "fell to {x}, {y}");
+    }
+
+    /// Over a whole frame, our sixtieths leave what Wallpaper Engine's steps
+    /// leave: one step at sixty a second, two half steps felt at
+    /// `(0.025 x 15)^0.7` at fifteen.
+    #[test]
+    fn drag_over_a_frame_is_wallpaper_engines() {
+        let close = |a: f32, b: f32| (a - b).abs() < 1e-5;
+        let sixtieth = drag_left(6.0, 1.0 / 60.0, 1.0 / 60.0, 1.0);
+        assert!(close(sixtieth, 1.0 - 6.0 / 60.0), "{sixtieth}");
+        let frame = 1.0 / 15.0;
+        let ours: f32 = (0..4).map(|_| drag_left(6.0, frame / 4.0, frame, 1.0)).product();
+        let wpe = (1.0 - 6.0 * (frame / 2.0) * (0.025f32 / frame).powf(0.7)).powi(2);
+        assert!(close(ours, wpe), "{ours} against {wpe}");
+        assert_eq!(drag_left(0.0, 0.1, frame, 1.0), 1.0);
+        // Never reversed, however strong.
+        assert!(drag_left(1e6, frame, frame, 1.0) >= 0.0);
     }
 
     #[test]

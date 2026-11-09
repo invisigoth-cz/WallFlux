@@ -1634,11 +1634,17 @@ impl Scene {
             steps = most;
         }
         let slice = (time - self.simulated) / steps as f32;
+        // Drag is reckoned by the frame. Catching up -- `settle`, or a window
+        // uncovered -- is a run of the desktop's frames, not one long one.
+        // ponytail: fifteen as the desktop draws; hand the rate in when the
+        // Settings tab offers the four.
+        let frame = (time - self.simulated).min(1.0 / 15.0);
         for object in &mut self.objects {
             let middle = middle_of(object.origin, object.anchor, object.size, object.scale, object.angles[2]);
             let model = transform::model(middle, object.size, object.scale, object.angles);
             if let Drawing::Particles(system) = &mut object.drawing {
                 system.stand_at(model);
+                system.frame_lasts(frame);
             }
         }
         let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
@@ -1819,20 +1825,12 @@ fn load_particles(
         // A number of its own, since a system is seeded from it: with its
         // parent's, a child and its siblings would all emit in step.
         placed.id = object.id.wrapping_mul(1_000_003).wrapping_add(index as i64 + 1);
-        // Its alpha and its clock go on down. Warhammer's rays are children of
-        // charges set anywhere from 0.13 to 0.76 at a rate of 0.07, and on
-        // Windows they keep to their charge's strength and its slow time. The
-        // rest stays with the parent: handed down, Star Citizen's embers, five
-        // times the size, took their glows with them and burned the sky white.
-        placed.instanceoverride = object.instanceoverride.as_ref().map(|over| {
-            wpe_format::scene::InstanceOverride {
-                alpha: over.alpha.clone(),
-                rate: over.rate.clone(),
-                colorn: over.colorn.clone(),
-                color: over.color.clone(),
-                ..Default::default()
-            }
-        });
+        // The whole of the instance's override goes on down, as the parent's
+        // object keeps it: `wallpaper64.exe` binds a child it spawns
+        // (`FUN_140236cd0` -> `FUN_14022f890`) through `FUN_1401d15a0` with
+        // the child's own bindings and the same object's values, exactly as
+        // the parent was bound. Space Visualizer's spark trails are children
+        // of systems set to a size of 0.2, and on Windows they are hair-thin.
         placed.origin.value.0 = transform::apply(&parent, child.origin);
         placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
         placed.angles.value.0 = std::array::from_fn(|i| object.angles.value.0[i] + child.angles[i]);

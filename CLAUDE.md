@@ -519,14 +519,23 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   colour. Look at a particle system's colour while it is lit.
 
 - **A scene's `instanceoverride` multiplies the particle system it
-  places, and stays with that system.** 462 particle objects carry one
+  places, and its children with it.** 462 particle objects carry one
   -- alpha, size, lifetime, rate, speed, count, and a colour written
   either as `colorn` (0-1) or, in older scenes, `color` (0-255), never
   both. Unread, every smoke kept its preset's colours, which is where the
-  pastel blobs in half the library came from. **A child system takes only its alpha and its rate:** handed the size too, Star
-  Citizen's embers -- five times as large -- took their glows with them and burned
-  the sky white; given no alpha, Warhammer's faintest charge threw the same rays as
-  its brightest. Both were checked against recordings.
+  pastel blobs in half the library came from. **A child takes the whole of
+  it**, read out of `wallpaper64.exe` on 9 November: a child spawned in
+  `FUN_140236cd0` is bound by `FUN_14022f890` -> `FUN_1401d15a0` with its
+  own bindings and the same object's values (+0x778), exactly as the parent
+  was. `rate` is not a binding at all except to `turbulence`'s
+  `timescale`: the object multiplies the system's step by it
+  (`0x1402307ff`), and the children run in that time. Until then children
+  took only alpha, rate and colour -- a rule read off Star Citizen's embers
+  burning the sky white, which other mistakes of the time explain -- and
+  Space Visualizer's lava spark trails, children of systems at a size of
+  0.2, were thick bright plumes where Windows has fans of hair-thin red
+  lines. With the size: Star Citizen 7.62 to 6.94 levels off its recording,
+  Terminator Resistance 3.73 to 3.22, Blue Dawn and the rest unmoved.
 
 - **A scene's y runs up, and its angles are radians.** Origin in the
   bottom-left corner: rain falls at a y of -10 000, snow at -50 to -90, a
@@ -978,6 +987,26 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   reaches a third of the way along its tubes. That second is the preset's and
   stays -- Space Visualizer's rays, at a rate of 0.01, are only there from the
   first frame because `starttime` is not slowed by the rate.
+
+- **Pushes are felt over less time at fifteen.** `wallpaper64.exe` runs a
+  frame's particle operators once, or twice at half the time when its frame
+  rate is set to 1-20 (`FUN_140236cd0`; the setting reaches the scene at
+  +0x158 from the general settings' +0x18c). Each run is handed the step and
+  a second time, the step times `min(0.025 / frame, 1)^0.7` with the frame
+  as the scene measured it (+0x15c): gravity, the move and a spin take the
+  first, and drag, `turbulence`, `vortex` and `controlpointattract` the
+  second. `movement` is gravity, then the move, then `velocity x= 1 -
+  min(drag x felt, 0.99999988)`. At 15 a second that is half the push our
+  `1 / (1 + drag dt)` and plain `dt` gave; at 40 and over it is the same.
+  `drag_left` and `felt` in `particles.rs` spread it over our sixtieths so a
+  frame comes out as Wallpaper Engine's; the frame is capped at a fifteenth,
+  so a `settle` is a run of desktop frames. Against recordings, 9 November:
+  Gears 5.49 to 5.41 levels off, its swing 1.00 to 0.88 off; Star wars 5.87
+  to 5.68, 4.25 to 4.01; DOOM, Snow Lights and Augmentation the same within
+  a few hundredths; Pyramid's YouTube recording is at 60 and agrees with
+  the change drawn at 60 (8.72 against 8.70). Space Visualizer's swarm lost
+  its narrow plume round the small planet's right edge and streams wide, as
+  on Windows. Drag alone, without the pushes, made Gears worse (5.73).
 
 - **`oscillate*` frequencies are radians a second, and the two scales are two ends.**
   An ember's "frequencymax 20, scalemin 0.7" is alpha swinging between 0.7 and 1 up
@@ -2298,6 +2327,26 @@ the file. Everything after it should.
    the scene with one preset changed, motion maps beside Windows) and then
    the whole library in a sweep, since a step's meaning changes every scene
    that has it.
+
+   **9 November: `movement` and `colorchange` read; see the trap "Pushes
+   are felt over less time at fifteen".** `colorchange` multiplies the born
+   colour, as ours did: each operator pass first copies the born colour
+   (+0x318..) over the working one (+0x2f8..). **Where the operators are:**
+   `FUN_140236cd0` (one system's frame) calls `0x14023fbc0(this, step,
+   felt)`, which walks the operator records -- type byte at +0, length at
+   +2, values from +0x10 -- through the jump table at `0x14024bb58`. Types:
+   1 movement `0x14023fdc9`, 2 angularmovement, 3 alphafade, 4 sizechange,
+   5 colorchange `0x1402403a2`, 6 alphachange, 7-9 oscillate position, alpha,
+   size, 10 controlpointattract `0x140241554`, 11-12 maintaindistance*,
+   13 reducemovementnearcontrolpoint, 14 turbulence `0x14024295a`, 15 vortex
+   `0x1402431be`, 16 vortex_v2, 17 boids. The initializers have a table of
+   their own at `0x14023fa78`. The lava sparks of Space Visualizer were the
+   size a child did not take (see the instance-override trap); their shape
+   is Windows' now, and there are fewer fans in a minute than in the
+   recording, which comes down to how often their parents hear bands 5 to 15
+   loud enough. Left: `movement`'s `flags` bit 0, which turns gravity by
+   the object in a system not in world space (not read here; no scene known
+   to set it); `alphafade` and `oscillate*` steps not yet compared.
 
 5. **The list as the user set it on 6 November, in this order, and only this.**
    Done that day: fifteen frames a second and no thinning, both as Wallpaper
