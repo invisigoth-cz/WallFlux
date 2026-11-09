@@ -6,6 +6,30 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-11-09
+
+### Added
+
+- **A Settings tab**, in sections down its left. *Appearance*: dark theme,
+  the window tinted by the wallpaper. *System*: frame rate (Wallpaper
+  Engine's presets, 10, 15, 25 and 30 a second), following the music, the
+  mouse, parallax and particles. *General*: language, the wallpaper's sound
+  and volume, starting at login, and a reset to the defaults. With the
+  music off nothing listens to the speakers, so Plasma's microphone icon
+  stays away; with particles off a scene costs a good deal less.
+- **The settings are remembered between runs**, the ticked screens with
+  them, in `~/.config/WallFlux/wallflux.conf`. The wallpaper itself still
+  does not play by itself at startup.
+
+### Fixed
+
+- **Blue Dawn's lens flare sits on its sun**, as on Windows, where it was a
+  white blob under it. Its offset is measured off a recording; why
+  Wallpaper Engine draws it there is not known yet.
+- **Control points a scene moves are read**, and points given in the
+  scene's own coordinates are placed there: Augmentation's lightning
+  strikes where it does on Windows.
+
 ## [0.26.0] — 2026-11-09
 
 ### Changed
@@ -1229,7 +1253,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.1...v0.25.2
