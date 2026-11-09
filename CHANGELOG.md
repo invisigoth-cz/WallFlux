@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-11-09
+
 ### Added
 
 - **Delete** in the library's grid removes the wallpaper with the ring on
@@ -1314,7 +1316,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.26.0...v0.27.0
