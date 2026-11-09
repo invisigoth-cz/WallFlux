@@ -160,6 +160,47 @@ Window {
     property bool halfTextures: false
     /// A wallpaper's own preset, by its id, over the settings.
     property var qualityOf: ({})
+    /// A wallpaper's own settings as set in the panel, by its id and then by
+    /// the setting's name: only what was changed, laid over project.json.
+    property var propertiesOf: ({})
+
+    function setProperty(id, name, value) {
+        const all = Object.assign({}, picker.propertiesOf);
+        all[id] = Object.assign({}, all[id] || {});
+        all[id][name] = value;
+        picker.propertiesOf = all;
+    }
+    function resetProperties(id) {
+        const all = Object.assign({}, picker.propertiesOf);
+        delete all[id];
+        picker.propertiesOf = all;
+    }
+    /// A wallpaper's settings as project.json declares them, with what was
+    /// set laid over: the JSON a page is handed by `applyUserProperties`.
+    function propertiesFor(one) {
+        if (!one || !one.properties)
+            return "";
+        const declared = JSON.parse(one.properties);
+        const set = picker.propertiesOf[one.id] || {};
+        for (const name in set) {
+            if (declared[name])
+                declared[name].value = set[name];
+        }
+        return JSON.stringify(declared);
+    }
+    /// The same as name to value, which is what the renderer takes.
+    function valuesFor(one) {
+        const all = picker.propertiesFor(one);
+        if (!all)
+            return "";
+        const declared = JSON.parse(all);
+        const values = {};
+        for (const name in declared) {
+            if (declared[name].value !== undefined)
+                values[name] = declared[name].value;
+        }
+        return JSON.stringify(values);
+    }
 
     /// Wallpaper Engine's four, out of `getQualityPreset` in its
     /// `ui/dist/scripts/scripts.js`. Ultra's own difference there is HDR
@@ -232,6 +273,7 @@ Window {
         property alias bloom: picker.bloom
         property alias halfTextures: picker.halfTextures
         property alias qualityOf: picker.qualityOf
+        property alias propertiesOf: picker.propertiesOf
         property alias muted: picker.muted
         property alias volume: picker.volume
         property alias fps: picker.fps
@@ -2484,6 +2526,17 @@ Window {
                         tags: picker.tagsOf(picker.inspected, Language.czech)
                         author: picker.inspectedAuthor
                         onAuthorAsked: picker.everythingByTheAuthor()
+
+                        below: PropertiesView {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            Layout.bottomMargin: 10
+                            wallpaper: picker.inspected
+                            values: picker.inspected ? (picker.propertiesOf[picker.inspected.id] || {}) : {}
+                            catalogue: Language.czech ? "cs-cz" : "en-us"
+                            onChosen: (name, value) => picker.setProperty(picker.inspected.id, name, value)
+                            onRestored: picker.resetProperties(picker.inspected.id)
+                        }
 
                         // This wallpaper's own quality, over the settings:
                         // a heavy scene on Low while the rest stay High.

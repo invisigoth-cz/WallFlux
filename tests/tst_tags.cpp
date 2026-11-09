@@ -23,6 +23,7 @@ private slots:
     void findsTheOnesWhoseNameIsNotTheirKey();
     void namesEveryGenreItOffers();
     void findsEveryPictureSizeInTheCatalogue();
+    void saysWallpaperEnginesOwnWordsForASetting();
 
 private:
     Tags m_tags;
@@ -154,6 +155,19 @@ void TestTags::findsEveryPictureSizeInTheCatalogue()
     QCOMPARE(m_tags.name(QStringLiteral("Portrait Standard Definition"),
                          QStringLiteral("en-us")),
              QStringLiteral("Portrait standard"));
+}
+
+/// `ui_browse_properties_scheme_color` is what an author writes in place
+/// of a label; anything else is the author's own label and stays as it is.
+void TestTags::saysWallpaperEnginesOwnWordsForASetting()
+{
+    QCOMPARE(m_tags.phrase(QStringLiteral("Clock colour"), QStringLiteral("cs-cz")),
+             QStringLiteral("Clock colour"));
+    if (!installed())
+        QSKIP("Wallpaper Engine is not installed, so there is no catalogue to read");
+    QCOMPARE(m_tags.phrase(QStringLiteral("ui_browse_properties_scheme_color"),
+                           QStringLiteral("en-us")),
+             QStringLiteral("Scheme color"));
 }
 
 QTEST_MAIN(TestTags)

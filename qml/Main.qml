@@ -134,6 +134,8 @@ Item {
             msaa: picker.drawnWith.msaa
             bloom: picker.drawnWith.bloom
             halfTextures: picker.halfTextures
+            properties: picker.propertiesFor(Wallpapers.current)
+            values: picker.valuesFor(Wallpapers.current)
             music: picker.music
             parallax: picker.parallax
             particles: picker.particles

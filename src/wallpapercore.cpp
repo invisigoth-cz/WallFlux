@@ -248,7 +248,7 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     wallpaper.source = entryPoint(drawnFrom, wallpaper.kind == WallpaperKind::Scene ? package : named);
     if (wallpaper.kind == WallpaperKind::Scene && wallpaper.source.isEmpty())
         wallpaper.source = entryPoint(drawnFrom, named);
-    if (wallpaper.kind == WallpaperKind::Web)
+    if (wallpaper.kind == WallpaperKind::Web || wallpaper.kind == WallpaperKind::Scene)
         wallpaper.properties = webProperties(*drawn, preset, folder);
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());
 

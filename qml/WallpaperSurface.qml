@@ -49,6 +49,10 @@ Window {
     property int msaa: 0
     property bool bloom: true
     property bool halfTextures: false
+    /// The wallpaper's settings with what was set in the panel laid over:
+    /// as a page is handed them, and as name to value for a scene.
+    property string properties: ""
+    property string values: ""
 
     /// Whether this screen works the wallpaper out, or shows the picture the
     /// first one worked out -- Wallpaper Engine's "Clone single wallpaper".
@@ -280,9 +284,32 @@ Window {
                 web.listens = false;
                 if (request.status !== WebEngineView.LoadSucceededStatus || !surface.showingWeb)
                     return;
+                web.told = surface.properties || "{}";
                 web.runJavaScript("window.wallpaperPropertyListener && window.wallpaperPropertyListener.applyUserProperties && window.wallpaperPropertyListener.applyUserProperties("
-                                  + (Wallpapers.current.properties || "{}") + "); !!window.wallfluxHear",
+                                  + web.told + "); !!window.wallfluxHear",
                                   heard => web.listens = !!heard);
+            }
+
+            /// What the page was last handed, so that a setting changed in the
+            /// panel goes to it alone, as Wallpaper Engine sends a change.
+            property string told: "{}"
+            Connections {
+                target: surface
+                function onPropertiesChanged() {
+                    if (!surface.showingWeb || web.loading || !surface.properties)
+                        return;
+                    const before = JSON.parse(web.told);
+                    const now = JSON.parse(surface.properties);
+                    const changed = {};
+                    for (const name in now) {
+                        if (JSON.stringify(now[name]) !== JSON.stringify(before[name]))
+                            changed[name] = now[name];
+                    }
+                    web.told = surface.properties;
+                    if (Object.keys(changed).length > 0)
+                        web.runJavaScript("window.wallpaperPropertyListener && window.wallpaperPropertyListener.applyUserProperties && window.wallpaperPropertyListener.applyUserProperties("
+                                          + JSON.stringify(changed) + ")");
+                }
             }
 
             // Read only while a page wants it and is on show: listening puts the
@@ -394,6 +421,7 @@ Window {
             msaa: surface.msaa
             bloom: surface.bloom
             halfTextures: surface.halfTextures
+            values: surface.values
             // The desktop's coordinates less where this screen starts on it,
             // which is this item's own: it fills a surface that fills the screen.
             pointer: Pointer.known && surface.onScreen

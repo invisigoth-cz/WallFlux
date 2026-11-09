@@ -108,9 +108,11 @@ public:
     /// one answer and leaves this empty.
     QString resolution;
 
-    /// What a web wallpaper is told through `applyUserProperties`, as JSON in
-    /// the shape Wallpaper Engine hands it: the settings project.json declares
-    /// with their values, a preset's laid over them. Empty for any other kind.
+    /// The settings project.json declares, with their values and a preset's
+    /// laid over them, as JSON in the shape Wallpaper Engine hands a page
+    /// through `applyUserProperties`. For web wallpapers and scenes -- the
+    /// panel beside the grid offers them -- and empty for a video, whose one
+    /// setting is Windows' scheme colour.
     QString properties;
 
     /// Whether the wallpaper plays a sound of its own, once it is known --

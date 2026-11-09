@@ -41,6 +41,10 @@ Rectangle {
 
     /// Whatever can be done about this one. One button, so far.
     default property alias actions: doing.data
+    /// Whatever goes under the author, scrolled with the list: the
+    /// wallpaper's own settings, in the library -- what can be changed
+    /// before what is merely so.
+    property alias below: under.data
 
     /// Asked for when somebody wants the rest of this author's work.
     signal authorAsked()
@@ -210,6 +214,13 @@ Rectangle {
                             sourceSize.height: 16
                         }
                     }
+                }
+
+                ColumnLayout {
+                    id: under
+
+                    Layout.fillWidth: true
+                    spacing: 0
                 }
 
                 Item {

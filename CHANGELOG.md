@@ -6,6 +6,19 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A wallpaper's own properties** in the panel beside the library's grid:
+  its author's switches, sliders, colours, drop downs and text, shown and
+  hidden by the author's own conditions, as Wallpaper Engine shows them.
+  A scene is drawn again with what was set, a web wallpaper is told at
+  once, and Defaults puts them back. Remembered per wallpaper.
+
+### Fixed
+
+- A preset of a scene wallpaper is drawn with the preset's values, not
+  with the scene's own.
+
 ## [0.30.0] — 2026-11-09
 
 ### Added

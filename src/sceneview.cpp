@@ -64,8 +64,9 @@ public:
         const QString folder = source.isLocalFile()
                                    ? QFileInfo(source.toLocalFile()).absolutePath()
                                    : QString();
-        if (folder != m_folder) {
+        if (folder != m_folder || view->m_values != m_values) {
             m_folder = folder;
+            m_values = view->m_values;
             m_reload = true;
         }
         m_running = view->m_running;
@@ -153,8 +154,10 @@ private:
         }
 
         char error[512] = {};
-        m_scene = wallflux_scene_load(m_folder.toUtf8().constData(), lookUp, nullptr, error,
-                                      sizeof error);
+        const QByteArray values = m_values.toUtf8();
+        m_scene = wallflux_scene_load_with(m_folder.toUtf8().constData(),
+                                           values.isEmpty() ? nullptr : values.constData(),
+                                           lookUp, nullptr, error, sizeof error);
         if (!m_scene) {
             qCWarning(lcScene) << "cannot draw" << m_folder << "--" << error;
             say(QString::fromUtf8(error));
@@ -190,6 +193,7 @@ private:
     QElapsedTimer m_clock;
     double m_seconds = 0;
     bool m_reload = false;
+    QString m_values;
     int m_samples = 0;
     bool m_half = false;
     bool m_running = true;
@@ -296,6 +300,15 @@ void SceneView::setHalfTextures(bool half)
         return;
     m_halfTextures = half;
     handOptionsOn();
+    update();
+}
+
+void SceneView::setValues(const QString &values)
+{
+    if (values == m_values)
+        return;
+    m_values = values;
+    emit valuesChanged();
     update();
 }
 

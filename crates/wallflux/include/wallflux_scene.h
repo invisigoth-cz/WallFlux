@@ -21,6 +21,11 @@ typedef const void *(*WallfluxLoader)(const char *name, void *user);
 
 WallfluxScene *wallflux_scene_load(const char *folder, WallfluxLoader loader, void *user,
                                    char *error, size_t error_len);
+/* The same, with the wallpaper's properties set to `values`: a JSON object of
+ * name to value laid over project.json's, or NULL for what it says. */
+WallfluxScene *wallflux_scene_load_with(const char *folder, const char *values,
+                                        WallfluxLoader loader, void *user, char *error,
+                                        size_t error_len);
 bool wallflux_scene_draw(WallfluxScene *scene, uint32_t width, uint32_t height, float seconds);
 void wallflux_scene_point_at(WallfluxScene *scene, bool inside, float x, float y,
                              uint32_t width, uint32_t height);

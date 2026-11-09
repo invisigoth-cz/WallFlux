@@ -193,6 +193,21 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   placeholder. **Remembered** in `~/.config/WallFlux/wallflux.conf` through
   QtCore's `Settings`, the ticked screens too -- not the wallpaper.
 
+- **A wallpaper's own properties**, in the library's panel under the
+  author's row (`PropertiesView.qml`): what project.json declares, in its
+  `order`, each shown while its `condition` -- the author's JavaScript,
+  run with every setting as `{ value }` under its own name -- holds. Bool,
+  slider (sent when let go), colour (`ColorDialog`, "r g b" from nought to
+  one), combo, text input, text, file and folder. What is set is the
+  picker's `propertiesOf`, by id and name, remembered, and laid over the
+  declared values (preset values included) by `propertiesFor` and
+  `valuesFor`. A page is told what changed through `applyUserProperties`;
+  a scene is loaded again with `wallflux_scene_load_with`, which lays the
+  values into project.json before the bindings and the scripts read it.
+  ponytail: loading again starts the scene's clock over; applying a value
+  to a running scene would need its bindings kept, which they are not.
+  Videos have only Windows' scheme colour and show none.
+
 - **A wallpaper on every screen that is ticked for it.** The Displays tab
   draws the monitors as they are arranged -- read off their positions on
   the shared desktop, so it is the arrangement somebody set up in their own
@@ -316,6 +331,8 @@ qml/WallpaperSurface.qml  one screen's wallpaper: the layer-shell window,
                       holds over them
 qml/SettingsView.qml  the Settings tab: sections down the left, a row to a
                       setting; the values live on the picker
+qml/Toggle.qml        a switch as they are drawn now, told and answering
+qml/PropertiesView.qml  a wallpaper's own settings, in the library's panel
 src/autostart.h       Autostart: starting at login, by the user's own entry
 src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
 src/usage.h           Usage: what WallFlux costs, for the status bar

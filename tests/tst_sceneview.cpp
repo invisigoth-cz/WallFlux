@@ -370,6 +370,50 @@ private slots:
     /// The scene is made here, a package holding a scene.json with no
     /// objects. It used to be Diablo IV Lilith, taken for a 3D model, until
     /// its one image turned out to be a video and began to play.
+    /// A setting changed in the panel reaches the picture: Future Clock with
+    /// its back plate green instead of grey is another picture, and handed
+    /// the same values as its project.json it is the same one again.
+    void drawsASceneWithTheValuesItIsGiven()
+    {
+        const QUrl source = scenes().value(QStringLiteral("2127129941"));
+        if (source.isEmpty())
+            QSKIP("Future Clock is not on this machine");
+
+        QQuickWindow window;
+        window.resize(480, 270);
+        SceneView view(window.contentItem());
+        view.setSize(QSizeF(480, 270));
+        view.setRunning(false);
+        view.setSource(source);
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        const auto grab = [&] {
+            QTest::qWait(300);
+            return window.grabWindow().convertToFormat(QImage::Format_RGB32);
+        };
+
+        const QImage asItIs = grab();
+        view.setValues(QStringLiteral(R"({"back_color":"0 1 0"})"));
+        const QImage green = grab();
+        QVERIFY(view.error().isEmpty());
+        view.setValues(QStringLiteral(R"({"back_color":"0.5529411764705883 0.5529411764705883 0.5529411764705883"})"));
+        const QImage again = grab();
+
+        if (qEnvironmentVariableIsSet("WALLFLUX_SCENE_GRAB")) {
+            asItIs.save(qEnvironmentVariable("WALLFLUX_SCENE_GRAB") + QStringLiteral("-a.png"));
+            green.save(qEnvironmentVariable("WALLFLUX_SCENE_GRAB") + QStringLiteral("-b.png"));
+        }
+        const double changed = apart(asItIs, green);
+        const double back = apart(asItIs, again);
+        // The plate is dark either way, so green moves the picture by a
+        // little over a quarter of a level on average -- measured, 0.28 --
+        // and the file's own grey by a tenth of that.
+        QVERIFY2(changed > 0.15 && back * 4 < changed,
+                 qPrintable(QStringLiteral("%1 apart with a green plate, %2 with the file's grey")
+                                .arg(changed)
+                                .arg(back)));
+    }
+
     void saysWhyASceneCannotBeDrawn()
     {
         QTemporaryDir folder;

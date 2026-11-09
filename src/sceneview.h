@@ -55,6 +55,10 @@ class SceneView : public QQuickFramebufferObject
     Q_PROPERTY(int msaa READ msaa WRITE setMsaa NOTIFY optionsChanged)
     Q_PROPERTY(bool bloom READ bloom WRITE setBloom NOTIFY optionsChanged)
     Q_PROPERTY(bool halfTextures READ halfTextures WRITE setHalfTextures NOTIFY optionsChanged)
+    /// The wallpaper's properties as set in the panel: a JSON object of name
+    /// to value, laid over project.json's. Another value is the scene loaded
+    /// again with it.
+    Q_PROPERTY(QString values READ values WRITE setValues NOTIFY valuesChanged)
 
 public:
     explicit SceneView(QQuickItem *parent = nullptr);
@@ -86,6 +90,8 @@ public:
     void setBloom(bool bloom);
     bool halfTextures() const { return m_halfTextures; }
     void setHalfTextures(bool half);
+    QString values() const { return m_values; }
+    void setValues(const QString &values);
 
 signals:
     void sourceChanged();
@@ -93,6 +99,7 @@ signals:
     void errorChanged();
     void pointerChanged();
     void optionsChanged();
+    void valuesChanged();
 
 private:
     friend class SceneRenderer;
@@ -113,6 +120,7 @@ private:
     int m_msaa = 0;
     bool m_bloom = true;
     bool m_halfTextures = false;
+    QString m_values;
 };
 
 /// The music a scene wallpaper plays.

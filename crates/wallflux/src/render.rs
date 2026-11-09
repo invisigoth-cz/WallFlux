@@ -889,11 +889,23 @@ impl Scene {
         dir: &std::path::Path,
         budget: usize,
     ) -> Result<Self, String> {
+        Self::load_with(gl, dir, budget, None)
+    }
+
+    /// The same, with the wallpaper's properties set to `values` -- a JSON
+    /// object of name to value, as the panel beside the grid sets them --
+    /// over what project.json says.
+    pub fn load_with(
+        gl: &glow::Context,
+        dir: &std::path::Path,
+        budget: usize,
+        values: Option<&str>,
+    ) -> Result<Self, String> {
         let package = open_package(dir)?;
         let assets = Assets::locate();
         let resolve = Resolver::new(&package, assets.as_ref());
 
-        let project = std::fs::read(dir.join("project.json")).ok();
+        let project = with_values(std::fs::read(dir.join("project.json")).ok(), values);
         let entry = scene_entry(project.as_deref());
         let bytes = package
             .get(&entry)
@@ -3896,6 +3908,34 @@ fn set_json(gl: &glow::Context, p: glow::Program, name: &str, value: &serde_json
     }
 }
 
+/// project.json with each property in `values` given that value instead,
+/// which is all a property set from the panel is: everything that reads the
+/// project -- the bindings, the scripts -- reads it from here. A name the
+/// project does not declare is left out, as Wallpaper Engine leaves it.
+fn with_values(project: Option<Vec<u8>>, values: Option<&str>) -> Option<Vec<u8>> {
+    let (Some(bytes), Some(values)) = (&project, values) else {
+        return project;
+    };
+    let Ok(serde_json::Value::Object(values)) = serde_json::from_str::<serde_json::Value>(values)
+    else {
+        return project;
+    };
+    let Ok(mut parsed) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return project;
+    };
+    if let Some(declared) = parsed
+        .pointer_mut("/general/properties")
+        .and_then(|p| p.as_object_mut())
+    {
+        for (name, value) in values {
+            if let Some(property) = declared.get_mut(&name).and_then(|p| p.as_object_mut()) {
+                property.insert("value".into(), value);
+            }
+        }
+    }
+    serde_json::to_vec(&parsed).ok().or(project)
+}
+
 /// The file inside the package that is the scene: what `project.json` names
 /// as the wallpaper's `file`, which is `scene.json` almost always and not
 /// always -- SCP Terminal Lockdown is `gifscene.json` in `gifscene.pkg`.
@@ -3960,7 +4000,21 @@ pub(crate) fn find_package(dir: &std::path::Path) -> Result<std::path::PathBuf, 
 
 #[cfg(test)]
 mod tests {
-    use super::{middle_of, anchor_of, coverage, divisor_of, other_layer, scene_entry, showing};
+    use super::{middle_of, anchor_of, coverage, divisor_of, other_layer, scene_entry, showing, with_values};
+
+    #[test]
+    fn a_value_from_the_panel_is_laid_over_the_projects() {
+        let project = br#"{"general":{"properties":{"tint":{"type":"color","value":"1 0 0"},"n":{"value":2}}}}"#;
+        let laid = with_values(Some(project.to_vec()), Some(r#"{"tint":"0 0 1","other":5}"#)).unwrap();
+        let laid: serde_json::Value = serde_json::from_slice(&laid).unwrap();
+        assert_eq!(laid.pointer("/general/properties/tint/value").unwrap(), "0 0 1");
+        assert_eq!(laid.pointer("/general/properties/n/value").unwrap(), 2);
+        // A name the project does not declare stays out.
+        assert!(laid.pointer("/general/properties/other").is_none());
+        // Nothing to lay, or nothing readable, is the project as it was.
+        assert_eq!(with_values(Some(project.to_vec()), None).unwrap(), project.to_vec());
+        assert_eq!(with_values(Some(project.to_vec()), Some("nonsense")).unwrap(), project.to_vec());
+    }
 
     #[test]
     fn the_scene_is_the_file_the_project_names() {

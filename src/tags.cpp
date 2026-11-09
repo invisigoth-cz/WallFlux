@@ -22,6 +22,7 @@ namespace {
 /// What every workshop tag's key starts with in Wallpaper Engine's
 /// catalogues. 103 keys carry it.
 constexpr QLatin1StringView KeyPrefix("ui_workshop_tags_");
+constexpr QLatin1StringView PhrasePrefix("ui_browse_properties_");
 
 /// The key a tag is filed under: lowercased, with every run of anything
 /// else turned into one underscore. `Sci-Fi` is `sci_fi`, `Pixel art` is
@@ -174,6 +175,16 @@ QVariantList Tags::labelled(const QStringList &tags, const QString &locale)
     return chips;
 }
 
+QString Tags::phrase(const QString &key, const QString &locale)
+{
+    if (!key.startsWith(PhrasePrefix))
+        return key;
+    if (!m_read.contains(locale))
+        m_read.insert(locale, read(locale));
+    const QString said = m_read.value(locale).value(key);
+    return said.isEmpty() ? key : said;
+}
+
 QString Tags::name(const QString &tag, const QString &locale)
 {
     if (!m_read.contains(locale))
@@ -230,6 +241,12 @@ QHash<QString, QString> Tags::read(const QString &locale) const
 
     const QJsonObject all = parsed.object();
     for (auto entry = all.constBegin(); entry != all.constEnd(); ++entry) {
+        // Kept whole, which no tag's short key can be: they never start
+        // with "ui_".
+        if (entry.key().startsWith(PhrasePrefix)) {
+            names.insert(entry.key(), entry.value().toString());
+            continue;
+        }
         if (!entry.key().startsWith(KeyPrefix))
             continue;
         const QString called = entry.value().toString();

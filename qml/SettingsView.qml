@@ -237,61 +237,6 @@ Item {
         }
     }
 
-    /// A switch that shows a value and sets it. Clicking a Switch sets its
-    /// own `checked`, which breaks a binding on it, so the binding is put
-    /// back after every click: a reset to the defaults has to show.
-    component Toggle: Switch {
-        id: toggle
-
-        property bool value
-        signal changed(bool to)
-
-        checked: toggle.value
-        onToggled: {
-            toggle.changed(toggle.checked);
-            toggle.checked = Qt.binding(() => toggle.value);
-        }
-
-        // A pill in the accent with a round knob that slides, as switches
-        // are drawn now, rather than Fusion's square one. No words beside
-        // it, so no room kept for them either.
-        padding: 0
-        spacing: 0
-        // Said outright: with the padding gone Fusion counts the indicator
-        // nowhere, and a switch nought wide is drawn but cannot be clicked.
-        implicitWidth: 44
-        implicitHeight: 24
-
-        indicator: Rectangle {
-            implicitWidth: 44
-            implicitHeight: 24
-            x: 0
-            y: (toggle.height - height) / 2
-            radius: height / 2
-            color: toggle.checked ? toggle.palette.highlight : Qt.alpha(toggle.palette.windowText, 0.16)
-            border.width: toggle.checked ? 0 : 1
-            border.color: toggle.palette.mid
-
-            Behavior on color { ColorAnimation { duration: 160 } }
-
-            Rectangle {
-                width: 18
-                height: 18
-                radius: 9
-                y: 3
-                x: toggle.checked ? parent.width - width - 3 : 3
-                scale: toggle.pressed ? 0.9 : 1
-                color: toggle.checked ? view.ink(toggle.palette.highlight) : toggle.palette.base
-                border.width: toggle.checked ? 0 : 1
-                border.color: toggle.palette.mid
-
-                Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                Behavior on scale { NumberAnimation { duration: 100 } }
-            }
-        }
-        contentItem: Item {}
-    }
-
     /// One of a few choices, as a segmented control: the chosen one lit.
     component Choice: RowLayout {
         id: choice

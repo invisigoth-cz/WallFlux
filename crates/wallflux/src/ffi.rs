@@ -87,6 +87,24 @@ pub unsafe extern "C" fn wallflux_scene_load(
     error: *mut c_char,
     error_len: usize,
 ) -> *mut WallfluxScene {
+    // SAFETY: passed on as the caller gave them.
+    unsafe { wallflux_scene_load_with(folder, std::ptr::null(), loader, user, error, error_len) }
+}
+
+/// The same, with the wallpaper's properties set to `values`: a JSON object
+/// of name to value, or null for what project.json says.
+///
+/// # Safety
+/// As `wallflux_scene_load`, and `values` is null or NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wallflux_scene_load_with(
+    folder: *const c_char,
+    values: *const c_char,
+    loader: Loader,
+    user: *mut c_void,
+    error: *mut c_char,
+    error_len: usize,
+) -> *mut WallfluxScene {
     let say = |message: &str| {
         if error.is_null() || error_len == 0 {
             return;
@@ -105,13 +123,16 @@ pub unsafe extern "C" fn wallflux_scene_load(
     }
     // SAFETY: the caller said it is NUL-terminated.
     let folder = unsafe { CStr::from_ptr(folder) }.to_string_lossy().into_owned();
+    // SAFETY: the caller said it is null or NUL-terminated.
+    let values = (!values.is_null())
+        .then(|| unsafe { CStr::from_ptr(values) }.to_string_lossy().into_owned());
 
     let loaded = catch_unwind(AssertUnwindSafe(|| {
         // SAFETY: the context is current, as the caller promised.
         let gl = unsafe {
             glow::Context::from_loader_function_cstr(|name| loader(name.as_ptr(), user))
         };
-        Scene::load_within(&gl, std::path::Path::new(&folder), DEFAULT_BUDGET)
+        Scene::load_with(&gl, std::path::Path::new(&folder), DEFAULT_BUDGET, values.as_deref())
             .map(|scene| (gl, scene))
     }));
     match loaded {

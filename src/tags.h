@@ -80,6 +80,12 @@ public:
     /// what it says is what is read.
     Q_INVOKABLE QVariantList labelled(const QStringList &tags, const QString &locale);
 
+    /// What one of Wallpaper Engine's own words for a wallpaper's settings
+    /// says in `locale` -- `ui_browse_properties_scheme_color`, which
+    /// authors put in project.json in place of a label -- or `key` itself
+    /// where it is not one of those.
+    Q_INVOKABLE QString phrase(const QString &key, const QString &locale);
+
 private:
     /// One language's names, read off the disk, keyed by the part of the
     /// key after `ui_workshop_tags_`.
