@@ -889,8 +889,18 @@ impl Scene {
         let bytes = package
             .get(&entry)
             .ok_or_else(|| format!("no {entry} in this wallpaper"))?;
-        let file = SceneFile::parse_with_properties(bytes, project.as_deref())
+        let mut file = SceneFile::parse_with_properties(bytes, project.as_deref())
             .map_err(|e| format!("scene.json: {e}"))?;
+        // Before anything reads a place, scripts included: Blue Dawn's flare
+        // has one that writes its origin back every frame.
+        let wallpaper = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        for object in &mut file.objects {
+            if let Some((.., by)) = MOVED.iter().find(|(w, id, _)| *w == wallpaper && *id == object.id) {
+                for (at, by) in object.origin.value.0.iter_mut().zip(by) {
+                    *at += by;
+                }
+            }
+        }
         let scene_size = (
             file.general.orthogonalprojection.width,
             file.general.orthogonalprojection.height,
@@ -3880,6 +3890,20 @@ pub(crate) fn scene_entry(project: Option<&[u8]>) -> String {
 /// while they came out as splats, draw as Windows' once a placed system's
 /// `size` and `speed` reached its `sizechange` and its pull.
 const LEFT_OUT: &[(&str, i64)] = &[];
+
+/// Objects Wallpaper Engine draws somewhere other than their file says, for a
+/// reason not found, moved by hand by the user's decision of 9 November: (the
+/// wallpaper's folder, the object's id, how far, in the scene's axes).
+///
+/// ponytail: one wallpaper's measured offset, not a rule. Remove an entry the
+/// day its cause is found. Blue Dawn's lens flare (object 43) stands at
+/// (2012.6, 1597.9) in its scene.json and on Windows its middle is on the sun,
+/// at (2035, 1905): moved there, its dots lie on a line through the sun and
+/// turn as in the recording; at its own place it was a white blob under the
+/// sun. Parallax, its script, its control points and its particles' motion
+/// were ruled out (see Blue Dawn in CLAUDE.md). Measured on one recording,
+/// at one screen's shape and one place of the mouse.
+const MOVED: &[(&str, i64, [f32; 3])] = &[("2149578679", 43, [22.4, 307.1, 0.0])];
 
 /// A wallpaper's files: its package, or the folder itself where there is
 /// none, which is how Wallpaper Engine's own Deep Space and the rest come.

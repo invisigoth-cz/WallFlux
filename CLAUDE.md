@@ -2525,6 +2525,17 @@ the file. Everything after it should.
      correlation (up to 27 screen px, so the mouse did move); counting the
      flare's bright spots against the sun, which the clouds and stars drown.
      Still open: what puts the system's middle on the sun in Wallpaper Engine.
+
+     **9 November, by the user's decision: moved by hand** (`MOVED` in
+     `render.rs`, applied to the parsed scene so its script writes the moved
+     origin back). Up 307.1 and right 22.4: where the blob was the recording
+     reads 139 over 35 s, ours 202 before and 141 now; the sun's surround 167
+     against 170. The dots lie on a line through the sun, as on Windows; which
+     way the line points depends on how long the wallpaper has run, which the
+     recording cannot say. The cause is still not found -- not the control
+     points either, which the scene moves (see that trap) and which reach the
+     children but not the parent's halos, having no `movement`. Take the entry
+     out when it is.
    - Done: **Battlefield** has nothing unplayed. Its `phase` has an
      `animation` with options and a `previewvalue` and no keyframes at all, so
      the value is the 0 written beside it; the pulse it offsets (`effects/pulse`,
