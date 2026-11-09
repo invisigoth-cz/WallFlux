@@ -39,7 +39,7 @@ Item {
     /// playing something, or a window pulled up to cover the wallpaper
     /// nobody can then see anyway. Neither is a setting -- what is left to
     /// choose is whether the wallpaper has sound at all.
-    readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover.covered
+    readonly property bool silent: picker.muted || (picker.quietForOthers && OtherAudio.playing) || root.covered
 
     /// Whether a window is filling the screen in front of the wallpaper.
     ///
@@ -51,7 +51,7 @@ Item {
     /// which screen it is on. A second monitor nobody has covered is
     /// stopped along with the first; worth knowing before it is called a
     /// bug.
-    readonly property bool covered: ScreenCover.covered
+    readonly property bool covered: ScreenCover.covered && picker.quietUnderWindows
 
     /// Whether the running playlist's clock should be standing still.
     ///
@@ -76,6 +76,10 @@ Item {
         property: "watching"
         value: root.showingScene && !root.covered && picker.mouse
     }
+
+    // The window at the start only when the Settings tab says so; otherwise
+    // the program comes up as the tray icon alone.
+    Component.onCompleted: if (!picker.startMinimized) root.showPicker()
 
     function showPicker() {
         picker.show();
@@ -130,6 +134,7 @@ Item {
             music: picker.music
             parallax: picker.parallax
             particles: picker.particles
+            scaling: picker.scaling
             onHeld: root.oneIsHolding()
         }
     }
@@ -274,7 +279,7 @@ Item {
     // background layer and transparent to input, so without this there
     // would be no way to reach the picker at all.
     Platform.SystemTrayIcon {
-        visible: true
+        visible: picker.tray
         // From the icon theme rather than shipped with us; Breeze and every
         // other freedesktop theme has this one.
         icon.name: "preferences-desktop-wallpaper"

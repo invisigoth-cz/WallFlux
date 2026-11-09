@@ -7,6 +7,8 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <QLockFile>
 #include <QNetworkAccessManager>
 #include <QNetworkDiskCache>
@@ -97,15 +99,25 @@ int main(int argc, char *argv[])
     // lifetime this lock wants. Where a system has none, a temporary file
     // named after the user does the same job.
     const QString runtime = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
-    QLockFile running(runtime.isEmpty()
-                          ? QDir::tempPath() + QStringLiteral("/wallflux-")
-                                + qEnvironmentVariable("USER", QStringLiteral("user"))
-                                + QStringLiteral(".lock")
-                          : runtime + QStringLiteral("/wallflux.lock"));
+    const QString place = runtime.isEmpty()
+                              ? QDir::tempPath() + QStringLiteral("/wallflux-")
+                                    + qEnvironmentVariable("USER", QStringLiteral("user"))
+                              : runtime + QStringLiteral("/wallflux");
+    QLockFile running(place + QStringLiteral(".lock"));
+    // Where the copy that is running listens for the next one. Started again
+    // from the menu, WallFlux shows the window of the copy already running --
+    // which is the only way to reach it with the tray icon switched off.
+    const QString door = place + QStringLiteral(".socket");
     if (!running.tryLock()) {
         // Not a failure: the wallpaper this copy was asked for is on the
         // screen already, put there by the copy that got here first.
-        qWarning("wallflux: another copy is already running, leaving the screen to it");
+        QLocalSocket knock;
+        knock.connectToServer(door);
+        if (knock.waitForConnected(1000)) {
+            knock.write("show\n");
+            knock.waitForBytesWritten(1000);
+        }
+        qWarning("wallflux: another copy is already running; asked it to show its window");
         return 0;
     }
 
@@ -143,6 +155,18 @@ int main(int argc, char *argv[])
     // is still hidden, for the same reason it was done before `show()`:
     // a surface that has reached the compositor cannot be made into a
     // layer-shell one afterwards.
+
+    QLocalServer::removeServer(door);
+    QLocalServer listening;
+    if (!listening.listen(door))
+        qWarning("wallflux: cannot listen for a second start: %s", qPrintable(listening.errorString()));
+    QObject *root = engine.rootObjects().constFirst();
+    QObject::connect(&listening, &QLocalServer::newConnection, &listening, [&listening, root] {
+        while (QLocalSocket *knock = listening.nextPendingConnection()) {
+            QObject::connect(knock, &QLocalSocket::disconnected, knock, &QObject::deleteLater);
+            QMetaObject::invokeMethod(root, "showPicker");
+        }
+    });
 
     return app.exec();
 }

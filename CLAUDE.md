@@ -43,8 +43,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   take no input and must not.
 - **Sound that gets out of the way by itself.** The wallpaper is quiet while
   another program is using the speakers, and quiet and stopped while a window
-  covers the screen; both come back on their own. Neither is a setting. The
-  one switch there is turns the wallpaper's own sound off altogether.
+  covers the screen; both come back on their own. Both became settings on 9
+  November, at the user's asking, on by default; with the second off the
+  wallpaper goes on playing -- and drawing -- behind the window.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
   the one that is clicked.
 - **Noticing what Steam downloads.** The workshop folders are watched, so a
@@ -160,23 +161,28 @@ Steam has already filled, and nothing of Steam's has to be running for that.
     open.
 - **A picker with its sections across the top**: Installed, Steam,
   Displays, Settings, centred, all four built.
-- **A Settings tab, in sections down its left** (as linux-wallpaper-engine-ux
-  has them, the user's choice of 9 November; more sections later, and the
-  contents to be reworked). *Appearance*: the dark theme, the window tinted
-  by the wallpaper. *System*: pictures a second (Wallpaper Engine's 10, 15,
-  25, 30 -- scenes through `SceneView.fps`, pages through the
-  `requestAnimationFrame` wrapper, which takes a change at the next page
-  loaded), following the music, the mouse, parallax and particles (the
-  last three and the music through `wallflux_options`, global in the
-  renderer; without the music nothing listens, so Plasma's microphone icon
-  stays away). *General*: the language, the wallpaper's sound and volume,
-  starting at login (`Autostart`: an entry of the user's own in
-  `~/.config/autostart`, `Hidden=true` when off, which the XDG rules put in
-  place of the package's in `/etc/xdg/autostart`), and a reset. Every row
-  works; nothing is a placeholder. **Remembered between runs** in
-  `~/.config/WallFlux/wallflux.conf` through QtCore's `Settings` in
-  `Picker.qml`, with the ticked screens as well -- not the wallpaper, which
-  still does not play at startup.
+- **A Settings tab, laid out as a desktop's settings are now** (the user's
+  sections of 9 November, after linux-wallpaper-engine-ux): a search and the
+  sections down the left, the section's name large over one card to a
+  setting; a search shows what matches in every section, each card saying
+  where it is from, accents and case ignored. *General*: language, starting
+  at login (`Autostart`, an entry of the user's own in `~/.config/autostart`,
+  `Hidden=true` when off), the tray icon, starting minimised, minimising on
+  close (off, closing quits), and a reset. *Audio*: volume, mute (the status
+  bar's own), quiet while another program plays, quiet under a maximised
+  window. *Performance / Display*: frame rate (10/15/25/30), default scaling
+  (default and fill crop, fit adds bars, stretch -- `transform::set_scaling`
+  for scenes, the `VideoOutput`'s fill mode for videos; a mirrored screen
+  still crops), the music, the mouse, parallax, particles. *Appearance*:
+  six themes as tiles with a picture of each (Light and Dark are Breeze's,
+  System follows `Qt.styleHints.colorScheme`, Steam its client's, Hard Light
+  and Hard Dark high contrast), an accent colour, the tint and the status
+  bar. Colours ease from one theme to the next (`shades` in `Picker.qml`,
+  which the window's palette reads); a section slides in. Switches are
+  pills, the volume's handle round. Every card works; nothing is a
+  placeholder. **Remembered** in `~/.config/WallFlux/wallflux.conf` through
+  QtCore's `Settings`, the ticked screens too -- not the wallpaper.
+
 - **A wallpaper on every screen that is ticked for it.** The Displays tab
   draws the monitors as they are arranged -- read off their positions on
   the shared desktop, so it is the arrangement somebody set up in their own
@@ -265,7 +271,8 @@ nothing.
 ## Layout
 
 ```
-src/main.cpp          WebEngine init and the single-copy lock
+src/main.cpp          WebEngine init, the single-copy lock, and the socket a
+                      second start knocks on to show the window
 src/desktop.h         Desktop: turning a window into a wallpaper
 src/desktop.cpp       the layer-shell settings, asked for per window
 src/sceneview.h       SceneView: a scene wallpaper as a QML item, and
@@ -475,7 +482,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   playlist is written to a file and is there at the next start -- but it is
   not started at the next start, which keeps the rule above intact.
 - **The tray icon is the whole interface.** Not a CLI, not a Plasma plugin;
-  both were considered and turned down.
+  both were considered and turned down. **It can be switched off** (the
+  user's word, 9 November): then starting WallFlux again from the menu shows
+  the window of the copy already running -- `main()` listens on
+  `wallflux.socket` beside its lock, and a second start knocks and leaves.
 - **Layer-shell is set up in C++**, before the window reaches the
   compositor — which is why a surface is built `visible: false` and shown
   by hand afterwards. It used to be `main()` doing that to the one window

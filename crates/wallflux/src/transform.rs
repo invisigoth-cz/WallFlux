@@ -22,6 +22,8 @@
 //! vector -- so they are uploaded transposed; see [`Transform::upload`].
 
 /// A 4x4 matrix in column-major order.
+use std::sync::atomic::{AtomicU8, Ordering};
+
 pub type Matrix = [f32; 16];
 
 /// The matrix that changes nothing.
@@ -45,16 +47,43 @@ pub const IDENTITY: Matrix = [
 /// What a perspective particle system is seen through: a camera back from the
 /// middle of the scene, looking at it, cropped to the output the way
 /// [`orthographic_cover`] crops.
+/// How a scene meets a screen of another shape, as the Settings tab says:
+/// cropped to fill it (Wallpaper Engine's own way, and the default), fitted
+/// inside it with bars, or stretched to it. See [`set_scaling`].
+static SCALING: AtomicU8 = AtomicU8::new(0);
+const FILL: u8 = 0;
+const FIT: u8 = 1;
+const STRETCH: u8 = 2;
+
+/// 0 fills, 1 fits, 2 stretches; anything else fills.
+pub fn set_scaling(how: u8) {
+    SCALING.store(if how <= STRETCH { how } else { FILL }, Ordering::Relaxed);
+}
+
+/// How much of each axis of the scene the screen shows, against the whole
+/// of it: over one crops that axis, under one leaves bars beside it.
+fn crop(scene_aspect: f32, output_aspect: f32) -> (f32, f32) {
+    crop_by(SCALING.load(Ordering::Relaxed), scene_aspect, output_aspect)
+}
+
+fn crop_by(how: u8, scene_aspect: f32, output_aspect: f32) -> (f32, f32) {
+    let wider = scene_aspect > output_aspect;
+    match how {
+        FIT if wider => (1.0, output_aspect / scene_aspect),
+        FIT => (scene_aspect / output_aspect, 1.0),
+        STRETCH => (1.0, 1.0),
+        _ if wider => (scene_aspect / output_aspect, 1.0),
+        _ => (1.0, output_aspect / scene_aspect),
+    }
+}
+
 pub fn perspective_cover(scene: (f32, f32), output: (f32, f32), fov_degrees: f32) -> Matrix {
     const NEAR: f32 = 1.0;
     const FAR: f32 = 100_000.0;
     let (sw, sh) = (scene.0.max(1.0), scene.1.max(1.0));
     let scene_aspect = sw / sh;
     let output_aspect = output.0.max(1.0) / output.1.max(1.0);
-    let (crop_x, crop_y) = match scene_aspect > output_aspect {
-        true => (scene_aspect / output_aspect, 1.0),
-        false => (1.0, output_aspect / scene_aspect),
-    };
+    let (crop_x, crop_y) = crop(scene_aspect, output_aspect);
     let focal = 1.0 / (fov_degrees.clamp(1.0, 170.0).to_radians() / 2.0).tan();
     // As far back as makes the plane at nought exactly fill the scene, so a
     // particle there lands where the flat projection would put it.
@@ -77,12 +106,11 @@ pub fn orthographic_cover(scene: (f32, f32), output: (f32, f32)) -> Matrix {
     let scene_aspect = sw / sh;
     let output_aspect = output.0.max(1.0) / output.1.max(1.0);
 
-    // The part of the scene the output can show, centred on the scene's middle.
-    let (visible_w, visible_h) = if scene_aspect > output_aspect {
-        (sh * output_aspect, sh)
-    } else {
-        (sw, sw / output_aspect)
-    };
+    // The part of the scene the output can show, centred on the scene's
+    // middle: less than the scene where it is cropped, more where it is
+    // fitted with bars.
+    let (crop_x, crop_y) = crop(scene_aspect, output_aspect);
+    let (visible_w, visible_h) = (sw / crop_x, sh / crop_y);
     let (left, top) = ((sw - visible_w) / 2.0, (sh - visible_h) / 2.0);
 
     // Clip space only runs from -1 to 1, so depth has to be scaled into it or
@@ -405,4 +433,18 @@ mod tests {
         assert_eq!(multiply(&IDENTITY, &m), m);
         assert_eq!(multiply(&m, &IDENTITY), m);
     }
+
+    /// A 16:9 scene on a 4:3 screen: filled it loses its sides, fitted it
+    /// gets bars above and below, stretched it is squeezed whole.
+    #[test]
+    fn a_scene_fills_fits_or_stretches() {
+        let (scene, screen) = (16.0 / 9.0, 4.0 / 3.0);
+        assert_eq!(crop_by(FILL, scene, screen), (scene / screen, 1.0));
+        assert_eq!(crop_by(FIT, scene, screen), (1.0, screen / scene));
+        assert_eq!(crop_by(STRETCH, scene, screen), (1.0, 1.0));
+        // And a tall screen the other way round.
+        assert_eq!(crop_by(FIT, scene, 0.5), (1.0, 0.5 / scene));
+        assert_eq!(crop_by(FILL, 0.5, scene), (1.0, scene / 0.5));
+    }
+
 }

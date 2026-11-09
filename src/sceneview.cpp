@@ -240,11 +240,22 @@ void SceneView::setParticles(bool particles)
     handOptionsOn();
 }
 
+void SceneView::setScaling(int scaling)
+{
+    scaling = std::clamp(scaling, 0, 2);
+    if (scaling == m_scaling)
+        return;
+    m_scaling = scaling;
+    handOptionsOn();
+    update();
+}
+
 /// The renderer keeps these for every scene; a plain store, safe from any
 /// thread, read when each frame is drawn.
 void SceneView::handOptionsOn()
 {
-    wallflux_options(static_cast<uint32_t>(m_fps), m_music, m_parallax, m_particles);
+    wallflux_options(static_cast<uint32_t>(m_fps), m_music, m_parallax, m_particles,
+                     static_cast<uint32_t>(m_scaling));
     emit optionsChanged();
 }
 

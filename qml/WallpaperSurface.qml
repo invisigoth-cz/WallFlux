@@ -43,6 +43,8 @@ Window {
     property bool music: true
     property bool parallax: true
     property bool particles: true
+    /// `default`, `fill`, `fit` or `stretch`; see the picker.
+    property string scaling: "default"
 
     /// Whether this screen works the wallpaper out, or shows the picture the
     /// first one worked out -- Wallpaper Engine's "Clone single wallpaper".
@@ -315,7 +317,9 @@ Window {
             visible: surface.showingVideo
             // A wallpaper fills the screen; the clip's own shape gives way rather
             // than leaving bars down the sides.
-            fillMode: VideoOutput.PreserveAspectCrop
+            fillMode: surface.scaling === "fit" ? VideoOutput.PreserveAspectFit
+                      : surface.scaling === "stretch" ? VideoOutput.Stretch
+                      : VideoOutput.PreserveAspectCrop
         }
 
         MediaPlayer {
@@ -382,6 +386,7 @@ Window {
             music: surface.music
             parallax: surface.parallax
             particles: surface.particles
+            scaling: surface.scaling === "fit" ? 1 : surface.scaling === "stretch" ? 2 : 0
             // The desktop's coordinates less where this screen starts on it,
             // which is this item's own: it fills a surface that fills the screen.
             pointer: Pointer.known && surface.onScreen

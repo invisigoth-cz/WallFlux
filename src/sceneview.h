@@ -47,6 +47,9 @@ class SceneView : public QQuickFramebufferObject
     Q_PROPERTY(bool music READ music WRITE setMusic NOTIFY optionsChanged)
     Q_PROPERTY(bool parallax READ parallax WRITE setParallax NOTIFY optionsChanged)
     Q_PROPERTY(bool particles READ particles WRITE setParticles NOTIFY optionsChanged)
+    /// How a scene meets a screen of another shape: 0 cropped to fill it,
+    /// 1 fitted inside it with bars, 2 stretched to it.
+    Q_PROPERTY(int scaling READ scaling WRITE setScaling NOTIFY optionsChanged)
 
 public:
     explicit SceneView(QQuickItem *parent = nullptr);
@@ -70,6 +73,8 @@ public:
     void setParallax(bool parallax);
     bool particles() const { return m_particles; }
     void setParticles(bool particles);
+    int scaling() const { return m_scaling; }
+    void setScaling(int scaling);
 
 signals:
     void sourceChanged();
@@ -93,6 +98,7 @@ private:
     bool m_music = true;
     bool m_parallax = true;
     bool m_particles = true;
+    int m_scaling = 0;
 };
 
 /// The music a scene wallpaper plays.

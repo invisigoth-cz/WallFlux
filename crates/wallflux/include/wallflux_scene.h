@@ -27,8 +27,9 @@ void wallflux_scene_point_at(WallfluxScene *scene, bool inside, float x, float y
 void wallflux_scene_free(WallfluxScene *scene);
 
 /* What every scene may do, as the Settings tab says: draw `fps` pictures a
- * second, follow the music, lean with the mouse, have particles. */
-void wallflux_options(uint32_t fps, bool music, bool parallax, bool particles);
+ * second, follow the music, lean with the mouse, have particles, and meet a
+ * screen of another shape by `scaling` it: 0 fill, 1 fit, 2 stretch. */
+void wallflux_options(uint32_t fps, bool music, bool parallax, bool particles, uint32_t scaling);
 size_t wallflux_scene_sounds(const char *folder, const char *cache, char *out, size_t out_len);
 bool wallflux_scene_has_sound(const char *folder);
 void wallflux_speakers(float *out);

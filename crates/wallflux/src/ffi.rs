@@ -41,11 +41,13 @@ static PARALLAX: AtomicBool = AtomicBool::new(true);
 static PARTICLES: AtomicBool = AtomicBool::new(true);
 
 /// Sets what every scene may do, as the Settings tab says: draw `fps`
-/// pictures a second, follow the `music`, lean with the mouse (`parallax`)
-/// and have `particles`. Without the music nothing listens to the speakers,
-/// so Plasma's microphone icon stays away as well.
+/// pictures a second, follow the `music`, lean with the mouse (`parallax`),
+/// have `particles`, and meet a screen of another shape by `scaling` it --
+/// 0 cropped to fill, 1 fitted with bars, 2 stretched. Without the music
+/// nothing listens to the speakers, so Plasma's microphone icon stays away.
 #[unsafe(no_mangle)]
-pub extern "C" fn wallflux_options(fps: u32, music: bool, parallax: bool, particles: bool) {
+pub extern "C" fn wallflux_options(fps: u32, music: bool, parallax: bool, particles: bool, scaling: u32) {
+    crate::transform::set_scaling(scaling.min(u8::MAX as u32) as u8);
     FPS.store(fps.clamp(1, 240), Ordering::Relaxed);
     MUSIC.store(music, Ordering::Relaxed);
     PARALLAX.store(parallax, Ordering::Relaxed);

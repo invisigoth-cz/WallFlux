@@ -44,9 +44,64 @@ Window {
     /// `Main.qml`, which builds one surface per name.
     readonly property var screensWanted: displays.wanted
 
-    /// Which way the colours go. Dark to start with, because a wallpaper
-    /// picker is a window full of pictures.
-    property bool dark: true
+    /// Which set of colours the window wears: `light`, `dark`, `system`
+    /// (whichever the desktop is), `steam`, `hardLight` or `hardDark` -- the
+    /// last two high contrast, pure white or pure black with hard edges.
+    /// Dark to start with, because a wallpaper picker is a window full of
+    /// pictures.
+    property string theme: "dark"
+    /// The colour buttons, switches and the ring are lit in, or empty for
+    /// the theme's own.
+    property string accent: ""
+    /// Whether the colours are the dark kind, whichever theme gave them.
+    readonly property bool dark: shades.dark
+
+    /// Each theme's colours. Light and dark are Breeze's own two, so the
+    /// window belongs on this desktop rather than looking like a visitor;
+    /// Steam's are its client's.
+    readonly property var themes: ({
+        light: { dark: false, window: "#eff0f1", base: "#fcfcfc", text: "#232629",
+                 button: "#fcfcfc", mid: "#c4c8cc", highlight: "#3daee9" },
+        dark: { dark: true, window: "#1b1e20", base: "#232629", text: "#fcfcfc",
+                button: "#31363b", mid: "#3a4045", highlight: "#3daee9" },
+        steam: { dark: true, window: "#171a21", base: "#1b2838", text: "#c7d5e0",
+                 button: "#2a475e", mid: "#2f4157", highlight: "#66c0f4" },
+        hardLight: { dark: false, window: "#ffffff", base: "#ffffff", text: "#000000",
+                     button: "#ffffff", mid: "#000000", highlight: "#0040c0" },
+        hardDark: { dark: true, window: "#000000", base: "#000000", text: "#ffffff",
+                    button: "#000000", mid: "#ffffff", highlight: "#ffd400" }
+    })
+
+    /// The colours in use, eased from one theme to the next rather than
+    /// switched: everything in the window takes them through its palette.
+    Item {
+        id: shades
+
+        visible: false
+        readonly property bool systemDark: Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+        readonly property var set: picker.theme === "system"
+                                   ? picker.themes[shades.systemDark ? "dark" : "light"]
+                                   : (picker.themes[picker.theme] || picker.themes.dark)
+        readonly property bool dark: shades.set.dark
+
+        property color window: shades.set.window
+        property color base: shades.set.base
+        property color text: shades.set.text
+        property color button: shades.set.button
+        property color mid: shades.set.mid
+        property color highlight: picker.accent !== "" ? picker.accent : shades.set.highlight
+        /// White on a dark accent, black on a light one (Hard Dark's yellow).
+        readonly property color onHighlight:
+            (0.2126 * shades.highlight.r + 0.7152 * shades.highlight.g + 0.0722 * shades.highlight.b) > 0.7
+            ? "#000000" : "#ffffff"
+
+        Behavior on window { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }
+        Behavior on base { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }
+        Behavior on text { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }
+        Behavior on button { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }
+        Behavior on mid { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }
+        Behavior on highlight { ColorAnimation { duration: 250; easing.type: Easing.OutCubic } }
+    }
 
     /// What the Settings tab sets, read by Main.qml for every screen.
     /// Pictures a second: Wallpaper Engine's presets give 10, 15, 25 and 30,
@@ -60,6 +115,27 @@ Window {
     property bool particles: true
     /// Whether the window is tinted by the wallpaper it is showing.
     property bool tint: true
+    /// Whether the strip along the bottom is there: the version, Turn off,
+    /// the sound and what is playing.
+    property bool statusBar: true
+
+    /// General: the tray icon, and what the window does at the start and on
+    /// being closed. Without the icon the window is reached by starting
+    /// WallFlux again, which shows the copy already running.
+    property bool tray: true
+    property bool startMinimized: true
+    property bool closeToTray: true
+
+    /// Audio: whether the wallpaper goes quiet by itself while another
+    /// program plays, and while a window covers the screen -- a covered
+    /// wallpaper is also stopped, so with this off it goes on playing.
+    property bool quietForOthers: true
+    property bool quietUnderWindows: true
+
+    /// How a wallpaper meets a screen of another shape: `default` (as
+    /// Wallpaper Engine draws it, which is cropped to fill), `fill`, `fit`
+    /// with bars, or `stretch`.
+    property string scaling: "default"
 
     // The one place anything here is remembered between runs, besides the
     // playlists: ~/.config/WallFlux/wallflux.conf. The wallpaper itself is
@@ -68,7 +144,15 @@ Window {
         id: remembered
 
         category: "settings"
-        property alias dark: picker.dark
+        property alias theme: picker.theme
+        property alias accent: picker.accent
+        property alias statusBar: picker.statusBar
+        property alias tray: picker.tray
+        property alias startMinimized: picker.startMinimized
+        property alias closeToTray: picker.closeToTray
+        property alias quietForOthers: picker.quietForOthers
+        property alias quietUnderWindows: picker.quietUnderWindows
+        property alias scaling: picker.scaling
         property alias muted: picker.muted
         property alias volume: picker.volume
         property alias fps: picker.fps
@@ -81,7 +165,15 @@ Window {
         property var screens: []
     }
 
-    Component.onCompleted: Language.czech = remembered.czech
+    Component.onCompleted: {
+        Language.czech = remembered.czech;
+        // Kept as dark or not before there were themes.
+        if (String(remembered.value("theme", "")) === "" && String(remembered.value("dark", "true")) === "false")
+            picker.theme = "light";
+    }
+
+    // Closed with the tray icon off or told not to hide, closing is quitting.
+    onClosing: if (!picker.closeToTray) Qt.quit()
     Connections {
         target: Language
         function onCzechChanged() { remembered.czech = Language.czech; }
@@ -351,7 +443,8 @@ Window {
         /// the light one: white on #3daee9 is a little over two to one,
         /// which is fine against a dark window and thin against a white
         /// page.
-        readonly property color mark: picker.dark ? "#3daee9" : "#1f6f9e"
+        readonly property color mark: picker.dark ? picker.palette.highlight
+                                                  : Qt.darker(picker.palette.highlight, 1.6)
 
         indicator: Rectangle {
             implicitWidth: 26
@@ -849,16 +942,16 @@ Window {
     // passes down to everything inside it -- which is the whole of the theme
     // switch: nothing below names a colour of its own.
     palette {
-        window: picker.dark ? "#1b1e20" : "#eff0f1"
-        windowText: picker.dark ? "#fcfcfc" : "#232629"
-        base: picker.dark ? "#232629" : "#fcfcfc"
-        text: picker.dark ? "#fcfcfc" : "#232629"
-        button: picker.dark ? "#31363b" : "#fcfcfc"
-        buttonText: picker.dark ? "#fcfcfc" : "#232629"
-        mid: picker.dark ? "#3a4045" : "#c4c8cc"
+        window: shades.window
+        windowText: shades.text
+        base: shades.base
+        text: shades.text
+        button: shades.button
+        buttonText: shades.text
+        mid: shades.mid
         placeholderText: "#7f8c8d"
-        highlight: "#3daee9"
-        highlightedText: "#ffffff"
+        highlight: shades.highlight
+        highlightedText: shades.onHighlight
     }
     color: picker.palette.window
 
@@ -1651,7 +1744,7 @@ Window {
                 icon.name: picker.dark ? "brightness-high" : "brightness-low"
                 ToolTip.visible: hovered
                 ToolTip.text: picker.dark ? qsTr("Light theme") : qsTr("Dark theme")
-                onClicked: picker.dark = !picker.dark
+                onClicked: picker.theme = picker.dark ? "light" : "dark"
             }
         }
 
@@ -2381,6 +2474,7 @@ Window {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 38
+            visible: picker.statusBar
             color: picker.palette.base
 
             // A hairline rather than a border, so the line is only along the
