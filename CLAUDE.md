@@ -1032,6 +1032,21 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   its narrow plume round the small planet's right edge and streams wide, as
   on Windows. Drag alone, without the pushes, made Gears worse (5.73).
 
+- **A scene moves a system's control points, and a point can be in the
+  scene's own coordinates.** `instanceoverride` carries `controlpoint0` to `7`
+  (and `controlpointangle0` to `7`, not read here); `wallpaper64.exe`
+  (`FUN_14022bd40`, the override's table in `FUN_14024d940`: points from
+  +0xf0, angles from +0x150, also a `brightness` at +0xe0 that nothing here
+  reads) puts each in place of the file's offset. A point whose `flags` has
+  bit 1 is given in the scene: `discharge.json`'s far end, which the scene
+  drags to where the bolt strikes. For a system in its own space the point
+  goes through the object's inverse, for one in the scene's axes it is
+  measured from the object's origin, as everything else there is. Before 9
+  November both were read as offsets from the system: Augmentation's bolts
+  struck elsewhere (its swing against the recording 0.94 to 0.91 off). Blue
+  Dawn's lens flare and Snow Lights' bolts carry them as well; Snow Lights'
+  never strike within a minute.
+
 - **`oscillate*` frequencies are radians a second, and the two scales are two ends.**
   An ember's "frequencymax 20, scalemin 0.7" is alpha swinging between 0.7 and 1 up
   to three times a second. Read as cycles, with the missing end taken as the stated

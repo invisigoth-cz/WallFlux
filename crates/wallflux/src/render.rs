@@ -1752,7 +1752,24 @@ fn load_particles(
     let Some(bytes) = resolve.get(path) else {
         return None;
     };
-    let definition = match ParticleSystem::parse(&bytes) {
+    let mut moved = object.instanceoverride.as_ref().map(|over| over.points()).unwrap_or_default();
+    // A point the file gives in the scene goes into the system's own space:
+    // a lightning bolt's far end, which the scene drags to where it strikes.
+    let (in_scene, in_world) = ParticleSystem::scene_points(&bytes);
+    let model = transform::model(object.origin.value.0, [1.0, 1.0], object.scale.value.0, object.angles.value.0);
+    for (at, from_file) in in_scene {
+        let there = moved.iter().find(|(i, _)| *i == at).map_or(from_file, |(_, p)| *p);
+        let here = match in_world {
+            true => std::array::from_fn(|i| there[i] - object.origin.value.0[i]),
+            false => match transform::unapply_flat(&model, [there[0], there[1]]) {
+                Some([x, y]) => [x, y, there[2]],
+                None => continue,
+            },
+        };
+        moved.retain(|(i, _)| *i != at);
+        moved.push((at, here));
+    }
+    let definition = match ParticleSystem::parse_placed(&bytes, &moved) {
         Ok(d) => d,
         Err(e) => {
             skipped.push(format!("{}: {path}: {e}", object.name));

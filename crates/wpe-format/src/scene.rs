@@ -428,6 +428,16 @@ pub struct InstanceOverride {
     pub count: Bound<f32>,
     pub colorn: Option<Bound<Vector<3>>>,
     pub color: Option<Bound<Vector<3>>>,
+    /// Where the scene puts the system's control points, in the system's own
+    /// space, in place of where its file has them (`controlpoint0` to `7`).
+    pub controlpoint0: Option<Bound<Vector<3>>>,
+    pub controlpoint1: Option<Bound<Vector<3>>>,
+    pub controlpoint2: Option<Bound<Vector<3>>>,
+    pub controlpoint3: Option<Bound<Vector<3>>>,
+    pub controlpoint4: Option<Bound<Vector<3>>>,
+    pub controlpoint5: Option<Bound<Vector<3>>>,
+    pub controlpoint6: Option<Bound<Vector<3>>>,
+    pub controlpoint7: Option<Bound<Vector<3>>>,
 }
 
 impl InstanceOverride {
@@ -439,6 +449,26 @@ impl InstanceOverride {
             (None, Some(colorn)) => Some(colorn.value.0),
             (None, None) => None,
         }
+    }
+
+    /// The control points the scene moves, by number. `wallpaper64.exe`
+    /// (`FUN_14022bd40`) puts each in place of the file's offset for that
+    /// point, in the system's own space unless the point is on the mouse.
+    pub fn points(&self) -> Vec<(usize, [f32; 3])> {
+        [
+            &self.controlpoint0,
+            &self.controlpoint1,
+            &self.controlpoint2,
+            &self.controlpoint3,
+            &self.controlpoint4,
+            &self.controlpoint5,
+            &self.controlpoint6,
+            &self.controlpoint7,
+        ]
+        .iter()
+        .enumerate()
+        .filter_map(|(at, point)| point.as_ref().map(|p| (at, p.value.0)))
+        .collect()
     }
 }
 
@@ -453,6 +483,14 @@ impl Default for InstanceOverride {
             count: Bound::plain(1.0),
             colorn: None,
             color: None,
+            controlpoint0: None,
+            controlpoint1: None,
+            controlpoint2: None,
+            controlpoint3: None,
+            controlpoint4: None,
+            controlpoint5: None,
+            controlpoint6: None,
+            controlpoint7: None,
         }
     }
 }

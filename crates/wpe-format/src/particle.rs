@@ -746,7 +746,32 @@ pub enum ChildKind {
 
 impl ParticleSystem {
     pub fn parse(bytes: &[u8]) -> serde_json::Result<Self> {
-        let root: Value = serde_json::from_slice(bytes)?;
+        Self::parse_placed(bytes, &[])
+    }
+
+    /// The control points the file places in the scene rather than in the
+    /// system's own space -- `flags` bit 1, as `discharge.json`'s far end --
+    /// by number with the file's offset, and whether the system lives in the
+    /// scene's axes. `wallpaper64.exe` (`FUN_14022bd40`) turns such a point
+    /// into the system's own space through the object's inverse.
+    pub fn scene_points(bytes: &[u8]) -> (Vec<(usize, [f32; 3])>, bool) {
+        let Ok(root) = serde_json::from_slice::<Value>(bytes) else {
+            return (Vec::new(), false);
+        };
+        let points = array(&root, "controlpoint")
+            .iter()
+            .enumerate()
+            .filter(|(_, point)| num(point, "flags", 0.0) as u32 & IN_SCENE != 0)
+            .map(|(at, point)| (at, vector(point, "offset", [0.0; 3])))
+            .collect();
+        (points, num(&root, "flags", 0.0) as u32 & WORLD_SPACE != 0)
+    }
+
+    /// Reads a system whose placing in the scene moves some of its control
+    /// points: each `(number, offset)` stands in for the file's offset.
+    pub fn parse_placed(bytes: &[u8], points: &[(usize, [f32; 3])]) -> serde_json::Result<Self> {
+        let mut root: Value = serde_json::from_slice(bytes)?;
+        move_points(&mut root, points);
 
         let mut unsupported = Vec::new();
         let mut emitters = Vec::new();
@@ -1168,6 +1193,8 @@ impl ParticleSystem {
 
 /// The bit of a control point's `flags` that hangs it on the mouse.
 const FOLLOWS_POINTER: u32 = 1;
+/// A control point given in the scene's coordinates.
+const IN_SCENE: u32 = 2;
 /// The bit of a system's `flags` that the editor calls Worldspace.
 const WORLD_SPACE: u32 = 1;
 /// The bit of a system's `flags` that says it is seen through a camera.
@@ -1182,6 +1209,26 @@ const COMES_AND_GOES: u32 = 4;
 const MAX_PARTICLES: usize = 100_000;
 
 /// A system's control points: where each is, and whether it rides the mouse.
+/// Puts control points where the scene says, adding any the file lacks: a
+/// system has eight whether its file lists them or not.
+fn move_points(root: &mut Value, moved: &[(usize, [f32; 3])]) {
+    let Some(object) = root.as_object_mut() else { return };
+    let list = object.entry("controlpoint").or_insert_with(|| Value::Array(Vec::new()));
+    if !list.is_array() {
+        *list = Value::Array(Vec::new());
+    }
+    let Some(list) = list.as_array_mut() else { return };
+    for &(at, [x, y, z]) in moved {
+        while list.len() <= at {
+            let id = list.len();
+            list.push(serde_json::json!({ "id": id }));
+        }
+        if let Some(point) = list[at].as_object_mut() {
+            point.insert("offset".into(), Value::String(format!("{x} {y} {z}")));
+        }
+    }
+}
+
 fn points_of(root: &Value) -> Vec<([f32; 3], bool)> {
     array(root, "controlpoint")
         .iter()
@@ -1855,6 +1902,18 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn a_scene_moves_a_control_point_in_place_of_the_files() {
+        let file = br#"{"material":"m.json","maxcount":1,
+            "controlpoint":[{"id":0},{"id":1,"offset":"1000 1000 0"}],
+            "operator":[{"name":"controlpointattract","controlpoint":1,"scale":100,"threshold":1000}]}"#;
+        let p = ParticleSystem::parse_placed(file, &[(1, [430.0, 489.0, 0.0])]).unwrap();
+        assert_eq!(p.control_points[1], [430.0, 489.0, 0.0]);
+        let far = ParticleSystem::parse_placed(file, &[(3, [5.0, 6.0, 0.0])]).unwrap();
+        assert_eq!(far.control_points[1], [1000.0, 1000.0, 0.0]);
+        assert_eq!(far.control_points[3], [5.0, 6.0, 0.0]);
     }
 
     #[test]
