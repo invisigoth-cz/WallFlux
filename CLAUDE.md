@@ -950,8 +950,23 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   which levels music out -- its root put into one of 64 entries by `x^0.25`, the
   loudest bin winning, and the lot times 127 x 0.001 x 640/960 x the recording
   volume (`audioinputvolume` x 0.02, so 50 is one). Every reading starts from
-  nought: the meter holds and smooths nothing. `audio.rs` does the same off an FFT
-  of 2048, each of its bins read off the nearest of ours.
+  nought: the meter holds and smooths nothing. `audio.rs` does the same, bin for
+  bin: a transform of the newest 1920 samples (fifteen of 128, put together).
+
+  **At 48 kHz, as Windows mixes and PipeWire runs** -- the Windows recordings'
+  sound is 48 kHz, so its bins are 25 Hz apart. Read at 44.1 kHz off an FFT of
+  2048, the nearest bin standing in for each, DOOM's 35 Hz drone filled band 0
+  and lit the D and the M through it, where on Windows they stay dark and light
+  on the kicks: the D followed Windows at 0.63, the M at 0.64. A replica of the
+  meter in numpy put it down to the rate (0.68 for an exact 1920 at 44.1 kHz,
+  0.76 at 48), and drawn the D follows at 0.74, the M 0.75, the Os 0.79 and
+  0.82 (were 0.75 and 0.81). Dark Core, Snow Lights, Augmentation and Space
+  Visualizer against their recordings: the same within a hundredth.
+
+  **Compare a letter a frame late.** The Windows recordings run one frame of
+  fifteen behind a `clip` of the same sound; unshifted, the D followed at 0.37
+  for a picture that follows at 0.62. Ours on the desktop is late by about as
+  much, the monitor's 0.12 s.
 
   **And then the scene evens the music out before anything sees it** --
   `wpe_format::particle::Response`, read off the scene's render loop
@@ -2677,6 +2692,10 @@ the file. Everything after it should.
      own bands 0 and 1 by more than a hundredth; our own letters follow our own
      bands at 0.70, which is about the ceiling the other effects on the letters
      leave. So what is left of the D and the M is not in the meter.
+     **Superseded on 9 November: it was the meter's rate**, see the trap about
+     the sound read as Wallpaper Engine reads it. The "ceiling" was wrong too:
+     ours against ours with the time-driven noise in another phase follows at
+     0.84 for the D and 0.86 for the M.
    - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.

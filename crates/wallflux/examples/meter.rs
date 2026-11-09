@@ -2,7 +2,7 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
-//! Reads a raw stereo f32le file at 44 100 Hz through the renderer's own meter
+//! Reads a raw stereo f32le file at 48 000 Hz through the renderer's own meter
 //! and prints every reading: its time, then the 64 entries of each ear.
 //!
 //! ```text

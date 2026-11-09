@@ -41,10 +41,16 @@ use wpe_format::particle::{AUDIO_ENTRIES, Spectrum};
 /// read them.
 pub const READ: usize = 1024;
 
-/// Samples each reading is measured over, which is the last two mouthfuls
-/// rather than only the newest.
+/// Samples kept, the last two mouthfuls; each reading is measured over the
+/// newest 1920 of them, as Wallpaper Engine's.
 const WINDOW: usize = 2048;
-pub const RATE: u32 = 44_100;
+/// Wallpaper Engine's rate on Windows, where the device mixes at 48 kHz, and
+/// PipeWire's own here, so nothing is resampled on the way in. Its bins are
+/// 25 Hz apart at this rate, and where a bass note falls between them is what
+/// the bass bands hear: read at 44.1 kHz, DOOM's 35 Hz drone filled band 0 and
+/// lit the D and the M, which on Windows stay dark through it (they followed
+/// Windows at 0.64; 0.76 at 48 kHz).
+pub const RATE: u32 = 48_000;
 
 /// Wallpaper Engine's own reading of the sound, out of `wallpaper64.exe`
 /// (`FUN_1400d02b0`, its defaults in the constructor at `0x1400c0c80`): a
@@ -54,7 +60,7 @@ pub const RATE: u32 = 44_100;
 /// the top and music comes out about level; its root goes into one of 64
 /// entries, the loudest bin in each winning. An entry is placed by `x` to the
 /// `PLACING` power and is never more than one ahead of the last, so the first
-/// thirty each hold a single bin of 23 Hz. The whole is multiplied by the
+/// thirty each hold a single bin of 25 Hz. The whole is multiplied by the
 /// samples' scale of 127, by 0.001, by 640 over half the window and by the
 /// recording volume, 50 out of 200 by default, which is one.
 ///
@@ -258,30 +264,55 @@ fn listen(stream: Simple, bands: &Mutex<Spectrum>, asked: &AtomicU64, epoch: Ins
     }
 }
 
-/// The 64 entries of one window of samples, as Wallpaper Engine reads them.
-///
-/// ponytail: its bins are 23 Hz apart and ours 21.5, so each of its bins is
-/// read off the nearest of ours, a few per cent out in pitch; a transform of
-/// 1920 itself (Bluestein) if that ever shows.
+/// The 64 entries of one window of samples, as Wallpaper Engine reads them:
+/// its transform of the newest 1920, bin for bin.
 fn spectrum(samples: &[f32; WINDOW]) -> [f32; AUDIO_ENTRIES] {
-    let mut real = *samples;
-    let mut imaginary = [0f32; WINDOW];
-    transform(&mut real, &mut imaginary);
-
-    // A tone read over 2048 samples comes out that much larger than over 1920.
-    let length = ITS_WINDOW / WINDOW as f32;
+    let (real, imaginary) = its_transform(&samples[WINDOW - ITS_LENGTH..]);
     let mut out = [0f32; AUDIO_ENTRIES];
     let mut entry = 0;
     for bin in 1..ITS_BINS {
         let x = (bin - 1) as f32 / (ITS_BINS - 1) as f32;
-        let ours = (bin as f32 * WINDOW as f32 / ITS_WINDOW).round() as usize;
-        let power = (real[ours] * real[ours] + imaginary[ours] * imaginary[ours]) * length * length;
+        let power = real[bin] * real[bin] + imaginary[bin] * imaginary[bin];
         let weight = TILT - (std::f32::consts::PI * x).cos() * (1.0 - TILT);
         let placed = ((x.powf(PLACING) * AUDIO_ENTRIES as f32) as usize).min(AUDIO_ENTRIES - 1);
         entry = placed.min(if bin == 1 { 0 } else { entry + 1 });
         out[entry] = out[entry].max((weight * power).max(0.0).sqrt());
     }
     out.map(|level| level * SCALE)
+}
+
+const ITS_LENGTH: usize = ITS_WINDOW as usize;
+/// 1920 is fifteen times 128.
+const SPLIT: usize = 15;
+const PART: usize = ITS_LENGTH / SPLIT;
+
+/// The first [`ITS_BINS`] bins of the discrete Fourier transform of 1920
+/// samples: fifteen transforms of 128, every fifteenth sample in each, put
+/// together for the bins wanted (Cooley-Tukey with a radix of 15).
+fn its_transform(samples: &[f32]) -> ([f32; ITS_BINS], [f32; ITS_BINS]) {
+    debug_assert_eq!(samples.len(), ITS_LENGTH);
+    let mut parts = [[[0f32; PART]; 2]; SPLIT];
+    for (offset, [real, imaginary]) in parts.iter_mut().enumerate() {
+        for (at, real) in real.iter_mut().enumerate() {
+            *real = samples[at * SPLIT + offset];
+        }
+        transform(real, imaginary);
+    }
+    let mut real = [0f32; ITS_BINS];
+    let mut imaginary = [0f32; ITS_BINS];
+    for bin in 0..ITS_BINS {
+        let (mut re, mut im) = (0f32, 0f32);
+        for (offset, [part_re, part_im]) in parts.iter().enumerate() {
+            let turn = -std::f32::consts::TAU * (offset * bin) as f32 / ITS_LENGTH as f32;
+            let (sin, cos) = turn.sin_cos();
+            let (a, b) = (part_re[bin % PART], part_im[bin % PART]);
+            re += a * cos - b * sin;
+            im += a * sin + b * cos;
+        }
+        real[bin] = re;
+        imaginary[bin] = im;
+    }
+    (real, imaginary)
 }
 
 /// An in-place radix-2 fast Fourier transform.
@@ -370,8 +401,8 @@ mod tests {
         (0..AUDIO_ENTRIES).max_by(|a, b| entries[*a].total_cmp(&entries[*b])).unwrap()
     }
 
-    /// The first thirty entries are a bin of 23 Hz each and the rest spread
-    /// up to 14.7 kHz: a bass note near the bottom, a kilohertz about half way.
+    /// The first thirty entries are a bin of 25 Hz each and the rest spread
+    /// up to 16 kHz: a bass note near the bottom, a kilohertz about half way.
     #[test]
     fn a_tone_lands_in_the_entry_that_covers_it() {
         assert!(loudest(tone(60.0, 0.5)) <= 2, "{}", loudest(tone(60.0, 0.5)));
@@ -379,14 +410,31 @@ mod tests {
         assert!(loudest(tone(8000.0, 0.5)) >= 52, "{}", loudest(tone(8000.0, 0.5)));
     }
 
-    /// A tenth of full scale at 10 kHz, on a bin of ours so none of it leaks:
-    /// 127 x 0.1 x 960 for the transform, the root of its weight of 0.77, and
-    /// 0.001 x 2/3 -- about seven. **Not one**: nothing is capped.
+    /// A tenth of full scale at 10 kHz, on a bin so none of it leaks: 127 x
+    /// 0.1 x 960 for the transform, the root of its weight of 0.69, and 0.001
+    /// x 2/3 -- about seven. **Not one**: nothing is capped.
     #[test]
     fn a_loud_treble_tone_reads_well_above_one() {
-        let hz = 465.0 * RATE as f32 / WINDOW as f32;
+        let hz = 400.0 * RATE as f32 / ITS_WINDOW;
         let level = tone(hz, 0.1)[loudest(tone(hz, 0.1))];
         assert!((6.0..8.0).contains(&level), "{level}");
+    }
+
+    /// The transform of 1920 is the discrete Fourier transform, bin for bin.
+    #[test]
+    fn its_transform_is_the_plain_one() {
+        let samples: Vec<f32> = (0..ITS_LENGTH).map(|n| ((n * 7919) % 101) as f32 / 50.0 - 1.0).collect();
+        let (real, imaginary) = its_transform(&samples);
+        for bin in [0, 1, 2, 37, 127, 128, 129, 400, 639] {
+            let (mut re, mut im) = (0f64, 0f64);
+            for (n, s) in samples.iter().enumerate() {
+                let turn = -std::f64::consts::TAU * (n * bin) as f64 / ITS_LENGTH as f64;
+                re += *s as f64 * turn.cos();
+                im += *s as f64 * turn.sin();
+            }
+            assert!((real[bin] as f64 - re).abs() < 0.05 && (imaginary[bin] as f64 - im).abs() < 0.05,
+                "bin {bin}: {} {} against {re} {im}", real[bin], imaginary[bin]);
+        }
     }
 
     /// The bass is weighed down on purpose: the same tone at 50 Hz reads a
