@@ -6,6 +6,31 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-11-09
+
+### Changed
+
+- **Particles move as Wallpaper Engine moves them at fifteen frames a
+  second.** Read out of `wallpaper64.exe`: at 20 frames a second or fewer it
+  runs each frame's particle step twice at half the time, and drag,
+  turbulence, vortices and pulls are felt over less time than gravity and
+  the move -- about half at the desktop's fifteen. Gears of War and Star wars
+  come out nearer their recordings; Space Visualizer's swarm streams wide
+  across the small planet instead of curling round its edge.
+- **The sound is read as Wallpaper Engine reads it: at 48 kHz, with its own
+  1920-sample transform.** DOOM's D and M no longer light up through the deep
+  35 Hz drone, only on the kicks, as on Windows (they follow the recording at
+  0.75 where they did at 0.64). Every wallpaper that answers to music hears
+  it this way now.
+
+### Fixed
+
+- **Space Visualizer's lava sparks are hair-thin red lines**, as on Windows,
+  where they were thick bright plumes. A particle system spawned by another
+  now takes the whole of the scene's override for it, size and lifetime
+  included, and every burst gets a pool of its own. Star Citizen and
+  Terminator Resistance come out nearer their recordings with it.
+
 ## [0.25.3] — 2026-11-06
 
 ### Fixed
@@ -1204,7 +1229,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.0...v0.25.1
