@@ -6,6 +6,26 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Show usage**, under Performance / Display: the status bar says what
+  WallFlux takes of the processor, the graphics card and the memory, its
+  helper processes included, once a second while the window is open.
+- The volume moves with the mouse wheel.
+
+### Changed
+
+- The details panel and the window's tint stay when another tab is opened;
+  what was picked last tints every tab until something else is picked or
+  the same card is clicked again.
+- The language and theme buttons are gone from the header, since Settings
+  has both; Refresh sits at the end of the library's search row.
+- The System theme is the desktop's own colours, not Breeze's dark or light.
+
+### Fixed
+
+- No switch in Settings could be clicked in 0.28.0.
+
 ## [0.28.0] — 2026-11-09
 
 ### Changed

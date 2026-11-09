@@ -111,6 +111,7 @@ Item {
         p.mouse = true;
         p.parallax = true;
         p.particles = true;
+        p.usage = false;
         p.scaling = "default";
     }
 
@@ -233,11 +234,15 @@ Item {
         // it, so no room kept for them either.
         padding: 0
         spacing: 0
+        // Said outright: with the padding gone Fusion counts the indicator
+        // nowhere, and a switch nought wide is drawn but cannot be clicked.
+        implicitWidth: 44
+        implicitHeight: 24
 
         indicator: Rectangle {
             implicitWidth: 44
             implicitHeight: 24
-            x: toggle.width - width
+            x: 0
             y: (toggle.height - height) / 2
             radius: height / 2
             color: toggle.checked ? toggle.palette.highlight : Qt.alpha(toggle.palette.windowText, 0.16)
@@ -503,6 +508,10 @@ Item {
                             from: 0
                             to: 1
                             value: view.picker.volume
+                            // Turned with the mouse wheel as well, five per
+                            // cent a notch.
+                            stepSize: 0.05
+                            wheelEnabled: true
                             enabled: !view.picker.muted
                             opacity: enabled ? 1 : 0.45
                             onMoved: view.picker.volume = volume.value
@@ -605,7 +614,8 @@ Item {
                     title: qsTr("Default scaling")
                     about: qsTr("How a wallpaper meets a screen of another shape: as Wallpaper Engine "
                                 + "draws it, cropped to fill the screen, fitted inside it with bars, "
-                                + "or stretched to it.")
+                                + "or stretched to it. A wallpaper the screen's own shape looks the "
+                                + "same every way.")
 
                     Choice {
                         options: view.scalings
@@ -657,6 +667,19 @@ Item {
                     Toggle {
                         value: view.picker.particles
                         onChanged: (to) => view.picker.particles = to
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("Show usage")
+                    about: qsTr("The status bar says what WallFlux takes of the processor, the "
+                                + "graphics card and the memory, its helpers included -- which is "
+                                + "how a lower frame rate or particles turned off can be seen.")
+
+                    Toggle {
+                        value: view.picker.usage
+                        onChanged: (to) => view.picker.usage = to
                     }
                 }
 
@@ -759,7 +782,7 @@ Item {
                 required property var modelData
                 readonly property bool chosen: view.picker.theme === tile.modelData.value
                 readonly property var colours: tile.modelData.value === "system"
-                                               ? null : view.picker.themes[tile.modelData.value]
+                                               ? view.picker.systemColours : view.picker.themes[tile.modelData.value]
 
                 width: 116
                 height: 92
@@ -777,17 +800,6 @@ Item {
                     scale: tileHover.hovered ? 1.04 : 1
 
                     Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-
-                    // System: half light and half dark.
-                    Rectangle {
-                        visible: !tile.colours
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.margins: frame.border.width
-                        width: parent.width / 2 - frame.border.width
-                        color: "#eff0f1"
-                    }
 
                     // A card, a line of text and the accent, in the theme's own.
                     Rectangle {

@@ -65,13 +65,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   again, and a double click does nothing whatever, because nothing in this
   tab is ours to play.
 
-  **Leaving a tab shuts its panel**, in either direction and for every
-  tab. The panel is a question about one wallpaper in one grid, so walking
-  away from the grid ends it; coming back to a tab and finding the panel
-  as it was left is the window remembering something nobody asked it to.
-  The click still being counted is forgotten with it, or it would open a
-  panel in the tab that had just been left, a few tenths of a second after
-  leaving it.
+  **A panel stays open when the tab is left**, and so does the tint: the
+  user's word of 9 November, reversing an earlier rule that shut it. What
+  was picked last, in either grid, tints every tab -- Displays and
+  Settings too -- until another is picked or the same card is clicked
+  again (`lastPicked` in `Picker.qml`). Only the click still being counted
+  is forgotten on leaving, or it would open a panel in the tab that had
+  just been left, a few tenths of a second later.
 - **A filter panel that folds.** Each section's heading is a switch: the
   arrow turns, the chips slide out from under it, and a number beside the
   heading says how many of them are ticked while they are away. The short
@@ -173,9 +173,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   window. *Performance / Display*: frame rate (10/15/25/30), default scaling
   (default and fill crop, fit adds bars, stretch -- `transform::set_scaling`
   for scenes, the `VideoOutput`'s fill mode for videos; a mirrored screen
-  still crops), the music, the mouse, parallax, particles. *Appearance*:
+  still crops), the music, the mouse, parallax, particles, and the usage
+  -- CPU, GPU and RAM of WallFlux and its child processes in the status bar,
+  read off `/proc` by `Usage` once a second while the window is on show
+  (the GPU from each DRM client's `fdinfo`, counted once per client).
+  *Appearance*:
   six themes as tiles with a picture of each (Light and Dark are Breeze's,
-  System follows `Qt.styleHints.colorScheme`, Steam its client's, Hard Light
+  System is the desktop's own `SystemPalette`, Steam its client's, Hard Light
   and Hard Dark high contrast), an accent colour, the tint and the status
   bar. Colours ease from one theme to the next (`shades` in `Picker.qml`,
   which the window's palette reads); a section slides in. Switches are
@@ -308,6 +312,8 @@ qml/SettingsView.qml  the Settings tab: sections down the left, a row to a
                       setting; the values live on the picker
 src/autostart.h       Autostart: starting at login, by the user's own entry
 src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
+src/usage.h           Usage: what WallFlux costs, for the status bar
+src/usage.cpp         /proc: stat, status and fdinfo of it and its children
 qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
                       switch for each
 qml/Picker.qml        the picker window: header, search, grid, footer
@@ -341,6 +347,7 @@ tests/tst_playlists.cpp       what a playlist remembers and how long a
                               on purpose, see below
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 tests/tst_autostart.cpp       the user's entry written hidden and not
+tests/tst_usage.cpp           /proc's lines read, and this process read
 tests/tst_mirror.cpp          one window's picture in another, the right way
                               up and cropped, and kept up to date
 tests/tst_sceneview.cpp       a scene drawn through the item, checked against
@@ -1699,6 +1706,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   downs and tick boxes in the left, and the whole panel looking shuffled
   rather than broken. It reads as four separate complaints about
   alignment, and it is one odd cell. Count the cells.
+
+- **A `Switch` with its padding taken away is nought wide.** Fusion counts
+  its width from the padding and the indicator's place in it, so the pill
+  was drawn and no click reached it: every switch in Settings did nothing
+  in 0.28.0. `implicitWidth` and `implicitHeight` said out loud, the
+  indicator at `x: 0`.
 
 - **A `Label` does not dim itself when it is switched off.** `enabled`
   reaches the mouse and not the colour, so a line beside a greyed-out tick

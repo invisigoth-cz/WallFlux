@@ -86,6 +86,8 @@ qt_add_qml_module(wallflux
     SOURCES
         src/autostart.h
         src/autostart.cpp
+        src/usage.h
+        src/usage.cpp
         src/otheraudio.h
         src/otheraudio.cpp
         src/playlists.h
@@ -200,6 +202,14 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_autostart PRIVATE src)
     target_link_libraries(tst_autostart PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME autostart COMMAND tst_autostart)
+
+    qt_add_executable(tst_usage
+        tests/tst_usage.cpp
+        src/usage.cpp
+    )
+    target_include_directories(tst_usage PRIVATE src)
+    target_link_libraries(tst_usage PRIVATE Qt6::Qml Qt6::Test)
+    add_test(NAME usage COMMAND tst_usage)
 
     qt_add_executable(tst_playlists
         tests/tst_playlists.cpp

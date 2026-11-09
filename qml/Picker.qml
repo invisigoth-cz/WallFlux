@@ -55,6 +55,8 @@ Window {
     property string accent: ""
     /// Whether the colours are the dark kind, whichever theme gave them.
     readonly property bool dark: shades.dark
+    /// The desktop's own colours, for the System theme's tile.
+    readonly property var systemColours: shades.systemSet
 
     /// Each theme's colours. Light and dark are Breeze's own two, so the
     /// window belongs on this desktop rather than looking like a visitor;
@@ -78,9 +80,18 @@ Window {
         id: shades
 
         visible: false
-        readonly property bool systemDark: Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+        // System: the desktop's own colour scheme, as Plasma hands it to
+        // every program -- not Breeze's dark or light, which are only what
+        // Plasma ships with.
+        SystemPalette { id: desktop; colorGroup: SystemPalette.Active }
+        readonly property var systemSet: ({
+            dark: Qt.styleHints.colorScheme === Qt.ColorScheme.Dark
+                  || (0.2126 * desktop.window.r + 0.7152 * desktop.window.g + 0.0722 * desktop.window.b) < 0.5,
+            window: desktop.window, base: desktop.base, text: desktop.windowText,
+            button: desktop.button, mid: desktop.mid, highlight: desktop.highlight
+        })
         readonly property var set: picker.theme === "system"
-                                   ? picker.themes[shades.systemDark ? "dark" : "light"]
+                                   ? shades.systemSet
                                    : (picker.themes[picker.theme] || picker.themes.dark)
         readonly property bool dark: shades.set.dark
 
@@ -113,6 +124,9 @@ Window {
     property bool mouse: true
     property bool parallax: true
     property bool particles: true
+    /// Whether the status bar says what WallFlux costs: processor, graphics
+    /// card, memory.
+    property bool usage: false
     /// Whether the window is tinted by the wallpaper it is showing.
     property bool tint: true
     /// Whether the strip along the bottom is there: the version, Turn off,
@@ -160,6 +174,7 @@ Window {
         property alias mouse: picker.mouse
         property alias parallax: picker.parallax
         property alias particles: picker.particles
+        property alias usage: picker.usage
         property alias tint: picker.tint
         property bool czech: false
         property var screens: []
@@ -762,17 +777,6 @@ Window {
         // open, and simply shows the new one.
         if (details.open)
             picker.lookUpAuthor(id);
-    }
-
-    /// Shuts the panel in both tabs, and forgets any click that was
-    /// still being counted -- which would otherwise open a panel in the
-    /// tab that had just been left, a few tenths of a second after
-    /// leaving it.
-    function shutThePanels() {
-        secondClick.stop();
-        details.open = false;
-        if (steam.item)
-            steam.item.shut();
     }
 
     /// Puts one on the desktop, which is what a second click means. Never
@@ -1537,15 +1541,16 @@ Window {
     /// The wallpaper the window is tinted by: whichever panel is open in
     /// whichever tab is being looked at, and nothing at all while both
     /// are shut.
-    readonly property url ambient: {
-        if (!picker.tint)
-            return "";
-        if (tabs.currentIndex === 0)
-            return details.open && picker.inspected ? picker.inspected.preview : "";
-        if (tabs.currentIndex === 1 && steam.item)
-            return steam.item.ambient;
-        return "";
-    }
+    readonly property url ambient: picker.tint ? picker.lastPicked : ""
+
+    /// What each grid has picked out, and whichever of the two was picked
+    /// last -- the one that tints every tab, until it is put back or
+    /// another is picked. Put back, the other's comes through, if any.
+    readonly property url pickedInstalled: details.open && picker.inspected ? picker.inspected.preview : ""
+    readonly property url pickedSteam: steam.item ? steam.item.ambient : ""
+    property url lastPicked: ""
+    onPickedInstalledChanged: picker.lastPicked = picker.pickedInstalled != "" ? picker.pickedInstalled : picker.pickedSteam
+    onPickedSteamChanged: picker.lastPicked = picker.pickedSteam != "" ? picker.pickedSteam : picker.pickedInstalled
 
     // The wallpaper being looked at, blurred out of all recognition
     // behind the whole window. Declared before everything else, which is
@@ -1639,16 +1644,15 @@ Window {
                 // the Loader, which cannot both follow the tab and stay
                 // behind when it changes.
                 //
-                // And leaving a tab shuts its panel: the panel is a
-                // question about one wallpaper in one grid, and walking
-                // away from the grid is the end of the question. Coming
-                // back to a tab that had one open and finding it still
-                // open is the window remembering something nobody asked
-                // it to.
+                // A wallpaper picked out stays picked out across the tabs,
+                // the user's word of 9 November: its panel is still open on
+                // coming back, and its colours tint every tab meanwhile.
+                // Only the click still being counted is forgotten, or it
+                // would open a panel in the tab just left.
                 onCurrentIndexChanged: {
                     if (tabs.currentIndex === 1)
                         steam.active = true;
-                    picker.shutThePanels();
+                    secondClick.stop();
                 }
 
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -1705,47 +1709,6 @@ Window {
                 }
             }
 
-            Item { Layout.fillWidth: true }
-
-            RoundedButton {
-                text: qsTr("Refresh")
-                icon.name: "view-refresh"
-                // There is nothing to look for again from any other section.
-                visible: tabs.currentIndex === 0
-                onClicked: Wallpapers.rescan()
-            }
-
-            RoundedButton {
-                // The language it is in now, rather than the one the click
-                // would give you: a language is what somebody looks for to
-                // check, and the tooltip says what happens.
-                //
-                // Not translated, deliberately. "EN" and "CZ" are the same
-                // in both, and a language switch that renames itself is a
-                // language switch nobody can find their way back from.
-                text: Language.czech ? "CZ" : "EN"
-                ToolTip.visible: hovered
-                ToolTip.text: Language.czech ? qsTr("Switch to English")
-                                             : qsTr("Switch to Czech")
-                onClicked: Language.czech = !Language.czech
-            }
-
-            RoundedButton {
-                // The icon is what the click will do, not what is on
-                // screen now: turn the lights up, or down.
-                //
-                // These two rather than a sun and a moon out of the
-                // weather icons: those are drawn for a 48-pixel applet
-                // and all that survives at 16 is a white disc. Looked
-                // at, not assumed. A Button rather than a ToolButton for
-                // the same reason the one beside it is: an icon alone on
-                // the window background says nothing about being a
-                // control at all.
-                icon.name: picker.dark ? "brightness-high" : "brightness-low"
-                ToolTip.visible: hovered
-                ToolTip.text: picker.dark ? qsTr("Light theme") : qsTr("Dark theme")
-                onClicked: picker.theme = picker.dark ? "light" : "dark"
-            }
         }
 
         StackLayout {
@@ -2053,6 +2016,17 @@ Window {
                                 checked: true
                             }
                         }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Looks through Steam's folders again. Down here with the
+                    // other things done to the grid, rather than up beside
+                    // the heading of a page it is only one control of.
+                    RoundedButton {
+                        text: qsTr("Refresh")
+                        icon.name: "view-refresh"
+                        onClicked: Wallpapers.rescan()
                     }
                 }
 
@@ -2502,6 +2476,24 @@ Window {
                     opacity: 0.8
                 }
 
+                // What the program costs, read only while it is on show:
+                // reading /proc every second for a window nobody sees would
+                // be a cost of its own.
+                Binding {
+                    target: Usage
+                    property: "watching"
+                    value: picker.usage && picker.statusBar && picker.visible
+                }
+                Label {
+                    visible: picker.usage
+                    text: qsTr("CPU %1 %  ·  GPU %2  ·  RAM %3 MB")
+                              .arg(Usage.cpu.toFixed(1))
+                              .arg(Usage.gpu < 0 ? qsTr("n/a") : Usage.gpu.toFixed(0) + " %")
+                              .arg(Usage.ram.toFixed(0))
+                    font.features: { "tnum": 1 }
+                    opacity: 0.8
+                }
+
                 RoundedTool {
                     icon.name: "help-about"
                     // See the magnifier above: without this it is invisible.
@@ -2533,5 +2525,4 @@ Window {
                 }
             }
         }
-    }
-}
+    }}
