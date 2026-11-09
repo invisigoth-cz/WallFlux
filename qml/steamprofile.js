@@ -161,7 +161,8 @@ function askAbout(ids, done) {
                     tags.push(one.tags[t].tag);
             }
             items[String(one.publishedfileid)] =
-                { maker: one.creator ? String(one.creator) : "", tags: tags };
+                { maker: one.creator ? String(one.creator) : "", tags: tags,
+                  updated: Number(one.time_updated || 0) };
         }
         done();
     };

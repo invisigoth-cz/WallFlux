@@ -62,6 +62,8 @@ class Wallpaper
     Q_PROPERTY(QString sizeOnDisk MEMBER sizeOnDisk CONSTANT)
     Q_PROPERTY(QDateTime added MEMBER added CONSTANT)
     Q_PROPERTY(qint64 bytes MEMBER bytes CONSTANT)
+    Q_PROPERTY(qint64 installedAt MEMBER installedAt CONSTANT)
+    Q_PROPERTY(qint64 latestAt MEMBER latestAt CONSTANT)
     Q_PROPERTY(bool hasFile READ hasFile CONSTANT)
     Q_PROPERTY(bool playable READ playable CONSTANT)
     Q_PROPERTY(bool official MEMBER official CONSTANT)
@@ -141,6 +143,14 @@ public:
     /// milliseconds for all 53, which is why it is read during a scan rather
     /// than when somebody asks: ordering by size needs all of them at once.
     qint64 bytes = 0;
+
+    /// When the copy on the disk was published, and the newest version
+    /// Steam has heard of, in seconds since 1970 -- `timeupdated` and
+    /// `latest_timeupdated` in Steam's `appworkshop_431960.acf`. A newer one
+    /// than is on the disk is an update Steam has not fetched. Nought where
+    /// Steam says nothing, which is never an update.
+    qint64 installedAt = 0;
+    qint64 latestAt = 0;
 
     /// Whether it came with Wallpaper Engine rather than from the workshop:
     /// one of its own, under `projects/defaultprojects`, named rather than

@@ -33,6 +33,10 @@ Item {
     /// Whether this one is in the playlist being put together.
     property bool ticked: false
 
+    /// Whether its author has published a newer version than the one on
+    /// the disk.
+    property bool outdated: false
+
     /// Asked for when the tick box is clicked.
     signal tickAsked()
 
@@ -137,6 +141,30 @@ Item {
             anchors.margins: -5
             cursorShape: Qt.PointingHandCursor
             onClicked: card.tickAsked()
+        }
+    }
+
+    /// Said on the picture, in the corner the tick box leaves free, so a
+    /// wallpaper with a newer version can be found by looking at the grid.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 10
+        visible: card.outdated
+        implicitWidth: updateWord.implicitWidth + 14
+        implicitHeight: 20
+        radius: 10
+        // A fixed blue rather than the palette's: it sits on a picture.
+        color: "#3daee9"
+
+        Label {
+            id: updateWord
+
+            anchors.centerIn: parent
+            text: qsTr("Update")
+            font.pixelSize: 11
+            font.weight: Font.Bold
+            color: "#ffffff"
         }
     }
 }

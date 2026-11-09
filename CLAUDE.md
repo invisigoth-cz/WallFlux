@@ -193,6 +193,18 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   placeholder. **Remembered** in `~/.config/WallFlux/wallflux.conf` through
   QtCore's `Settings`, the ticked screens too -- not the wallpaper.
 
+- **Updates from the workshop.** `installedAt` and `latestAt` on each
+  `Wallpaper` are `timeupdated` and `latest_timeupdated` out of Steam's
+  `steamapps/workshop/appworkshop_431960.acf`; the keyless details answer
+  adds `time_updated`, kept in the picker's `workshopUpdated`. Newer than
+  `installedAt` by either is `picker.outdated`: a blue Update on the card,
+  an Update button in the panel with `Steamworks.downloads`' progress, and
+  Update all beside Refresh. `Steamworks.download()` is the update --
+  `DownloadItem` fetches a newer version of an installed item -- and five
+  seconds after one finishes the library is read again, since Steam writes
+  its record after the files. Steam fetches updates by itself while it
+  runs: on 9 November none of 58 was behind, so this is for when it did not.
+
 - **A wallpaper's own properties**, in the library's panel under the
   author's row (`PropertiesView.qml`): what project.json declares, in its
   `order`, each shown while its `condition` -- the author's JavaScript,

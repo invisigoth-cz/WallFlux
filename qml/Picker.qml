@@ -777,6 +777,51 @@ Window {
     /// finds the author brings these back with it, so it costs nothing.
     property var workshopTags: ({})
 
+    /// When the workshop says each installed wallpaper was last published,
+    /// by id: the same answer as the tags.
+    property var workshopUpdated: ({})
+
+    /// The installed wallpapers whose author has published a newer version
+    /// than the one on the disk: newer than Steam's own record says it
+    /// fetched, by what Steam has heard or the workshop says now. Steam
+    /// fetches these by itself while it runs; this is for when it did not.
+    readonly property var outdated: {
+        const found = [];
+        const all = Wallpapers.wallpapers;
+        for (let i = 0; i < all.length; ++i) {
+            const one = all[i];
+            const newest = Math.max(one.latestAt, picker.workshopUpdated[one.id] || 0);
+            if (one.installedAt > 0 && newest > one.installedAt)
+                found.push(one.id);
+        }
+        return found;
+    }
+    /// Asks Steam for the newer versions; the folder watcher sees them come.
+    function update(ids) {
+        for (let i = 0; i < ids.length; ++i)
+            Steamworks.download(ids[i]);
+    }
+
+    // Steam writes down that it fetched a version a moment after the files,
+    // and the folder watcher answers to the files: looked at again once the
+    // record has caught up, so the Update badge goes when it should.
+    Connections {
+        target: Steamworks
+        function onDownloadsChanged() {
+            for (let i = 0; i < picker.outdated.length; ++i) {
+                if (Steamworks.downloads[picker.outdated[i]] === 100) {
+                    caughtUp.restart();
+                    return;
+                }
+            }
+        }
+    }
+    Timer {
+        id: caughtUp
+        interval: 5000
+        onTriggered: Wallpapers.rescan()
+    }
+
     /// Asks the workshop about every installed wallpaper at once, so that
     /// the filter beside the grid has the tags they really carry rather
     /// than the handful project.json keeps.
@@ -796,12 +841,16 @@ Window {
 
         Steam.detailsOfMany(ids, function () {
             const seen = Object.assign({}, picker.workshopTags);
+            const updated = Object.assign({}, picker.workshopUpdated);
             for (let i = 0; i < ids.length; ++i) {
                 const said = Steam.items[ids[i]];
                 if (said && said.tags.length > 0)
                     seen[ids[i]] = said.tags;
+                if (said && said.updated)
+                    updated[ids[i]] = said.updated;
             }
             picker.workshopTags = seen;
+            picker.workshopUpdated = updated;
         });
     }
 
@@ -2243,6 +2292,16 @@ Window {
 
                     Item { Layout.fillWidth: true }
 
+                    // Every wallpaper with a newer version, in one go. Only
+                    // while there are some and Steam is there to fetch them.
+                    RoundedButton {
+                        visible: picker.outdated.length > 0 && Steamworks.available
+                        text: qsTr("Update all (%1)").arg(picker.outdated.length)
+                        icon.name: "update-none"
+                        accent: "#3daee9"
+                        onClicked: picker.update(picker.outdated)
+                    }
+
                     // Looks through Steam's folders again. Down here with the
                     // other things done to the grid, rather than up beside
                     // the heading of a page it is only one control of.
@@ -2508,6 +2567,7 @@ Window {
                                     }
                                     onApplied: (id) => picker.apply(id)
                                     ticked: picker.inPlaylist.indexOf(cell.modelData.id) >= 0
+                                    outdated: picker.outdated.indexOf(cell.modelData.id) >= 0
                                     showTick: picker.picking
                                     onTickAsked: picker.tick(cell.modelData.id)
                                 }
@@ -2595,6 +2655,26 @@ Window {
                                     highlighted: ownQuality.highlightedIndex === index
                                 }
                             }
+                        }
+
+                        // A newer version, fetched through Steam, with how far
+                        // it has got while it comes.
+                        RoundedButton {
+                            id: updating
+
+                            readonly property var progress: picker.inspected
+                                ? Steamworks.downloads[picker.inspected.id] : undefined
+
+                            Layout.fillWidth: true
+                            visible: !!picker.inspected
+                                     && picker.outdated.indexOf(picker.inspected.id) >= 0
+                            enabled: Steamworks.available && updating.progress === undefined
+                            text: updating.progress === undefined ? qsTr("Update")
+                                : updating.progress < 0 ? qsTr("Steam would not update it")
+                                : qsTr("Updating… %1 %").arg(Math.round(updating.progress))
+                            icon.name: "update-none"
+                            accent: "#3daee9"
+                            onClicked: picker.update([picker.inspected.id])
                         }
 
                         RoundedButton {

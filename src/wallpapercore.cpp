@@ -82,6 +82,31 @@ QSet<QString> hiddenIn(const QDir &shipped)
 }
 
 
+/// What Steam's record of the workshop says of each item: when the copy on
+/// the disk was published and the newest Steam knows of, by id. The record
+/// is Valve's KeyValues text; every item is a block of plain pairs, so a
+/// block is found by its braces and read by its keys.
+QHash<QString, std::pair<qint64, qint64>> workshopTimes(const QString &acf)
+{
+    QFile file(acf);
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    const QString text = QString::fromUtf8(file.readAll());
+    static const QRegularExpression block(QStringLiteral(R"re("(\d+)"\s*\{([^{}]*)\})re"));
+    static const QRegularExpression installed(QStringLiteral(R"re("timeupdated"\s*"(\d+)")re"));
+    static const QRegularExpression latest(QStringLiteral(R"re("latest_timeupdated"\s*"(\d+)")re"));
+    QHash<QString, std::pair<qint64, qint64>> times;
+    for (auto it = block.globalMatch(text); it.hasNext();) {
+        const QRegularExpressionMatch one = it.next();
+        const QString body = one.captured(2);
+        auto &[at, newest] = times[one.captured(1)];
+        // The item is in two blocks, and only one of them says the latest.
+        at = std::max(at, installed.match(body).captured(1).toLongLong());
+        newest = std::max(newest, latest.match(body).captured(1).toLongLong());
+    }
+    return times;
+}
+
 /// What to ask ffprobe for.
 QStringList probeArguments(const QString &file)
 {
@@ -354,12 +379,16 @@ QList<Wallpaper> WallpaperCore::scan(const QStringList &steamRoots)
         if (!content.exists())
             continue;
 
+        const auto times = workshopTimes(root + QLatin1StringView("/steamapps/workshop/appworkshop_")
+                                         + WallpaperEngineAppId + QLatin1StringView(".acf"));
         const QStringList folders =
             content.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
         for (const QString &folder : folders) {
-            if (const std::optional<Wallpaper> wallpaper =
-                    readWallpaper(QDir(content.filePath(folder))))
-                found.append(*wallpaper);
+            std::optional<Wallpaper> wallpaper = readWallpaper(QDir(content.filePath(folder)));
+            if (!wallpaper)
+                continue;
+            std::tie(wallpaper->installedAt, wallpaper->latestAt) = times.value(folder);
+            found.append(*wallpaper);
         }
     }
 

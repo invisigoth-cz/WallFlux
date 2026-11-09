@@ -73,6 +73,7 @@ private slots:
     void hidesOneOfWallpaperEnginesOwn();
     /// The things a scan has to get right, on one made-up Steam install.
     void readsWhatIsThere();
+    void readsWhenSteamFetchedEachOne();
 
     /// A `file` that climbs out of the wallpaper's folder is refused. The
     /// name comes from downloaded content, so this is a boundary, not a
@@ -277,6 +278,66 @@ void TestWallpaperCore::readsWhatIsThere()
     // scene.json lives inside scene.pkg, so the package is what is drawn.
     QVERIFY(found[2].source.toLocalFile().endsWith(QStringLiteral("/222/scene.pkg")));
     QVERIFY(found[2].playable());
+}
+
+/// Steam's own record, in its own shape: one item in both sections, one
+/// whose newer version Steam has heard of and not fetched, and one Steam
+/// says nothing about.
+void TestWallpaperCore::readsWhenSteamFetchedEachOne()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+    for (const char *id : {"111", "222", "333"})
+        makeWallpaper(steam.path(), QString::fromLatin1(id),
+                      R"({"title":"x","type":"web","file":"index.html"})",
+                      {QStringLiteral("index.html")});
+
+    QFile acf(steam.path() + QStringLiteral("/steamapps/workshop/appworkshop_431960.acf"));
+    QVERIFY(acf.open(QIODevice::WriteOnly));
+    acf.write(R"("AppWorkshop"
+{
+	"appid"		"431960"
+	"WorkshopItemsInstalled"
+	{
+		"111"
+		{
+			"size"		"100"
+			"timeupdated"		"1600000000"
+			"manifest"		"1"
+		}
+		"222"
+		{
+			"size"		"200"
+			"timeupdated"		"1500000000"
+		}
+	}
+	"WorkshopItemDetails"
+	{
+		"111"
+		{
+			"timeupdated"		"1600000000"
+			"latest_timeupdated"		"1600000000"
+		}
+		"222"
+		{
+			"timeupdated"		"1500000000"
+			"latest_timeupdated"		"1700000000"
+		}
+	}
+}
+)");
+    acf.close();
+
+    QHash<QString, Wallpaper> byId;
+    for (const Wallpaper &one : WallpaperCore::scan({steam.path()}))
+        byId.insert(one.id, one);
+    QCOMPARE(byId.size(), 3);
+    QCOMPARE(byId[QStringLiteral("111")].installedAt, 1600000000);
+    QCOMPARE(byId[QStringLiteral("111")].latestAt, 1600000000);
+    QCOMPARE(byId[QStringLiteral("222")].installedAt, 1500000000);
+    QCOMPARE(byId[QStringLiteral("222")].latestAt, 1700000000);
+    QCOMPARE(byId[QStringLiteral("333")].installedAt, 0);
+    QCOMPARE(byId[QStringLiteral("333")].latestAt, 0);
 }
 
 void TestWallpaperCore::findsAScenePackageNamedAfterItsFile()

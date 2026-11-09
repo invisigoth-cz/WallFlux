@@ -6,6 +6,13 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Updates from the workshop.** A wallpaper whose author has published a
+  newer version than the one on the disk says Update on its card, the panel
+  has an Update button with its progress, and Update all fetches every one
+  through Steam. Known from Steam's own record and the workshop's answer.
+
 ## [0.32.0] — 2026-11-09
 
 ### Added
