@@ -6,6 +6,31 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-11-09
+
+### Changed
+
+- **Settings, reworked** into General, Audio, Performance / Display and
+  Appearance, laid out as a desktop's settings are now: a search across
+  every section (accents and case ignored), the sections down the left with
+  icons, the section's name large over one card to a setting, switches as
+  pills and a round volume handle, and a section sliding in when opened.
+- **General**: the language, starting at login, the tray icon, starting
+  minimised and minimising on close (off, closing the window quits), and a
+  reset. With the tray icon off, starting WallFlux again from the menu
+  shows the window of the copy already running.
+- **Audio**: the volume from 0 to 100 %, mute (the same as the status bar's
+  button), and the two times the wallpaper goes quiet by itself -- while
+  another program plays, and under a maximised window -- now switches, on
+  by default.
+- **Performance / Display**: default scaling -- fill, fit with bars, or
+  stretch -- for scenes and videos, beside the frame rate, the music, the
+  mouse, parallax and particles.
+- **Appearance**: six themes -- Light, Dark, System, Steam, Hard Light and
+  Hard Dark, the last two high contrast -- chosen from tiles that show
+  each, with the colours easing from one to the next; an accent colour; the
+  tint by the wallpaper; and the status bar, which can be hidden.
+
 ## [0.27.0] — 2026-11-09
 
 ### Added
@@ -1253,7 +1278,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.25.2...v0.25.3
