@@ -41,17 +41,22 @@ Item {
     /// choose is whether the wallpaper has sound at all.
     readonly property bool silent: picker.muted || (picker.quietForOthers && OtherAudio.playing) || root.covered
 
-    /// Whether a window is filling the screen in front of the wallpaper.
+    /// Whether the wallpaper is to stand still: a window filling the screen
+    /// in front of it, another program with the keyboard where that was
+    /// asked for, or a battery below the floor set in Settings.
     ///
-    /// Nothing of the wallpaper is on screen then, so it stops rather than
-    /// going on decoding frames and running JavaScript behind a game.
+    /// Nothing of the wallpaper is on screen in the first case, so it stops
+    /// rather than going on decoding frames and running JavaScript behind a
+    /// game; the other two are somebody's choice to save the machine.
     ///
     /// One answer for every screen, because that is all `ScreenCover` can
     /// say: KWin is asked whether *a* window covers the wallpaper, not
     /// which screen it is on. A second monitor nobody has covered is
     /// stopped along with the first; worth knowing before it is called a
     /// bug.
-    readonly property bool covered: ScreenCover.covered && picker.quietUnderWindows
+    readonly property bool covered: (ScreenCover.covered && picker.quietUnderWindows)
+        || (ScreenCover.focused && picker.pauseOnFocus)
+        || (Power.onBattery && Power.hasBattery && Power.percent < picker.batteryFloor)
 
     /// Whether the running playlist's clock should be standing still.
     ///

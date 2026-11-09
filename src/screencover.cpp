@@ -4,6 +4,7 @@
 
 #include "screencover.h"
 
+#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QLoggingCategory>
@@ -29,6 +30,7 @@ QString scriptFor(const QString &busName)
 var wallflux = "%1";
 var path = "%2";
 var iface = "%3";
+var ours = %4;
 
 // A window covers the screen when it fills the room a maximised window gets
 // -- which is the screen minus the panels, not the whole of it. Comparing
@@ -74,6 +76,21 @@ function watch(w) {
     look();
 }
 
+// Another program has the keyboard: an ordinary window that is not one of
+// ours. Not the desktop or a panel, which are not normal windows, and not
+// the picker, or choosing a wallpaper would stop the one being chosen.
+var hadFocus = null;
+function focus() {
+    var w = workspace.activeWindow;
+    var other = !!w && w.normalWindow && w.pid !== ours;
+    if (other === hadFocus)
+        return;
+    hadFocus = other;
+    callDBus(wallflux, path, iface, "setFocused", other);
+}
+workspace.windowActivated.connect(focus);
+focus();
+
 workspace.windowAdded.connect(watch);
 workspace.windowRemoved.connect(look);
 workspace.currentDesktopChanged.connect(look);
@@ -86,7 +103,8 @@ for (var i = 0; i < open.length; ++i)
 look();
 )JS")
         .arg(busName, QLatin1StringView(ObjectPath),
-             QLatin1StringView("cz.invisigoth.WallFlux.ScreenCover"));
+             QLatin1StringView("cz.invisigoth.WallFlux.ScreenCover"),
+             QString::number(QCoreApplication::applicationPid()));
 }
 
 } // namespace
@@ -141,6 +159,12 @@ void ScreenCover::setCovered(bool covered)
     settle();
 }
 
+void ScreenCover::setFocused(bool focused)
+{
+    m_otherHasFocus = focused;
+    settle();
+}
+
 void ScreenCover::setShowingDesktop(bool showing)
 {
     m_showingDesktop = showing;
@@ -149,6 +173,8 @@ void ScreenCover::setShowingDesktop(bool showing)
 
 void ScreenCover::settle()
 {
+    settleFocus();
+
     // A window in front of the wallpaper only counts while the windows are
     // where they were put.
     const bool covered = m_windowCovers && !m_showingDesktop;
@@ -163,4 +189,16 @@ void ScreenCover::settle()
     qCDebug(lcCover) << (covered ? "a window is covering the wallpaper"
                                  : "the wallpaper is in view");
     emit coveredChanged();
+}
+
+void ScreenCover::settleFocus()
+{
+    // "Show desktop" hands the keyboard to the desktop, which is no program.
+    const bool focused = m_otherHasFocus && !m_showingDesktop;
+    if (focused == m_focused)
+        return;
+    m_focused = focused;
+    qCDebug(lcCover) << (focused ? "another program has the keyboard"
+                                 : "no other program has the keyboard");
+    emit focusedChanged();
 }

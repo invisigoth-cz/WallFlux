@@ -30,17 +30,23 @@ class ScreenCover : public QObject
     Q_CLASSINFO("D-Bus Interface", "cz.invisigoth.WallFlux.ScreenCover")
 
     Q_PROPERTY(bool covered READ isCovered NOTIFY coveredChanged)
+    /// Whether another program's window has the keyboard, however small it
+    /// is -- Wallpaper Engine's "other application focused".
+    Q_PROPERTY(bool focused READ isFocused NOTIFY focusedChanged)
 
 public:
     explicit ScreenCover(QObject *parent = nullptr);
     ~ScreenCover() override;
 
     bool isCovered() const { return m_covered; }
+    bool isFocused() const { return m_focused; }
 
 public slots:
     /// Called by the KWin script over D-Bus. Not meant for QML, which reads
     /// `covered` instead.
     void setCovered(bool covered);
+    /// Called by the script too, when the window with the keyboard changes.
+    void setFocused(bool focused);
 
     /// Called by KWin itself, which announces this one.
     ///
@@ -53,12 +59,14 @@ public slots:
 
 signals:
     void coveredChanged();
+    void focusedChanged();
 
 private:
     void watchShowDesktop(QDBusConnection &bus);
     /// Works out what QML is told, and says nothing where that has not
     /// changed: handing the players a change that is not one stops them.
     void settle();
+    void settleFocus();
 
     /// The script that watches the windows, for as long as this lives.
     KWinScript m_script{QStringLiteral("wallflux-screencover")};
@@ -66,4 +74,6 @@ private:
     bool m_windowCovers = false;
     bool m_showingDesktop = false;
     bool m_covered = false;
+    bool m_otherHasFocus = false;
+    bool m_focused = false;
 };

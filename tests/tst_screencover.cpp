@@ -64,6 +64,29 @@ private slots:
         QVERIFY2(changes.count() == 1,
                  "the players were handed a change that was not one, which stops them");
     }
+
+    /// Another program's window with the keyboard is said once, and not
+    /// while the desktop is being shown, which hands the keyboard to nobody.
+    void saysWhenAnotherProgramHasTheKeyboard()
+    {
+        ScreenCover cover;
+        QSignalSpy changes(&cover, &ScreenCover::focusedChanged);
+        QVERIFY(!cover.isFocused());
+
+        cover.setFocused(true);
+        cover.setFocused(true);
+        QVERIFY(cover.isFocused());
+        QCOMPARE(changes.count(), 1);
+
+        cover.setShowingDesktop(true);
+        QVERIFY(!cover.isFocused());
+        cover.setShowingDesktop(false);
+        QVERIFY(cover.isFocused());
+
+        cover.setFocused(false);
+        QVERIFY(!cover.isFocused());
+        QCOMPARE(changes.count(), 4);
+    }
 };
 
 QTEST_MAIN(TestScreenCover)

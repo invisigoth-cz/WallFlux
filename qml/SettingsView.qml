@@ -61,6 +61,14 @@ Item {
         { value: 8, name: "8×" }
     ]
 
+    readonly property var floors: [
+        { value: 0, name: qsTr("Never") },
+        { value: 10, name: "10 %" },
+        { value: 20, name: "20 %" },
+        { value: 30, name: "30 %" },
+        { value: 50, name: "50 %" }
+    ]
+
     readonly property var textureSizes: [
         { value: false, name: qsTr("Full") },
         { value: true, name: qsTr("Half") }
@@ -125,6 +133,9 @@ Item {
         p.volume = 1;
         p.quietForOthers = true;
         p.quietUnderWindows = true;
+        p.pauseOnFocus = false;
+        p.batteryLow = true;
+        p.batteryFloor = 20;
         p.fps = 15;
         p.music = true;
         p.mouse = true;
@@ -561,6 +572,19 @@ Item {
                     }
                 }
 
+                Setting {
+                    home: 1
+                    title: qsTr("Pause while another program is in use")
+                    about: qsTr("Whenever another program's window has the keyboard, however small "
+                                + "it is, the wallpaper stops and goes quiet; clicking the desktop "
+                                + "brings it back. This window does not count.")
+
+                    Toggle {
+                        value: view.picker.pauseOnFocus
+                        onChanged: (to) => view.picker.pauseOnFocus = to
+                    }
+                }
+
                 // Performance / Display.
 
                 Setting {
@@ -675,6 +699,33 @@ Item {
                     Toggle {
                         value: view.picker.parallax
                         onChanged: (to) => view.picker.parallax = to
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("Low quality on battery")
+                    about: (Power.hasBattery ? "" : qsTr("This computer has no battery. "))
+                           + qsTr("On battery every wallpaper is drawn on the Low preset, its own "
+                                  + "preset or not, so the battery lasts longer.")
+
+                    Toggle {
+                        value: view.picker.batteryLow
+                        onChanged: (to) => view.picker.batteryLow = to
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("Pause on a low battery")
+                    about: (Power.hasBattery ? "" : qsTr("This computer has no battery. "))
+                           + qsTr("Below this much battery the wallpaper stops altogether, until the "
+                                  + "charger is plugged in.")
+
+                    Choice {
+                        options: view.floors
+                        current: view.picker.batteryFloor
+                        onChosen: (value) => view.picker.batteryFloor = value
                     }
                 }
 

@@ -6,6 +6,16 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Pause while another program is in use**, under Audio: off unless
+  switched on, Wallpaper Engine's "other application focused" -- any
+  program's window with the keyboard, however small; WallFlux's own does
+  not count.
+- **On a battery**, under Performance / Display: every wallpaper drawn on
+  the Low preset, and stopped below a share of the battery (20 % unless
+  set otherwise). Read off UPower; a computer without a battery is told so.
+
 ## [0.31.0] — 2026-11-09
 
 ### Added

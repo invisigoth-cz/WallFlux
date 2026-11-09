@@ -145,6 +145,14 @@ Window {
     /// wallpaper is also stopped, so with this off it goes on playing.
     property bool quietForOthers: true
     property bool quietUnderWindows: true
+    /// And stopped while another program has the keyboard -- Wallpaper
+    /// Engine's "other application focused". Off unless asked for.
+    property bool pauseOnFocus: false
+
+    /// On a battery: drawn on the Low preset, and stopped below so many per
+    /// cent of it (nought for never).
+    property bool batteryLow: true
+    property int batteryFloor: 20
 
     /// How a wallpaper meets a screen of another shape: `default` (as
     /// Wallpaper Engine draws it, which is cropped to fill), `fill`, `fit`
@@ -229,6 +237,8 @@ Window {
     /// What the wallpaper on show is drawn with: its own preset where it
     /// has one, the settings where it has not.
     readonly property var drawnWith: {
+        if (picker.batteryLow && Power.onBattery)
+            return picker.presets.low;
         const own = picker.presets[picker.qualityOf[Wallpapers.current.id]];
         return own ? own : { fps: picker.fps, msaa: picker.msaa, bloom: picker.bloom };
     }
@@ -268,6 +278,9 @@ Window {
         property alias closeToTray: picker.closeToTray
         property alias quietForOthers: picker.quietForOthers
         property alias quietUnderWindows: picker.quietUnderWindows
+        property alias pauseOnFocus: picker.pauseOnFocus
+        property alias batteryLow: picker.batteryLow
+        property alias batteryFloor: picker.batteryFloor
         property alias scaling: picker.scaling
         property alias msaa: picker.msaa
         property alias bloom: picker.bloom

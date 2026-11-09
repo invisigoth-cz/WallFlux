@@ -335,6 +335,8 @@ qml/Toggle.qml        a switch as they are drawn now, told and answering
 qml/PropertiesView.qml  a wallpaper's own settings, in the library's panel
 src/autostart.h       Autostart: starting at login, by the user's own entry
 src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
+src/power.h           Power: on a battery or not, and how full, off UPower
+src/power.cpp         the system bus, OnBattery and the display device
 src/usage.h           Usage: what WallFlux costs, for the status bar
 src/usage.cpp         /proc: stat, status and fdinfo of it and its children
 qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
@@ -371,6 +373,7 @@ tests/tst_playlists.cpp       what a playlist remembers and how long a
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 tests/tst_autostart.cpp       the user's entry written hidden and not
 tests/tst_usage.cpp           /proc's lines read, and this process read
+tests/tst_power.cpp           mains for ever without UPower
 tests/tst_mirror.cpp          one window's picture in another, the right way
                               up and cropped, and kept up to date
 tests/tst_sceneview.cpp       a scene drawn through the item, checked against
@@ -459,9 +462,14 @@ and `watching`, which `Main.qml` binds to a scene being on show and in
 view. Each screen's `SceneView` is handed `pointer` -- the position less
 `Screen.virtualX/Y`, or undefined -- and passes it on as a fraction.
 
-`OtherAudio` and `ScreenCover` are singletons of the same module, each with
-one property -- `playing` and `covered` -- and no business of their own in
-what the answer is used for. `Main.qml` puts the three together in one line:
+`OtherAudio` and `ScreenCover` are singletons of the same module -- `playing`,
+and `covered` with `focused` (another program's normal window has the
+keyboard; the KWin script is handed our pid, so the picker does not count) --
+with no business of their own in what the answer is used for. So is `Power`
+(`hasBattery`, `onBattery`, `percent`). `Main.qml`'s `covered` is a window in
+front where `quietUnderWindows` asks, `focused` where `pauseOnFocus` asks, or
+a battery under `batteryFloor`; `drawnWith` is Low on a battery where
+`batteryLow` asks. It is put together with the rest in one line:
 
 ```qml
 readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover.covered
