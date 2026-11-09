@@ -149,6 +149,11 @@ Window {
     /// Engine's "other application focused". Off unless asked for.
     property bool pauseOnFocus: false
 
+    /// Whether GitHub is asked about a newer WallFlux when the window first
+    /// opens -- not at startup: a program nobody has looked at yet should not
+    /// be talking to anybody.
+    property bool checkUpdates: true
+
     /// On a battery: drawn on the Low preset, and stopped below so many per
     /// cent of it (nought for never).
     property bool batteryLow: true
@@ -279,6 +284,7 @@ Window {
         property alias quietForOthers: picker.quietForOthers
         property alias quietUnderWindows: picker.quietUnderWindows
         property alias pauseOnFocus: picker.pauseOnFocus
+        property alias checkUpdates: picker.checkUpdates
         property alias batteryLow: picker.batteryLow
         property alias batteryFloor: picker.batteryFloor
         property alias scaling: picker.scaling
@@ -1166,6 +1172,8 @@ Window {
             return;
         picker.askedAboutThemAll = true;
         picker.lookUpEverything();
+        if (picker.checkUpdates)
+            Updater.check();
     }
 
     // A wallpaper that turns up later -- Steam finishing a download, or a
@@ -2790,6 +2798,8 @@ Window {
             }
 
             SettingsView {
+                id: settingsPage
+
                 picker: picker
             }
         }
@@ -2852,6 +2862,19 @@ Window {
                     // with one line in it is a dialog nobody wants, so
                     // there is nothing here for a click to do.
                     ToolTip.text: qsTr("WallFlux %1").arg(Application.version)
+                }
+
+                // A newer WallFlux, said where it is seen without looking for
+                // it; the click goes to where it is installed from.
+                RoundedButton {
+                    visible: Updater.state === Updater.Available
+                    text: qsTr("WallFlux %1 is out").arg(Updater.latest)
+                    accent: "#3daee9"
+                    flat: true
+                    onClicked: {
+                        tabs.currentIndex = 3;
+                        settingsPage.section = 0;
+                    }
                 }
 
                 RoundedButton {

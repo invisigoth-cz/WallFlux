@@ -94,6 +94,8 @@ qt_add_qml_module(wallflux
         src/usage.cpp
         src/power.h
         src/power.cpp
+        src/updater.h
+        src/updater.cpp
         src/otheraudio.h
         src/otheraudio.cpp
         src/playlists.h
@@ -208,6 +210,14 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_autostart PRIVATE src)
     target_link_libraries(tst_autostart PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME autostart COMMAND tst_autostart)
+
+    qt_add_executable(tst_updater
+        tests/tst_updater.cpp
+        src/updater.cpp
+    )
+    target_include_directories(tst_updater PRIVATE src)
+    target_link_libraries(tst_updater PRIVATE Qt6::Network Qt6::Qml Qt6::Test)
+    add_test(NAME updater COMMAND tst_updater)
 
     qt_add_executable(tst_power
         tests/tst_power.cpp

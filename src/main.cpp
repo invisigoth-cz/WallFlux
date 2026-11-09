@@ -167,6 +167,10 @@ int main(int argc, char *argv[])
             QMetaObject::invokeMethod(root, "showPicker");
         }
     });
+    // Started again by an update, which is somebody's click: the window is
+    // what they were looking at, so it is what they get back.
+    if (app.arguments().contains(QStringLiteral("--show")))
+        QMetaObject::invokeMethod(root, "showPicker", Qt::QueuedConnection);
 
     return app.exec();
 }

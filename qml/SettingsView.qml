@@ -134,6 +134,7 @@ Item {
         p.quietForOthers = true;
         p.quietUnderWindows = true;
         p.pauseOnFocus = false;
+        p.checkUpdates = true;
         p.batteryLow = true;
         p.batteryFloor = 20;
         p.fps = 15;
@@ -456,6 +457,68 @@ Item {
                     Toggle {
                         value: view.picker.closeToTray
                         onChanged: (to) => view.picker.closeToTray = to
+                    }
+                }
+
+                Setting {
+                    home: 0
+                    title: qsTr("Updates")
+                    about: {
+                        switch (Updater.state) {
+                        case Updater.Checking:
+                            return qsTr("Asking GitHub for the newest release…");
+                        case Updater.Current:
+                            return qsTr("WallFlux %1 is the newest release.").arg(Application.version);
+                        case Updater.Available:
+                            return Updater.canInstall
+                                ? qsTr("WallFlux %1 is out; this is %2. Installing asks for your "
+                                       + "password, and WallFlux starts again on its own.")
+                                      .arg(Updater.latest).arg(Application.version)
+                                : qsTr("WallFlux %1 is out; this is %2, run from outside the "
+                                       + "installed package, so it is fetched by hand.")
+                                      .arg(Updater.latest).arg(Application.version);
+                        case Updater.Downloading:
+                            return qsTr("Downloading WallFlux %1… %2 %").arg(Updater.latest)
+                                                                        .arg(Updater.progress);
+                        case Updater.Installing:
+                            return qsTr("Installing WallFlux %1…").arg(Updater.latest);
+                        case Updater.Failed:
+                            return qsTr("That did not work: %1").arg(Updater.detail);
+                        default:
+                            return qsTr("This is WallFlux %1.").arg(Application.version);
+                        }
+                    }
+
+                    RoundedButton {
+                        visible: Updater.state === Updater.Available && Updater.canInstall
+                        text: qsTr("Install %1").arg(Updater.latest)
+                        accent: "#3daee9"
+                        onClicked: Updater.install()
+                    }
+                    RoundedButton {
+                        visible: Updater.state === Updater.Available && !Updater.canInstall
+                        text: qsTr("Release page")
+                        onClicked: Qt.openUrlExternally(Updater.page)
+                    }
+                    RoundedButton {
+                        visible: Updater.state !== Updater.Available
+                        enabled: Updater.state !== Updater.Checking
+                                 && Updater.state !== Updater.Downloading
+                                 && Updater.state !== Updater.Installing
+                        text: qsTr("Check now")
+                        onClicked: Updater.check()
+                    }
+                }
+
+                Setting {
+                    home: 0
+                    title: qsTr("Check for updates")
+                    about: qsTr("Asks GitHub once, the first time the window opens after WallFlux "
+                                + "starts. Nothing is installed without your click.")
+
+                    Toggle {
+                        value: view.picker.checkUpdates
+                        onChanged: (to) => view.picker.checkUpdates = to
                     }
                 }
 

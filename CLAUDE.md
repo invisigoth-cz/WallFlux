@@ -193,6 +193,20 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   placeholder. **Remembered** in `~/.config/WallFlux/wallflux.conf` through
   QtCore's `Settings`, the ticked screens too -- not the wallpaper.
 
+- **Updates of WallFlux itself** (`Updater`): `releases/latest` of
+  invisigoth-cz/WallFlux, asked without a key when the window first opens
+  and `checkUpdates` allows. The asset must be named as makepkg names it and
+  come over https; it is fetched into the cache and installed with `pkexec
+  pacman -U --noconfirm` -- pkexec is the desktop's password window, 126 is
+  its "cancelled". Then a shell waits for this pid to be gone (the new copy
+  would knock on the old one's door and leave) and starts `/usr/bin/wallflux
+  --show`, which opens the window. Only `/usr/bin/wallflux` installs; a
+  build tree gets the release page. **The repository has to be public for
+  any of it**: private, GitHub answers 404 to a request without a login,
+  measured on 9 November. The packages are not signed, and pacman's
+  `LocalFileSigLevel = Optional` lets a local file in unsigned: whoever can
+  publish a release can put code on the machine as root, after the password.
+
 - **Updates from the workshop.** `installedAt` and `latestAt` on each
   `Wallpaper` are `timeupdated` and `latest_timeupdated` out of Steam's
   `steamapps/workshop/appworkshop_431960.acf`; the keyless details answer
@@ -349,6 +363,8 @@ src/autostart.h       Autostart: starting at login, by the user's own entry
 src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
 src/power.h           Power: on a battery or not, and how full, off UPower
 src/power.cpp         the system bus, OnBattery and the display device
+src/updater.h         Updater: a newer WallFlux on GitHub, and installing it
+src/updater.cpp       releases/latest, the package, pkexec pacman -U, restart
 src/usage.h           Usage: what WallFlux costs, for the status bar
 src/usage.cpp         /proc: stat, status and fdinfo of it and its children
 qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
@@ -386,6 +402,7 @@ tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 tests/tst_autostart.cpp       the user's entry written hidden and not
 tests/tst_usage.cpp           /proc's lines read, and this process read
 tests/tst_power.cpp           mains for ever without UPower
+tests/tst_updater.cpp         versions as numbers, the package and only it
 tests/tst_mirror.cpp          one window's picture in another, the right way
                               up and cropped, and kept up to date
 tests/tst_sceneview.cpp       a scene drawn through the item, checked against
