@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-11-10
+
 ### Added
 
 - **Recent approved** opens Discover, as Wallpaper Engine's first row: the
@@ -21,8 +23,9 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   -- rounded, with a magnifier and a cross to empty it.
 - **Filter sections open one at a time**, all folded whenever the filter is
   shown, in both tabs.
-- **The card the keyboard is on glows**, with a wider band, where the blue
-  band alone was hard to find among the green ones.
+- **The chosen card stands out** with a wider band and the theme's own
+  mark (below), where the blue band alone was hard to find among the green
+  ones.
 - **Drop downs are rounded** like the buttons: a wallpaper's quality, a
   playlist's order and transition, and a wallpaper's own choices.
 - **The Steam tab's panel closes when the tab is left.** The library's stays
@@ -35,9 +38,9 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   button stay readable, and each theme marks the chosen card its own way:
   a glow in Dark, a raised card in Light, a focus ring in System, a larger
   lit card in Steam, a thick double frame in the high contrast pair.
-- **Sliders are round**, a wallpaper's own included.
-- **The Anime switch is in Settings › General**, and Particles sit under
-  Parallax in Performance.
+- **Sliders are round and switches are pills everywhere**, a wallpaper's own
+  settings and the Displays tab included.
+- **Particles sit under Parallax** in Settings › Performance.
 
 ### Fixed
 
@@ -1426,7 +1429,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.31.0...v0.32.0
