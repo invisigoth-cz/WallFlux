@@ -222,6 +222,31 @@ void Playlists::forget(const QString &name)
     }
 }
 
+bool Playlists::rename(const QString &from, const QString &to)
+{
+    const QString name = to.trimmed();
+    if (name.isEmpty() || (name != from && !named(name).isEmpty()))
+        return false;
+
+    for (qsizetype i = 0; i < m_all.size(); ++i) {
+        QVariantMap one = m_all[i].toMap();
+        if (one.value(QStringLiteral("name")).toString() != from)
+            continue;
+
+        one.insert(QStringLiteral("name"), name);
+        m_all[i] = one;
+        store();
+        emit allChanged();
+        if (m_playing == from) {
+            m_playing = name;
+            emit playingChanged();
+        }
+        qCInfo(lcPlaylists) << "renamed" << from << "to" << name;
+        return true;
+    }
+    return false;
+}
+
 QVariantMap Playlists::named(const QString &name) const
 {
     for (const QVariant &value : m_all) {

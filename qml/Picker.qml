@@ -1480,7 +1480,25 @@ Window {
         /// The name picked in the list, or empty while none is.
         property string picked: ""
 
+        /// Whether the picked row is a field to type its new name into.
+        property bool renaming: false
+
         onOpened: loading.picked = picker.playlistName
+        onPickedChanged: loading.renaming = false
+        onClosed: loading.renaming = false
+
+        /// Gives the picked one the name typed, and says whether it took.
+        /// The strip's own name follows, or the next Save would make the
+        /// old name again beside the new one.
+        function renameTo(name) {
+            const from = loading.picked;
+            if (!Playlists.rename(from, name))
+                return false;
+            if (picker.playlistName === from)
+                picker.playlistName = name.trim();
+            loading.picked = name.trim();
+            return true;
+        }
 
         background: Rectangle {
             color: picker.palette.base
@@ -1569,12 +1587,52 @@ Window {
 
                             Label {
                                 Layout.fillWidth: true
+                                visible: !newName.visible
                                 elide: Text.ElideRight
                                 text: (Playlists.playing === row.modelData.name ? "▶  " : "")
                                       + row.modelData.name
                                 color: loading.picked === row.modelData.name
                                            ? picker.palette.highlightedText
                                            : picker.palette.windowText
+                            }
+
+                            TextField {
+                                id: newName
+
+                                /// Set when the name typed was refused --
+                                /// empty, or another playlist's -- and
+                                /// cleared by typing.
+                                property bool refused: false
+
+                                Layout.fillWidth: true
+                                visible: loading.renaming && loading.picked === row.modelData.name
+                                onVisibleChanged: {
+                                    if (!visible)
+                                        return;
+                                    text = row.modelData.name;
+                                    refused = false;
+                                    forceActiveFocus();
+                                    selectAll();
+                                }
+                                onTextEdited: refused = false
+                                onAccepted: {
+                                    if (loading.renameTo(text))
+                                        loading.renaming = false;
+                                    else
+                                        refused = true;
+                                }
+                                // Escape takes the field back and leaves
+                                // the dialog open; a second one closes it.
+                                Keys.onEscapePressed: event => {
+                                    loading.renaming = false;
+                                    loading.forceActiveFocus();
+                                }
+                                background: Rectangle {
+                                    radius: 4
+                                    color: picker.palette.base
+                                    border.width: newName.refused ? 2 : 1
+                                    border.color: newName.refused ? "#c0392b" : picker.palette.mid
+                                }
                             }
 
                             Label {
@@ -1630,6 +1688,14 @@ Window {
                         function onPickedChanged() { binIt.asking = false; }
                         function onClosed() { binIt.asking = false; }
                     }
+                }
+
+                RoundedButton {
+                    text: qsTr("Rename")
+                    icon.name: "edit-rename"
+                    enabled: !loading.renaming
+                             && Playlists.named(loading.picked).name !== undefined
+                    onClicked: loading.renaming = true
                 }
 
                 Item { Layout.fillWidth: true }

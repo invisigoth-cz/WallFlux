@@ -94,6 +94,12 @@ public:
     /// Throws one away, and stops it if it was the one playing.
     Q_INVOKABLE void forget(const QString &name);
 
+    /// Calls one by another name, and goes on playing it if it was. Refused,
+    /// with false, where the new name is empty or another playlist has it:
+    /// renaming over one would throw that one away without asking, which is
+    /// what Delete is for.
+    Q_INVOKABLE bool rename(const QString &from, const QString &to);
+
     /// One playlist by name, or an empty map. For the window, which has to
     /// show what a playlist holds before it changes any of it.
     Q_INVOKABLE QVariantMap named(const QString &name) const;

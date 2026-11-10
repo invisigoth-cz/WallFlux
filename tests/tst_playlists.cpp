@@ -49,6 +49,29 @@ private slots:
         QCOMPARE(one.value(QStringLiteral("alwaysFirst")).toBool(), true);
     }
 
+    /// A new name keeps everything else, goes on playing, and is refused
+    /// where it is empty or another playlist's.
+    void renamesWithoutTakingAnotherName()
+    {
+        Playlists p;
+        p.save(QStringLiteral("a"), {QStringLiteral("1"), QStringLiteral("2")},
+               {{QStringLiteral("seconds"), 30}});
+        p.save(QStringLiteral("b"), {QStringLiteral("3")}, {});
+        p.start(QStringLiteral("a"));
+
+        QVERIFY(!p.rename(QStringLiteral("a"), QStringLiteral("b")));
+        QVERIFY(!p.rename(QStringLiteral("a"), QStringLiteral("  ")));
+        QVERIFY(!p.rename(QStringLiteral("nobody"), QStringLiteral("c")));
+        QVERIFY(p.rename(QStringLiteral("a"), QStringLiteral(" c ")));
+
+        QVERIFY(p.named(QStringLiteral("a")).isEmpty());
+        QCOMPARE(p.named(QStringLiteral("c")).value(QStringLiteral("seconds")).toInt(), 30);
+        QCOMPARE(p.playing(), QStringLiteral("c"));
+        QCOMPARE(Playlists().named(QStringLiteral("c")).value(QStringLiteral("ids")).toStringList(),
+                 (QStringList{QStringLiteral("1"), QStringLiteral("2")}));
+        p.stop();
+    }
+
     /// Hours, minutes and seconds are added up rather than one of them
     /// winning, and nought is lifted to the floor rather than taken at its
     /// word.
