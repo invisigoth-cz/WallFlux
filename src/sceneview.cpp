@@ -172,6 +172,12 @@ private:
         }
         qCInfo(lcScene) << "drawing" << m_folder;
         m_drawn = m_folder;
+        QByteArray skipped(int(wallflux_scene_skipped(m_scene, nullptr, 0)) + 1, '\0');
+        wallflux_scene_skipped(m_scene, skipped.data(), size_t(skipped.size()));
+        const QStringList parts = QString::fromUtf8(skipped.constData()).split(u'\n', Qt::SkipEmptyParts);
+        if (SceneView *view = m_view.data())
+            QMetaObject::invokeMethod(view, [view, parts] { emit view->loaded(parts); },
+                                      Qt::QueuedConnection);
         say({});
         // A new scene has been told nothing about the mouse yet.
         m_pointed = false;

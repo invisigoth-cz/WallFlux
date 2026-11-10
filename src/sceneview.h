@@ -101,6 +101,11 @@ signals:
     void optionsChanged();
     void valuesChanged();
 
+    /// A scene was loaded and is being drawn, with what of it the renderer
+    /// had to leave out -- nothing, for a scene drawn whole. Not said again
+    /// when a changed setting loads the same scene over.
+    void loaded(const QStringList &skipped);
+
 private:
     friend class SceneRenderer;
     void setError(const QString &error);

@@ -53,6 +53,7 @@ set_source_files_properties(qml/SceneSound.qml PROPERTIES QT_RESOURCE_ALIAS Scen
 set_source_files_properties(qml/DisplaysView.qml PROPERTIES QT_RESOURCE_ALIAS DisplaysView.qml)
 set_source_files_properties(qml/SettingsView.qml PROPERTIES QT_RESOURCE_ALIAS SettingsView.qml)
 set_source_files_properties(qml/Toggle.qml PROPERTIES QT_RESOURCE_ALIAS Toggle.qml)
+set_source_files_properties(qml/Heart.qml PROPERTIES QT_RESOURCE_ALIAS Heart.qml)
 set_source_files_properties(qml/PropertiesView.qml PROPERTIES QT_RESOURCE_ALIAS PropertiesView.qml)
 set_source_files_properties(qml/steamprofile.js PROPERTIES QT_RESOURCE_ALIAS steamprofile.js)
 
@@ -85,6 +86,7 @@ qt_add_qml_module(wallflux
         qml/DisplaysView.qml
         qml/SettingsView.qml
         qml/Toggle.qml
+        qml/Heart.qml
         qml/PropertiesView.qml
         qml/steamprofile.js
     SOURCES

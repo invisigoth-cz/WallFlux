@@ -28,10 +28,15 @@ Rectangle {
     property var ratings: []
     property var resolutions: []
     property var kinds: []
+    property var grades: []
+    /// ["only"] while the favourites alone are wanted. A list like the rest
+    /// so that it is a chip like the rest.
+    property var favorites: []
 
     /// How many chips are on, for the button that opens this.
     readonly property int chosen: panel.tags.length + panel.ratings.length
                                  + panel.resolutions.length + panel.kinds.length
+                                 + panel.grades.length + panel.favorites.length
 
     /// The same list with that value taken out or put in.
     function toggled(list, value) {
@@ -44,6 +49,8 @@ Rectangle {
         panel.ratings = [];
         panel.resolutions = [];
         panel.kinds = [];
+        panel.grades = [];
+        panel.favorites = [];
     }
 
     /// Which of Wallpaper Engine's catalogues to call the tags by. Read as
@@ -158,6 +165,16 @@ Rectangle {
                 spacing: 16
 
                 ChipSection {
+                    title: qsTr("FAVOURITES")
+                    // The account's hearts on Steam, so only while it can
+                    // be asked.
+                    visible: Steamworks.available
+                    values: [{ v: "only", l: qsTr("Only favourites") }]
+                    picked: panel.favorites
+                    onAsked: (value) => panel.favorites = panel.toggled(panel.favorites, value)
+                }
+
+                ChipSection {
                     title: qsTr("GENRE")
                     values: panel.genreValues
                     picked: panel.tags
@@ -183,18 +200,16 @@ Rectangle {
 
                 ChipSection {
                     title: qsTr("COMPATIBILITY")
-                    // Nothing answers this yet: it is for when a wallpaper fetched
-                    // from the workshop has been tried and found to work or not.
-                    // Shown and switched off, so the plan is visible and nothing
-                    // pretends to do anything.
-                    enabled: false
-                    values: [{ v: "perfect", l: qsTr("Perfect") },
+                    // How a wallpaper fared when it was played: what the
+                    // renderer left out, or whether it played at all. No
+                    // "major issues": nothing can tell those from minor ones
+                    // without somebody looking.
+                    values: [{ v: "perfect", l: qsTr("Works") },
                              { v: "minor", l: qsTr("Minor issues") },
-                             { v: "major", l: qsTr("Major issues") },
                              { v: "broken", l: qsTr("Broken") },
-                             { v: "unknown", l: qsTr("Unknown") }]
-                    picked: []
-                    onAsked: (value) => {}
+                             { v: "unknown", l: qsTr("Not tried yet") }]
+                    picked: panel.grades
+                    onAsked: (value) => panel.grades = panel.toggled(panel.grades, value)
                 }
 
                 ChipSection {

@@ -324,7 +324,11 @@ Item {
         const rows = [
             { key: "trending", title: qsTr("Trending"),
               order: Steamworks.Trending, tag: "" },
-            { key: "new", title: qsTr("New"), order: Steamworks.Newest, tag: "" }
+            { key: "new", title: qsTr("New"), order: Steamworks.Newest, tag: "" },
+            { key: "favorites", title: qsTr("Your favourites"),
+              order: Steamworks.MyFavorites, tag: "", personal: true },
+            { key: "friends", title: qsTr("Friends' favourites"),
+              order: Steamworks.FriendsFavorites, tag: "", personal: true }
         ];
         const genres = Tags.genres;
         for (let i = 0; i < genres.length; ++i) {
@@ -403,6 +407,8 @@ Item {
         switch (which) {
         case Steamworks.Newest: return qsTr("New");
         case Steamworks.MostSubscribed: return qsTr("Most subscribed");
+        case Steamworks.MyFavorites: return qsTr("Your favourites");
+        case Steamworks.FriendsFavorites: return qsTr("Friends' favourites");
         }
         return qsTr("Trending");
     }
@@ -504,6 +510,21 @@ Item {
         label: offered.item.title
         onClicked: workshop.choose(offered.item)
         onDoubleClicked: workshop.neverMind()
+
+        readonly property bool favorite: Steamworks.favorites.indexOf(offered.item.id) >= 0
+
+        HoverHandler { id: over }
+
+        // The heart, as on the library's cards: there under the pointer,
+        // and for good on a favourite.
+        Heart {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 6
+            visible: over.hovered || offered.favorite
+            on: offered.favorite
+            onAsked: Steamworks.favorite(offered.item.id, !offered.favorite)
+        }
     }
 
     /// One Discover row: a heading, a sideways strip of cards, and a way
@@ -526,6 +547,9 @@ Item {
 
         Layout.fillWidth: true
         spacing: 6
+        // A row about the account that finds nothing is somebody without
+        // favourites, not a workshop with nothing in it: it goes.
+        visible: !(row.section.personal && row.answered && row.items.length === 0)
 
         /// Asked when the row is built, which is when it is first scrolled
         /// to, and again if Steam becomes reachable after that -- a row
@@ -789,7 +813,8 @@ Item {
 
                     Repeater {
                         model: [Steamworks.Trending, Steamworks.Newest,
-                                Steamworks.MostSubscribed]
+                                Steamworks.MostSubscribed, Steamworks.MyFavorites,
+                                Steamworks.FriendsFavorites]
 
                         delegate: MenuItem {
                             required property var modelData
@@ -1111,6 +1136,9 @@ Item {
                 Layout.bottomMargin: 8
                 preview: workshop.inspected ? workshop.inspected.preview : ""
                 title: workshop.inspected ? workshop.inspected.title : ""
+                canFavorite: Steamworks.available && !!workshop.inspected
+                favorite: !!workshop.inspected && Steamworks.favorites.indexOf(workshop.inspected.id) >= 0
+                onFavoriteAsked: Steamworks.favorite(workshop.inspected.id, !favorite)
                 facts: workshop.factsFor(workshop.inspected, Language.czech)
                 tags: workshop.inspected
                       ? Tags.labelled(workshop.inspected.tags, workshop.catalogue)

@@ -75,6 +75,9 @@ class Steamworks : public QObject
     /// know is a button on a card and a binding is how a card asks.
     Q_PROPERTY(QVariantMap downloads READ downloads NOTIFY downloadsChanged)
 
+    /// The ids of the wallpapers the account has made favourites on Steam.
+    Q_PROPERTY(QStringList favorites READ favorites NOTIFY favoritesChanged)
+
 public:
     /// Why the workshop cannot be asked.
     enum Trouble {
@@ -91,6 +94,8 @@ public:
         Trending,     ///< What the workshop is making a fuss of now.
         Newest,       ///< By the date it was published.
         MostSubscribed, ///< By how many people took it.
+        MyFavorites,  ///< The account's own favourites, newest first.
+        FriendsFavorites, ///< What the account's friends made favourites.
     };
     Q_ENUM(Order)
 
@@ -103,6 +108,7 @@ public:
     QVariantMap totals() const { return m_totals; }
     bool isBusy() const { return m_call != 0; }
     QVariantMap downloads() const { return m_downloads; }
+    QStringList favorites() const { return m_favorites; }
 
     /// Asks the workshop for one page of wallpapers, fifty at a time, which
     /// is what Steam gives, and files the answer under `key`.
@@ -157,11 +163,19 @@ public:
     /// restarted.
     Q_INVOKABLE void retry();
 
+    /// Makes one wallpaper one of the account's favourites on Steam, or
+    /// takes it off -- the heart Wallpaper Engine draws, which is the
+    /// workshop's own favourite and so the same on every machine the
+    /// account signs in to. `favorites` says so at once rather than when
+    /// Steam answers, since the heart is what was clicked.
+    Q_INVOKABLE void favorite(const QString &id, bool on);
+
 signals:
     void availableChanged();
     void foundChanged();
     void busyChanged();
     void downloadsChanged();
+    void favoritesChanged();
 
 private:
     /// Opens libsteam_api.so from wherever it is, or says where it looked.
@@ -179,6 +193,11 @@ private:
 
     /// Asks Steam how far each outstanding download has got.
     void measure();
+
+    /// Asks for the account's favourites from the first page: the answers
+    /// come under `FavoritesKey` and a page number and are gathered into
+    /// `m_favorites` rather than `found`.
+    void askFavorites(int page);
 
     /// Whether the pump still has anything to pump for.
     bool waiting() const
@@ -223,6 +242,15 @@ private:
     QList<quint64> m_downloading;
     QVariantMap m_downloads;
 
+    /// The account's favourites by id, and the pages of them gathered so
+    /// far while they are being asked for.
+    QStringList m_favorites;
+    QStringList m_gathering;
+
+    /// The account signed in to Steam, as a steamID64, for the questions
+    /// about its own favourites. Nought where it could not be asked.
+    quint64 m_self = 0;
+
     /// The pipe callbacks come down, and what is outstanding on it.
     qint32 m_pipe = 0;
     quint64 m_query = 0;
@@ -247,6 +275,8 @@ private:
     bool (*m_searchText)(void *, quint64, const char *) = nullptr;
     quint64 (*m_subscribe)(void *, quint64) = nullptr;
     quint64 (*m_unsubscribe)(void *, quint64) = nullptr;
+    quint64 (*m_addFavorite)(void *, quint32, quint64) = nullptr;
+    quint64 (*m_removeFavorite)(void *, quint32, quint64) = nullptr;
     bool (*m_downloadItem)(void *, quint64, bool) = nullptr;
     bool (*m_downloadInfo)(void *, quint64, quint64 *, quint64 *) = nullptr;
 };

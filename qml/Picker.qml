@@ -177,6 +177,42 @@ Window {
     /// the setting's name: only what was changed, laid over project.json.
     property var propertiesOf: ({})
 
+    /// How each wallpaper fared the first time it was played, and every
+    /// time after, by id: `{ grade, why }`, the grade "perfect", "minor" or
+    /// "broken" and `why` what the renderer left out or the error. Measured
+    /// rather than guessed: a scene's renderer says what it could not build,
+    /// a video or a page whether it would play at all.
+    property var tried: ({})
+
+    /// Writes down how a wallpaper fared. Only a change is written, since
+    /// the grid is built out of this while the filter asks about it.
+    function noteCompatibility(id, grade, why) {
+        const was = picker.tried[id];
+        if (was && was.grade === grade && JSON.stringify(was.why) === JSON.stringify(why))
+            return;
+        const all = Object.assign({}, picker.tried);
+        all[id] = { grade: grade, why: why };
+        picker.tried = all;
+    }
+
+    /// How a wallpaper fares: what it was found to do when it was played,
+    /// "broken" where it cannot be played at all, and "unknown" until then.
+    function compatibility(one) {
+        if (!one.playable)
+            return "broken";
+        const was = picker.tried[one.id];
+        return was ? was.grade : "unknown";
+    }
+
+    function compatibilityName(grade, language) {
+        switch (grade) {
+        case "perfect": return qsTr("Works");
+        case "minor": return qsTr("Minor issues");
+        case "broken": return qsTr("Broken");
+        }
+        return qsTr("Not tried yet");
+    }
+
     function setProperty(id, name, value) {
         const all = Object.assign({}, picker.propertiesOf);
         all[id] = Object.assign({}, all[id] || {});
@@ -293,6 +329,7 @@ Window {
         property alias halfTextures: picker.halfTextures
         property alias qualityOf: picker.qualityOf
         property alias propertiesOf: picker.propertiesOf
+        property alias tried: picker.tried
         property alias muted: picker.muted
         property alias volume: picker.volume
         property alias fps: picker.fps
@@ -712,6 +749,14 @@ Window {
         if (one.soundKnown)
             told.push({ label: qsTr("Sound of its own"), icon: "audio-volume-high",
                         value: one.hasSound ? qsTr("Yes") : qsTr("No") });
+        const grade = picker.compatibility(one);
+        const left = (picker.tried[one.id] || { why: [] }).why.length;
+        told.push({ label: qsTr("Compatibility"),
+                    icon: grade === "perfect" ? "emblem-success"
+                        : grade === "minor" ? "emblem-warning"
+                        : grade === "broken" ? "emblem-error" : "emblem-question",
+                    value: picker.compatibilityName(grade, language)
+                           + (grade === "minor" ? " " + qsTr("(%n part(s) left out)", "", left) : "") });
         if (picker.fromWorkshop(one))
             told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: one.id });
         return told;
@@ -1092,6 +1137,13 @@ Window {
             if (filters.resolutions.length && filters.resolutions.indexOf(one.resolution) < 0)
                 continue;
             if (filters.kinds.length && filters.kinds.indexOf(one.kind) < 0)
+                continue;
+            // Read only while it is asked about: everything a binding reads
+            // rebuilds the grid when it changes, and a rebuild puts the view
+            // back to its first row.
+            if (filters.grades.length && filters.grades.indexOf(picker.compatibility(one)) < 0)
+                continue;
+            if (filters.favorites.length && Steamworks.favorites.indexOf(one.id) < 0)
                 continue;
             kept.push(one);
         }
@@ -2644,6 +2696,9 @@ Window {
                                     outdated: picker.outdated.indexOf(cell.modelData.id) >= 0
                                     showTick: picker.picking
                                     onTickAsked: picker.tick(cell.modelData.id)
+                                    canFavorite: Steamworks.available && picker.fromWorkshop(cell.modelData)
+                                    favorite: Steamworks.favorites.indexOf(cell.modelData.id) >= 0
+                                    onFavoriteAsked: Steamworks.favorite(cell.modelData.id, !favorite)
                                 }
                             }
 
@@ -2669,6 +2724,9 @@ Window {
                         Layout.bottomMargin: 8
                         preview: picker.inspected ? picker.inspected.preview : ""
                         title: picker.inspected ? picker.inspected.title : ""
+                        canFavorite: Steamworks.available && !!picker.inspected && picker.fromWorkshop(picker.inspected)
+                        favorite: !!picker.inspected && Steamworks.favorites.indexOf(picker.inspected.id) >= 0
+                        onFavoriteAsked: Steamworks.favorite(picker.inspected.id, !favorite)
                         facts: picker.factsFor(picker.inspected, Language.czech)
                         tags: picker.tagsOf(picker.inspected, Language.czech)
                         author: picker.inspectedAuthor

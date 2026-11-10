@@ -152,6 +152,7 @@ Item {
             particles: picker.particles
             scaling: picker.scaling
             onHeld: root.oneIsHolding()
+            onTried: (id, grade, why) => picker.noteCompatibility(id, grade, why)
         }
     }
 

@@ -147,6 +147,7 @@ constexpr int MatchingItemsReadyToUse = 2;
 /// account's own work. Read out of Valve's headers rather than guessed,
 /// the same as every other number in this file.
 constexpr int UserListPublished = 0;      // k_EUserUGCList_Published
+constexpr int UserListFavorited = 5;      // k_EUserUGCList_Favorited
 constexpr int MatchingAll = ~0;           // k_EUGCMatchingUGCType_All
 constexpr int UserSortByCreationDesc = 0; // k_EUserUGCListSortOrder_CreationOrderDesc
 
@@ -163,11 +164,17 @@ int ugcOrder(Steamworks::Order order)
         return 1; // k_EUGCQuery_RankedByPublicationDate
     case Steamworks::MostSubscribed:
         return 12; // k_EUGCQuery_RankedByTotalUniqueSubscriptions
+    case Steamworks::FriendsFavorites:
+        return 4; // k_EUGCQuery_FavoritedByFriendsRankedByPublicationDate
     case Steamworks::Trending:
+    case Steamworks::MyFavorites: // a list of the account's, not a ranking
         break;
     }
     return 3; // k_EUGCQuery_RankedByTrend
 }
+
+/// What the account's favourites are gathered under, followed by the page.
+const QString FavoritesKey = QStringLiteral("favorites:");
 
 /// A fixed char array out of Steam, which is not promised to end in a zero.
 QString textIn(const char *field, int room)
@@ -249,6 +256,10 @@ bool Steamworks::open()
                      "SteamAPI_ISteamUGC_SubscribeItem");
     WALLFLUX_RESOLVE(m_unsubscribe, quint64 (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_UnsubscribeItem");
+    WALLFLUX_RESOLVE(m_addFavorite, quint64 (*)(void *, quint32, quint64),
+                     "SteamAPI_ISteamUGC_AddItemToFavorites");
+    WALLFLUX_RESOLVE(m_removeFavorite, quint64 (*)(void *, quint32, quint64),
+                     "SteamAPI_ISteamUGC_RemoveItemFromFavorites");
     WALLFLUX_RESOLVE(m_downloadItem, bool (*)(void *, quint64, bool),
                      "SteamAPI_ISteamUGC_DownloadItem");
     WALLFLUX_RESOLVE(m_downloadInfo, bool (*)(void *, quint64, quint64 *, quint64 *),
@@ -261,7 +272,7 @@ bool Steamworks::open()
         || !m_createUserQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
         || !m_unsubscribe || !m_downloadItem || !m_downloadInfo || !m_requireTag
-        || !m_searchText) {
+        || !m_searchText || !m_addFavorite || !m_removeFavorite) {
         m_trouble = UnknownLibrary;
         return false;
     }
@@ -289,6 +300,13 @@ bool Steamworks::open()
         return false;
     }
 
+    // Who is signed in, for the account's own favourites. Without it the
+    // rest of the workshop works and the hearts stay empty.
+    const auto getSteamId = reinterpret_cast<quint64 (*)(void *)>(
+        dlsym(m_library, "SteamAPI_ISteamUser_GetSteamID"));
+    if (void *user = findInterface(steamUser(), "SteamUser023"); user && getSteamId)
+        m_self = getSteamId(user);
+
     // Steam runs no thread of its own in this process: its answers sit in a
     // queue until somebody asks for them, which is what pump() does.
     dispatchInit();
@@ -304,7 +322,33 @@ bool Steamworks::open()
     connect(&m_pump, &QTimer::timeout, this, &Steamworks::pump, Qt::UniqueConnection);
 
     m_trouble = Fine;
+    askFavorites(1);
     return true;
+}
+
+void Steamworks::askFavorites(int page)
+{
+    if (m_self != 0)
+        browse(FavoritesKey + QString::number(page), MyFavorites, page);
+}
+
+void Steamworks::favorite(const QString &id, bool on)
+{
+    bool numeric = false;
+    const quint64 fileId = id.toULongLong(&numeric);
+    if (!m_ugc || !numeric || fileId == 0)
+        return;
+    const quint32 app = QByteArrayView(WallpaperEngineAppId).toByteArray().toUInt();
+    (on ? m_addFavorite : m_removeFavorite)(m_ugc, app, fileId);
+    if (on && !m_favorites.contains(id))
+        m_favorites.append(id);
+    else if (!on)
+        m_favorites.removeAll(id);
+    emit favoritesChanged();
+    // Its answer is nobody's business, but it still has to be freed.
+    m_draining = 100;
+    m_pump.start();
+    qCInfo(lcSteam) << (on ? "made a favourite of" : "no longer a favourite:") << fileId;
 }
 
 void Steamworks::retry()
@@ -356,7 +400,13 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     const quint32 app = QByteArrayView(WallpaperEngineAppId).toByteArray().toUInt();
     const quint32 at = static_cast<quint32>(qMax(1, page));
 
-    if (creator.isEmpty()) {
+    if (order == MyFavorites) {
+        // The account's own list, which -- like an author's -- is a
+        // question about one account rather than a ranking of all.
+        m_query = m_createUserQuery(m_ugc, static_cast<quint32>(m_self & 0xFFFFFFFFULL),
+                                    UserListFavorited, MatchingAll, UserSortByCreationDesc,
+                                    app, app, at);
+    } else if (creator.isEmpty()) {
         const int ranking = search.isEmpty() ? ugcOrder(order) : RankedByTextSearch;
         m_query = m_createQuery(m_ugc, ranking, MatchingItemsReadyToUse, 0, app, at);
     } else {
@@ -566,6 +616,29 @@ void Steamworks::collect(quint64 call, int callbackId, int paramSize)
             });
         }
         qCInfo(lcSteam) << m_asking << "returned" << landing.size() << "of" << finished->total;
+    }
+
+    // The account's favourites are gathered page by page into the list the
+    // hearts read, rather than filed for a grid.
+    if (m_asking.startsWith(FavoritesKey)) {
+        const int page = m_asking.mid(FavoritesKey.size()).toInt();
+        if (page == 1)
+            m_gathering.clear();
+        for (const QVariant &one : std::as_const(landing))
+            m_gathering.append(one.toMap().value(QStringLiteral("id")).toString());
+        m_releaseQuery(m_ugc, m_query);
+        m_query = 0;
+        emit busyChanged();
+        if (finished->result == ResultOk && !landing.isEmpty()
+            && qint64(page) * 50 < qint64(finished->total)) {
+            askFavorites(page + 1);
+        } else {
+            m_favorites = m_gathering;
+            emit favoritesChanged();
+            qCInfo(lcSteam) << "the account has" << m_favorites.size() << "favourites";
+        }
+        askNext();
+        return;
     }
 
     // Filed even when it came back empty, so a row that found nothing can

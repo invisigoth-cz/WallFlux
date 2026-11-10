@@ -49,6 +49,12 @@ Rectangle {
     /// Asked for when somebody wants the rest of this author's work.
     signal authorAsked()
 
+    /// The heart on the picture, as on the cards: whether this one is a
+    /// favourite on Steam, whether it can be, and the click asking for it.
+    property bool favorite: false
+    property bool canFavorite: false
+    signal favoriteAsked()
+
     /// Whether the panel is out.
     ///
     /// It slides rather than appearing: the width is what moves, and the
@@ -111,6 +117,15 @@ Rectangle {
             // The name goes under this in its own type, where it can wrap.
             label: ""
             clickable: false
+
+            Heart {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 8
+                visible: panel.canFavorite
+                on: panel.favorite
+                onAsked: panel.favoriteAsked()
+            }
         }
 
         Label {

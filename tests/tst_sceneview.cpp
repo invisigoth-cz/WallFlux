@@ -166,6 +166,7 @@ private slots:
         // Standing still at nought seconds, so the picture is one moment and
         // not whichever moment the grab happened to land on.
         view.setRunning(false);
+        QSignalSpy loaded(&view, &SceneView::loaded);
         view.setSource(source);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -174,6 +175,13 @@ private slots:
         QVERIFY(view.error().isEmpty());
         if (qEnvironmentVariableIsSet("WALLFLUX_SCENE_GRAB"))
             picture.save(qEnvironmentVariable("WALLFLUX_SCENE_GRAB"));
+        // The one thing of Dark Angels' the renderer leaves out -- a script
+        // that switches an effect -- is what it says it left out, which is
+        // what grades the wallpaper as having minor issues.
+        QTRY_COMPARE(loaded.count(), 1);
+        const QStringList skipped = loaded.first().first().toStringList();
+        QVERIFY2(skipped.size() == 1 && skipped.first().contains(QStringLiteral("M5")),
+                 qPrintable(skipped.join(QStringLiteral(" | "))));
 
         // A scene that loaded and drew nothing is the failure to catch: the
         // framebuffer would be the clear colour from edge to edge.
@@ -454,6 +462,7 @@ private slots:
         SceneView view(window.contentItem());
         view.setSize(QSizeF(480, 270));
         view.setRunning(false);
+        QSignalSpy loaded(&view, &SceneView::loaded);
         view.setSource(source);
         window.show();
         QVERIFY(QTest::qWaitForWindowExposed(&window));
@@ -468,6 +477,10 @@ private slots:
         QVERIFY(view.error().isEmpty());
         view.setValues(QStringLiteral(R"({"back_color":"0.5529411764705883 0.5529411764705883 0.5529411764705883"})"));
         const QImage again = grab();
+        // Future Clock is drawn whole, and said so once: a setting changed
+        // carries the same scene on, which is no new load to grade.
+        QCOMPARE(loaded.count(), 1);
+        QCOMPARE(loaded.first().first().toStringList(), QStringList());
 
         if (qEnvironmentVariableIsSet("WALLFLUX_SCENE_GRAB")) {
             asItIs.save(qEnvironmentVariable("WALLFLUX_SCENE_GRAB") + QStringLiteral("-a.png"));

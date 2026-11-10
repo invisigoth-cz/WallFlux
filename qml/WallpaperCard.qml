@@ -40,6 +40,15 @@ Item {
     /// Asked for when the tick box is clicked.
     signal tickAsked()
 
+    /// Whether it is one of the account's favourites on Steam, and whether
+    /// it can be one at all: only what came from the workshop, and only
+    /// while Steam can be asked.
+    property bool favorite: false
+    property bool canFavorite: false
+
+    /// Asked for when the heart is clicked.
+    signal favoriteAsked()
+
     /// Whether this is the one the arrow keys are on. Drawn as a ring
     /// round the whole card: the band along the preview already says
     /// whether it can be played, and a second band would be a riddle.
@@ -144,12 +153,26 @@ Item {
         }
     }
 
+    /// The heart, in the corner opposite the tick box: there while the
+    /// pointer is on the card, and for good on a favourite.
+    Heart {
+        id: heart
+
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 6
+        visible: card.canFavorite && (pointer.hovered || card.favorite)
+        on: card.favorite
+        onAsked: card.favoriteAsked()
+    }
+
     /// Said on the picture, in the corner the tick box leaves free, so a
     /// wallpaper with a newer version can be found by looking at the grid.
     Rectangle {
         anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.margins: 10
+        anchors.right: heart.visible ? heart.left : parent.right
+        anchors.topMargin: 10
+        anchors.rightMargin: heart.visible ? 6 : 10
         visible: card.outdated
         implicitWidth: updateWord.implicitWidth + 14
         implicitHeight: 20

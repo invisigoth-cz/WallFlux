@@ -247,8 +247,48 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   draws Gears of War both ways: the same to the pixel. Rebuilding the whole
   scene rather than keeping bindings live was chosen because it covers every
   bound value there is, not just the ones this library uses; the price is
-  the load itself, a moment of the render thread. Videos have only Windows'
-  scheme colour and show none.
+  the load itself, a moment of the render thread -- **119 ms for DOOM, 130
+  for Dark Core, 19 for Gears** since the same day, from 964, 591 and 110:
+  the running scene's textures are taken over (`texture::Uploads`, which
+  also uploads a texture once per scene however many passes name it -- DOOM
+  named 167 times), the package is opened rather than read whole
+  (`Package::open`, the table and then each entry when asked: 105 ms of
+  DOOM's 290 MB), and the video players are taken over whole, decoder and
+  texture, so nothing is written out or asked of ffprobe again (85 of Dark
+  Core's ms). What is left is parsing the textures and building the
+  particle systems. Videos have only Windows' scheme colour and show none.
+
+- **A wallpaper's compatibility, measured** (10 November): the grade it got
+  the last time it was played, kept by id in `wallflux.conf` (`tried` in
+  `Picker.qml`) -- *Works*, *Minor issues* where the renderer left something
+  out (`SceneView.loaded(skipped)`, off `wallflux_scene_skipped`, named in
+  the panel's row), *Broken* where it did not play or cannot be played at
+  all, *Not tried yet* otherwise. A video is graded by `LoadedMedia` or an
+  error, a page by how its load ended. No "major issues": nothing can tell
+  them from minor ones without somebody looking. The filter's COMPATIBILITY
+  section filters by it, and the grid reads `tried` only while it does.
+  Kept and not removed, by the user's choice of 10 November, because the
+  renderer does not draw everything: 3D models, applications and 15 of
+  Wallpaper Engine's 19 own scenes, whatever the workshop sends next.
+
+- **Favourites, as Wallpaper Engine's heart** (10 November): the workshop's
+  own favourite on the account (`AddItemToFavorites`), so the same on every
+  machine -- read out of `scripts.js`, where `setFavorited` is the whole of
+  it. A heart on every card and on the panel's picture, red while it is on;
+  ONLY FAVOURITES in the library's filter; *Your favourites* and *Friends'
+  favourites* as Discover rows and as orders of the Workshop grid
+  (`k_EUserUGCList_Favorited` for the account, found by
+  `ISteamUser::GetSteamID`; `k_EUGCQuery_FavoritedByFriendsRankedByPublicationDate`).
+  A personal row that finds nothing is not drawn. Nothing in Wallpaper
+  Engine's code says a favourite changes what the workshop recommends.
+
+- **What a scene made on the GPU goes with it** (10 November,
+  `Scene::free`, called when the C interface drops it): every texture,
+  program, buffer and framebuffer, each once, less what a scene loaded
+  again took over (`handed_over`). Until then nothing was given back, and
+  loading DOOM twelve times took VRAM from 10.7 to 15.8 GB; now it stays
+  put. **And every offscreen picture is cleared when it is made** -- see the
+  trap about memory given back.
 
 - **A wallpaper on every screen that is ticked for it.** The Displays tab
   draws the monitors as they are arranged -- read off their positions on
@@ -374,6 +414,8 @@ qml/WallpaperSurface.qml  one screen's wallpaper: the layer-shell window,
 qml/SettingsView.qml  the Settings tab: sections down the left, a row to a
                       setting; the values live on the picker
 qml/Toggle.qml        a switch as they are drawn now, told and answering
+qml/Heart.qml         the favourite's heart drawn on a picture, told and
+                      asking
 qml/PropertiesView.qml  a wallpaper's own settings, in the library's panel
 src/autostart.h       Autostart: starting at login, by the user's own entry
 src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
@@ -468,6 +510,8 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
   sentence -- see the trap), `busy`, `found` and `totals` (keyed by the
   name the asker gave the question), `downloads` (id -> 0..100, -1 refused);
   `browse(key, order, page, tags, search, urgent, creator)`, `download(id)`,
+  `favorites` (ids) and `favorite(id, on)`, the orders `MyFavorites` and
+  `FriendsFavorites` beside the three rankings,
   `remove(id)` (unsubscribes, and nothing else -- the folder is
   `Wallpapers.discard()`'s), `retry()`. An answer's entries carry `owner`,
   the maker's steamID64 **as a string** -- it does not fit a double and QML
@@ -578,6 +622,16 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   used to write out.
 
 ## Traps, each one found the expensive way
+
+- **A texture made with no pixels holds what the memory held before.**
+  `tex_image_2d` with no data leaves whatever was there, which is nought
+  only while the GPU hands out memory nobody used. Once scenes gave theirs
+  back, a buffer read before its first write -- a motion blur's last frame
+  on the first frame -- showed what the scene before had left, and
+  `drawsASceneIntoTheItem` wandered from 2 to 19 apart from run to run.
+  `make_target` clears what it makes; the same rows now read 0, where they
+  had read 6.7, 1.4 and 3.7 apart before any of this, which was the same
+  thing in fresh memory.
 
 - **A `QQuickFramebufferObject` drawn with OpenGL comes out upside down.**
   OpenGL draws from the bottom up and Qt 6 shows the framebuffer as it
@@ -2428,13 +2482,11 @@ day; everything asked for on 9 November is in it.
      9 November. Until it is, Settings > General > Updates says 404 and
      WallFlux cannot update itself. History checked: no secrets; the e-mail
      and one commit's full name would be public.
-   - **Favourites** (a star on a card, a filter): being considered.
-   - **A quick menu on the tray icon** (pause, next wallpaper, mute, the
-     last few wallpapers): proposed, not answered.
-   - Not tried by eye yet: properties on a web wallpaper changing live,
-     pausing for another program's focus on the desktop, anything on a
-     battery (this machine has none), installing an update end to end
-     (needs the repository public and a newer release).
+   - **Trying it on the laptop** (the user's, with help asked for): a
+     battery and several monitors there; then the repository public and an
+     update installed end to end. Properties on a web wallpaper changing
+     live and pausing for another program's focus were confirmed by eye on
+     10 November.
 
 1. **The wallpaper backlog of 9 November** (memory `backlog-tapet-9-11`):
    Augmentation's bolts blue where Windows has them white-violet, Space
@@ -2443,8 +2495,8 @@ day; everything asked for on 9 November is in it.
    particles; formats nothing here uses yet (`controlpointangle*`,
    `brightness`, `movement` flags bit 0, `alphafade` and `oscillate*`
    against the binary, what scene scripts cannot reach); Blue Dawn's hand
-   offset to take out once its cause is found. Outside the wallpapers: the
-   COMPATIBILITY filter section is a placeholder.
+   offset to take out once its cause is found. Put off by the user on
+   10 November, to come back to.
 
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
@@ -2927,10 +2979,6 @@ day; everything asked for on 9 November is in it.
 - The volume for a video went with the panel that used to be drawn over a
   preview: the only sound control now is the one in the footer, which is on
   or off. Nobody has asked for it back.
-- The COMPATIBILITY section in the library's filter is a placeholder,
-  shown and switched off. It is for when a wallpaper fetched from the
-  workshop has been tried and found to work or not, and nothing records
-  that yet.
 - `SteamAppId=431960` in the environment makes the window's resource class
   `steam_app_431960`, which is confusing when reading `workspace.windowList()`.
   Harmless; worth knowing before chasing it.

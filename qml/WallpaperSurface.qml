@@ -164,6 +164,11 @@ Window {
     /// Said when this screen is holding still and can be changed under.
     signal held()
 
+    /// Said when a wallpaper has been tried: `grade` is "perfect" where it
+    /// plays whole, "minor" where the renderer left parts out -- named in
+    /// `why` -- and "broken" where it does not play at all.
+    signal tried(string id, string grade, var why)
+
     NumberAnimation {
         id: veilUp
 
@@ -282,6 +287,10 @@ Window {
             // first picture whatever its preset says, and neither clock nor ring.
             onLoadingChanged: request => {
                 web.listens = false;
+                if (surface.showingWeb && request.status === WebEngineView.LoadSucceededStatus)
+                    surface.tried(Wallpapers.current.id, "perfect", []);
+                else if (surface.showingWeb && request.status === WebEngineView.LoadFailedStatus)
+                    surface.tried(Wallpapers.current.id, "broken", [request.errorString]);
                 if (request.status !== WebEngineView.LoadSucceededStatus || !surface.showingWeb)
                     return;
                 web.told = surface.properties || "{}";
@@ -380,6 +389,8 @@ Window {
             }
 
             onMediaStatusChanged: {
+                if (surface.showingVideo && player.mediaStatus === MediaPlayer.LoadedMedia)
+                    surface.tried(Wallpapers.current.id, "perfect", []);
                 if (player.mediaStatus !== MediaPlayer.EndOfMedia)
                     return;
 
@@ -399,8 +410,11 @@ Window {
                     player.play();
             }
 
-            onErrorOccurred: (error, errorString) =>
-                console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString)
+            onErrorOccurred: (error, errorString) => {
+                console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString);
+                if (surface.showingVideo)
+                    surface.tried(Wallpapers.current.id, "broken", [errorString]);
+            }
         }
 
         // A scene is drawn by the renderer under crates/, into this item, on
@@ -430,8 +444,15 @@ Window {
                      : undefined
 
             onErrorChanged: {
-                if (scene.error !== "")
-                    console.warn("wallflux: cannot draw", Wallpapers.current.title, "--", scene.error)
+                if (scene.error === "")
+                    return;
+                console.warn("wallflux: cannot draw", Wallpapers.current.title, "--", scene.error);
+                if (surface.showingScene)
+                    surface.tried(Wallpapers.current.id, "broken", [scene.error]);
+            }
+            onLoaded: skipped => {
+                if (surface.showingScene)
+                    surface.tried(Wallpapers.current.id, skipped.length ? "minor" : "perfect", skipped);
             }
         }
 
