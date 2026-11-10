@@ -116,8 +116,8 @@ Item {
     /// else a click on a card out here can mean: it is not ours to play.
     function inspect(item) {
         // A click on the one the panel is already about puts it away
-        // again, which is the way out now that the picture carries no
-        // cross in its corner. What is in it is left alone, so it does
+        // again, as the cross in the picture's corner does. What is in it
+        // is left alone, so it does
         // not empty itself out while it slides.
         if (shown.open && item && workshop.inspected
                 && workshop.inspected.id === item.id) {
@@ -318,24 +318,75 @@ Item {
 
     // ---- Discover -----------------------------------------------------
 
-    /// Trending and New, then a row per genre. Each row is its own question
-    /// under its own name, so one row's answer never lands in another.
+    /// Whether the workshop shows Anime, Wallpaper Engine's own switch
+    /// ("Show Anime" / "Hide Anime" in its filter settings, which sets
+    /// `filterConfig.Anime`). Hidden, every question but the account's own
+    /// favourites leaves out what carries the tag, and the genre's row goes.
+    /// A question that asks for Anime outright -- the chip ticked -- is
+    /// still answered.
+    /// Set from Settings › General by the picker, which remembers it, as
+    /// Wallpaper Engine does.
+    property bool showAnime: true
+
+    /// `tags` as they are asked for: with Anime left out while it is hidden,
+    /// unless it is the very thing being asked for.
+    function narrowed(tags) {
+        return workshop.showAnime || tags.indexOf("Anime") >= 0 ? tags : tags.concat(["-Anime"]);
+    }
+
+    onShowAnimeChanged: {
+        // A section opened whole is asked again under the new rule, or goes
+        // back to Discover if it was Anime's own.
+        if (workshop.mode === 2 && workshop.section) {
+            const base = workshop.section.base;
+            workshop.section = workshop.sections.find((one) => one.base === base) || null;
+            if (!workshop.section) {
+                workshop.mode = 0;
+                return;
+            }
+        }
+        if (workshop.mode !== 0)
+            workshop.askAfresh();
+    }
+
+    /// Recent approved, Trending and New, then a row per genre. Each row is
+    /// its own question under its own name, so one row's answer never lands
+    /// in another -- and the name says whether Anime was left out, so
+    /// switching it asks every row again rather than showing the old answer.
+    ///
+    /// Recent approved is Wallpaper Engine's own first row, read out of its
+    /// `scripts.js`: `most_recent` with the tag Approved -- the wallpapers
+    /// its makers have checked by hand -- and the five portrait sizes left
+    /// out, which are for phones.
     readonly property var sections: {
+        const hide = !workshop.showAnime;
+        const portrait = ["Portrait Standard Definition", "Portrait 720 x 1280",
+                          "Portrait 1080 x 1920", "Portrait 1440 x 2560",
+                          "Portrait 2160 x 3840"].map((one) => "-" + one);
         const rows = [
-            { key: "trending", title: qsTr("Trending"),
-              order: Steamworks.Trending, tag: "" },
-            { key: "new", title: qsTr("New"), order: Steamworks.Newest, tag: "" },
-            { key: "favorites", title: qsTr("Your favourites"),
-              order: Steamworks.MyFavorites, tag: "", personal: true },
-            { key: "friends", title: qsTr("Friends' favourites"),
-              order: Steamworks.FriendsFavorites, tag: "", personal: true }
+            { base: "approved", title: qsTr("Recent approved"),
+              order: Steamworks.Newest, tags: ["Approved"].concat(portrait) },
+            { base: "trending", title: qsTr("Trending"),
+              order: Steamworks.Trending, tags: [] },
+            { base: "new", title: qsTr("New"), order: Steamworks.Newest, tags: [] },
+            { base: "favorites", title: qsTr("Your favourites"),
+              order: Steamworks.MyFavorites, tags: [], personal: true },
+            { base: "friends", title: qsTr("Friends' favourites"),
+              order: Steamworks.FriendsFavorites, tags: [], personal: true }
         ];
         const genres = Tags.genres;
         for (let i = 0; i < genres.length; ++i) {
-            rows.push({ key: "genre:" + genres[i],
+            if (hide && genres[i] === "Anime")
+                continue;
+            rows.push({ base: "genre:" + genres[i],
                         title: Tags.name(genres[i], workshop.catalogue),
                         order: Steamworks.Trending,
-                        tag: genres[i] });
+                        tags: [genres[i]] });
+        }
+        for (const one of rows) {
+            const narrows = hide && one.order !== Steamworks.MyFavorites;
+            one.key = one.base + (narrows ? "|-Anime" : "");
+            one.tags = narrows ? workshop.narrowed(one.tags) : one.tags;
         }
         return rows;
     }
@@ -432,8 +483,9 @@ Item {
         Steamworks.browse("browse",
                           open ? workshop.section.order : workshop.order,
                           workshop.page,
-                          open ? (workshop.section.tag ? [workshop.section.tag] : [])
-                               : filters.picked,
+                          open ? workshop.section.tags
+                               : !workshop.creator && workshop.order === Steamworks.MyFavorites
+                                 ? filters.picked : workshop.narrowed(filters.picked),
                           open ? "" : workshop.search,
                           true,
                           // A section is somebody else's row, so it is
@@ -559,8 +611,7 @@ Item {
         function ask() {
             if (Steamworks.available && !row.answered && !row.asked) {
                 row.asked = true;
-                Steamworks.browse(row.section.key, row.section.order, 1,
-                                  row.section.tag ? [row.section.tag] : []);
+                Steamworks.browse(row.section.key, row.section.order, 1, row.section.tags);
             }
         }
 
@@ -695,17 +746,11 @@ Item {
                 }
             }
 
-            TextField {
+            SearchField {
                 id: searchField
 
                 Layout.preferredWidth: 300
                 placeholderText: qsTr("Search workshop…")
-                leftPadding: 34
-                // Room for the cross on the other side.
-                rightPadding: 34
-                // Nothing Steam is asked is longer than this, and a field
-                // that takes a paragraph invites one.
-                maximumLength: 50
 
                 // Typing is not a question. Steam is asked once the typing
                 // stops, or at once if somebody presses return.
@@ -725,35 +770,10 @@ Item {
 
                 onTextEdited: settle.restart()
                 onAccepted: settle.triggered()
-
-                RoundedTool {
-                    x: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    icon.name: "system-search"
-                    icon.color: parent.palette.text
-                    flat: true
-                    focusPolicy: Qt.NoFocus
-                }
-
-                RoundedTool {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 2
-                    anchors.verticalCenter: parent.verticalCenter
-                    icon.name: "edit-clear"
-                    icon.color: searchField.palette.text
-                    flat: true
-                    focusPolicy: Qt.NoFocus
-                    visible: searchField.text.length > 0
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Clear the search")
-                    // Emptying the field is only half of it: what is on the
-                    // screen is still the answer to the word that was
-                    // there, so the question is asked again without it.
-                    onClicked: {
-                        searchField.clear();
-                        settle.triggered();
-                    }
-                }
+                // Emptying the field is only half of it: what is on the
+                // screen is still the answer to the word that was there,
+                // so the question is asked again without it.
+                onCleared: settle.triggered()
             }
 
             // Whose work is being shown, while it is one person's. A chip
@@ -763,7 +783,7 @@ Item {
                 text: qsTr("By %1").arg(workshop.creatorName)
                 icon.name: "user-identity"
                 visible: workshop.mode === 1 && workshop.creator !== ""
-                accent: "#3daee9"
+                accent: Look.highlight
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("Back to the whole workshop")
                 onClicked: workshop.wholeWorkshopAgain()
@@ -783,7 +803,7 @@ Item {
                 // whatever size the window is -- see WorkshopFilters.qml.
                 // Blue while the panel it opens is open, so the
                 // button says which of its two states it is in.
-                accent: filters.visible ? "#3daee9" : "transparent"
+                accent: filters.visible ? Look.highlight : "transparent"
                 onClicked: filters.visible = !filters.visible
             }
 
@@ -1146,6 +1166,7 @@ Item {
                       : []
                 author: workshop.inspectedAuthor
                 onAuthorAsked: workshop.everythingBy(workshop.inspected.owner)
+                onCloseAsked: workshop.shut()
 
                 RoundedButton {
                     id: fetch
@@ -1166,7 +1187,7 @@ Item {
                     Layout.fillWidth: true
                     // The one button in this window that is the thing to do
                     // on the page it is on.
-                    accent: fetch.owned ? "transparent" : "#2e9e5b"
+                    accent: fetch.owned ? "transparent" : Look.positive
                     text: fetch.owned ? qsTr("Installed")
                          : fetch.untouched ? qsTr("Download")
                          : fetch.progress < 0 ? qsTr("Steam would not")

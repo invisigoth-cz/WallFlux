@@ -3,6 +3,7 @@
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
 #include "steamworks.h"
+#include "wallpapercore.h"
 
 #include <QFileInfo>
 #include <QLoggingCategory>
@@ -250,6 +251,8 @@ bool Steamworks::open()
                      "SteamAPI_ISteamUGC_ReleaseQueryUGCRequest");
     WALLFLUX_RESOLVE(m_requireTag, bool (*)(void *, quint64, const char *),
                      "SteamAPI_ISteamUGC_AddRequiredTag");
+    WALLFLUX_RESOLVE(m_excludeTag, bool (*)(void *, quint64, const char *),
+                     "SteamAPI_ISteamUGC_AddExcludedTag");
     WALLFLUX_RESOLVE(m_searchText, bool (*)(void *, quint64, const char *),
                      "SteamAPI_ISteamUGC_SetSearchText");
     WALLFLUX_RESOLVE(m_subscribe, quint64 (*)(void *, quint64),
@@ -271,7 +274,7 @@ bool Steamworks::open()
         || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery
         || !m_createUserQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
-        || !m_unsubscribe || !m_downloadItem || !m_downloadInfo || !m_requireTag
+        || !m_unsubscribe || !m_downloadItem || !m_downloadInfo || !m_requireTag || !m_excludeTag
         || !m_searchText || !m_addFavorite || !m_removeFavorite) {
         m_trouble = UnknownLibrary;
         return false;
@@ -426,8 +429,12 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     }
 
     // Narrowing has to be said before the question is sent, never after.
-    for (const QString &tag : tags)
-        m_requireTag(m_ugc, m_query, tag.toUtf8().constData());
+    for (const QString &tag : tags) {
+        if (tag.startsWith(u'-'))
+            m_excludeTag(m_ugc, m_query, tag.mid(1).toUtf8().constData());
+        else
+            m_requireTag(m_ugc, m_query, tag.toUtf8().constData());
+    }
     if (!search.isEmpty())
         m_searchText(m_ugc, m_query, search.toUtf8().constData());
 
@@ -604,7 +611,7 @@ void Steamworks::collect(quint64 call, int callbackId, int paramSize)
 
             landing.append(QVariantMap{
                 {QStringLiteral("id"), QString::number(item.id)},
-                {QStringLiteral("title"), textIn(item.title, sizeof(item.title))},
+                {QStringLiteral("title"), WallpaperCore::readable(textIn(item.title, sizeof(item.title)))},
                 {QStringLiteral("preview"), textIn(preview, sizeof(preview))},
                 {QStringLiteral("tags"),
                  textIn(item.tags, sizeof(item.tags)).split(QLatin1Char(','), Qt::SkipEmptyParts)},

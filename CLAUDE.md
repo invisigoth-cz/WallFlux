@@ -57,7 +57,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   wallpaper subscribed to in Steam turns up in the grid on its own, a couple
   of seconds after the writing stops.
 - **The Steam Workshop, browsed.** Two ways in. *Discover* is rows picked
-  for you -- Trending, New and one per genre, twenty wallpapers to a row --
+  for you -- Recent approved (Wallpaper Engine's own first row: `most_recent`,
+  tag Approved, the five portrait sizes left out), Trending, New and one per
+  genre, twenty wallpapers to a row --
   as many rows as the window is tall, with more as it is scrolled, since
   each row is its own question. Nothing in Discover is filtered or sorted
   by hand; "See more" opens one row whole, as a page with the section's
@@ -70,20 +72,33 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   again, and a double click does nothing whatever, because nothing in this
   tab is ours to play.
 
-  **A panel stays open when the tab is left**, and so does the tint: the
-  user's word of 9 November, reversing an earlier rule that shut it. What
+  **Anime can be hidden** (10 November), Wallpaper Engine's Show Anime /
+  Hide Anime (`filterConfig.Anime` in its `scripts.js`): a switch in
+  Settings › General above the reset (the user's choice of place), kept on
+  the picker as `showAnime` and handed to the Steam tab by a `Binding`. Hidden, every
+  question but the account's own favourites carries `-Anime` --
+  `Steamworks.browse` reads a tag with a `-` in front as
+  `AddExcludedTag` -- the genre's row goes, and the rows' keys get
+  `|-Anime` so that switching asks them all again. A ticked Anime chip is
+  still answered. Measured against Steam: 0 of 50 carry the tag, and the
+  totals with and without add up to the whole workshop exactly.
+
+  **The library's panel stays open when the tab is left**, and so does the
+  tint: the user's word of 9 November, reversing an earlier rule that shut
+  it. **The Steam tab's is shut on leaving** (`steam.item.shut()`), the
+  user's word of 10 November -- what was looked at there has usually just
+  been downloaded, and is played from the library. What
   was picked last, in either grid, tints every tab -- Displays and
   Settings too -- until another is picked or the same card is clicked
   again (`lastPicked` in `Picker.qml`). Only the click still being counted
   is forgotten on leaving, or it would open a panel in the tab that had
   just been left, a few tenths of a second later.
-- **A filter panel that folds.** Each section's heading is a switch: the
-  arrow turns, the chips slide out from under it, and a number beside the
-  heading says how many of them are ticked while they are away. The short
-  sections start open and the long ones folded -- half a dozen is the
-  line, which leaves the workshop's six kinds and three age ratings out
-  and folds its nineteen picture sizes and twenty-five genres. Sixty-four
-  chips, and the panel opens shorter than a window.
+- **A filter panel that folds, one section at a time.** Each section's
+  heading is a switch: the arrow turns, the chips slide out from under it,
+  and a number beside the heading says how many of them are ticked while
+  they are away. Opening one folds whichever was open, and every section is
+  folded each time the panel is shown (the user's word of 10 November, both
+  tabs). It used to be the short ones open and the long ones folded.
 - **One vocabulary for both filters.** Type, age rating, picture size,
   genre and the rest are all tags as far as Steam is concerned, so a genre
   row and a ticked chip are the same required tag. Both panels read DRUH,
@@ -313,9 +328,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   all three on this machine.
 
 - **A panel beside the grid saying what a wallpaper is.** A click opens
-  it and a click on the same card puts it away again, in either tab --
-  which is why there is no cross on the picture any more: the card is the
-  switch. It slides rather than appearing, two tenths of a second of
+  it and a click on the same card puts it away again, in either tab; so
+  does the cross in the picture's top right corner, back since 10 November
+  at the user's asking, with the heart in the top left (`closeAsked`). It slides rather than appearing, two tenths of a second of
   width, with its contents held at their full width and cut off by the
   edge so that nothing inside is squashed on the way. In the library both
   halves wait out the same 400 ms as the double click, because opening
@@ -449,6 +464,13 @@ qml/steamprofile.js   who made a workshop item, and who that account is:
                       two keyless questions, shared by both tabs
 qml/RoundedButton.qml a button with its corners off -- every button here
 qml/RoundedTool.qml   the same corners for an icon on its own
+qml/RoundedCombo.qml  the same corners for a drop down -- every one here
+qml/SearchField.qml   the one search field: a pill, a magnifier, a cross
+qml/RoundSlider.qml   the one slider: a thin track and a round handle
+qml/Look.qml          singleton: what a theme is besides its palette --
+                      positive/negative buttons, card bands, tags and how
+                      the chosen card is marked (`ring`); the picker hands
+                      it the theme and the accent
 tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pw-dump's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
@@ -498,7 +520,11 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
   `discard(id)` (deletes the workshop folder -- the other half of giving a
   wallpaper back, see the trap), `details(id)` (`{ size, resolution }`,
   read off the disk when the picker shows one card and kept afterwards)
-- static: `scan(roots)`, `steamRoots()`
+- static: `scan(roots)`, `steamRoots()`, `readable(text)` -- the text
+  without Chinese, Japanese and Korean (the user's word of 10 November),
+  tidied, or whole where nothing readable would be left; applied to a
+  wallpaper's title at the scan and a workshop answer's title -- **not** to
+  a property's label, where the user found it ugly and confusing
 - `Wallpaper`: `id`, `title`, `kind`, `source`, `preview`, `tags`, `rating`,
   `resolution`, `sizeOnDisk`, `added`, `bytes`, `soundKnown`, `hasSound`,
   `hasFile`, `playable`
@@ -509,7 +535,8 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
 - `Steamworks`: `available`, `trouble` (a `Trouble` enum, **not** a
   sentence -- see the trap), `busy`, `found` and `totals` (keyed by the
   name the asker gave the question), `downloads` (id -> 0..100, -1 refused);
-  `browse(key, order, page, tags, search, urgent, creator)`, `download(id)`,
+  `browse(key, order, page, tags, search, urgent, creator)` -- a tag
+  starting with `-` is left out rather than required --, `download(id)`,
   `favorites` (ids) and `favorite(id, on)`, the orders `MyFavorites` and
   `FriendsFavorites` beside the three rankings,
   `remove(id)` (unsubscribes, and nothing else -- the folder is
@@ -2257,6 +2284,14 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   flickers and stays. `Popup.CloseOnPressOutsideParent` keeps a press on
   the button that owns it from counting as outside, and then
   `opened ? close() : open()` does what everybody expects.
+- **A scene let go is memory glibc keeps.** `wallflux_scene_free` frees
+  everything and the resident size does not move: glibc holds on to it for
+  the next allocation, so the status bar's RAM only rose from wallpaper to
+  wallpaper and stayed at the largest. `release()` in `sceneview.cpp` calls
+  `malloc_trim(0)` after every free -- 1 ms. Measured over the library
+  loaded and freed in turn, 255 MB and 227 after; the first eight alone,
+  238 and 166. What stays is the GL driver's own.
+
 - **Asking ffprobe during the scan is a trap.** It is 53 milliseconds a
   video, which sounds free until the constructor of WallpaperCore scans the
   real machine on every test that builds one: the suite went from 0.03 to

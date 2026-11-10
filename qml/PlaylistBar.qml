@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
+import WallFlux
 
 /// The playlist being put together, along the bottom of the window.
 ///
@@ -87,7 +88,7 @@ Rectangle {
             RoundedButton {
                 text: qsTr("Save")
                 icon.name: "document-save"
-                accent: "#2e9e5b"
+                accent: Look.positive
                 // Nothing to write down until something is in it.
                 enabled: bar.items.length > 0
                 onClicked: bar.saveAsked()

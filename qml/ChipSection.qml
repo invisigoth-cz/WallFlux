@@ -34,12 +34,11 @@ ColumnLayout {
 
     /// Whether the chips are out.
     ///
-    /// The short sections start open and the long ones folded, which is
-    /// what makes the panel short without making it empty. Half a dozen
-    /// is the line: the workshop's kinds and age ratings are six and
-    /// three, which are the two anybody reaches for, and its nineteen
-    /// picture sizes and twenty-five genres are what the folding is for.
-    property bool open: section.values.length <= 6
+    /// One section at a time, the user's word of 10 November: opening one
+    /// folds whichever was open, and every section starts folded each time
+    /// the panel is shown (the panel's `onVisibleChanged`). It used to be
+    /// the short sections open and the long ones folded.
+    property bool open: false
 
     /// How many of this section's values are ticked, which is what a
     /// folded section has to be able to say.
@@ -74,7 +73,16 @@ ColumnLayout {
         HoverHandler { id: pointer }
 
         TapHandler {
-            onTapped: section.open = !section.open
+            onTapped: {
+                if (!section.open) {
+                    const beside = section.parent ? section.parent.children : [];
+                    for (let i = 0; i < beside.length; ++i) {
+                        if (beside[i] !== section && beside[i].chosenHere !== undefined)
+                            beside[i].open = false;
+                    }
+                }
+                section.open = !section.open;
+            }
         }
 
         Rectangle {

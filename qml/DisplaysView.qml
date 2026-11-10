@@ -195,9 +195,10 @@ Item {
                                 }
                             }
 
-                            Switch {
-                                checked: row.on
-                                onToggled: view.toggle(row.modelData.name)
+                            // The same switch as Settings', told and answering.
+                            Toggle {
+                                value: row.on
+                                onChanged: view.toggle(row.modelData.name)
                             }
                         }
                     }

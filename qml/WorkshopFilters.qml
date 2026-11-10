@@ -57,6 +57,15 @@ Rectangle {
     implicitWidth: 300
     // Shown by the Filters button, which is the only way in.
     visible: false
+    // Every section folded each time the panel is shown.
+    onVisibleChanged: {
+        if (!panel.visible)
+            return;
+        for (let i = 0; i < body.children.length; ++i) {
+            if (body.children[i].chosenHere !== undefined)
+                body.children[i].open = false;
+        }
+    }
 
     color: panel.palette.base
     border.color: panel.palette.mid

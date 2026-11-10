@@ -6,6 +6,45 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Recent approved** opens Discover, as Wallpaper Engine's first row: the
+  newest wallpapers its makers checked by hand, phone sizes left out.
+- **Anime can be hidden** from Discover and the Workshop, as Wallpaper
+  Engine's Show Anime / Hide Anime, by a switch in Settings › General.
+- **A cross on the panel's picture** closes it; the heart has moved to the
+  other corner. Clicking the card again still closes it too.
+
+### Changed
+
+- **One search field everywhere** -- the library, the workshop and Settings
+  -- rounded, with a magnifier and a cross to empty it.
+- **Filter sections open one at a time**, all folded whenever the filter is
+  shown, in both tabs.
+- **The card the keyboard is on glows**, with a wider band, where the blue
+  band alone was hard to find among the green ones.
+- **Drop downs are rounded** like the buttons: a wallpaper's quality, a
+  playlist's order and transition, and a wallpaper's own choices.
+- **The Steam tab's panel closes when the tab is left.** The library's stays
+  open, as before.
+- **Chinese, Japanese and Korean are left out** of wallpapers' names where
+  something readable is left without them. A wallpaper's own settings keep
+  theirs.
+- **Every theme is its own.** Buttons, card bands and tags take the theme's
+  colours instead of staying Breeze's green and blue, words on a coloured
+  button stay readable, and each theme marks the chosen card its own way:
+  a glow in Dark, a raised card in Light, a focus ring in System, a larger
+  lit card in Steam, a thick double frame in the high contrast pair.
+- **Sliders are round**, a wallpaper's own included.
+- **The Anime switch is in Settings › General**, and Particles sit under
+  Parallax in Performance.
+
+### Fixed
+
+- **Memory is given back when a scene is let go.** The status bar's RAM only
+  ever went up from one wallpaper to the next and stayed at the largest;
+  what is freed is now returned to the system at once.
+
 ## [0.34.0] — 2026-11-10
 
 ### Added

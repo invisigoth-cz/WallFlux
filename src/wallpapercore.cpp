@@ -260,7 +260,7 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     Wallpaper wallpaper;
     wallpaper.id = folder.dirName();
     // An untitled wallpaper is still worth listing, under its id.
-    wallpaper.title = root.value(QLatin1StringView("title")).toString(wallpaper.id);
+    wallpaper.title = WallpaperCore::readable(root.value(QLatin1StringView("title")).toString(wallpaper.id));
     wallpaper.kind = kind;
     // A scene's own file is inside a package named after it -- scene.json in
     // scene.pkg almost always, gifscene.json in gifscene.pkg once here -- and
@@ -625,4 +625,79 @@ WallpaperCore::~WallpaperCore()
 {
     // Nobody is left who wanted the answers.
     stopProbes();
+}
+
+QString WallpaperCore::readable(const QString &text)
+{
+    const auto east = [](char32_t c) {
+        switch (QChar::script(c)) {
+        case QChar::Script_Han:
+        case QChar::Script_Hiragana:
+        case QChar::Script_Katakana:
+        case QChar::Script_Hangul:
+        case QChar::Script_Bopomofo:
+            return true;
+        default:
+            // Their punctuation is Common to Unicode: the 【】 and 「」 a
+            // title is wrapped in, and the ideographic comma and full stop.
+            return (c >= 0x3000 && c <= 0x303F) || (c >= 0xFE30 && c <= 0xFE4F)
+                || (c >= 0xFF5F && c <= 0xFFEF);
+        }
+    };
+
+    QString kept;
+    bool any = false;
+    for (char32_t c : text.toUcs4()) {
+        if (east(c)) {
+            any = true;
+            kept += u' ';
+            continue;
+        }
+        // Full-width ASCII is ASCII: "（" closes a "(" as well as "）" does.
+        if (c >= 0xFF01 && c <= 0xFF5E)
+            c -= 0xFEE0;
+        kept += QString::fromUcs4(&c, 1);
+    }
+    if (!any)
+        return text;
+
+    static const QRegularExpression emptied(QStringLiteral(R"(\(\s*\)|\[\s*\]|\{\s*\}|<\s*>)"));
+    kept.replace(emptied, QString());
+
+    // What separated the words that went: "A-完美【x+y】-B" leaves "A- + -B".
+    // Marks are peeled off the ends of each word, a run of them is cut to
+    // its first, and none is left at either end.
+    const auto mark = [](QChar c) { return QStringView(u"|/·•~_+&-–—").contains(c); };
+    QStringList words;
+    bool afterMark = true;
+    const auto add = [&](const QString &piece) {
+        if (piece.isEmpty())
+            return;
+        const bool marks = std::all_of(piece.begin(), piece.end(), mark);
+        if (marks && afterMark)
+            return;
+        words << piece;
+        afterMark = marks;
+    };
+    for (QString word : kept.split(u' ', Qt::SkipEmptyParts)) {
+        qsizetype from = 0, to = word.size();
+        while (from < to && mark(word.at(from)))
+            ++from;
+        while (to > from && mark(word.at(to - 1)))
+            --to;
+        add(word.left(from));
+        add(word.mid(from, to - from));
+        add(word.mid(to));
+    }
+    if (afterMark && !words.isEmpty())
+        words.removeLast();
+
+    static const QRegularExpression ends(QStringLiteral(R"(^[\s,:;.]+|[\s,:;]+$)"));
+    kept = words.join(u' ').replace(ends, QString());
+
+    for (const QChar c : std::as_const(kept)) {
+        if (c.isLetterOrNumber())
+            return kept;
+    }
+    return text;
 }

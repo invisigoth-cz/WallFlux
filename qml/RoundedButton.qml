@@ -6,6 +6,8 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import QtQuick.Controls.impl
+import WallFlux
 
 /// A button with its corners taken off.
 ///
@@ -27,6 +29,22 @@ Button {
     rightPadding: 16
     topPadding: 7
     bottomPadding: 7
+
+    // Fusion's own content, with words that read on the accent: white on
+    // Breeze's green, black on High Contrast Dark's.
+    contentItem: IconLabel {
+        readonly property color ink: button.accent.a > 0 ? Look.ink(button.accent)
+                                                         : button.palette.buttonText
+
+        spacing: button.spacing
+        mirrored: button.mirrored
+        display: button.display
+        icon: button.icon
+        defaultIconColor: ink
+        text: button.text
+        font: button.font
+        color: ink
+    }
 
     background: Rectangle {
         implicitHeight: 34

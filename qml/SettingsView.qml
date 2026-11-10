@@ -142,6 +142,7 @@ Item {
         p.mouse = true;
         p.parallax = true;
         p.particles = true;
+        p.showAnime = true;
         p.usage = false;
         p.scaling = "default";
         p.msaa = 0;
@@ -294,23 +295,13 @@ Item {
             Layout.maximumWidth: 230
             spacing: 4
 
-            TextField {
+            SearchField {
                 id: search
 
                 Layout.fillWidth: true
                 Layout.bottomMargin: 10
                 placeholderText: qsTr("Search settings")
-                leftPadding: 12
-                rightPadding: 12
                 onTextChanged: view.query = search.text
-
-                background: Rectangle {
-                    implicitHeight: 36
-                    radius: 18
-                    color: search.palette.base
-                    border.width: search.activeFocus ? 2 : 1
-                    border.color: search.activeFocus ? search.palette.highlight : search.palette.mid
-                }
             }
 
             Repeater {
@@ -492,7 +483,7 @@ Item {
                     RoundedButton {
                         visible: Updater.state === Updater.Available && Updater.canInstall
                         text: qsTr("Install %1").arg(Updater.latest)
-                        accent: "#3daee9"
+                        accent: Look.highlight
                         onClicked: Updater.install()
                     }
                     RoundedButton {
@@ -524,6 +515,20 @@ Item {
 
                 Setting {
                     home: 0
+                    title: qsTr("Anime in the workshop")
+                    about: qsTr("Off, the Steam tab leaves out wallpapers tagged Anime -- in "
+                                + "Discover, where the Anime row goes too, and in the Workshop. "
+                                + "Wallpaper Engine's Show Anime / Hide Anime. Your favourites "
+                                + "and a ticked Anime filter still show them.")
+
+                    Toggle {
+                        value: view.picker.showAnime
+                        onChanged: (to) => view.picker.showAnime = to
+                    }
+                }
+
+                Setting {
+                    home: 0
                     title: qsTr("Reset to defaults")
                     about: qsTr("Every setting in every section, except the language and starting at login.")
 
@@ -543,7 +548,7 @@ Item {
                     RowLayout {
                         spacing: 12
 
-                        Slider {
+                        RoundSlider {
                             id: volume
 
                             implicitWidth: 240
@@ -557,38 +562,6 @@ Item {
                             enabled: !view.picker.muted
                             opacity: enabled ? 1 : 0.45
                             onMoved: view.picker.volume = volume.value
-
-                            // A track in the accent up to the handle, and a
-                            // round handle that grows a little when held.
-                            background: Rectangle {
-                                x: volume.leftPadding
-                                y: volume.topPadding + volume.availableHeight / 2 - height / 2
-                                width: volume.availableWidth
-                                height: 6
-                                radius: 3
-                                color: Qt.alpha(volume.palette.windowText, 0.15)
-
-                                Rectangle {
-                                    width: volume.visualPosition * parent.width
-                                    height: parent.height
-                                    radius: 3
-                                    color: volume.palette.highlight
-                                }
-                            }
-
-                            handle: Rectangle {
-                                x: volume.leftPadding + volume.visualPosition * (volume.availableWidth - width)
-                                y: volume.topPadding + volume.availableHeight / 2 - height / 2
-                                implicitWidth: 20
-                                implicitHeight: 20
-                                radius: width / 2
-                                scale: volume.pressed ? 1.15 : volume.hovered ? 1.07 : 1
-                                color: volume.palette.base
-                                border.width: 3
-                                border.color: volume.palette.highlight
-
-                                Behavior on scale { NumberAnimation { duration: 120 } }
-                            }
                         }
 
                         Label {
@@ -767,6 +740,18 @@ Item {
 
                 Setting {
                     home: 2
+                    title: qsTr("Particles")
+                    about: qsTr("Smoke, sparks, snow and the like in scenes. They are most of what "
+                                + "a scene costs; off, they are neither worked out nor drawn.")
+
+                    Toggle {
+                        value: view.picker.particles
+                        onChanged: (to) => view.picker.particles = to
+                    }
+                }
+
+                Setting {
+                    home: 2
                     title: qsTr("Low quality on battery")
                     about: (Power.hasBattery ? "" : qsTr("This computer has no battery. "))
                            + qsTr("On battery every wallpaper is drawn on the Low preset, its own "
@@ -789,18 +774,6 @@ Item {
                         options: view.floors
                         current: view.picker.batteryFloor
                         onChosen: (value) => view.picker.batteryFloor = value
-                    }
-                }
-
-                Setting {
-                    home: 2
-                    title: qsTr("Particles")
-                    about: qsTr("Smoke, sparks, snow and the like in scenes. They are most of what "
-                                + "a scene costs; off, they are neither worked out nor drawn.")
-
-                    Toggle {
-                        value: view.picker.particles
-                        onChanged: (to) => view.picker.particles = to
                     }
                 }
 

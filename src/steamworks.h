@@ -115,7 +115,9 @@ public:
     ///
     /// `tags` narrows it to wallpapers carrying all of them, spelled as
     /// Steam spells them -- `Sci-Fi`, `MMD`, `Everyone`, `3840 x 2160` --
-    /// which is what makes a genre row and the filters one mechanism.
+    /// which is what makes a genre row and the filters one mechanism. A tag
+    /// with a `-` in front leaves out what carries it instead: `-Anime` is
+    /// Wallpaper Engine's "Hide Anime".
     /// `search` is free text; giving any switches the order to ranking by
     /// text, since that is the only ranking a search means anything under.
     ///
@@ -272,6 +274,7 @@ private:
     bool (*m_previewUrl)(void *, quint64, quint32, char *, quint32) = nullptr;
     bool (*m_releaseQuery)(void *, quint64) = nullptr;
     bool (*m_requireTag)(void *, quint64, const char *) = nullptr;
+    bool (*m_excludeTag)(void *, quint64, const char *) = nullptr;
     bool (*m_searchText)(void *, quint64, const char *) = nullptr;
     quint64 (*m_subscribe)(void *, quint64) = nullptr;
     quint64 (*m_unsubscribe)(void *, quint64) = nullptr;

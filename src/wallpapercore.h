@@ -300,6 +300,14 @@ public:
     /// ones that exist.
     static QStringList steamRoots();
 
+    /// A name or a label without its Chinese, Japanese and Korean, the
+    /// user's word of 10 November: for somebody who reads neither it is
+    /// only noise and width. What is left is tidied -- emptied brackets and
+    /// doubled separators go -- and a text that would be left with no
+    /// letter or digit at all is handed back whole, since a card has to be
+    /// called something.
+    Q_INVOKABLE static QString readable(const QString &text);
+
 signals:
     void wallpapersChanged();
     void currentChanged();

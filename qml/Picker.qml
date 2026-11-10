@@ -124,6 +124,8 @@ Window {
     property bool mouse: true
     property bool parallax: true
     property bool particles: true
+    /// Whether the Steam tab shows Anime; see `showAnime` in WorkshopView.
+    property bool showAnime: true
     /// Whether the status bar says what WallFlux costs: processor, graphics
     /// card, memory.
     property bool usage: false
@@ -337,6 +339,7 @@ Window {
         property alias mouse: picker.mouse
         property alias parallax: picker.parallax
         property alias particles: picker.particles
+        property alias showAnime: picker.showAnime
         property alias usage: picker.usage
         property alias tint: picker.tint
         property bool czech: false
@@ -1210,11 +1213,15 @@ Window {
         button: shades.button
         buttonText: shades.text
         mid: shades.mid
-        placeholderText: "#7f8c8d"
+        placeholderText: Qt.alpha(shades.text, 0.5)
         highlight: shades.highlight
         highlightedText: shades.onHighlight
     }
     color: picker.palette.window
+
+    // What the theme is besides its palette, for everything in the window.
+    Binding { target: Look; property: "theme"; value: picker.theme }
+    Binding { target: Look; property: "highlight"; value: shades.highlight }
 
     /// Whether the workshop has been asked about the library yet.
     property bool askedAboutThemAll: false
@@ -1349,7 +1356,7 @@ Window {
                 // told. The model is the words as they go into the file,
                 // which never change, and only what is *shown* is
                 // translated.
-                ComboBox {
+                RoundedCombo {
                     id: orderBox
 
                     /// What each row is called in the file. Row nought is
@@ -1372,7 +1379,7 @@ Window {
 
                 Label { text: qsTr("Wallpaper transition") }
 
-                ComboBox {
+                RoundedCombo {
                     id: transitionBox
 
                     /// What each row is called in the file. A word rather
@@ -1415,7 +1422,7 @@ Window {
                     visible: transitionBox.takesTime
                     Layout.topMargin: 8
 
-                    Slider {
+                    RoundSlider {
                         id: transitionTime
 
                         Layout.fillWidth: true
@@ -1427,26 +1434,6 @@ Window {
                         // asked what it is ends up fighting its own
                         // binding.
                         value: 1500
-
-                        // Fusion draws a slider's handle as a rounded
-                        // square. A dot is what was asked for and what
-                        // everything else round here has its corners
-                        // taken off to look like.
-                        handle: Rectangle {
-                            x: transitionTime.leftPadding
-                               + transitionTime.visualPosition
-                                 * (transitionTime.availableWidth - width)
-                            y: transitionTime.topPadding
-                               + (transitionTime.availableHeight - height) / 2
-                            implicitWidth: 18
-                            implicitHeight: 18
-                            radius: width / 2
-                            color: transitionTime.pressed
-                                       ? Qt.darker(transitionTime.palette.highlight, 1.2)
-                                       : transitionTime.palette.highlight
-                            border.width: 1
-                            border.color: Qt.darker(transitionTime.palette.highlight, 1.4)
-                        }
                     }
 
                     Label {
@@ -1498,7 +1485,7 @@ Window {
 
                 RoundedButton {
                     text: qsTr("Confirm")
-                    accent: "#2e9e5b"
+                    accent: Look.positive
                     onClicked: settings.close()
                 }
             }
@@ -1683,7 +1670,7 @@ Window {
                                     radius: 4
                                     color: picker.palette.base
                                     border.width: newName.refused ? 2 : 1
-                                    border.color: newName.refused ? "#c0392b" : picker.palette.mid
+                                    border.color: newName.refused ? Look.negative : picker.palette.mid
                                 }
                             }
 
@@ -1720,7 +1707,7 @@ Window {
 
                     text: binIt.asking ? qsTr("Really delete?") : qsTr("Delete")
                     icon.name: "edit-delete"
-                    accent: "#c0392b"
+                    accent: Look.negative
                     enabled: Playlists.named(loading.picked).name !== undefined
                     onClicked: {
                         if (!binIt.asking) {
@@ -1754,7 +1741,7 @@ Window {
 
                 RoundedButton {
                     text: qsTr("Confirm")
-                    accent: "#2e9e5b"
+                    accent: Look.positive
                     enabled: Playlists.named(loading.picked).name !== undefined
                     onClicked: {
                         picker.playPlaylist(loading.picked);
@@ -1831,7 +1818,7 @@ Window {
                 RoundedButton {
                     text: qsTr("Remove")
                     icon.name: "edit-delete"
-                    accent: "#c0392b"
+                    accent: Look.negative
                     onClicked: removing.confirm()
                 }
 
@@ -1924,7 +1911,7 @@ Window {
 
                 RoundedButton {
                     text: qsTr("Confirm")
-                    accent: "#2e9e5b"
+                    accent: Look.positive
                     onClicked: saving.keep()
                 }
 
@@ -2042,14 +2029,20 @@ Window {
                 // the Loader, which cannot both follow the tab and stay
                 // behind when it changes.
                 //
-                // A wallpaper picked out stays picked out across the tabs,
-                // the user's word of 9 November: its panel is still open on
-                // coming back, and its colours tint every tab meanwhile.
-                // Only the click still being counted is forgotten, or it
+                // A wallpaper picked out in the library stays picked out
+                // across the tabs, the user's word of 9 November: its panel
+                // is still open on coming back, and its colours tint every
+                // tab meanwhile. The Steam tab's panel is shut on leaving
+                // it, the user's word of 10 November -- what was looked at
+                // there has usually just been downloaded, and coming back
+                // to its panel is coming back to something finished. The
+                // click still being counted is forgotten either way, or it
                 // would open a panel in the tab just left.
                 onCurrentIndexChanged: {
                     if (tabs.currentIndex === 1)
                         steam.active = true;
+                    else if (steam.item)
+                        steam.item.shut();
                     secondClick.stop();
                 }
 
@@ -2124,52 +2117,12 @@ Window {
                     Layout.rightMargin: 24
                     spacing: 10
 
-                    TextField {
+                    SearchField {
                         id: search
 
                         Layout.fillWidth: true
                         Layout.maximumWidth: 420
                         placeholderText: qsTr("Search wallpapers…")
-                        // Room for the magnifier that sits in it, and for
-                        // the cross on the other side.
-                        leftPadding: 34
-                        rightPadding: 34
-                        // No wallpaper is named at greater length than
-                        // this, and a field that takes a paragraph invites
-                        // one.
-                        maximumLength: 50
-
-                        RoundedTool {
-                            x: 4
-                            anchors.verticalCenter: parent.verticalCenter
-                            icon.name: "system-search"
-                            // Fusion leaves a ToolButton's icon colour unset
-                            // and the icon is then drawn in nothing at all.
-                            // Measured against a Button, which sets it and
-                            // shows up.
-                            icon.color: search.palette.text
-                            flat: true
-                            focusPolicy: Qt.NoFocus
-                            // Not decoration for its own sake: it is where
-                            // somebody who clicks the magnifier expects to
-                            // end up.
-                            onClicked: search.forceActiveFocus()
-                        }
-
-                        RoundedTool {
-                            anchors.right: parent.right
-                            anchors.rightMargin: 2
-                            anchors.verticalCenter: parent.verticalCenter
-                            icon.name: "edit-clear"
-                            icon.color: search.palette.text
-                            flat: true
-                            focusPolicy: Qt.NoFocus
-                            // Nothing to clear until something is typed.
-                            visible: search.text.length > 0
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Clear the search")
-                            onClicked: search.clear()
-                        }
                     }
 
                     RoundedButton {
@@ -2181,7 +2134,7 @@ Window {
                         // window as the workshop's, behaving the same way.
                         // Blue while the panel it opens is open, so the
                         // button says which of its two states it is in.
-                        accent: filters.visible ? "#3daee9" : "transparent"
+                        accent: filters.visible ? Look.highlight : "transparent"
                         onClicked: filters.visible = !filters.visible
                     }
 
@@ -2424,7 +2377,7 @@ Window {
                         visible: picker.outdated.length > 0 && Steamworks.available
                         text: qsTr("Update all (%1)").arg(picker.outdated.length)
                         icon.name: "update-none"
-                        accent: "#3daee9"
+                        accent: Look.highlight
                         onClicked: picker.update(picker.outdated)
                     }
 
@@ -2677,8 +2630,13 @@ Window {
 
                                 width: grid.cellWidth
                                 height: grid.cellHeight
+                                // Over its neighbours, or they would cover
+                                // the glow on two sides.
+                                z: shownCard.current ? 1 : 0
 
                                 WallpaperCard {
+                                    id: shownCard
+
                                     anchors.fill: parent
                                     anchors.margins: 8
                                     wallpaper: cell.modelData
@@ -2731,6 +2689,10 @@ Window {
                         tags: picker.tagsOf(picker.inspected, Language.czech)
                         author: picker.inspectedAuthor
                         onAuthorAsked: picker.everythingByTheAuthor()
+                        onCloseAsked: {
+                            secondClick.stop();
+                            details.open = false;
+                        }
 
                         below: PropertiesView {
                             Layout.fillWidth: true
@@ -2756,7 +2718,7 @@ Window {
                                 Layout.fillWidth: true
                             }
 
-                            ComboBox {
+                            RoundedCombo {
                                 id: ownQuality
 
                                 readonly property string held: picker.inspected
@@ -2805,7 +2767,7 @@ Window {
                                 : updating.progress < 0 ? qsTr("Steam would not update it")
                                 : qsTr("Updating… %1 %").arg(Math.round(updating.progress))
                             icon.name: "update-none"
-                            accent: "#3daee9"
+                            accent: Look.highlight
                             onClicked: picker.update([picker.inspected.id])
                         }
 
@@ -2825,7 +2787,7 @@ Window {
                             icon.name: "edit-delete"
                             // Red, because it is the one thing in this
                             // window that takes something away.
-                            accent: "#c0392b"
+                            accent: Look.negative
                             // See `canRemove`: shown for what could be given
                             // back, and live only while it can be now.
                             visible: giveBack.official || picker.fromWorkshop(picker.inspected)
@@ -2901,6 +2863,15 @@ Window {
 
                 active: false
                 source: "WorkshopView.qml"
+            }
+
+            // The switch lives in Settings, which is there whether or not
+            // this tab has been built.
+            Binding {
+                target: steam.item
+                property: "showAnime"
+                value: picker.showAnime
+                when: steam.item !== null
             }
 
             DisplaysView {
@@ -2993,7 +2964,7 @@ Window {
                 RoundedButton {
                     visible: Updater.state === Updater.Available
                     text: qsTr("WallFlux %1 is out").arg(Updater.latest)
-                    accent: "#3daee9"
+                    accent: Look.highlight
                     flat: true
                     onClicked: {
                         tabs.currentIndex = 3;

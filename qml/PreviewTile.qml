@@ -33,6 +33,8 @@ Item {
 
     /// The band around the preview. Transparent for no band at all.
     property color band: "transparent"
+    /// How wide the band is drawn.
+    property int bandWidth: 2
 
     /// Whether the pointer is over the preview. What the tick box on a
     /// card and the cross on a playlist's strip are shown by.
@@ -62,7 +64,7 @@ Item {
 
         radius: 6
         color: tile.backing
-        border.width: tile.band.a > 0 ? 2 : 0
+        border.width: tile.band.a > 0 ? tile.bandWidth : 0
         border.color: tile.band
 
         // The picture goes in a box of its own, which crops it: that is

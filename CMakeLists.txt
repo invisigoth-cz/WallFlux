@@ -46,6 +46,10 @@ set_source_files_properties(qml/ChipSection.qml PROPERTIES QT_RESOURCE_ALIAS Chi
 set_source_files_properties(qml/Scroller.qml PROPERTIES QT_RESOURCE_ALIAS Scroller.qml)
 set_source_files_properties(qml/RoundedButton.qml PROPERTIES QT_RESOURCE_ALIAS RoundedButton.qml)
 set_source_files_properties(qml/RoundedTool.qml PROPERTIES QT_RESOURCE_ALIAS RoundedTool.qml)
+set_source_files_properties(qml/RoundedCombo.qml PROPERTIES QT_RESOURCE_ALIAS RoundedCombo.qml)
+set_source_files_properties(qml/SearchField.qml PROPERTIES QT_RESOURCE_ALIAS SearchField.qml)
+set_source_files_properties(qml/RoundSlider.qml PROPERTIES QT_RESOURCE_ALIAS RoundSlider.qml)
+set_source_files_properties(qml/Look.qml PROPERTIES QT_RESOURCE_ALIAS Look.qml QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/Details.qml PROPERTIES QT_RESOURCE_ALIAS Details.qml)
 set_source_files_properties(qml/PlaylistBar.qml PROPERTIES QT_RESOURCE_ALIAS PlaylistBar.qml)
 set_source_files_properties(qml/WallpaperSurface.qml PROPERTIES QT_RESOURCE_ALIAS WallpaperSurface.qml)
@@ -79,6 +83,10 @@ qt_add_qml_module(wallflux
         qml/Scroller.qml
         qml/RoundedButton.qml
         qml/RoundedTool.qml
+        qml/RoundedCombo.qml
+        qml/SearchField.qml
+        qml/RoundSlider.qml
+        qml/Look.qml
         qml/Details.qml
         qml/PlaylistBar.qml
         qml/WallpaperSurface.qml

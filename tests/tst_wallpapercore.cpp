@@ -68,6 +68,7 @@ class TestWallpaperCore : public QObject
     Q_OBJECT
 
 private slots:
+    void leavesOutWhatOnlyEastAsiaReads();
     void drawsAPresetAsTheWallpaperItSitsOn();
     void listsWhatComesWithWallpaperEngine();
     void hidesOneOfWallpaperEnginesOwn();
@@ -523,6 +524,30 @@ void TestWallpaperCore::noticesAWallpaperArriving()
     // with room for a filesystem that takes its time telling anyone.
     QVERIFY2(arrivals.wait(10000), "nothing noticed the wallpaper arriving");
     QCOMPARE(core.wallpapers().size(), 2);
+}
+
+void TestWallpaperCore::leavesOutWhatOnlyEastAsiaReads()
+{
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("【4K】原神 雷电将军 Raiden Shogun")),
+             QStringLiteral("4K Raiden Shogun"));
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("夜の街 | Night City | 夜景")),
+             QStringLiteral("Night City"));
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("Raiden将军Shogun (原神)")),
+             QStringLiteral("Raiden Shogun"));
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("벚꽃 Cherry blossom")),
+             QStringLiteral("Cherry blossom"));
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("This is just a Code Rain(只是一个代码雨）")),
+             QStringLiteral("This is just a Code Rain"));
+    QCOMPARE(WallpaperCore::readable(
+                 QStringLiteral("Perfect Wallpaper-完美壁纸【落樱粒子+多风格+自定义】-steam独此一家")),
+             QStringLiteral("Perfect Wallpaper - steam"));
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("质量效应3 诺曼底号 SR-2 飞行壁纸")),
+             QStringLiteral("3 SR-2"));
+    // Nothing to read without it: kept whole.
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("雷电将军")), QStringLiteral("雷电将军"));
+    // Untouched where there is nothing to leave out.
+    QCOMPARE(WallpaperCore::readable(QStringLiteral("DOOM -- Eternal (4K)")),
+             QStringLiteral("DOOM -- Eternal (4K)"));
 }
 
 QTEST_MAIN(TestWallpaperCore)

@@ -5,6 +5,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Controls.Fusion
 import WallFlux
 
@@ -68,8 +69,17 @@ Item {
     opacity: card.usable ? 1 : 0.4
 
     /// The colour of the band when the pointer is somewhere else.
-    readonly property color edge: card.current ? card.palette.highlight
-                                : card.usable ? "#2ecc71" : "#e8a33d"
+    readonly property color edge: card.current ? (Look.ring === "glow" ? Qt.lighter(Look.highlight, 1.25)
+                                                : Look.ring === "focus" ? Qt.lighter(Look.highlight, 1.4)
+                                                : Look.highlight)
+                                : card.usable ? Look.playable : Look.listed
+
+    /// How the theme marks the card the keyboard is on; see `ring` in Look.
+    readonly property string ring: card.current ? Look.ring : ""
+
+    // Grown, for the two styles that raise the card rather than ring it.
+    scale: card.ring === "focus" ? 1.06 : card.ring === "lift" ? 1.03 : 1
+    Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
     /// Whether the pointer is anywhere on this card.
     ///
@@ -80,6 +90,86 @@ Item {
     /// Handlers do not take the pointer away from one another.
     HoverHandler {
         id: pointer
+    }
+
+    // What marks the card the keyboard is on, in the theme's own way: the
+    // band alone, two pixels of blue among a grid of green ones, was not
+    // enough to find it by (the user's word of 10 November). Only that one
+    // card has any of it, so only one effect is ever made.
+    Loader {
+        anchors.fill: parent
+        active: card.ring !== ""
+        sourceComponent: card.ring === "lift" ? lift
+                       : card.ring === "outline" || card.ring === "double" ? line
+                       : glow
+    }
+
+    // A halo in the accent: Dark's, and Steam's brighter and closer.
+    Component {
+        id: glow
+
+        Item {
+            Rectangle {
+                id: halo
+
+                anchors.fill: parent
+                anchors.margins: card.ring === "focus" ? -3 : -5
+                radius: 10
+                // Lighter rather than the effect's `brightness`, which
+                // lights its whole padding as a faint box.
+                color: Qt.lighter(Look.highlight, card.ring === "focus" ? 1.6 : 1.3)
+                visible: false
+            }
+
+            MultiEffect {
+                anchors.fill: halo
+                source: halo
+                blurEnabled: true
+                blur: 1
+                blurMax: card.ring === "focus" ? 28 : 40
+            }
+        }
+    }
+
+    // Raised on a shadow: Light's, where a glow is lost against the window.
+    Component {
+        id: lift
+
+        Item {
+            Rectangle {
+                id: slab
+
+                anchors.fill: parent
+                radius: 8
+                color: "#000000"
+                visible: false
+            }
+
+            MultiEffect {
+                anchors.fill: slab
+                source: slab
+                shadowEnabled: true
+                shadowColor: "#000000"
+                shadowOpacity: 0.45
+                shadowBlur: 1
+                shadowVerticalOffset: 8
+            }
+        }
+    }
+
+    // A second line a gap outside the band: System's, as KDE draws focus,
+    // and the high contrast pair's, hard and in the window's text colour.
+    Component {
+        id: line
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -5
+            radius: 11
+            color: "transparent"
+            border.width: card.ring === "double" ? 3 : 2
+            border.color: card.ring === "double" ? card.palette.windowText : Look.highlight
+        }
     }
 
     PreviewTile {
@@ -104,6 +194,8 @@ Item {
         // it rather than a shadow being drawn, which would cost every
         // card a layer of its own.
         band: pointer.hovered ? Qt.lighter(card.edge, 1.4) : card.edge
+        bandWidth: card.ring === "double" ? 5 : card.ring === "glow" ? 4
+                   : card.ring === "" || card.ring === "outline" ? 2 : 3
         Behavior on band {
             ColorAnimation { duration: 150 }
         }
@@ -132,7 +224,7 @@ Item {
         // ticked -- fixed colours rather than the palette's, because this
         // box sits on a picture and not on the window: against a dark
         // preview the window's own colours left it all but invisible.
-        color: card.ticked ? "#3daee9" : "#ffffff"
+        color: card.ticked ? Look.highlight : "#ffffff"
         border.width: 1
         border.color: "#000000"
 
@@ -142,7 +234,7 @@ Item {
             font.pixelSize: 11
             font.weight: Font.Bold
             visible: card.ticked
-            color: "#ffffff"
+            color: Look.ink(Look.highlight)
         }
 
         MouseArea {
@@ -177,8 +269,8 @@ Item {
         implicitWidth: updateWord.implicitWidth + 14
         implicitHeight: 20
         radius: 10
-        // A fixed blue rather than the palette's: it sits on a picture.
-        color: "#3daee9"
+        // The accent, which every theme keeps strong enough for a picture.
+        color: Look.highlight
 
         Label {
             id: updateWord
@@ -187,7 +279,7 @@ Item {
             text: qsTr("Update")
             font.pixelSize: 11
             font.weight: Font.Bold
-            color: "#ffffff"
+            color: Look.ink(Look.highlight)
         }
     }
 }

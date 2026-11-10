@@ -193,7 +193,7 @@ ColumnLayout {
                 visible: row.kind === "slider"
                 spacing: 8
 
-                Slider {
+                RoundSlider {
                     id: slider
 
                     readonly property real at: Number(row.held) || 0
@@ -224,7 +224,7 @@ ColumnLayout {
                 }
             }
 
-            ComboBox {
+            RoundedCombo {
                 id: combo
 
                 readonly property var options: row.kind === "combo" ? (row.modelData.options || []) : []

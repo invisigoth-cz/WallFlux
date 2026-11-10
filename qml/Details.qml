@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Controls.impl
 import QtQuick.Layouts
+import WallFlux
 
 /// What is known about one wallpaper, in a panel beside the grid.
 ///
@@ -55,12 +56,15 @@ Rectangle {
     property bool canFavorite: false
     signal favoriteAsked()
 
+    /// Asked for by the cross on the picture. Clicking the card the panel
+    /// is about again puts it away too; the cross came back on 10 November,
+    /// at the user's asking, as the way that can be seen.
+    signal closeAsked()
+
     /// Whether the panel is out.
     ///
     /// It slides rather than appearing: the width is what moves, and the
-    /// grid beside it takes the room back as it goes. There is no cross
-    /// on the picture any more -- clicking the card the panel is about
-    /// is what puts it away, which is one fewer thing to aim at.
+    /// grid beside it takes the room back as it goes.
     property bool open: false
 
     /// How far out it is, nought to one. The width is read off this
@@ -120,11 +124,47 @@ Rectangle {
 
             Heart {
                 anchors.top: parent.top
-                anchors.right: parent.right
+                anchors.left: parent.left
                 anchors.margins: 8
                 visible: panel.canFavorite
                 on: panel.favorite
                 onAsked: panel.favoriteAsked()
+            }
+
+            // The cross, drawn as the heart is: a dark disc that reads on
+            // any picture.
+            Rectangle {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 8
+                implicitWidth: 26
+                implicitHeight: 26
+                radius: width / 2
+                color: shut.containsMouse ? "#cc000000" : "#99000000"
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                IconImage {
+                    anchors.centerIn: parent
+                    width: 14
+                    height: 14
+                    name: "window-close"
+                    color: "#ffffff"
+                    scale: shut.pressed ? 0.85 : 1
+                    Behavior on scale { NumberAnimation { duration: 90 } }
+                }
+
+                MouseArea {
+                    id: shut
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: panel.closeAsked()
+                }
+
+                ToolTip.visible: shut.containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: qsTr("Close")
             }
         }
 
@@ -333,8 +373,14 @@ Rectangle {
 
                             implicitWidth: name.implicitWidth + 20
                             implicitHeight: 24
-                            radius: 5
-                            color: Qt.alpha(pill.palette.mid, 0.5)
+                            radius: Look.tags === "outline" ? 12 : 5
+                            // As the theme draws a tag: grey, tinted in the
+                            // accent as Steam's own are, or an outline.
+                            color: Look.tags === "tinted" ? Qt.alpha(Look.highlight, 0.18)
+                                 : Look.tags === "outline" ? "transparent"
+                                 : Qt.alpha(pill.palette.mid, 0.5)
+                            border.width: Look.tags === "outline" ? 1 : 0
+                            border.color: pill.palette.windowText
 
                             Label {
                                 id: name
@@ -342,6 +388,10 @@ Rectangle {
                                 anchors.centerIn: parent
                                 text: pill.modelData
                                 font.pixelSize: 12
+                                color: Look.tags === "tinted" && pill.palette.window.hslLightness < 0.5
+                                       ? Qt.lighter(Look.highlight, 1.15)
+                                       : Look.tags === "tinted" ? Qt.darker(Look.highlight, 1.6)
+                                       : pill.palette.windowText
                             }
                         }
                     }
