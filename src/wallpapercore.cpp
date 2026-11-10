@@ -419,7 +419,7 @@ QList<Wallpaper> WallpaperCore::scan(const QStringList &steamRoots)
 
     // By title, because that is the order a person would look for one in.
     std::ranges::sort(found, [](const Wallpaper &a, const Wallpaper &b) {
-        return a.title.localeAwareCompare(b.title) < 0;
+        return readsBefore(a.title, b.title);
     });
     return found;
 }
@@ -700,4 +700,25 @@ QString WallpaperCore::readable(const QString &text)
             return kept;
     }
     return text;
+}
+
+bool WallpaperCore::readsBefore(const QString &a, const QString &b)
+{
+    // Latin letters first, then digits, then everything else -- the user's
+    // word of 10 November: A to Z is where a name is looked for, and a
+    // title starting "3" or "【" or in another script is the exception.
+    const auto group = [](const QString &title) {
+        const QString t = title.trimmed();
+        if (t.isEmpty())
+            return 2;
+        const QChar c = t.at(0);
+        if (c.isLetter() && c.script() == QChar::Script_Latin)
+            return 0;
+        return c.isDigit() ? 1 : 2;
+    };
+    const int ga = group(a);
+    const int gb = group(b);
+    if (ga != gb)
+        return ga < gb;
+    return a.localeAwareCompare(b) < 0;
 }

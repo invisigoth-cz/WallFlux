@@ -79,8 +79,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   question but the account's own favourites carries `-Anime` --
   `Steamworks.browse` reads a tag with a `-` in front as
   `AddExcludedTag` -- the genre's row goes, and the rows' keys get
-  `|-Anime` so that switching asks them all again. A ticked Anime chip is
-  still answered. Measured against Steam: 0 of 50 carry the tag, and the
+  `|-Anime` so that switching asks them all again. The Workshop filter's
+  Anime chip goes while it is hidden, and is unticked if it was (the user's
+  choice: Wallpaper Engine's genres are "include" boxes, where the setting
+  only unticks Anime, but ours are "require" chips, which cannot copy that). Measured against Steam: 0 of 50 carry the tag, and the
   totals with and without add up to the whole workshop exactly.
 
   **The library's panel stays open when the tab is left**, and so does the
@@ -180,7 +182,16 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   - A playlist does not cycle at all while Wallpaper Engine's own window is
     open.
 - **A picker with its sections across the top**: Installed, Steam,
-  Displays, Settings, centred, all four built.
+  Displays, Settings, all four built. Each an equal share of the width
+  with its icon in the middle and its name as a tooltip, no line under the
+  open one -- a tile behind it slides from one to the next, placed from
+  the index (the user's design of 10 November; `currentItem` lags the
+  index and a tile bound to it stayed behind).
+- **Controls**, the fifth section of Settings (`Guide` cards in
+  `SettingsView.qml`): how each part is used, in both languages, found by
+  the settings search. Keep it true when behaviour changes.
+- **Name order is Latin letters, then digits, then the rest**
+  (`WallpaperCore::readsBefore`), each group in the locale's order.
 - **A Settings tab, laid out as a desktop's settings are now** (the user's
   sections of 9 November, after linux-wallpaper-engine-ux): a search and the
   sections down the left, the section's name large over one card to a

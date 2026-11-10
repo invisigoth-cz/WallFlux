@@ -6,6 +6,25 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Controls in Settings**: how WallFlux is used, a card for each part of it
+  -- the library, the Steam workshop, playlists, the tray icon, the
+  keyboard, screens, sound and a wallpaper's own settings. Found by the
+  settings search too.
+
+### Changed
+
+- **The bar across the top** shares the window's width equally between its
+  four sections, an icon in the middle of each and its name when pointed
+  at; a tile slides behind the open one.
+- **Names sort A to Z first**, then those starting with a digit, then
+  everything else.
+- **With Anime off, its chip leaves the Workshop's filter**, unticked if it
+  was ticked.
+- **Leaving the Steam tab closes its filter panel** as well as its details
+  panel, so neither is waiting, lit, on the way back.
+
 ## [0.35.0] — 2026-11-10
 
 ### Added

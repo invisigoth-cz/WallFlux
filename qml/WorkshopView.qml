@@ -105,11 +105,15 @@ Item {
         workshop.waiting = null;
     }
 
-    /// Shuts the panel, which is what leaving this tab does. The picker
-    /// asks for it: this view has no idea it is in a tab at all.
+    /// Shuts the panel and the filters, which is what leaving this tab
+    /// does. The picker asks for it: this view has no idea it is in a tab
+    /// at all. The filters too since 10 November: left open, they came back
+    /// lit after Anime was switched off in Settings, which read as a filter
+    /// still on although nothing was ticked any more.
     function shut() {
         workshop.neverMind();
         shown.open = false;
+        filters.visible = false;
     }
 
     /// Shows one wallpaper of the workshop in the panel. There is nothing
@@ -322,19 +326,19 @@ Item {
     /// ("Show Anime" / "Hide Anime" in its filter settings, which sets
     /// `filterConfig.Anime`). Hidden, every question but the account's own
     /// favourites leaves out what carries the tag, and the genre's row goes.
-    /// A question that asks for Anime outright -- the chip ticked -- is
-    /// still answered.
     /// Set from Settings › General by the picker, which remembers it, as
     /// Wallpaper Engine does.
     property bool showAnime: true
 
-    /// `tags` as they are asked for: with Anime left out while it is hidden,
-    /// unless it is the very thing being asked for.
+    /// `tags` as they are asked for: with Anime left out while it is hidden.
     function narrowed(tags) {
-        return workshop.showAnime || tags.indexOf("Anime") >= 0 ? tags : tags.concat(["-Anime"]);
+        return workshop.showAnime ? tags : tags.concat(["-Anime"]);
     }
 
     onShowAnimeChanged: {
+        // Its chip goes, and with it whatever it had ticked.
+        if (!workshop.showAnime)
+            filters.picked = filters.picked.filter((tag) => tag !== "Anime");
         // A section opened whole is asked again under the new rule, or goes
         // back to Discover if it was Anime's own.
         if (workshop.mode === 2 && workshop.section) {
@@ -964,6 +968,7 @@ Item {
                     WorkshopFilters {
                         id: filters
 
+                        anime: workshop.showAnime
                         Layout.fillHeight: true
                         Layout.bottomMargin: 8
                         onChanged: workshop.askAfresh()

@@ -30,6 +30,11 @@ Rectangle {
     /// Everything ticked, in the one list Steam is given.
     property var picked: []
 
+    /// Whether Anime is offered at all. Off in Settings, its chip is not
+    /// there to tick (the user's choice of 10 November): the switch in
+    /// Settings is the one way to have Anime back.
+    property bool anime: true
+
     /// How many chips are on, for the button that opens this.
     readonly property int chosen: panel.picked.length
 
@@ -121,7 +126,9 @@ Rectangle {
 
                 ChipSection {
                     title: qsTr("GENRE")
-                    values: Tags.labelled(Tags.genres, panel.catalogue)
+                    values: Tags.labelled(panel.anime ? Tags.genres
+                                                      : Tags.genres.filter((g) => g !== "Anime"),
+                                          panel.catalogue)
                     picked: panel.picked
                     onAsked: (value) => panel.pick(value)
                 }

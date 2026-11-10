@@ -308,6 +308,11 @@ public:
     /// called something.
     Q_INVOKABLE static QString readable(const QString &text);
 
+    /// Whether title `a` comes before `b` in the library's name order:
+    /// Latin letters A to Z first, then digits, then anything else, each
+    /// group in the locale's own order.
+    static bool readsBefore(const QString &a, const QString &b);
+
 signals:
     void wallpapersChanged();
     void currentChanged();

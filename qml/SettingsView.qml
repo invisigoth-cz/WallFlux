@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
+import QtQuick.Controls.impl
 import QtQuick.Layouts
 import WallFlux
 
@@ -36,7 +37,8 @@ Item {
         { name: qsTr("General"), icon: "preferences-system" },
         { name: qsTr("Audio"), icon: "audio-volume-high" },
         { name: qsTr("Performance / Display"), icon: "video-display" },
-        { name: qsTr("Appearance"), icon: "preferences-desktop-theme" }
+        { name: qsTr("Appearance"), icon: "preferences-desktop-theme" },
+        { name: qsTr("Controls"), icon: "help-contents" }
     ]
 
     /// Wallpaper Engine's presets, by the pictures a second each draws.
@@ -247,6 +249,30 @@ Item {
             visible: under.children.length > 0
             implicitHeight: under.childrenRect.height
         }
+        }
+    }
+
+    /// One card of Controls: how one part of WallFlux is used, a line to a
+    /// thing to do, with that part's icon where a setting has its control.
+    /// The user's word of 10 November: a guide anybody can read, in the
+    /// window rather than on a web page, and found by the same search.
+    component Guide: Setting {
+        id: guide
+
+        property string glyph
+        property bool tinted: true
+
+        home: 4
+
+        IconImage {
+            Layout.alignment: Qt.AlignTop
+            Layout.topMargin: 2
+            Layout.preferredWidth: 28
+            Layout.preferredHeight: 28
+            sourceSize.width: 28
+            sourceSize.height: 28
+            name: guide.glyph
+            color: guide.tinted ? guide.palette.highlight : "transparent"
         }
     }
 
@@ -518,8 +544,9 @@ Item {
                     title: qsTr("Anime in the workshop")
                     about: qsTr("Off, the Steam tab leaves out wallpapers tagged Anime -- in "
                                 + "Discover, where the Anime row goes too, and in the Workshop. "
-                                + "Wallpaper Engine's Show Anime / Hide Anime. Your favourites "
-                                + "and a ticked Anime filter still show them.")
+                                + "Its chip leaves the Workshop's filter as well. Wallpaper "
+                                + "Engine's Show Anime / Hide Anime; your own favourites still "
+                                + "show them.")
 
                     Toggle {
                         value: view.picker.showAnime
@@ -870,6 +897,91 @@ Item {
                         value: view.picker.statusBar
                         onChanged: (to) => view.picker.statusBar = to
                     }
+                }
+
+                // Controls: how WallFlux is used. One card a part of it,
+                // each line one thing to do.
+
+                Guide {
+                    glyph: "download"
+                    title: qsTr("The library")
+                    about: qsTr("• One click on a wallpaper opens its panel on the right: the picture, "
+                                + "what is known about it, its own settings and its quality. A second "
+                                + "click on it, or the cross on the picture, closes the panel.\n"
+                                + "• Two clicks put it on the desktop.\n"
+                                + "• Search, Filters and the order button narrow and sort the grid; "
+                                + "Refresh reads Steam's folders again.\n"
+                                + "• The heart makes it a favourite on your Steam account. Update on a "
+                                + "card means the workshop has a newer version of it.")
+                }
+
+                Guide {
+                    glyph: "steam"
+                    tinted: false
+                    title: qsTr("The Steam workshop")
+                    about: qsTr("• Steam has to be running, with Wallpaper Engine in your library.\n"
+                                + "• Discover is rows picked for you; See more opens a whole row. "
+                                + "Workshop is the whole catalogue, with search, filters, order and pages.\n"
+                                + "• Click a wallpaper for its panel, then Download. Steam fetches it, "
+                                + "and a few seconds later it is in the library by itself.\n"
+                                + "• The author's button in the panel shows everything else they made.")
+                }
+
+                Guide {
+                    glyph: "view-media-playlist"
+                    title: qsTr("Playlists")
+                    about: qsTr("• Tick wallpapers with the box in a card's corner, or press Add "
+                                + "wallpaper to show every box at once. They line up along the bottom.\n"
+                                + "• Save gives the playlist a name; Load opens a saved one and starts "
+                                + "it; Configure sets how long each stays, the order and the transition.\n"
+                                + "• The Playlists button beside the filters starts a saved playlist, "
+                                + "and stops it when clicked again.")
+                }
+
+                Guide {
+                    glyph: "preferences-desktop-wallpaper"
+                    title: qsTr("The tray icon")
+                    about: qsTr("• A click opens this window.\n"
+                                + "• A right click pauses and resumes the wallpaper, goes on to the next "
+                                + "one of a playlist, mutes, offers the last five wallpapers and quits.\n"
+                                + "• With Minimise on close (General), closing this window leaves "
+                                + "WallFlux running in the tray.")
+                }
+
+                Guide {
+                    glyph: "input-keyboard"
+                    title: qsTr("The keyboard")
+                    about: qsTr("• Arrows walk the library's grid; Enter puts the wallpaper on the "
+                                + "desktop; Space ticks it for a playlist; Delete removes it, after "
+                                + "asking.\n"
+                                + "• Escape closes whatever popup is open.")
+                }
+
+                Guide {
+                    glyph: "preferences-desktop-display"
+                    title: qsTr("Screens")
+                    about: qsTr("• The Displays tab shows your monitors as they are arranged. Switch "
+                                + "on each one the wallpaper should be on; the same wallpaper plays on "
+                                + "all of them.")
+                }
+
+                Guide {
+                    glyph: "audio-volume-high"
+                    title: qsTr("Sound and pausing")
+                    about: qsTr("• The wallpaper goes quiet while another program plays sound, and "
+                                + "quiet and still under a maximised window. Both come back by "
+                                + "themselves, and both can be switched off in Audio.\n"
+                                + "• The speaker in the status bar mutes it.")
+                }
+
+                Guide {
+                    glyph: "configure"
+                    title: qsTr("A wallpaper's own settings")
+                    about: qsTr("• In the library's panel, under the author: the colours, sliders and "
+                                + "switches its author offered. A change shows at once; Defaults puts "
+                                + "them back.\n"
+                                + "• Quality in the panel sets this one wallpaper apart from Performance "
+                                + "in Settings -- a heavy scene on Low while the rest stay High.")
                 }
             }
         }

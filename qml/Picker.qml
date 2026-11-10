@@ -1088,28 +1088,42 @@ Window {
 
     /// One section across the top: an icon, what it is called, and the
     /// accent underneath while it is the one showing.
+    /// One section of the bar across the top: an equal share of the
+    /// window's width, its icon in the middle, its name when pointed at.
+    ///
+    /// Laid out as the user chose on 10 November: segments rather than a
+    /// cluster of icons in the middle, and no line under the one that is
+    /// open -- the tile behind it, sliding from one to the next, says that.
     component Section: TabButton {
+        id: section
+
         required property var entry
+        /// Whether the icon takes the window's colours. Steam's logo is a
+        /// picture rather than a glyph, and tinted it comes out as a plain
+        /// disc -- measured both ways round.
+        property bool tinted: true
 
         display: AbstractButton.IconOnly
-        // Room to aim at, and an icon big enough to tell from the next one.
-        // Left to itself a tab with nothing but a 16-pixel icon in it comes
-        // out two dozen pixels wide.
-        implicitWidth: 54
-        implicitHeight: 40
-        icon.width: 22
-        icon.height: 22
+        implicitHeight: 52
+        icon.width: 24
+        icon.height: 24
+        icon.color: !section.tinted ? "transparent"
+                  : section.checked ? picker.palette.highlight : picker.palette.buttonText
+        opacity: section.checked || section.hovered ? 1 : 0.7
+        Behavior on opacity { NumberAnimation { duration: 150 } }
         ToolTip.visible: hovered
+        ToolTip.delay: 500
         ToolTip.text: entry.name
 
-        // Fusion raises the current tab a little, which is not enough to
-        // find at a glance in a row of five icons.
-        Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: 2
-            color: picker.palette.highlight
-            visible: parent.checked
+        // Under the pointer the segment lifts a little; the open one has
+        // the sliding tile in the bar's background instead.
+        background: Rectangle {
+            anchors.fill: parent
+            anchors.margins: 6
+            radius: 9
+            color: Qt.alpha(picker.palette.windowText, 0.07)
+            opacity: section.hovered && !section.checked ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150 } }
         }
     }
 
@@ -1999,15 +2013,9 @@ Window {
         anchors.fill: parent
         spacing: 0
 
-        // The sections, across the top. Only the first of them exists; the
-        // rest are named here because naming them is what decides where the
-        // next piece of work goes, and because a person can then see what
-        // this program is going to be.
-        //
-        // The strip runs the width of the window while the tabs in it keep
-        // the width they need: a TabBar asked to fill the window shares the
-        // room out between its tabs, which turns five icons into five wide
-        // slabs.
+        // The sections, across the top, each an equal share of the width
+        // -- the user's word of 10 November -- so the bar fills any window
+        // on any screen the same way.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: tabs.implicitHeight
@@ -2046,33 +2054,52 @@ Window {
                     secondClick.stop();
                 }
 
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                anchors.bottomMargin: 1
+                spacing: 4
+
+                // The tile behind the open section, which slides to the
+                // next one rather than jumping. Worked out from the index,
+                // since every section is the same width: `currentItem` is
+                // handed over a moment after the index changes, and a tile
+                // bound to it was left behind on the section before.
+                background: Item {
+                    Rectangle {
+                        readonly property real share:
+                            (tabs.availableWidth - tabs.spacing * (tabs.count - 1)) / Math.max(1, tabs.count)
+
+                        x: tabs.leftPadding + tabs.currentIndex * (share + tabs.spacing) + 6
+                        y: 6
+                        width: share - 12
+                        height: parent.height - 12
+                        radius: 9
+                        color: Qt.alpha(picker.palette.highlight, 0.18)
+                        border.width: 1
+                        border.color: Qt.alpha(picker.palette.highlight, 0.35)
+
+                        Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                        Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                }
 
                 Section {
                     entry: picker.sections[0]
                     icon.name: "download"
-                    icon.color: picker.palette.buttonText
                 }
                 Section {
                     entry: picker.sections[1]
-                    // The one icon in this window with no colour set on
-                    // it. It is Steam's own logo and a picture rather than
-                    // a glyph, and tinting does not know the difference:
-                    // asked to follow the palette it comes out as a plain
-                    // white disc. Measured both ways round.
                     icon.name: "steam"
+                    tinted: false
                 }
                 Section {
                     entry: picker.sections[2]
                     icon.name: "preferences-desktop-display"
-                    icon.color: picker.palette.buttonText
                 }
                 Section {
                     entry: picker.sections[3]
                     icon.name: "settings-configure"
-                    icon.color: picker.palette.buttonText
                 }
             }
         }

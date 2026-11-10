@@ -69,6 +69,7 @@ class TestWallpaperCore : public QObject
 
 private slots:
     void leavesOutWhatOnlyEastAsiaReads();
+    void putsLettersBeforeDigitsBeforeTheRest();
     void drawsAPresetAsTheWallpaperItSitsOn();
     void listsWhatComesWithWallpaperEngine();
     void hidesOneOfWallpaperEnginesOwn();
@@ -257,28 +258,28 @@ void TestWallpaperCore::readsWhatIsThere()
     const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
     QCOMPARE(found.size(), 3);
 
-    // Sorted by title, and digits sort before letters, so the untitled one
-    // -- listed under its id -- comes first.
-    QCOMPARE(found[0].id, QStringLiteral("333"));
-    QCOMPARE(found[0].title, QStringLiteral("333"));
-    QCOMPARE(found[0].kind, WallpaperKind::Video);
+    // Sorted by title, letters before digits, so the untitled one -- listed
+    // under its id -- comes last.
+    QCOMPARE(found[0].title, QStringLiteral("A web one"));
+    QCOMPARE(found[0].kind, WallpaperKind::Web);
+    QVERIFY(found[0].source.isLocalFile());
+    QVERIFY(found[0].source.toLocalFile().endsWith(QStringLiteral("/111/index.html")));
     QVERIFY(found[0].hasFile());
-
-    QCOMPARE(found[1].title, QStringLiteral("A web one"));
-    QCOMPARE(found[1].kind, WallpaperKind::Web);
-    QVERIFY(found[1].source.isLocalFile());
-    QVERIFY(found[1].source.toLocalFile().endsWith(QStringLiteral("/111/index.html")));
-    QVERIFY(found[1].hasFile());
-    QVERIFY(found[1].playable());
+    QVERIFY(found[0].playable());
     // What the picker puts in its grid, found the same guarded way as the
     // wallpaper's own file.
-    QVERIFY(found[1].preview.toLocalFile().endsWith(QStringLiteral("/111/preview.jpg")));
+    QVERIFY(found[0].preview.toLocalFile().endsWith(QStringLiteral("/111/preview.jpg")));
 
-    QCOMPARE(found[2].title, QStringLiteral("B capital scene"));
-    QCOMPARE(found[2].kind, WallpaperKind::Scene);
+    QCOMPARE(found[1].title, QStringLiteral("B capital scene"));
+    QCOMPARE(found[1].kind, WallpaperKind::Scene);
     // scene.json lives inside scene.pkg, so the package is what is drawn.
-    QVERIFY(found[2].source.toLocalFile().endsWith(QStringLiteral("/222/scene.pkg")));
-    QVERIFY(found[2].playable());
+    QVERIFY(found[1].source.toLocalFile().endsWith(QStringLiteral("/222/scene.pkg")));
+    QVERIFY(found[1].playable());
+
+    QCOMPARE(found[2].id, QStringLiteral("333"));
+    QCOMPARE(found[2].title, QStringLiteral("333"));
+    QCOMPARE(found[2].kind, WallpaperKind::Video);
+    QVERIFY(found[2].hasFile());
 }
 
 /// Steam's own record, in its own shape: one item in both sections, one
@@ -548,6 +549,18 @@ void TestWallpaperCore::leavesOutWhatOnlyEastAsiaReads()
     // Untouched where there is nothing to leave out.
     QCOMPARE(WallpaperCore::readable(QStringLiteral("DOOM -- Eternal (4K)")),
              QStringLiteral("DOOM -- Eternal (4K)"));
+}
+
+void TestWallpaperCore::putsLettersBeforeDigitsBeforeTheRest()
+{
+    QStringList titles{QStringLiteral("三体"), QStringLiteral("3 SR-2"), QStringLiteral("Zed"),
+                       QStringLiteral("[4K] Dune"), QStringLiteral("Árie"), QStringLiteral("alien"),
+                       QStringLiteral("2077")};
+    std::ranges::sort(titles, WallpaperCore::readsBefore);
+    QCOMPARE(titles.mid(0, 3),
+             (QStringList{QStringLiteral("alien"), QStringLiteral("Árie"), QStringLiteral("Zed")}));
+    QCOMPARE(titles.mid(3, 2), (QStringList{QStringLiteral("2077"), QStringLiteral("3 SR-2")}));
+    QCOMPARE(titles.mid(5).size(), 2);
 }
 
 QTEST_MAIN(TestWallpaperCore)
