@@ -54,9 +54,15 @@ Item {
     /// which screen it is on. A second monitor nobody has covered is
     /// stopped along with the first; worth knowing before it is called a
     /// bug.
-    readonly property bool covered: (ScreenCover.covered && picker.quietUnderWindows)
+    readonly property bool covered: root.paused
+        || (ScreenCover.covered && picker.quietUnderWindows)
         || (ScreenCover.focused && picker.pauseOnFocus)
         || (Power.onBattery && Power.hasBattery && Power.percent < picker.batteryFloor)
+
+    /// Paused from the tray: stood still and quiet as under a window, and
+    /// a playlist held unless it was told to change while paused -- what
+    /// Wallpaper Engine's own Pause does. Forgotten at quit, like the rest.
+    property bool paused: false
 
     /// Whether the running playlist's clock should be standing still.
     ///
@@ -293,19 +299,68 @@ Item {
         // From the icon theme rather than shipped with us; Breeze and every
         // other freedesktop theme has this one.
         icon.name: "preferences-desktop-wallpaper"
-        tooltip: Wallpapers.current.playable
-                 ? qsTr("WallFlux — %1").arg(Wallpapers.current.title)
-                 : qsTr("WallFlux")
+        tooltip: !Wallpapers.current.playable ? qsTr("WallFlux")
+                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(Wallpapers.current.title)
+                 : qsTr("WallFlux — %1").arg(Wallpapers.current.title)
 
         onActivated: (reason) => {
             if (reason === Platform.SystemTrayIcon.Trigger)
                 root.showPicker();
         }
 
+        // Not one checkable item here: a checkable item ticks itself on a
+        // click, which breaks the binding saying whether it is ticked. The
+        // words say the state instead.
         menu: Platform.Menu {
             Platform.MenuItem {
                 text: qsTr("Choose wallpaper…")
                 onTriggered: root.showPicker()
+            }
+            Platform.MenuSeparator {}
+            Platform.MenuItem {
+                text: root.paused ? qsTr("Resume") : qsTr("Pause")
+                icon.name: root.paused ? "media-playback-start" : "media-playback-pause"
+                enabled: root.playing
+                onTriggered: root.paused = !root.paused
+            }
+            Platform.MenuItem {
+                text: qsTr("Next wallpaper")
+                icon.name: "media-skip-forward"
+                // Only a playlist has a next one.
+                enabled: Playlists.playing !== ""
+                onTriggered: Playlists.next()
+            }
+            Platform.MenuItem {
+                text: picker.muted ? qsTr("Unmute") : qsTr("Mute")
+                icon.name: picker.muted ? "audio-volume-high" : "audio-volume-muted"
+                onTriggered: picker.muted = !picker.muted
+            }
+            Platform.Menu {
+                id: lately
+
+                title: qsTr("Recent wallpapers")
+                enabled: Wallpapers.recent.length > 0
+
+                Instantiator {
+                    // The last five chosen in this run, the one on show
+                    // among them.
+                    model: Wallpapers.recent.slice(0, 5)
+                    delegate: Platform.MenuItem {
+                        required property string modelData
+                        text: {
+                            const all = Wallpapers.wallpapers;
+                            for (let i = 0; i < all.length; ++i) {
+                                if (all[i].id === modelData)
+                                    return all[i].title;
+                            }
+                            return modelData;
+                        }
+                        enabled: modelData !== Wallpapers.current.id
+                        onTriggered: Wallpapers.select(modelData)
+                    }
+                    onObjectAdded: (index, object) => lately.insertItem(index, object)
+                    onObjectRemoved: (index, object) => lately.removeItem(object)
+                }
             }
             Platform.MenuSeparator {}
             Platform.MenuItem {
