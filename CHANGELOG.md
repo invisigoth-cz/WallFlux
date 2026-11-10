@@ -6,6 +6,36 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-11-10
+
+### Added
+
+- **Favourites.** A heart on every card and in the panel, which is the
+  workshop's own favourite on your Steam account, as Wallpaper Engine's is.
+  Only favourites in the library's filter, and *Your favourites* and
+  *Friends' favourites* as rows of Discover and orders of the Workshop.
+- **Compatibility, measured.** A wallpaper is graded the first time it plays
+  -- works, minor issues where the renderer left something out, or broken --
+  and the filter's Compatibility section and the panel say so.
+- **The tray menu** pauses and resumes, goes on to the next wallpaper of a
+  playlist, mutes, and offers the last few wallpapers chosen.
+- **A playlist can be renamed**, in Load.
+
+### Changed
+
+- **A scene's settings change without starting it over.** The clock,
+  the particles, the scripts and the videos carry on; only what the setting
+  changes is new. Loading a scene again takes a fraction of the time it did
+  -- DOOM 0.12 s where it took a second -- so the picture hardly stops.
+
+### Fixed
+
+- **Memory on the graphics card is given back** when a wallpaper is
+  changed or set differently. Until now none of it was, and every change
+  kept hold of more for as long as WallFlux ran.
+- Offscreen pictures start cleared, so the first frame of a scene no longer
+  shows what the previous one left in the graphics card's memory.
+
 ## [0.33.0] — 2026-11-09
 
 ### Added
@@ -1357,7 +1387,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.30.0...v0.31.0
