@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-11-10
+
 ### Added
 
 - **Controls in Settings**: how WallFlux is used, a card for each part of it
@@ -1448,7 +1450,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.32.0...v0.33.0
