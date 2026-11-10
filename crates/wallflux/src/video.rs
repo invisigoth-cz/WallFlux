@@ -136,6 +136,36 @@ impl Video {
         Texture::borrowed(self.texture, as_big_as.0.max(1), as_big_as.1.max(1))
     }
 
+    /// Goes on with the decoder `old` has running, and the frame it shows,
+    /// rather than starting the clip again from a seek: the same clip of the
+    /// same scene, loaded again for a changed property.
+    pub fn carry_on_from(&mut self, gl: &glow::Context, old: &mut Video) {
+        if old.size != self.size {
+            return;
+        }
+        std::mem::swap(&mut self.decoder, &mut old.decoder);
+        self.next = old.next;
+        unsafe {
+            gl.copy_image_sub_data(
+                old.texture,
+                glow::TEXTURE_2D,
+                0,
+                0,
+                0,
+                0,
+                self.texture,
+                glow::TEXTURE_2D,
+                0,
+                0,
+                0,
+                0,
+                self.size.0 as i32,
+                self.size.1 as i32,
+                1,
+            );
+        }
+    }
+
     /// Puts the frame showing at `time` into the texture. Waits for it only
     /// when the decoder has just been started, which is the first frame and
     /// any jump; otherwise a decoder that is behind leaves the last frame up.

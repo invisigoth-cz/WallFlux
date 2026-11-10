@@ -183,12 +183,7 @@ globalThis.__script = function (module, layer, property, start, chosen, user) {
     const entry = { module, layer: layers[layer], property, value: lively(JSON.parse(start)) };
     scripts.push(entry);
     try {
-        const own = module.scriptProperties;
-        const told = JSON.parse(chosen);
-        if (own && told && typeof told === 'object')
-            for (const [name, setting] of Object.entries(told))
-                own[name] = setting && typeof setting === 'object' && 'value' in setting
-                    ? setting.value : setting;
+        choose(module, JSON.parse(chosen));
         globalThis.thisLayer = entry.layer;
         if (typeof module.init === 'function') {
             const now = module.init(current(entry));
@@ -202,6 +197,56 @@ globalThis.__script = function (module, layer, property, start, chosen, user) {
         entry.broken = true;
         return String(e);
     }
+};
+
+// A script's own settings, as the scene sets them.
+function choose(module, told) {
+    const own = module.scriptProperties;
+    if (own && told && typeof told === 'object')
+        for (const [name, setting] of Object.entries(told))
+            own[name] = setting && typeof setting === 'object' && 'value' in setting
+                ? setting.value : setting;
+}
+
+// The wallpaper's settings changed while the scripts run: `moved` is each
+// layer whose values in the scene changed with them, as `{index, changed}`
+// in the form `__layers` takes; `chosen` each script's own settings again,
+// in the order they were started; `user` the settings that changed, which
+// is what Wallpaper Engine hands `applyUserProperties`.
+globalThis.__retell = function (moved, chosen, user) {
+    for (const { index, changed } of JSON.parse(moved)) {
+        const layer = layers[index];
+        if (!layer)
+            continue;
+        for (const [key, value] of Object.entries(changed)) {
+            if (key === 'angles')
+                layer.angles = new Vec3(value).multiply(DEGREES);
+            else if (key === 'origin' || key === 'scale')
+                layer[key] = new Vec3(value);
+            else if (key === 'size')
+                layer.size = new Vec2(value);
+            else
+                layer[key] = value;
+        }
+    }
+    const told = JSON.parse(chosen);
+    const changed = JSON.parse(user);
+    const any = Object.keys(changed).length > 0;
+    const said = [];
+    scripts.forEach((entry, index) => {
+        if (entry.broken)
+            return;
+        try {
+            choose(entry.module, told[index]);
+            globalThis.thisLayer = entry.layer;
+            if (any && typeof entry.module.applyUserProperties === 'function')
+                entry.module.applyUserProperties(changed);
+        } catch (e) {
+            entry.broken = true;
+            said.push(String(e));
+        }
+    });
+    return said.join('; ');
 };
 
 function current(entry) {

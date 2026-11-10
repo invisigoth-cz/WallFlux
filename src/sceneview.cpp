@@ -147,7 +147,14 @@ private:
     void load()
     {
         m_reload = false;
+        // The same wallpaper with other settings goes on from where it is;
+        // another wallpaper starts from the beginning.
+        if (m_scene && !m_folder.isEmpty() && m_folder == m_drawn) {
+            carryOn();
+            return;
+        }
         wallflux_scene_free(std::exchange(m_scene, nullptr));
+        m_drawn.clear();
         if (m_folder.isEmpty()) {
             say({});
             return;
@@ -164,11 +171,34 @@ private:
             return;
         }
         qCInfo(lcScene) << "drawing" << m_folder;
+        m_drawn = m_folder;
         say({});
         // A new scene has been told nothing about the mouse yet.
         m_pointed = false;
         m_seconds = 0;
         m_clock.start();
+    }
+
+    /// The scene loaded again with the new settings, taking over the clock,
+    /// particles, scripts and videos of the one running, so that a setting
+    /// changes the picture rather than starting the wallpaper over. Where
+    /// that fails the scene that was running goes on as it was: a setting
+    /// that cannot be shown is better than a wallpaper gone.
+    void carryOn()
+    {
+        char error[512] = {};
+        const QByteArray values = m_values.toUtf8();
+        WallfluxScene *next = wallflux_scene_reload_with(
+            m_scene, m_folder.toUtf8().constData(),
+            values.isEmpty() ? nullptr : values.constData(), lookUp, nullptr, error,
+            sizeof error);
+        if (!next) {
+            qCWarning(lcScene) << "cannot apply the settings to" << m_folder << "--" << error;
+            return;
+        }
+        wallflux_scene_free(std::exchange(m_scene, next));
+        qCInfo(lcScene) << "carried on with" << m_folder << "under new settings";
+        m_pointed = false;
     }
 
     /// Hands the item why the scene cannot be drawn, or that it can.
@@ -193,6 +223,8 @@ private:
     QElapsedTimer m_clock;
     double m_seconds = 0;
     bool m_reload = false;
+    /// The folder `m_scene` was loaded from.
+    QString m_drawn;
     QString m_values;
     int m_samples = 0;
     bool m_half = false;

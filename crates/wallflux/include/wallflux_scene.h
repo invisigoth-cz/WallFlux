@@ -26,6 +26,13 @@ WallfluxScene *wallflux_scene_load(const char *folder, WallfluxLoader loader, vo
 WallfluxScene *wallflux_scene_load_with(const char *folder, const char *values,
                                         WallfluxLoader loader, void *user, char *error,
                                         size_t error_len);
+/* The scene `previous` loaded again with other `values`, carrying on from
+ * where it has got to -- clock, particles, scripts, videos -- rather than
+ * starting over. `previous` is still the caller's to free afterwards, and is
+ * whole again where NULL comes back. */
+WallfluxScene *wallflux_scene_reload_with(WallfluxScene *previous, const char *folder,
+                                          const char *values, WallfluxLoader loader,
+                                          void *user, char *error, size_t error_len);
 bool wallflux_scene_draw(WallfluxScene *scene, uint32_t width, uint32_t height, float seconds);
 void wallflux_scene_point_at(WallfluxScene *scene, bool inside, float x, float y,
                              uint32_t width, uint32_t height);

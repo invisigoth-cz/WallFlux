@@ -1069,6 +1069,41 @@ impl System {
         self.maxcount = self.maxcount.saturating_mul(systems.max(1)).min(EVENT_POOLS.max(self.maxcount));
     }
 
+    /// Takes over the particles `old` has alive and where it was in its run,
+    /// keeping its own settings: the same system loaded again with other
+    /// values for the wallpaper's properties. What is alive keeps the colour
+    /// and size it was born with, and what is born from now on takes the new
+    /// ones -- a change that spreads as the particles turn over, rather than
+    /// a sky emptied and filled again. Nothing is taken from a system built
+    /// differently, which is not the same one.
+    pub fn carry_on_from(&mut self, old: &mut System) {
+        if old.emitters.len() != self.emitters.len()
+            || old.operators.len() != self.operators.len()
+            || old.maxcount != self.maxcount
+        {
+            return;
+        }
+        std::mem::swap(&mut self.live, &mut old.live);
+        for (now, was) in self.emitters.iter_mut().zip(&old.emitters) {
+            now.1 = was.1;
+        }
+        std::mem::swap(&mut self.gates, &mut old.gates);
+        std::mem::swap(&mut self.rng, &mut old.rng);
+        std::mem::swap(&mut self.events, &mut old.events);
+        std::mem::swap(&mut self.hosts, &mut old.hosts);
+        self.elapsed = old.elapsed;
+        // Spent on the first step, running the system ahead; taken over
+        // with the particles it ran ahead to.
+        self.starttime = old.starttime;
+        self.born = old.born;
+        self.pointer = old.pointer;
+        self.pointer_velocity = old.pointer_velocity;
+        self.pointer_was = old.pointer_was;
+        self.steps = old.steps;
+        self.burst = old.burst;
+        self.serials = old.serials;
+    }
+
     /// Sets how fast the system's time runs, as the scene's override would.
     pub fn set_rate(&mut self, rate: f32) {
         self.clock = rate.max(0.0);

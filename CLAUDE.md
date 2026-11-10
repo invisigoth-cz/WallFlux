@@ -47,7 +47,12 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   November, at the user's asking, on by default; with the second off the
   wallpaper goes on playing -- and drawing -- behind the window.
 - **A tray icon** that opens a grid of every installed wallpaper and plays
-  the one that is clicked.
+  the one that is clicked. Its menu (10 November) also pauses -- the
+  wallpaper stands still and quiet as under a window, and a playlist is held
+  unless told to change while paused, Wallpaper Engine's meaning -- goes on
+  to the next wallpaper of a running playlist, mutes, and offers the last
+  five wallpapers chosen in this run. No item is checkable: the words say
+  the state, since a checkable item ticks itself and breaks its binding.
 - **Noticing what Steam downloads.** The workshop folders are watched, so a
   wallpaper subscribed to in Steam turns up in the grid on its own, a couple
   of seconds after the writing stops.
@@ -228,11 +233,22 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   picker's `propertiesOf`, by id and name, remembered, and laid over the
   declared values (preset values included) by `propertiesFor` and
   `valuesFor`. A page is told what changed through `applyUserProperties`;
-  a scene is loaded again with `wallflux_scene_load_with`, which lays the
-  values into project.json before the bindings and the scripts read it.
-  ponytail: loading again starts the scene's clock over; applying a value
-  to a running scene would need its bindings kept, which they are not.
-  Videos have only Windows' scheme colour and show none.
+  a scene is loaded again with `wallflux_scene_reload_with`, which lays the
+  values into project.json before the bindings read it -- and **carries on
+  from the scene that was running** (10 November): its clock, the particles
+  alive (born colours and sizes kept, so a new colour spreads as they turn
+  over), each system's run ahead, the canvases an effect gathers frames in,
+  the videos' decoders and frame, and the scripts, which are not started
+  again but told (`Scripts::retell`): the layer values the settings moved,
+  their own `scriptProperties` bound to a setting, and `applyUserProperties`
+  with only what changed. Objects are matched by id, whether the scene placed
+  them and how many of that id came before, since a setting that shows or
+  hides an object changes which are loaded. `carriesOnUnderNewSettings`
+  draws Gears of War both ways: the same to the pixel. Rebuilding the whole
+  scene rather than keeping bindings live was chosen because it covers every
+  bound value there is, not just the ones this library uses; the price is
+  the load itself, a moment of the render thread. Videos have only Windows'
+  scheme colour and show none.
 
 - **A wallpaper on every screen that is ticked for it.** The Displays tab
   draws the monitors as they are arranged -- read off their positions on
@@ -2427,10 +2443,8 @@ day; everything asked for on 9 November is in it.
    particles; formats nothing here uses yet (`controlpointangle*`,
    `brightness`, `movement` flags bit 0, `alphafade` and `oscillate*`
    against the binary, what scene scripts cannot reach); Blue Dawn's hand
-   offset to take out once its cause is found. Outside the wallpapers: a
-   playlist cannot be renamed, the COMPATIBILITY filter section is a
-   placeholder, and a scene loaded again for a changed property starts its
-   clock over.
+   offset to take out once its cause is found. Outside the wallpapers: the
+   COMPATIBILITY filter section is a placeholder.
 
 2. **The tray icon itself.** Today it is `preferences-desktop-wallpaper`
    from the icon theme. A drawn one has been asked for, without any hurry.
@@ -2898,9 +2912,10 @@ day; everything asked for on 9 November is in it.
   never loaded -- and the children of a particle system whose parent a
   script moves, which were placed once from where the parent started.
 
-- A saved playlist still cannot be renamed. Saving under a name that is
-  taken replaces it, which covers changing one; Load is where one is thrown
-  away.
+- A saved playlist is renamed in Load (10 November): Rename turns the picked
+  row into a field, Enter takes the name and Escape gives the row back. A
+  name another playlist has is refused, since that would throw it away
+  unasked; a running playlist goes on under its new name.
 - Wallpaper Engine's Load and Save dialogs each carry a keyboard shortcut
   field. There is nothing here that could listen for one, so neither is
   drawn, and keyboard shortcuts are not going to be taken on.

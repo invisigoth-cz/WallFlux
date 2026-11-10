@@ -105,6 +105,52 @@ pub unsafe extern "C" fn wallflux_scene_load_with(
     error: *mut c_char,
     error_len: usize,
 ) -> *mut WallfluxScene {
+    // SAFETY: the context is current, as the caller promised.
+    let gl = unsafe { glow::Context::from_loader_function_cstr(|name| loader(name.as_ptr(), user)) };
+    // SAFETY: passed on as the caller gave them.
+    unsafe { load(folder, values, gl, None, error, error_len) }
+}
+
+/// The scene `previous` loaded again with the wallpaper's properties set to
+/// `values`, going on from where `previous` has got to rather than from the
+/// start: its clock, its particles, its scripts and its videos carry on, and
+/// only what the values change is new. `previous` is left to the caller to
+/// free, emptied of what was taken; null comes back as from
+/// `wallflux_scene_load_with`, and then `previous` is still whole.
+///
+/// # Safety
+/// `previous` is a scene from these functions not yet freed, the rest as
+/// `wallflux_scene_load_with`, in the context `previous` was loaded in.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wallflux_scene_reload_with(
+    previous: *mut WallfluxScene,
+    folder: *const c_char,
+    values: *const c_char,
+    loader: Loader,
+    user: *mut c_void,
+    error: *mut c_char,
+    error_len: usize,
+) -> *mut WallfluxScene {
+    // SAFETY: the context is current, as the caller promised.
+    let gl = unsafe { glow::Context::from_loader_function_cstr(|name| loader(name.as_ptr(), user)) };
+    // SAFETY: the caller said it is a live scene or null.
+    let previous = unsafe { previous.as_mut() }.filter(|p| !p.broken).map(|p| &mut p.scene);
+    // SAFETY: passed on as the caller gave them.
+    unsafe { load(folder, values, gl, previous, error, error_len) }
+}
+
+/// What the two above have in common.
+///
+/// # Safety
+/// As `wallflux_scene_load_with`.
+unsafe fn load(
+    folder: *const c_char,
+    values: *const c_char,
+    gl: glow::Context,
+    previous: Option<&mut Scene>,
+    error: *mut c_char,
+    error_len: usize,
+) -> *mut WallfluxScene {
     let say = |message: &str| {
         if error.is_null() || error_len == 0 {
             return;
@@ -128,15 +174,14 @@ pub unsafe extern "C" fn wallflux_scene_load_with(
         .then(|| unsafe { CStr::from_ptr(values) }.to_string_lossy().into_owned());
 
     let loaded = catch_unwind(AssertUnwindSafe(|| {
-        // SAFETY: the context is current, as the caller promised.
-        let gl = unsafe {
-            glow::Context::from_loader_function_cstr(|name| loader(name.as_ptr(), user))
-        };
-        Scene::load_with(&gl, std::path::Path::new(&folder), DEFAULT_BUDGET, values.as_deref())
-            .map(|scene| (gl, scene))
+        let dir = std::path::Path::new(&folder);
+        match previous {
+            Some(previous) => Scene::reload_with(&gl, dir, DEFAULT_BUDGET, values.as_deref(), previous),
+            None => Scene::load_with(&gl, dir, DEFAULT_BUDGET, values.as_deref()),
+        }
     }));
     match loaded {
-        Ok(Ok((gl, scene))) => {
+        Ok(Ok(scene)) => {
             for skipped in &scene.skipped {
                 eprintln!("wallflux scene {folder}: skipped {skipped}");
             }

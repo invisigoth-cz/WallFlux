@@ -901,6 +901,32 @@ impl Scene {
         budget: usize,
         values: Option<&str>,
     ) -> Result<Self, String> {
+        Self::load_after(gl, dir, budget, values, None)
+    }
+
+    /// The same scene loaded again with other `values`, going on from where
+    /// `previous` -- the scene as it runs now -- has got to: its clock, the
+    /// particles alive, its scripts and what they have worked out, the
+    /// videos where they are playing, the mouse and the sound. Only what the
+    /// new values change is new, so a property changes in the picture as it
+    /// would in Wallpaper Engine rather than starting the wallpaper over.
+    pub fn reload_with(
+        gl: &glow::Context,
+        dir: &std::path::Path,
+        budget: usize,
+        values: Option<&str>,
+        previous: &mut Scene,
+    ) -> Result<Self, String> {
+        Self::load_after(gl, dir, budget, values, Some(previous))
+    }
+
+    fn load_after(
+        gl: &glow::Context,
+        dir: &std::path::Path,
+        budget: usize,
+        values: Option<&str>,
+        mut previous: Option<&mut Scene>,
+    ) -> Result<Self, String> {
         let package = open_package(dir)?;
         let assets = Assets::locate();
         let resolve = Resolver::new(&package, assets.as_ref());
@@ -1126,7 +1152,15 @@ impl Scene {
                 system.bound_by(scene);
             }
         }
-        let scripts = Scripts::load(&file, project.as_deref());
+        // The scripts that are running are told what changed rather than
+        // started again; they are the same scripts of the same scene.
+        let scripts = match previous.as_mut().and_then(|p| p.scripts.take()) {
+            Some(mut running) => {
+                running.retell(&file, project.as_deref());
+                Some(running)
+            }
+            None => Scripts::load(&file, project.as_deref()),
+        };
         if let Some(scripts) = &scripts {
             skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
         }
@@ -1149,7 +1183,7 @@ impl Scene {
                 .map_err(|e| skipped.push(format!("bloom: {e}")))
                 .ok(),
         };
-        Ok(Self {
+        let mut scene = Self {
             objects,
             quad,
             buffer,
@@ -1193,7 +1227,75 @@ impl Scene {
             fov: file.general.perspectiveoverridefov.unwrap_or(file.general.fov),
             scene_size,
             skipped,
-        })
+        };
+        if let Some(previous) = previous {
+            scene.carry_on_from(gl, previous);
+        }
+        Ok(scene)
+    }
+
+    /// Takes over what `old` -- the same scene with other values -- has
+    /// running. Its objects are found again by their id, whether the scene
+    /// placed them and how many of that id came before, because a property
+    /// that shows or hides an object changes which ones were loaded and so
+    /// every place in the list after it.
+    fn carry_on_from(&mut self, gl: &glow::Context, old: &mut Scene) {
+        self.simulated = old.simulated;
+        self.heard = old.heard;
+        self.response = std::mem::take(&mut old.response);
+        self.responded_at = old.responded_at;
+        self.sound = old.sound;
+        self.scripted_at = old.scripted_at;
+        self.pointer = old.pointer;
+        self.parallax_on = old.parallax_on;
+        self.particles_on = old.particles_on;
+        self.bloom_on = old.bloom_on;
+        if let (Some(now), Some(was)) = (&mut self.parallax, &old.parallax) {
+            now.aim = was.aim;
+            now.drift = was.drift;
+            now.eased_at = was.eased_at;
+        }
+        for (name, video) in &mut self.videos {
+            if let Some(was) = old.videos.get_mut(name) {
+                video.carry_on_from(gl, was);
+            }
+        }
+        let key = |objects: &[Object]| {
+            let mut seen = BTreeMap::new();
+            objects
+                .iter()
+                .map(|o| {
+                    let nth = seen.entry((o.id, o.from_scene)).or_insert(0usize);
+                    *nth += 1;
+                    (o.id, o.from_scene, *nth)
+                })
+                .collect::<Vec<_>>()
+        };
+        let where_was: BTreeMap<_, _> = key(&old.objects).into_iter().zip(0..).collect();
+        // An effect that builds on its last frames -- a motion blur, a fog
+        // gathered over time -- keeps them in its object's canvas, so that
+        // goes along too where it is made the same way: Gears of War's red
+        // fog came back as bare specks without it.
+        let same_buffers = self.buffers == old.buffers;
+        self.canvases.resize_with(self.objects.len(), || None);
+        old.canvases.resize_with(old.objects.len(), || None);
+        for (index, at) in key(&self.objects).into_iter().enumerate() {
+            let Some(&was) = where_was.get(&at) else { continue };
+            if same_buffers
+                && self.objects[index].kept == old.objects[was].kept
+                && self.objects[index].effects.len() == old.objects[was].effects.len()
+            {
+                self.canvases[index] = old.canvases[was].take();
+            }
+            // Where a script places a layer it says so again before the
+            // next frame is drawn, from layers `retell` has brought up to
+            // date, so only the particles are taken here.
+            if let (Drawing::Particles(now), Drawing::Particles(then)) =
+                (&mut self.objects[index].drawing, &mut old.objects[was].drawing)
+            {
+                now.carry_on_from(then);
+            }
+        }
     }
 
     /// Hands the scene what the speakers are playing, which the steps that

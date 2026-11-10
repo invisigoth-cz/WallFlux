@@ -98,6 +98,14 @@ pub struct Scripts {
     names: Vec<String>,
     ids: Vec<i64>,
     listens: bool,
+    /// The layers as the scene file had them when the scripts started, and
+    /// the wallpaper's settings then: what a change of settings is told
+    /// against, since only what changed is handed on.
+    layers: Vec<serde_json::Value>,
+    user: serde_json::Map<String, serde_json::Value>,
+    /// For each script started, its place among those `find` comes to,
+    /// which is how the same scene read again finds it.
+    found_at: Vec<usize>,
     /// Scripts there are and that are not run, with why.
     pub skipped: Vec<String>,
 }
@@ -157,10 +165,11 @@ impl Scripts {
         let user = user_json(project);
         let mut targets = Vec::new();
         let mut names = Vec::new();
+        let mut found_at = Vec::new();
         context.with(|ctx| -> rquickjs::Result<()> {
             deadline.set(Instant::now() + DEADLINE);
             ctx.eval::<(), _>(HOST)?;
-            call::<()>(&ctx, "__layers", (layers,))?;
+            call::<()>(&ctx, "__layers", (serde_json::Value::Array(layers.clone()).to_string(),))?;
             for (index, one) in found.into_iter().enumerate() {
                 deadline.set(Instant::now() + DEADLINE);
                 let module = format!("{}#{index}", one.name);
@@ -186,7 +195,7 @@ impl Scripts {
                         one.property,
                         one.start.to_string(),
                         one.chosen.map_or("null".to_owned(), |c| c.to_string()),
-                        user.clone(),
+                        serde_json::Value::Object(user.clone()).to_string(),
                     ),
                 )
                 .unwrap_or_else(|e| thrown(&ctx, e));
@@ -195,6 +204,7 @@ impl Scripts {
                 }
                 targets.push(one.target);
                 names.push(one.name);
+                found_at.push(index);
             }
             Ok(())
         })?;
@@ -207,8 +217,69 @@ impl Scripts {
             names,
             ids: file.objects.iter().map(|o| o.id).collect(),
             listens,
+            layers,
+            user,
+            found_at,
             skipped,
         })
+    }
+
+    /// Tells the running scripts that the wallpaper's settings changed:
+    /// `file` and `project` are the same scene read again with the new
+    /// values. What a setting moved on a layer is moved on the scripts'
+    /// layer as well -- they hand every layer back each frame, and would
+    /// put the old value back -- a script's own `scriptProperties` bound to
+    /// a setting take the new value, and `applyUserProperties` is handed the
+    /// settings that changed, as Wallpaper Engine hands them. Everything a
+    /// script has worked out since it started is kept.
+    pub fn retell(&mut self, file: &SceneFile, project: Option<&[u8]>) {
+        let layers = layers_json(file);
+        let user = user_json(project);
+        let moved: Vec<serde_json::Value> = layers
+            .iter()
+            .zip(&self.layers)
+            .enumerate()
+            .filter_map(|(index, (now, was))| {
+                let changed: serde_json::Map<_, _> = now
+                    .as_object()?
+                    .iter()
+                    .filter(|(key, value)| was.get(key.as_str()) != Some(value))
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect();
+                (!changed.is_empty()).then(|| serde_json::json!({ "index": index, "changed": changed }))
+            })
+            .collect();
+        let changed: serde_json::Map<_, _> = user
+            .iter()
+            .filter(|(name, value)| self.user.get(name.as_str()) != Some(value))
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        let mut skipped = Vec::new();
+        let found = find(file, &mut skipped);
+        let chosen: Vec<serde_json::Value> = self
+            .found_at
+            .iter()
+            .map(|&at| found.get(at).and_then(|f| f.chosen.cloned()).unwrap_or(serde_json::Value::Null))
+            .collect();
+        let deadline = &self.deadline;
+        self.context.with(|ctx| {
+            deadline.set(Instant::now() + DEADLINE);
+            let said = call::<String>(
+                &ctx,
+                "__retell",
+                (
+                    serde_json::Value::Array(moved).to_string(),
+                    serde_json::Value::Array(chosen).to_string(),
+                    serde_json::Value::Object(changed).to_string(),
+                ),
+            )
+            .unwrap_or_else(|e| thrown(&ctx, e));
+            if !said.is_empty() {
+                eprintln!("wallflux scene: a script stopped on the new settings -- {said}");
+            }
+        });
+        self.layers = layers;
+        self.user = user;
     }
 
     /// Whether a script asked for the sound.
@@ -317,7 +388,7 @@ fn layer_from(value: &serde_json::Value) -> Option<Layer> {
     })
 }
 
-fn layers_json(file: &SceneFile) -> String {
+fn layers_json(file: &SceneFile) -> Vec<serde_json::Value> {
     let layers: Vec<_> = file
         .objects
         .iter()
@@ -337,12 +408,12 @@ fn layers_json(file: &SceneFile) -> String {
             layer
         })
         .collect();
-    serde_json::Value::Array(layers).to_string()
+    layers
 }
 
 /// The wallpaper's settings by name, as `applyUserProperties` is handed
 /// them: every one of them, since at the start none has been sent yet.
-fn user_json(project: Option<&[u8]>) -> String {
+fn user_json(project: Option<&[u8]>) -> serde_json::Map<String, serde_json::Value> {
     let properties = project
         .and_then(|p| serde_json::from_slice::<serde_json::Value>(p).ok())
         .and_then(|p| p.pointer("/general/properties").cloned());
@@ -353,7 +424,7 @@ fn user_json(project: Option<&[u8]>) -> String {
             .collect(),
         _ => serde_json::Map::new(),
     };
-    serde_json::Value::Object(values).to_string()
+    values
 }
 
 /// Every script in the scene this renderer can do something with, in the
@@ -615,5 +686,46 @@ mod tests {
         loud.right[63] = 0.5;
         let frame = scripts.run(0.0, 0.0, &loud).unwrap();
         assert_eq!(frame.values[0].1, serde_json::json!(6.5));
+    }
+
+    /// Settings changed while the scripts run reach them without starting
+    /// them again: a layer a setting hides is hidden on the scripts' side
+    /// too, a script's own setting bound to one takes the new value, and
+    /// `applyUserProperties` is handed only what changed -- while what the
+    /// script counted so far is kept.
+    #[test]
+    fn running_scripts_are_told_new_settings() {
+        let source = script(
+            "export var scriptProperties = createScriptProperties()
+                 .addSlider({ name: 'gain', value: 1 }).finish();
+             let told = [], ticks = 0;
+             export function applyUserProperties(p) { told = Object.keys(p).sort(); }
+             export function update() { ticks++; return `${scriptProperties.gain} ${told} ${ticks}`; }",
+        );
+        let objects = format!(
+            r#"{{"objects":[{{"id":1,"name":"a","visible":{{"user":"show","value":true}}}},
+                 {{"id":2,"name":"b","instanceoverride":{{"rate":{{"script":{source},"value":0,
+                 "scriptproperties":{{"gain":{{"user":"g","value":1}}}}}}}}}}]}}"#
+        );
+        let project = |show: bool, g: i32| {
+            format!(
+                r#"{{"general":{{"properties":{{"show":{{"type":"bool","value":{show}}},
+                     "g":{{"type":"slider","value":{g}}},"speed":{{"type":"slider","value":2}}}}}}}}"#
+            )
+        };
+        let read = |project: &str| {
+            SceneFile::parse_with_properties(objects.as_bytes(), Some(project.as_bytes())).unwrap()
+        };
+        let before = project(true, 3);
+        let mut scripts = Scripts::load(&read(&before), Some(before.as_bytes())).unwrap();
+        let frame = scripts.run(0.0, 0.0, &SILENCE).unwrap();
+        assert!(frame.layers[0].1.visible);
+        assert_eq!(frame.values[0].1, serde_json::json!("3 g,show,speed 1"));
+
+        let after = project(false, 5);
+        scripts.retell(&read(&after), Some(after.as_bytes()));
+        let frame = scripts.run(0.1, 0.1, &SILENCE).unwrap();
+        assert!(!frame.layers[0].1.visible);
+        assert_eq!(frame.values[0].1, serde_json::json!("5 g,show 2"));
     }
 }

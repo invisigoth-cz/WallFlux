@@ -373,6 +373,76 @@ private slots:
     /// A setting changed in the panel reaches the picture: Future Clock with
     /// its back plate green instead of grey is another picture, and handed
     /// the same values as its project.json it is the same one again.
+    /// A scene loaded again for a changed setting goes on where it was
+    /// rather than starting over: two of Gears of War run alike for six
+    /// seconds, one is loaded again, and the next frame of each is the same
+    /// picture -- where the same scene loaded fresh at that moment has only
+    /// begun to let its particles out.
+    void carriesOnUnderNewSettings()
+    {
+        const QUrl source = scenes().value(QStringLiteral("1420884532"));
+        if (source.isEmpty())
+            QSKIP("Gears of War is not on this machine");
+        const QByteArray folder = QFileInfo(source.toLocalFile()).absolutePath().toUtf8();
+        const QSize size(480, 270);
+
+        QOffscreenSurface surface;
+        surface.create();
+        QOpenGLContext context;
+        QVERIFY(context.create() && context.makeCurrent(&surface));
+        QOpenGLFramebufferObject frame(size);
+        frame.bind();
+        const auto lookUp = [](const char *name, void *) -> const void * {
+            return reinterpret_cast<const void *>(
+                QOpenGLContext::currentContext()->getProcAddress(name));
+        };
+        char error[256] = {};
+        const auto load = [&] {
+            return wallflux_scene_load(folder.constData(), lookUp, nullptr, error, sizeof error);
+        };
+        const auto draw = [&](WallfluxScene *scene, float at) {
+            wallflux_scene_draw(scene, size.width(), size.height(), at);
+            return frame.toImage().convertToFormat(QImage::Format_RGB32);
+        };
+
+        WallfluxScene *running = load();
+        WallfluxScene *changed = load();
+        QVERIFY2(running && changed, error);
+        const float step = 1.0f / 15;
+        float at = 0;
+        for (; at < 6; at += step) {
+            draw(running, at);
+            draw(changed, at);
+        }
+        WallfluxScene *again = wallflux_scene_reload_with(changed, folder.constData(), "{}",
+                                                          lookUp, nullptr, error, sizeof error);
+        QVERIFY2(again, error);
+        wallflux_scene_free(changed);
+        WallfluxScene *fresh = load();
+
+        const QImage goingOn = draw(running, at);
+        const QImage carried = draw(again, at);
+        const QImage started = draw(fresh, at);
+        if (qEnvironmentVariableIsSet("WALLFLUX_SCENE_GRAB")) {
+            const QString to = qEnvironmentVariable("WALLFLUX_SCENE_GRAB");
+            goingOn.save(to + QStringLiteral("-going-on.png"));
+            carried.save(to + QStringLiteral("-carried.png"));
+            started.save(to + QStringLiteral("-started.png"));
+        }
+        wallflux_scene_free(running);
+        wallflux_scene_free(again);
+        wallflux_scene_free(fresh);
+        context.doneCurrent();
+
+        // The same to the pixel, measured, once the canvases an effect
+        // gathers its fog in and a system's run ahead were taken along too;
+        // before those, 2.1 and 0.89 apart against 2.8 for starting over.
+        const double kept = apart(goingOn, carried);
+        const double over = apart(goingOn, started);
+        QVERIFY2(kept < 0.01 && over > 1,
+                 qPrintable(QStringLiteral("%1 apart carried on, %2 started over").arg(kept).arg(over)));
+    }
+
     void drawsASceneWithTheValuesItIsGiven()
     {
         const QUrl source = scenes().value(QStringLiteral("2127129941"));
