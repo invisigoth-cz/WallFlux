@@ -28,6 +28,17 @@ pub struct WallfluxScene {
     broken: bool,
 }
 
+/// What the scene made on the GPU goes with it. Until 10 November nothing
+/// did, and every wallpaper changed or setting changed left its textures
+/// behind for as long as the program ran. Even after a panic, since the
+/// names are still the scene's; a panic while giving them back is let go.
+impl Drop for WallfluxScene {
+    fn drop(&mut self) {
+        let (gl, scene) = (&self.gl, &mut self.scene);
+        let _ = catch_unwind(AssertUnwindSafe(|| scene.free(gl)));
+    }
+}
+
 /// What the speakers are playing, listened to once for every scene on every
 /// screen, and only while a scene that follows the sound is being drawn --
 /// see `audio` for why. `None` where there is no sound server, and the
@@ -200,6 +211,34 @@ unsafe fn load(
             std::ptr::null_mut()
         }
     }
+}
+
+/// What of the scene could not be built and was left out, one line each,
+/// into `out` -- at most `out_len` bytes, always ending in a nought. Returns
+/// the length the whole list needs, without its nought; nothing left out is
+/// nought. What the picker grades a wallpaper's compatibility by.
+///
+/// # Safety
+/// `scene` is a scene from these functions not yet freed; `out` holds
+/// `out_len` bytes, or is null with `out_len` nought.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wallflux_scene_skipped(
+    scene: *const WallfluxScene,
+    out: *mut c_char,
+    out_len: usize,
+) -> usize {
+    // SAFETY: the caller said it is a live scene or null.
+    let Some(scene) = (unsafe { scene.as_ref() }) else { return 0 };
+    let all = scene.scene.skipped.join("\n");
+    if !out.is_null() && out_len > 0 {
+        let n = all.len().min(out_len - 1);
+        // SAFETY: the caller said `out` holds `out_len` bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(all.as_ptr(), out.cast::<u8>(), n);
+            *out.add(n) = 0;
+        }
+    }
+    all.len()
 }
 
 /// Writes what the speakers are playing into `out`, 128 numbers from nought to

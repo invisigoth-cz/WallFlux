@@ -22,6 +22,10 @@ pub struct Package {
     version: String,
     data: Vec<u8>,
     entries: BTreeMap<String, Range<usize>>,
+    /// For a package opened rather than read: the file, with `entries` as
+    /// places in it, and each entry once it has been asked for.
+    file: Option<std::fs::File>,
+    loaded: BTreeMap<String, std::cell::OnceCell<Option<Vec<u8>>>>,
 }
 
 /// What the front of a package says: its version, each entry's name, offset
@@ -72,18 +76,7 @@ pub fn read_entry(path: impl AsRef<std::path::Path>, name: &str) -> std::io::Res
 
     let mut file = std::fs::File::open(path)?;
     let length = file.metadata()?.len();
-    let mut front = Vec::new();
-    let mut wanted: u64 = 256 * 1024;
-    let (table, base) = loop {
-        front.clear();
-        file.seek(SeekFrom::Start(0))?;
-        (&mut file).take(wanted).read_to_end(&mut front)?;
-        match table(&front) {
-            Ok((_, table, base)) => break (table, base),
-            Err(Error::Eof { .. }) if wanted < length => wanted *= 4,
-            Err(e) => return Err(invalid(e)),
-        }
-    };
+    let (_, table, base) = front(&mut file, length)?;
     let Some(&(_, offset, size)) = table.iter().find(|(entry, _, _)| entry == name) else {
         return Ok(None);
     };
@@ -101,7 +94,52 @@ pub fn read_entry(path: impl AsRef<std::path::Path>, name: &str) -> std::io::Res
     Ok(Some(entry))
 }
 
+/// The table off the front of `file`, a quarter of a megabyte at a time
+/// until it is all there.
+fn front(file: &mut std::fs::File, length: u64) -> std::io::Result<Table> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut front = Vec::new();
+    let mut wanted: u64 = 256 * 1024;
+    loop {
+        front.clear();
+        file.seek(SeekFrom::Start(0))?;
+        file.take(wanted).read_to_end(&mut front)?;
+        match table(&front) {
+            Ok(found) => return Ok(found),
+            Err(Error::Eof { .. }) if wanted < length => wanted *= 4,
+            Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+        }
+    }
+}
+
 impl Package {
+    /// The package at `path` with only its table read, and each entry read
+    /// off the disk the first time it is asked for.
+    ///
+    /// A scene uses a part of what its package carries, and reading all of
+    /// it was most of what loading a scene again cost after its textures:
+    /// 105 ms of DOOM's 190, for 290 MB of which the scene reads a fraction.
+    pub fn open(path: impl AsRef<std::path::Path>) -> std::io::Result<Self> {
+        let invalid = |e: Error| std::io::Error::new(std::io::ErrorKind::InvalidData, e);
+        let mut file = std::fs::File::open(path)?;
+        let length = file.metadata()?.len() as usize;
+        let (version, table, base) = front(&mut file, length as u64)?;
+        let mut entries = BTreeMap::new();
+        let mut loaded = BTreeMap::new();
+        for (name, offset, size) in table {
+            let end = base
+                .checked_add(offset)
+                .and_then(|start| start.checked_add(size))
+                .ok_or_else(|| invalid(Error::Absurd { what: "entry extent", value: offset as i64, at: base }))?;
+            if end > length {
+                return Err(invalid(Error::Eof { need: end, have: length, at: base }));
+            }
+            loaded.insert(name.clone(), std::cell::OnceCell::new());
+            entries.insert(name, (base + offset)..end);
+        }
+        Ok(Self { version, data: Vec::new(), entries, file: Some(file), loaded })
+    }
+
     pub fn parse(bytes: Vec<u8>) -> Result<Self> {
         let (version, table, base) = table(&bytes)?;
         // The payload is whatever is left after the table.
@@ -128,6 +166,8 @@ impl Package {
             version,
             data: bytes,
             entries,
+            file: None,
+            loaded: BTreeMap::new(),
         })
     }
 
@@ -160,7 +200,7 @@ impl Package {
         }
         let (mut data, mut entries) = (Vec::new(), BTreeMap::new());
         walk(dir.as_ref(), "", &mut data, &mut entries)?;
-        Ok(Self { version: "folder".into(), data, entries })
+        Ok(Self { version: "folder".into(), data, entries, file: None, loaded: BTreeMap::new() })
     }
 
     pub fn version(&self) -> &str {
@@ -168,7 +208,24 @@ impl Package {
     }
 
     pub fn get(&self, name: &str) -> Option<&[u8]> {
-        self.entries.get(name).map(|r| &self.data[r.clone()])
+        let range = self.entries.get(name)?;
+        let Some(file) = &self.file else {
+            return Some(&self.data[range.clone()]);
+        };
+        self.loaded
+            .get(name)?
+            .get_or_init(|| {
+                use std::os::unix::fs::FileExt;
+                let mut entry = vec![0; range.len()];
+                match file.read_exact_at(&mut entry, range.start as u64) {
+                    Ok(()) => Some(entry),
+                    Err(e) => {
+                        eprintln!("wpe-format: {name} could not be read from its package -- {e}");
+                        None
+                    }
+                }
+            })
+            .as_deref()
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
@@ -176,9 +233,7 @@ impl Package {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&str, &[u8])> {
-        self.entries
-            .iter()
-            .map(|(name, range)| (name.as_str(), &self.data[range.clone()]))
+        self.entries.keys().filter_map(|name| Some((name.as_str(), self.get(name)?)))
     }
 }
 
@@ -254,12 +309,18 @@ mod tests {
         let last = names.last().unwrap();
         let read = read_entry(&path, last).unwrap();
         let absent = read_entry(&path, "scene.json").unwrap();
+        let opened = Package::open(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
 
         let whole = Package::parse(v).unwrap();
         assert_eq!(read.as_deref(), whole.get(last));
         assert_eq!(read.as_deref(), Some(&3999u16.to_le_bytes()[..]));
         assert_eq!(absent, None);
+        // Opened, every entry is the bytes a whole read finds, read off a
+        // file that is no longer even there by name.
+        assert_eq!(opened.version(), "PKGV0019");
+        assert!(opened.iter().eq(whole.iter()));
+        assert_eq!(opened.get("scene.json"), None);
     }
 
     #[test]

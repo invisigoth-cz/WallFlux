@@ -37,6 +37,9 @@ bool wallflux_scene_draw(WallfluxScene *scene, uint32_t width, uint32_t height, 
 void wallflux_scene_point_at(WallfluxScene *scene, bool inside, float x, float y,
                              uint32_t width, uint32_t height);
 void wallflux_scene_free(WallfluxScene *scene);
+/* What of the scene was left out, one line each, into `out`; returns the
+ * length the whole list needs. */
+size_t wallflux_scene_skipped(const WallfluxScene *scene, char *out, size_t out_len);
 
 /* What every scene may do, as the Settings tab says: draw `fps` pictures a
  * second, follow the music, lean with the mouse, have particles, meet a

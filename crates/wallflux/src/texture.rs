@@ -60,6 +60,11 @@ impl Texture {
         self.id
     }
 
+    /// Another handle on the same texture, for a pass that shares it.
+    fn share(&self) -> Self {
+        Self { ..*self }
+    }
+
     /// Uploads one of a texture's images.
     ///
     /// A sprite sheet too big for one image is stored as several, and a frame
@@ -367,4 +372,102 @@ unsafe fn upload_encoded(gl: &glow::Context, level: usize, data: &[u8]) -> Resul
         );
     }
     Ok(())
+}
+
+/// What a texture was uploaded from: the file, which of its images, whether
+/// it repeats, and whether it was cut to half size.
+type Made = (String, usize, bool, bool);
+
+/// Every texture a scene uploaded from its files, each once, by what it was
+/// made from.
+///
+/// A scene names the same texture from many passes -- DOOM 167 uploads for
+/// far fewer files -- and uploading is most of the time a scene takes to
+/// load: 557 of DOOM's 756 ms. So a texture is uploaded once and its passes
+/// share it, and a scene loaded again for a changed setting takes over the
+/// ones the running scene already has, which is what turns a pause of most of
+/// a second into one nobody sees.
+#[derive(Default)]
+pub struct Uploads {
+    made: std::collections::HashMap<Made, Texture>,
+    used: std::collections::HashSet<Made>,
+}
+
+std::thread_local! {
+    /// The uploads of the scene being loaded on this thread, while it is.
+    /// Here rather than handed down, because every function that builds a
+    /// pass would otherwise take one more argument for it.
+    static LOADING: std::cell::RefCell<Option<Uploads>> = const { std::cell::RefCell::new(None) };
+    /// Off while a text is built: its picture is written into its texture,
+    /// and a texture shared would be written over by the next text.
+    static SHARING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+impl Uploads {
+    /// Makes these the uploads of the scene this thread now loads.
+    pub fn begin(self) {
+        LOADING.with(|l| *l.borrow_mut() = Some(self));
+    }
+
+    /// Takes back the uploads of the scene this thread was loading.
+    pub fn end() -> Self {
+        LOADING.with(|l| l.borrow_mut().take()).unwrap_or_default()
+    }
+
+    /// The GL names of every texture here.
+    pub fn ids(&self) -> impl Iterator<Item = glow::Texture> + '_ {
+        self.made.values().map(Texture::raw)
+    }
+
+    /// Gives back what the scene just loaded did not use -- what a setting
+    /// took out of the one before it -- and starts counting afresh.
+    pub fn prune(&mut self, gl: &glow::Context) {
+        let used = std::mem::take(&mut self.used);
+        self.made.retain(|made, texture| {
+            let keep = used.contains(made);
+            if !keep {
+                unsafe { gl.delete_texture(texture.raw()) };
+            }
+            keep
+        });
+    }
+
+    /// Builds what `build` builds with every texture it uploads its own.
+    pub fn unshared<R>(build: impl FnOnce() -> R) -> R {
+        let was = SHARING.with(|s| s.replace(false));
+        let built = build();
+        SHARING.with(|s| s.set(was));
+        built
+    }
+}
+
+/// `page` of `source`, which was read from `name`, uploaded once for the
+/// scene being loaded and shared by every pass that asks for it -- or
+/// uploaded for the asker alone outside a load and inside `unshared`.
+pub fn uploaded(
+    gl: &glow::Context,
+    name: &str,
+    source: &wpe_format::Texture,
+    page: usize,
+    repeat: bool,
+) -> Result<Texture, String> {
+    if !SHARING.with(std::cell::Cell::get) {
+        return Texture::upload_page(gl, source, page, repeat);
+    }
+    let made = (name.to_owned(), page, repeat, HALF.load(std::sync::atomic::Ordering::Relaxed));
+    LOADING.with(|l| {
+        let mut loading = l.borrow_mut();
+        let Some(uploads) = loading.as_mut() else {
+            return Texture::upload_page(gl, source, page, repeat);
+        };
+        if let Some(texture) = uploads.made.get(&made) {
+            uploads.used.insert(made);
+            return Ok(texture.share());
+        }
+        let texture = Texture::upload_page(gl, source, page, repeat)?;
+        let shared = texture.share();
+        uploads.used.insert(made.clone());
+        uploads.made.insert(made, texture);
+        Ok(shared)
+    })
 }

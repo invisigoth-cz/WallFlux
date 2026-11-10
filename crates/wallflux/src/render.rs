@@ -195,7 +195,7 @@ struct Still {
 
 impl Film {
     /// Builds the sheet an image object plays, if its texture holds one.
-    fn of(gl: &glow::Context, source: &wpe_format::Texture) -> Option<Self> {
+    fn of(gl: &glow::Context, name: &str, source: &wpe_format::Texture) -> Option<Self> {
         let sprite = source.sprite.as_ref()?;
         if sprite.frames.is_empty() || source.images.len() < 2 && sprite.frames.len() < 2 {
             return None;
@@ -203,7 +203,7 @@ impl Film {
 
         let mut pages = Vec::new();
         for page in 0..source.images.len() {
-            pages.push(Texture::upload_page(gl, source, page, false).ok()?);
+            pages.push(crate::texture::uploaded(gl, name, source, page, false).ok()?);
         }
 
         let mut frames = Vec::new();
@@ -510,7 +510,10 @@ fn build_text(
     };
     let material = resolve.get("materials/fonts/basefontrgba.json")?;
     let material = Material::parse(&material).ok()?;
-    let mut passes = build_passes(gl, resolve, &material, Kind::Image, object, skipped);
+    // Its picture is written into its texture, which is its own for that.
+    let mut passes = crate::texture::Uploads::unshared(|| {
+        build_passes(gl, resolve, &material, Kind::Image, object, skipped)
+    });
     let brighter = |color: [f32; 3], by: f32| color.map(|c| c * by);
     let style = Style {
         points: object.pointsize.value,
@@ -686,6 +689,11 @@ pub struct Scene {
     pub scene_size: (u32, u32),
     /// Passes that would not compile, named so they can be looked at.
     pub skipped: Vec<String>,
+    /// The textures uploaded from the scene's files, each once.
+    uploads: crate::texture::Uploads,
+    /// Those of them a scene loaded again has taken over, which this one
+    /// must leave alone when it is freed.
+    handed_over: std::collections::HashSet<glow::Texture>,
 }
 
 /// The pair of offscreen pictures an object with effects is drawn through.
@@ -828,6 +836,13 @@ unsafe fn make_target(gl: &glow::Context, size: (u32, u32)) -> Result<Target, St
         if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
             return Err("an offscreen picture is not complete".into());
         }
+        // Clear from the start. A texture made with no pixels holds whatever
+        // the memory held, which is nought only while the GPU hands out
+        // memory nobody used: once scenes gave theirs back, a buffer read
+        // before its first write -- a motion blur's last frame on the first
+        // one -- showed what the scene before had left in it.
+        gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        gl.clear(glow::COLOR_BUFFER_BIT);
         Ok(Target {
             frame,
             texture: Texture::borrowed(texture, size.0, size.1),
@@ -927,6 +942,51 @@ impl Scene {
         values: Option<&str>,
         mut previous: Option<&mut Scene>,
     ) -> Result<Self, String> {
+        let handed = match previous.as_deref_mut() {
+            Some(previous) => {
+                let uploads = std::mem::take(&mut previous.uploads);
+                previous.handed_over = uploads.ids().collect();
+                uploads
+            }
+            None => Default::default(),
+        };
+        handed.begin();
+        let built = Self::build(gl, dir, budget, values, previous.as_deref_mut());
+        let mut uploads = crate::texture::Uploads::end();
+        match built {
+            Ok(mut scene) => {
+                uploads.prune(gl);
+                scene.uploads = uploads;
+                if let Some(previous) = previous {
+                    scene.carry_on_from(previous);
+                }
+                Ok(scene)
+            }
+            // The scene that was running goes on, with what it had.
+            Err(why) => {
+                match previous {
+                    Some(previous) => {
+                        previous.uploads = uploads;
+                        previous.handed_over.clear();
+                    }
+                    None => {
+                        for texture in uploads.ids() {
+                            unsafe { gl.delete_texture(texture) };
+                        }
+                    }
+                }
+                Err(why)
+            }
+        }
+    }
+
+    fn build(
+        gl: &glow::Context,
+        dir: &std::path::Path,
+        budget: usize,
+        values: Option<&str>,
+        mut previous: Option<&mut Scene>,
+    ) -> Result<Self, String> {
         let package = open_package(dir)?;
         let assets = Assets::locate();
         let resolve = Resolver::new(&package, assets.as_ref());
@@ -955,7 +1015,20 @@ impl Scene {
 
         let mut objects = Vec::new();
         let mut skipped = Vec::new();
-        let mut videos = BTreeMap::new();
+        // The players a scene loaded again takes over whole, decoder and
+        // texture: the clip goes on from the frame it was on, and nothing is
+        // written out or asked of ffprobe again -- 85 of Dark Core's ms.
+        // Taken only once the package and the scene have been read, which
+        // is where a load fails; past here only the GPU refusing to make a
+        // texture or a buffer does, and then nothing is left drawing anyway.
+        let mut videos: BTreeMap<String, Video> = match previous.as_deref_mut() {
+            Some(previous) => {
+                let videos = std::mem::take(&mut previous.videos);
+                previous.handed_over.extend(videos.values().map(Video::raw));
+                videos
+            }
+            None => BTreeMap::new(),
+        };
         let mut buffers = BTreeMap::new();
         // The layers that finish as a picture another can read: those with
         // effects, and those somebody asks to read even without any.
@@ -1152,18 +1225,6 @@ impl Scene {
                 system.bound_by(scene);
             }
         }
-        // The scripts that are running are told what changed rather than
-        // started again; they are the same scripts of the same scene.
-        let scripts = match previous.as_mut().and_then(|p| p.scripts.take()) {
-            Some(mut running) => {
-                running.retell(&file, project.as_deref());
-                Some(running)
-            }
-            None => Scripts::load(&file, project.as_deref()),
-        };
-        if let Some(scripts) = &scripts {
-            skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
-        }
 
         let (quad, buffer) = unsafe { make_quad(gl)? };
         let widest = objects
@@ -1177,18 +1238,45 @@ impl Scene {
             Some(capacity) => Some(unsafe { make_particle_buffers(gl, capacity)? }),
             None => None,
         };
+        let played: BTreeSet<&str> = objects
+            .iter()
+            .flat_map(|o| &o.passes)
+            .filter_map(|p| p.video.as_deref())
+            .collect();
+        videos.retain(|name, video| {
+            let keep = played.contains(name.as_str());
+            if !keep {
+                unsafe { gl.delete_texture(video.raw()) };
+            }
+            keep
+        });
         let bloom = match file.general.bloom.value {
             false => None,
             true => build_bloom(gl, &resolve, &file.general, scene_size)
                 .map_err(|e| skipped.push(format!("bloom: {e}")))
                 .ok(),
         };
-        let mut scene = Self {
+        let white = Texture::white(gl)?;
+        // Last, after everything that can fail: a scene that fails to load
+        // again leaves the one running with its scripts.
+        // The scripts that are running are told what changed rather than
+        // started again; they are the same scripts of the same scene.
+        let scripts = match previous.and_then(|p| p.scripts.take()) {
+            Some(mut running) => {
+                running.retell(&file, project.as_deref());
+                Some(running)
+            }
+            None => Scripts::load(&file, project.as_deref()),
+        };
+        if let Some(scripts) = &scripts {
+            skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
+        }
+        let scene = Self {
             objects,
             quad,
             buffer,
             particles,
-            white: Texture::white(gl)?,
+            white,
             canvases: Vec::new(),
             frame: None,
             bloom,
@@ -1227,11 +1315,90 @@ impl Scene {
             fov: file.general.perspectiveoverridefov.unwrap_or(file.general.fov),
             scene_size,
             skipped,
+            uploads: Default::default(),
+            handed_over: Default::default(),
         };
-        if let Some(previous) = previous {
-            scene.carry_on_from(gl, previous);
-        }
         Ok(scene)
+    }
+
+    /// Gives back everything the scene made on the GPU. The context it was
+    /// loaded in, or one sharing with it, must be current.
+    ///
+    /// Each name once, though passes share textures and programs and a pass
+    /// may show a texture something else owns -- a video's, a buffer's --
+    /// and none a scene loaded again took over.
+    pub fn free(&mut self, gl: &glow::Context) {
+        use std::collections::HashSet;
+        let mut textures: HashSet<glow::Texture> = HashSet::new();
+        let mut programs = HashSet::new();
+        let mut framebuffers = HashSet::new();
+        let mut arrays = HashSet::new();
+        let mut buffers = HashSet::new();
+        let mut pass = |pass: &Pass, textures: &mut HashSet<glow::Texture>| {
+            programs.insert(pass.program);
+            textures.extend(pass.textures.iter().flatten().map(Texture::raw));
+            if let Some(film) = &pass.film {
+                textures.extend(film.pages.iter().map(Texture::raw));
+            }
+        };
+        let mut target = |target: &Target, textures: &mut HashSet<glow::Texture>| {
+            framebuffers.insert(target.frame);
+            textures.insert(target.texture.raw());
+        };
+        let bloom = self.bloom.as_ref();
+        for object in self.objects.iter().chain(bloom.map(|b| &b.carrier)) {
+            for one in object.passes.iter().chain(object.effects.iter().filter_map(|s| s.pass.as_ref())) {
+                pass(one, &mut textures);
+            }
+            if let Some(puppet) = &object.puppet {
+                arrays.insert(puppet.array);
+                buffers.insert(puppet.vertices);
+            }
+        }
+        if let Some(bloom) = bloom {
+            for one in &bloom.passes {
+                pass(one, &mut textures);
+            }
+            for one in bloom.targets.iter().flatten() {
+                target(one, &mut textures);
+            }
+        }
+        for canvas in self.canvases.iter().flatten() {
+            for one in canvas.targets.iter().chain(canvas.named.values()).chain(&canvas.kept) {
+                target(one, &mut textures);
+            }
+        }
+        if let Some(frame) = &self.frame {
+            target(frame, &mut textures);
+        }
+        textures.extend(self.videos.values().map(Video::raw));
+        textures.extend(self.uploads.ids());
+        textures.insert(self.white.raw());
+        arrays.insert(self.quad);
+        buffers.insert(self.buffer);
+        if let Some(p) = &self.particles {
+            arrays.extend([p.vao, p.rope]);
+            buffers.extend([p.vertices, p.rope_vertices, p.indices]);
+        }
+        unsafe {
+            for texture in textures.difference(&self.handed_over) {
+                gl.delete_texture(*texture);
+            }
+            for program in programs {
+                gl.delete_program(program);
+            }
+            for framebuffer in framebuffers {
+                gl.delete_framebuffer(framebuffer);
+            }
+            for array in arrays {
+                gl.delete_vertex_array(array);
+            }
+            for buffer in buffers {
+                gl.delete_buffer(buffer);
+            }
+        }
+        self.canvases.clear();
+        self.frame = None;
     }
 
     /// Takes over what `old` -- the same scene with other values -- has
@@ -1239,7 +1406,7 @@ impl Scene {
     /// placed them and how many of that id came before, because a property
     /// that shows or hides an object changes which ones were loaded and so
     /// every place in the list after it.
-    fn carry_on_from(&mut self, gl: &glow::Context, old: &mut Scene) {
+    fn carry_on_from(&mut self, old: &mut Scene) {
         self.simulated = old.simulated;
         self.heard = old.heard;
         self.response = std::mem::take(&mut old.response);
@@ -1254,11 +1421,6 @@ impl Scene {
             now.aim = was.aim;
             now.drift = was.drift;
             now.eased_at = was.eased_at;
-        }
-        for (name, video) in &mut self.videos {
-            if let Some(was) = old.videos.get_mut(name) {
-                video.carry_on_from(gl, was);
-            }
         }
         let key = |objects: &[Object]| {
             let mut seen = BTreeMap::new();
@@ -3339,7 +3501,12 @@ fn build_pass(
                         .and_then(|source| Sheet::of(source, named, resolve));
                     padded = source.as_ref().is_some_and(Sheet::padded);
                 }
-                Kind::Image => film = source.as_ref().and_then(|source| Film::of(gl, source)),
+                Kind::Image => {
+                    film = source
+                        .as_ref()
+                        .zip(named)
+                        .and_then(|(source, name)| Film::of(gl, name, source));
+                }
                 // An effect's first texture is the object's own picture,
                 // handed over at drawing time rather than loaded from a file.
                 Kind::Effect => {}
@@ -3349,8 +3516,9 @@ fn build_pass(
             source
                 .as_ref()
                 .filter(|texture| !texture.is_video())
-                .and_then(|source| {
-                    Texture::upload_page(gl, source, 0, source.repeats()).ok()
+                .zip(named)
+                .and_then(|(source, name)| {
+                    crate::texture::uploaded(gl, name, source, 0, source.repeats()).ok()
                 }),
         );
     }
@@ -3564,7 +3732,7 @@ fn build_pass(
             .and_then(|bytes| wpe_format::Texture::parse(&bytes).ok())
             .filter(|texture| !texture.is_video())
             .and_then(|source| {
-                Texture::upload_page(gl, &source, 0, source.repeats()).ok()
+                crate::texture::uploaded(gl, &path, &source, 0, source.repeats()).ok()
             });
     }
     let stated = pass
@@ -4080,7 +4248,7 @@ const MOVED: &[(&str, i64, [f32; 3])] = &[("2149578679", 43, [22.4, 307.1, 0.0])
 /// none, which is how Wallpaper Engine's own Deep Space and the rest come.
 pub(crate) fn open_package(dir: &std::path::Path) -> Result<Package, String> {
     match find_package(dir) {
-        Ok(path) => Package::read(&path).map_err(|e| format!("reading package: {e}")),
+        Ok(path) => Package::open(&path).map_err(|e| format!("reading package: {e}")),
         Err(none) if !dir.join("project.json").exists() => Err(none),
         Err(_) => Package::from_folder(dir).map_err(|e| format!("reading {}: {e}", dir.display())),
     }
