@@ -8,7 +8,7 @@ arch=('x86_64')
 url='https://github.com/invisigoth-cz/WallFlux'
 # The exception is for the Steamworks SDK and is spelled out in
 # LICENSE-EXCEPTION, which package() installs beside the binary.
-license=('GPL-3.0-or-later' 'custom:Steamworks-SDK-linking-exception')
+license=('GPL-3.0-or-later' 'custom:Steamworks-SDK-linking-exception' 'OFL-1.1')
 # No LTO. makepkg's -flto reaches the C of QuickJS through CFLAGS, which
 # Cargo compiles into the renderer's static library as LTO objects the
 # final link cannot read: the build stops on `undefined reference to
@@ -54,7 +54,7 @@ depends=('breeze-icons' 'ffmpeg' 'layer-shell-qt' 'libpulse' 'pipewire' 'qt6-bas
 #
 # cargo builds the scene renderer under crates/ into a static library that
 # goes inside the binary, so it is needed to build and never to run.
-makedepends=('cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
+makedepends=('binutils' 'cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
 
 # Not a dependency of running: WallFlux reads the folder Steam has already
 # filled and needs nothing of Steam's while it plays. It is a dependency of
@@ -105,7 +105,17 @@ check() {
 
 package() {
     DESTDIR="$pkgdir" cmake --install build
+    # The flags above keep our own code to x86-64-v2, but the binary was
+    # still marked as needing v3: the mark comes from glibc's Scrt1.o, and
+    # on a CachyOS machine with the v3 repositories that file is built for
+    # v3 and marks every program linked against it. Elsewhere glibc's loader
+    # then refuses to start it -- "CPU ISA level is lower than required" on
+    # the A8-6410, reproduced with Arch's own ld.so under qemu -cpu Nehalem.
+    # The note only says what was assumed; the code itself is v2.
+    objcopy --remove-section=.note.gnu.property "$pkgdir/usr/bin/wallflux"
     # The added permission travels with the binary it applies to.
     install -Dm644 "$pkgname/LICENSE-EXCEPTION" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE-EXCEPTION"
+    # The typefaces built into the binary carry their licence with them.
+    install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname/fonts" "$pkgname"/fonts/*-OFL.txt
 }

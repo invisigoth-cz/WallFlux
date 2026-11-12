@@ -652,6 +652,29 @@ Item {
 
                 Setting {
                     home: 2
+                    title: qsTr("Compatibility test")
+                    about: {
+                        const done = Compatibility.done, total = Compatibility.total;
+                        if (Compatibility.running)
+                            return qsTr("Trying %1 of %2: %3").arg(Math.min(done + 1, total)).arg(total)
+                                .arg(view.picker.titleOf(Compatibility.current));
+                        if (total > 0 && done === total)
+                            return qsTr("Tried %1 wallpapers. Each card in the library says how it fared.")
+                                .arg(total);
+                        return qsTr("Plays every wallpaper in the library for a moment, unseen and "
+                                    + "unheard, and marks each one Works, Minor issues or Broken. "
+                                    + "Run it again after downloading new ones.");
+                    }
+
+                    RoundedButton {
+                        text: Compatibility.running ? qsTr("Stop") : qsTr("Test the library")
+                        accent: Compatibility.running ? "transparent" : Look.highlight
+                        onClicked: Compatibility.running ? Compatibility.stop() : view.picker.testLibrary()
+                    }
+                }
+
+                Setting {
+                    home: 2
                     title: qsTr("Quality")
                     about: qsTr("Wallpaper Engine's presets, setting the three below at once. Changed "
                                 + "one by one they are your own, and no preset is lit. A wallpaper can "
@@ -832,6 +855,17 @@ Item {
 
                 Setting {
                     home: 3
+                    title: qsTr("Typeface")
+                    about: qsTr("The letters the whole window is written in. The desktop's own is "
+                                + "the one your other programs use.")
+
+                    below: FontTiles {
+                        width: parent ? parent.width : 0
+                    }
+                }
+
+                Setting {
+                    home: 3
                     title: qsTr("Accent colour")
                     about: qsTr("What buttons, switches and the ring round a chosen card are lit in.")
 
@@ -990,6 +1024,69 @@ Item {
 
     /// The themes as tiles: a small picture of each one's window, its name
     /// under it, the chosen one ringed in the accent.
+    /// One tile per typeface: a large Áá and its name, both in it.
+    component FontTiles: Flow {
+        spacing: 10
+
+        Repeater {
+            // The desktop's own first, as the default; then the ones
+            // WallFlux carries, every one with all of Czech.
+            model: ["", "Inter", "Geist", "Manrope", "Plus Jakarta Sans", "Figtree", "Onest", "DM Sans"]
+
+            delegate: Item {
+                id: face
+
+                required property string modelData
+                readonly property bool chosen: view.picker.typeface === face.modelData
+                readonly property string family: face.modelData !== "" ? face.modelData
+                                                                        : Qt.application.font.family
+
+                width: 116
+                height: 108
+
+                Rectangle {
+                    id: sample
+
+                    width: parent.width
+                    height: 66
+                    radius: 10
+                    color: face.palette.base
+                    border.width: face.chosen ? 3 : 1
+                    border.color: face.chosen ? face.palette.highlight : face.palette.mid
+                    scale: faceHover.hovered ? 1.04 : 1
+
+                    Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: "Áá"
+                        font.family: face.family
+                        font.pixelSize: 28
+                        font.weight: Font.Bold
+                    }
+                }
+
+                Label {
+                    anchors.top: sample.bottom
+                    anchors.topMargin: 6
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    // The desktop's own says so, and which it is underneath.
+                    text: face.modelData !== "" ? face.modelData
+                                                : qsTr("Desktop's") + "\n" + face.family
+                    font.family: face.family
+                    font.pixelSize: 12
+                    font.weight: face.chosen ? Font.DemiBold : Font.Normal
+                }
+
+                HoverHandler { id: faceHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: view.picker.typeface = face.modelData }
+            }
+        }
+    }
+
     component ThemeTiles: Flow {
         spacing: 10
 

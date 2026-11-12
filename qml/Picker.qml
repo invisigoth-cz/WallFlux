@@ -22,7 +22,7 @@ import "steamprofile.js" as Steam
 /// Says what was clicked and nothing more -- it neither plays a wallpaper nor
 /// remembers one. Which of the two is on screen is the wallpaper window's
 /// business, and remembering is nobody's, by design.
-Window {
+ApplicationWindow {
     id: picker
 
     /// What was clicked. Never emitted for a wallpaper that cannot be played.
@@ -53,6 +53,10 @@ Window {
     /// The colour buttons, switches and the ring are lit in, or empty for
     /// the theme's own.
     property string accent: ""
+    /// The typeface the window is written in, or empty for the desktop's
+    /// own -- Noto Sans on Plasma unless somebody changed it there.
+    property string typeface: ""
+    font.family: picker.typeface !== "" ? picker.typeface : Qt.application.font.family
     /// Whether the colours are the dark kind, whichever theme gave them.
     readonly property bool dark: shades.dark
     /// The desktop's own colours, for the System theme's tile.
@@ -197,6 +201,39 @@ Window {
         picker.tried = all;
     }
 
+    /// A wallpaper's name by its id, or the id where nothing has it.
+    function titleOf(id) {
+        const all = Wallpapers.wallpapers;
+        for (let i = 0; i < all.length; ++i) {
+            if (all[i].id === id)
+                return all[i].title;
+        }
+        return id;
+    }
+
+    /// Every wallpaper that can be played, tried out by Compatibility --
+    /// unseen and unheard, with its own settings -- and graded as it goes.
+    function testLibrary() {
+        const kinds = {};
+        kinds[WallpaperKind.Scene] = "scene";
+        kinds[WallpaperKind.Video] = "video";
+        kinds[WallpaperKind.Web] = "web";
+        const all = Wallpapers.wallpapers;
+        const list = [];
+        for (let i = 0; i < all.length; ++i) {
+            const one = all[i];
+            if (one.playable && kinds[one.kind])
+                list.push({ id: one.id, kind: kinds[one.kind], source: one.source.toString(),
+                            values: picker.valuesFor(one) });
+        }
+        Compatibility.test(list);
+    }
+
+    Connections {
+        target: Compatibility
+        function onGraded(id, grade, why) { picker.noteCompatibility(id, grade, why); }
+    }
+
     /// How a wallpaper fares: what it was found to do when it was played,
     /// "broken" where it cannot be played at all, and "unknown" until then.
     function compatibility(one) {
@@ -315,6 +352,7 @@ Window {
         category: "settings"
         property alias theme: picker.theme
         property alias accent: picker.accent
+        property alias typeface: picker.typeface
         property alias statusBar: picker.statusBar
         property alias tray: picker.tray
         property alias startMinimized: picker.startMinimized

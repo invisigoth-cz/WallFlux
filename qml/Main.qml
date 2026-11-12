@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Window
 import Qt.labs.platform as Platform
 import WallFlux
+import "emblem.js" as Emblem
 
 /// The program: a tray icon, the picker, and a wallpaper on every screen
 /// it is wanted on.
@@ -300,19 +301,9 @@ Item {
         required property int place
         readonly property string one: Wallpapers.recent[place] || ""
         visible: one !== ""
-        text: root.titleOf(one)
+        text: picker.titleOf(one)
         enabled: one !== Wallpapers.current.id
         onTriggered: Wallpapers.select(one)
-    }
-
-    /// A wallpaper's name by its id, or the id where nothing has it.
-    function titleOf(id) {
-        const all = Wallpapers.wallpapers;
-        for (let i = 0; i < all.length; ++i) {
-            if (all[i].id === id)
-                return all[i].title;
-        }
-        return id;
     }
 
     /// The tray's Next and Previous: through the running playlist if there
@@ -337,9 +328,15 @@ Item {
 
     Platform.SystemTrayIcon {
         visible: picker.tray
-        // From the icon theme rather than shipped with us; Breeze and every
-        // other freedesktop theme has this one.
-        icon.name: "preferences-desktop-wallpaper"
+        // Ours, in the window's colours: the theme's target colours rather
+        // than the ones easing towards them, or a change of theme would
+        // send the panel a new picture every frame of the fade.
+        icon.source: {
+            const set = picker.theme === "system" ? picker.systemColours
+                                                  : (picker.themes[picker.theme] || picker.themes.dark);
+            const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
+            return Emblem.url(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
+        }
         tooltip: !Wallpapers.current.playable ? qsTr("WallFlux")
                  : root.paused ? qsTr("WallFlux — %1 (paused)").arg(Wallpapers.current.title)
                  : qsTr("WallFlux — %1").arg(Wallpapers.current.title)

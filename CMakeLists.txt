@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # speaks no other language and Wayland tells a window nothing about the ones
 # in front of it.
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core DBus Gui LinguistTools Multimedia Network OpenGL Qml Quick WebEngineQuick Widgets)
+    Core DBus Gui LinguistTools Multimedia Network OpenGL Qml Quick WebEngineCore WebEngineQuick Widgets)
 
 # Only the tests need this one, and a machine that just wants to run WallFlux
 # should not have to have it.
@@ -60,6 +60,7 @@ set_source_files_properties(qml/Toggle.qml PROPERTIES QT_RESOURCE_ALIAS Toggle.q
 set_source_files_properties(qml/Heart.qml PROPERTIES QT_RESOURCE_ALIAS Heart.qml)
 set_source_files_properties(qml/PropertiesView.qml PROPERTIES QT_RESOURCE_ALIAS PropertiesView.qml)
 set_source_files_properties(qml/steamprofile.js PROPERTIES QT_RESOURCE_ALIAS steamprofile.js)
+set_source_files_properties(qml/emblem.js PROPERTIES QT_RESOURCE_ALIAS emblem.js)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -97,6 +98,7 @@ qt_add_qml_module(wallflux
         qml/Heart.qml
         qml/PropertiesView.qml
         qml/steamprofile.js
+        qml/emblem.js
     SOURCES
         src/autostart.h
         src/autostart.cpp
@@ -130,12 +132,31 @@ qt_add_qml_module(wallflux
         src/tags.cpp
         src/wallpapercore.h
         src/wallpapercore.cpp
+        src/compatibility.h
+        src/compatibility.cpp
+        src/webguard.h
 )
 
 # The Czech catalogue, compiled into the binary under /i18n -- which is where
 # Language looks for it. `cmake --build build --target update_translations`
 # refreshes the .ts file after strings change.
 qt_add_translations(wallflux TS_FILES i18n/wallflux_cs.ts)
+
+# The typefaces Settings > Appearance offers besides the desktop's own, and
+# WallFlux's icon, compiled into the binary. All seven typefaces are under
+# the SIL Open Font License, which the package installs beside them.
+qt_add_resources(wallflux "assets"
+    PREFIX "/"
+    FILES
+        fonts/Inter.ttf
+        fonts/Geist.ttf
+        fonts/Manrope.ttf
+        fonts/PlusJakartaSans.ttf
+        fonts/Figtree.ttf
+        fonts/Onest.ttf
+        fonts/DMSans.ttf
+        icons/wallflux.svg
+)
 
 target_include_directories(wallflux PRIVATE src)
 
@@ -192,6 +213,7 @@ target_link_libraries(wallflux PRIVATE
     Qt6::OpenGL
     Qt6::Qml
     Qt6::Quick
+    Qt6::WebEngineCore
     Qt6::WebEngineQuick
     # Only for the tray icon's fallback, which Qt.labs.platform needs linked
     # whether or not this desktop ends up using it.
@@ -318,6 +340,12 @@ include(GNUInstallDirs)
 
 install(TARGETS wallflux
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# What the application menu and the desktop file show; the tray draws its own
+# in the window's colours.
+install(FILES icons/wallflux.svg
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
 )
 
 # Without this on the system, the desktop portal refuses to register the

@@ -2,11 +2,16 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+#include "compatibility.h"
 #include "wallpapercore.h"
+#include "webguard.h"
 
 
 #include <QApplication>
 #include <QDir>
+#include <QDirIterator>
+#include <QFontDatabase>
+#include <QIcon>
 #include <QFileInfo>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -21,7 +26,6 @@
 #include <QtWebEngineQuick>
 #include <algorithm>
 #include <QQuickWebEngineProfile>
-#include <QWebEngineUrlRequestInterceptor>
 
 namespace {
 
@@ -49,51 +53,6 @@ public:
         network->setCache(cache);
         return network;
     }
-};
-
-/// Keeps a web wallpaper's page to the wallpapers' own folders.
-///
-/// A page is somebody's off the workshop, loaded from a file, and Chromium
-/// lets a page loaded from a file read any other file it can name -- left
-/// alone, `fetch("file:///home/...")` would hand it whatever is in the home
-/// folder. So a file is fetched only from under a folder wallpapers live in:
-/// the workshop's, or Wallpaper Engine's own install. Everything else that
-/// is not a file is Chromium's business as before.
-class WallpaperFilesOnly : public QWebEngineUrlRequestInterceptor
-{
-public:
-    explicit WallpaperFilesOnly(QObject *parent)
-        : QWebEngineUrlRequestInterceptor(parent)
-    {
-        for (const QString &root : WallpaperCore::steamRoots()) {
-            for (const char *under : {"/steamapps/workshop/content/431960", "/steamapps/common/wallpaper_engine"}) {
-                const QString folder = QFileInfo(root + QLatin1StringView(under)).canonicalFilePath();
-                if (!folder.isEmpty())
-                    m_allowed.append(folder + QLatin1Char('/'));
-            }
-        }
-    }
-
-    static bool inside(const QString &path, const QStringList &folders)
-    {
-        // Canonical, so that neither `..` nor a symbolic link leads out.
-        const QString real = QFileInfo(path).canonicalFilePath();
-        return !real.isEmpty()
-               && std::ranges::any_of(folders, [&](const QString &f) { return real.startsWith(f); });
-    }
-
-    void interceptRequest(QWebEngineUrlRequestInfo &info) override
-    {
-        const QUrl url = info.requestUrl();
-        if (!url.isLocalFile() || inside(url.toLocalFile(), m_allowed))
-            return;
-        qWarning("a web wallpaper asked for %s, outside the wallpapers' folders: refused",
-                 qPrintable(url.toString()));
-        info.block(true);
-    }
-
-private:
-    QStringList m_allowed;
 };
 
 } // namespace
@@ -126,6 +85,12 @@ int main(int argc, char *argv[])
     // debugging a wallpaper.
     QLoggingCategory::setFilterRules(QStringLiteral("js=false"));
 
+    // Started by Compatibility to try the library out, unseen and unheard:
+    // a program of its own, so that a wallpaper that brings it down brings
+    // down nothing else.
+    if (argc > 1 && qstrcmp(argv[1], "--grade") == 0)
+        return Compatibility::grade(argc, argv);
+
     // QApplication rather than QGuiApplication: Qt.labs.platform, which the
     // tray icon comes from, falls back to the Qt Widgets tray where the
     // desktop has no native one of its own, and that fallback needs this.
@@ -138,6 +103,14 @@ int main(int argc, char *argv[])
     // KWin reads the desktop file name to decide what the window is; a
     // wallpaper that claims to be an ordinary application gets treated as one.
     app.setDesktopFileName(QStringLiteral("wallflux"));
+    app.setWindowIcon(QIcon::fromTheme(QStringLiteral("wallflux"), QIcon(QStringLiteral(":/icons/wallflux.svg"))));
+
+    // The typefaces Settings > Appearance offers, out of the binary. The
+    // desktop's own is the default and needs nothing loading.
+    for (QDirIterator font(QStringLiteral(":/fonts"), {QStringLiteral("*.ttf")}); font.hasNext();) {
+        if (QFontDatabase::addApplicationFont(font.next()) < 0)
+            qWarning("could not load the typeface %s", qPrintable(font.filePath()));
+    }
 
     // One wallpaper to a session. Starting at login means the program is
     // usually already running by the time somebody starts it again by hand,
