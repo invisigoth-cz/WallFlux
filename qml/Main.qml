@@ -295,6 +295,46 @@ Item {
     // The only thing a person can click: the wallpapers are in the
     // background layer and transparent to input, so without this there
     // would be no way to reach the picker at all.
+    /// One row of the tray's Recent wallpapers: the `place`th chosen.
+    component RecentRow: Platform.MenuItem {
+        required property int place
+        readonly property string one: Wallpapers.recent[place] || ""
+        visible: one !== ""
+        text: root.titleOf(one)
+        enabled: one !== Wallpapers.current.id
+        onTriggered: Wallpapers.select(one)
+    }
+
+    /// A wallpaper's name by its id, or the id where nothing has it.
+    function titleOf(id) {
+        const all = Wallpapers.wallpapers;
+        for (let i = 0; i < all.length; ++i) {
+            if (all[i].id === id)
+                return all[i].title;
+        }
+        return id;
+    }
+
+    /// The tray's Next and Previous: through the running playlist if there
+    /// is one, and otherwise through the library in the order the grid
+    /// shows it, round from the end to the start.
+    function step(by) {
+        if (Playlists.playing !== "") {
+            if (by > 0)
+                Playlists.next();
+            else
+                Playlists.previous();
+            return;
+        }
+        const order = picker.shown.filter(w => w.playable);
+        if (order.length === 0)
+            return;
+        const at = order.findIndex(w => w.id === Wallpapers.current.id);
+        const to = at < 0 ? (by > 0 ? 0 : order.length - 1)
+                          : (at + by + order.length) % order.length;
+        Wallpapers.select(order[to].id);
+    }
+
     Platform.SystemTrayIcon {
         visible: picker.tray
         // From the icon theme rather than shipped with us; Breeze and every
@@ -325,11 +365,14 @@ Item {
                 onTriggered: root.paused = !root.paused
             }
             Platform.MenuItem {
+                text: qsTr("Previous wallpaper")
+                icon.name: "media-skip-backward"
+                onTriggered: root.step(-1)
+            }
+            Platform.MenuItem {
                 text: qsTr("Next wallpaper")
                 icon.name: "media-skip-forward"
-                // Only a playlist has a next one.
-                enabled: Playlists.playing !== ""
-                onTriggered: Playlists.next()
+                onTriggered: root.step(1)
             }
             Platform.MenuItem {
                 text: picker.muted ? qsTr("Unmute") : qsTr("Mute")
@@ -342,26 +385,16 @@ Item {
                 title: qsTr("Recent wallpapers")
                 enabled: Wallpapers.recent.length > 0
 
-                Instantiator {
-                    // The last five chosen in this run, the one on show
-                    // among them.
-                    model: Wallpapers.recent.slice(0, 5)
-                    delegate: Platform.MenuItem {
-                        required property string modelData
-                        text: {
-                            const all = Wallpapers.wallpapers;
-                            for (let i = 0; i < all.length; ++i) {
-                                if (all[i].id === modelData)
-                                    return all[i].title;
-                            }
-                            return modelData;
-                        }
-                        enabled: modelData !== Wallpapers.current.id
-                        onTriggered: Wallpapers.select(modelData)
-                    }
-                    onObjectAdded: (index, object) => lately.insertItem(index, object)
-                    onObjectRemoved: (index, object) => lately.removeItem(object)
-                }
+                // The last five chosen in this run, the one on show among
+                // them. Five rows that are there from the start and only
+                // shown or hidden: rows put into a tray's submenu later are
+                // a change of the menu's shape, which the panel has to be
+                // told about separately and is not always.
+                RecentRow { place: 0 }
+                RecentRow { place: 1 }
+                RecentRow { place: 2 }
+                RecentRow { place: 3 }
+                RecentRow { place: 4 }
             }
             Platform.MenuSeparator {}
             Platform.MenuItem {

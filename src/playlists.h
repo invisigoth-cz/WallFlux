@@ -117,6 +117,9 @@ public:
     /// to turn on that rather than on the clock.
     Q_INVOKABLE void next();
 
+    /// Back to the one before, and the clock starts again from the top.
+    Q_INVOKABLE void previous();
+
     /// Stops the clock without stopping the playlist, and starts it again
     /// where it left off rather than from the beginning.
     ///
@@ -167,7 +170,7 @@ private:
 
     /// Puts the next wallpaper on and winds the clock again. The one place
     /// that does it, whether the clock ran out or a video did.
-    void goOn();
+    void goOn(int step = 1);
 
     QVariantList m_all;
     QString m_playing;

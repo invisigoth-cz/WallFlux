@@ -255,6 +255,27 @@ private slots:
         playlists.stop();
     }
 
+    /// The tray's Previous goes back round from the first to the last.
+    void previousGoesBackRound()
+    {
+        Playlists playlists;
+        playlists.save(QStringLiteral("back"),
+                       {QStringLiteral("a"), QStringLiteral("b"), QStringLiteral("c")},
+                       {{QStringLiteral("seconds"), 30}});
+
+        QSignalSpy plays(&playlists, &Playlists::plays);
+        playlists.start(QStringLiteral("back"));
+        playlists.previous();
+        playlists.next();
+        playlists.next();
+        playlists.previous();
+        QStringList seen;
+        for (const auto &one : std::as_const(plays))
+            seen << one.at(0).toString();
+        QCOMPARE(seen, (QStringList{"a", "c", "a", "b", "a"}));
+        playlists.stop();
+    }
+
     /// What is running says what it was told, and says nothing once it
     /// has stopped -- the window reads these to decide whether a video
     /// loops and whether a covered screen holds the clock.

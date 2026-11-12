@@ -308,6 +308,13 @@ void Playlists::next()
     goOn();
 }
 
+void Playlists::previous()
+{
+    if (m_playing.isEmpty())
+        return;
+    goOn(-1);
+}
+
 void Playlists::hold(bool held)
 {
     if (m_playing.isEmpty())
@@ -354,14 +361,15 @@ void Playlists::turn()
     goOn();
 }
 
-void Playlists::goOn()
+void Playlists::goOn(int step)
 {
     if (m_order.isEmpty()) {
         stop();
         return;
     }
 
-    m_at = (m_at + 1) % int(m_order.size());
+    const int count = int(m_order.size());
+    m_at = ((m_at + step) % count + count) % count;
     // Wound again here rather than left to repeat: a single-shot timer is
     // what lets it be stopped and picked up where it was.
     m_left = -1;

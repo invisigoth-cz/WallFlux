@@ -942,8 +942,9 @@ Item {
                     glyph: "preferences-desktop-wallpaper"
                     title: qsTr("The tray icon")
                     about: qsTr("• A click opens this window.\n"
-                                + "• A right click pauses and resumes the wallpaper, goes on to the next "
-                                + "one of a playlist, mutes, offers the last five wallpapers and quits.\n"
+                                + "• A right click pauses and resumes the wallpaper, goes to the next or "
+                                + "previous wallpaper -- of the playlist, if one is running, and "
+                                + "otherwise in the library's order -- mutes, offers the last five wallpapers and quits.\n"
                                 + "• With Minimise on close (General), closing this window leaves "
                                 + "WallFlux running in the tray.")
                 }
