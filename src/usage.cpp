@@ -62,13 +62,28 @@ bool Usage::readStat(const QByteArray &stat, qint64 *parent, qint64 *ticks)
     return ok1 && ok2 && ok3;
 }
 
-qint64 Usage::residentKb(const QByteArray &status)
+namespace {
+
+/// The number after `key` on its own line, as /proc writes its kilobytes.
+qint64 kilobytes(const QByteArray &text, QByteArrayView key)
 {
-    for (const QByteArray &line : status.split('\n')) {
-        if (line.startsWith("VmRSS:"))
-            return line.mid(6).simplified().split(' ').value(0).toLongLong();
+    for (const QByteArray &line : text.split('\n')) {
+        if (line.startsWith(key))
+            return line.mid(key.size()).simplified().split(' ').value(0).toLongLong();
     }
     return 0;
+}
+
+} // namespace
+
+qint64 Usage::residentKb(const QByteArray &status)
+{
+    return kilobytes(status, "VmRSS:");
+}
+
+qint64 Usage::availableKb(const QByteArray &meminfo)
+{
+    return kilobytes(meminfo, "MemAvailable:");
 }
 
 QString Usage::drmClient(const QByteArray &fdinfo, QHash<QString, qint64> *engines)
@@ -156,5 +171,6 @@ void Usage::sample()
     m_lastTicks = ticks;
     m_lastEngines = engines;
     m_ram = kb / 1024.0;
+    m_free = availableKb(slurp(QStringLiteral("/proc/meminfo"))) / 1024.0;
     emit changed();
 }

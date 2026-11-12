@@ -946,7 +946,10 @@ Item {
                                 + "• Search, Filters and the order button narrow and sort the grid; "
                                 + "Refresh reads Steam's folders again.\n"
                                 + "• The heart makes it a favourite on your Steam account. Update on a "
-                                + "card means the workshop has a newer version of it.")
+                                + "card means the workshop has a newer version of it; Update all, beside "
+                                + "Refresh, fetches every one.\n"
+                                + "• Remove in the panel gives the wallpaper back to Steam and deletes "
+                                + "its folder.")
                 }
 
                 Guide {
@@ -960,7 +963,9 @@ Item {
                                 + "wallpaper's number or the link to its page finds that one.\n"
                                 + "• Click a wallpaper for its panel, then Download. Steam fetches it, "
                                 + "and a few seconds later it is in the library by itself.\n"
-                                + "• The author's button in the panel shows everything else they made.")
+                                + "• The author's button in the panel shows everything else they made.\n"
+                                + "• Your favourites and your friends' favourites are rows of Discover and "
+                                + "orders of Workshop.")
                 }
 
                 Guide {
@@ -969,7 +974,8 @@ Item {
                     about: qsTr("• Tick wallpapers with the box in a card's corner, or press Add "
                                 + "wallpaper to show every box at once. They line up along the bottom.\n"
                                 + "• Save gives the playlist a name; Load opens a saved one and starts "
-                                + "it; Configure sets how long each stays, the order and the transition.\n"
+                                + "it, renames it or throws it away; Configure sets how long each stays, "
+                                + "the order and the transition.\n"
                                 + "• The Playlists button beside the filters starts a saved playlist, "
                                 + "and stops it when clicked again.")
                 }
@@ -1007,18 +1013,32 @@ Item {
                     title: qsTr("Sound and pausing")
                     about: qsTr("• The wallpaper goes quiet while another program plays sound, and "
                                 + "quiet and still under a maximised window. Both come back by "
-                                + "themselves, and both can be switched off in Audio.\n"
+                                + "themselves, and both can be switched off in Audio. Audio can also pause "
+                                + "it while you work in another program.\n"
+                                + "• On a battery it can drop to Low quality and stop when the battery "
+                                + "runs low (Performance).\n"
                                 + "• The speaker in the status bar mutes it.")
                 }
 
                 Guide {
                     glyph: "configure"
                     title: qsTr("A wallpaper's own settings")
-                    about: qsTr("• In the library's panel, under the author: the colours, sliders and "
+                    about: qsTr("• In the library's panel, under the tags: the colours, sliders and "
                                 + "switches its author offered. A change shows at once; Defaults puts "
                                 + "them back.\n"
                                 + "• Quality in the panel sets this one wallpaper apart from Performance "
                                 + "in Settings -- a heavy scene on Low while the rest stay High.")
+                }
+
+                Guide {
+                    glyph: "emblem-success"
+                    title: qsTr("Compatibility")
+                    about: qsTr("• The panel says how a wallpaper plays here: Works, Minor issues "
+                                + "(something in it is not drawn yet) or Broken. It is filled in the "
+                                + "first time the wallpaper plays.\n"
+                                + "• Test the library (Performance) tries every wallpaper at once, "
+                                + "unseen and unheard; run it again after downloading new ones.\n"
+                                + "• Filters › Compatibility finds them by it.")
                 }
             }
         }

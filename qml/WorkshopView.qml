@@ -1085,7 +1085,7 @@ Item {
                             visible: workshop.grid.length > 0
 
                             RoundedTool {
-                                icon.name: "go-first"
+                                icon.name: "arrow-left-double"
                                 icon.color: workshop.palette.windowText
                                 visible: workshop.page > 1
                                 enabled: !Steamworks.busy
@@ -1143,7 +1143,7 @@ Item {
                             }
 
                             RoundedTool {
-                                icon.name: "go-last"
+                                icon.name: "arrow-right-double"
                                 icon.color: workshop.palette.windowText
                                 visible: workshop.page < workshop.pages
                                 enabled: !Steamworks.busy

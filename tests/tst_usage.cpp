@@ -28,6 +28,9 @@ private slots:
     {
         QCOMPARE(Usage::residentKb("Name:\twallflux\nVmPeak:\t 900 kB\nVmRSS:\t  420108 kB\n"), 420108);
         QCOMPARE(Usage::residentKb("Name:\tkthread\n"), 0);
+        QCOMPARE(Usage::availableKb("MemTotal:       32768000 kB\nMemFree:  1000 kB\nMemAvailable:   20480000 kB\n"),
+                 20480000);
+        QCOMPARE(Usage::availableKb(""), 0);
     }
 
     /// amdgpu's own words: a client, and nanoseconds an engine was busy.

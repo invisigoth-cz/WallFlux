@@ -34,6 +34,9 @@ class Usage : public QObject
     Q_PROPERTY(double gpu READ gpu NOTIFY changed)
     /// Megabytes held in memory.
     Q_PROPERTY(double ram READ ram NOTIFY changed)
+    /// Megabytes the whole machine still has to give, as the kernel counts
+    /// what is available: free, and cache it can drop.
+    Q_PROPERTY(double free READ free NOTIFY changed)
 
 public:
     explicit Usage(QObject *parent = nullptr);
@@ -43,6 +46,7 @@ public:
     double cpu() const { return m_cpu; }
     double gpu() const { return m_gpu; }
     double ram() const { return m_ram; }
+    double free() const { return m_free; }
 
     /// A process's parent and its processor time in clock ticks, out of
     /// its `stat` -- whose name field may hold spaces and brackets, so the
@@ -50,6 +54,8 @@ public:
     static bool readStat(const QByteArray &stat, qint64 *parent, qint64 *ticks);
     /// The kilobytes `VmRSS` says, out of a process's `status`.
     static qint64 residentKb(const QByteArray &status);
+    /// The kilobytes `MemAvailable` says, out of `/proc/meminfo`.
+    static qint64 availableKb(const QByteArray &meminfo);
     /// One open file's `fdinfo`: the DRM client it belongs to, or empty,
     /// and the nanoseconds each engine was busy for it.
     static QString drmClient(const QByteArray &fdinfo, QHash<QString, qint64> *engines);
@@ -68,4 +74,5 @@ private:
     double m_cpu = 0;
     double m_gpu = -1;
     double m_ram = 0;
+    double m_free = 0;
 };

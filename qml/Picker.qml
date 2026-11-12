@@ -3001,14 +3001,36 @@ ApplicationWindow {
                     property: "watching"
                     value: picker.usage && picker.statusBar && picker.visible
                 }
-                Label {
+                // Each name in the accent and its value beside it, a bar
+                // between them: one line of grey figures read as one blur.
+                RowLayout {
                     visible: picker.usage
-                    text: qsTr("CPU %1 %  ·  GPU %2  ·  RAM %3 MB")
-                              .arg(Usage.cpu.toFixed(1))
-                              .arg(Usage.gpu < 0 ? qsTr("n/a") : Usage.gpu.toFixed(0) + " %")
-                              .arg(Usage.ram.toFixed(0))
-                    font.features: { "tnum": 1 }
-                    opacity: 0.8
+                    spacing: 6
+
+                    component Name: Label {
+                        color: picker.palette.highlight
+                        font.weight: Font.Bold
+                    }
+                    component Figure: Label {
+                        font.features: { "tnum": 1 }
+                    }
+                    component Bar: Label {
+                        text: "|"
+                        opacity: 0.35
+                    }
+
+                    Name { text: qsTr("CPU") }
+                    Figure { text: Usage.cpu.toLocaleString(Qt.locale(), "f", 1) + " %" }
+                    Bar {}
+                    Name { text: qsTr("GPU") }
+                    Figure { text: Usage.gpu < 0 ? qsTr("n/a") : Usage.gpu.toFixed(0) + " %" }
+                    Bar {}
+                    Name { text: qsTr("RAM") }
+                    Figure {
+                        // WallFlux's own, then what the machine has left.
+                        text: qsTr("%1 MB / %2 GB free").arg(Usage.ram.toFixed(0))
+                                  .arg((Usage.free / 1024).toLocaleString(Qt.locale(), "f", 1))
+                    }
                 }
 
                 RoundedTool {
