@@ -171,6 +171,7 @@ Item {
             // with the name in its own type underneath.
             visible: tile.label !== ""
             text: tile.label
+            textFormat: Text.PlainText   // off the workshop: never HTML
             elide: Text.ElideRight
             maximumLineCount: 1
             font.weight: Font.DemiBold

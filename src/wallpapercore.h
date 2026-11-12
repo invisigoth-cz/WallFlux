@@ -313,6 +313,16 @@ public:
     /// group in the locale's own order.
     static bool readsBefore(const QString &a, const QString &b);
 
+    /// Whether a property's `condition` holds, with `values` its settings
+    /// by name. The condition is the author's JavaScript, and running it
+    /// would run a stranger's code inside this window, which can delete
+    /// wallpapers and talk to Steam -- so it is read as the small language
+    /// every condition in the library is written in instead: `name.value`,
+    /// numbers, strings, true and false, the comparisons, `!`, `&&`, `||`,
+    /// brackets and `startsWith`, `endsWith` and `includes`. Anything else,
+    /// or a name nothing declares, is "shown", as a JavaScript error was.
+    Q_INVOKABLE static bool holds(const QString &condition, const QVariantMap &values);
+
 signals:
     void wallpapersChanged();
     void currentChanged();

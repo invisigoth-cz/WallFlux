@@ -172,6 +172,7 @@ Rectangle {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             text: panel.title
+            textFormat: Text.PlainText   // off the workshop: never HTML
             font.pixelSize: 15
             font.weight: Font.Bold
             wrapMode: Text.Wrap
@@ -258,6 +259,7 @@ Rectangle {
                         Label {
                             Layout.fillWidth: true
                             text: panel.author ? panel.author.name : ""
+                            textFormat: Text.PlainText   // off the workshop: never HTML
                             color: panel.palette.highlight
                             elide: Text.ElideRight
                         }
@@ -328,6 +330,7 @@ Rectangle {
                                 Layout.maximumWidth: told.width * 0.55
                                 horizontalAlignment: Text.AlignRight
                                 text: fact.modelData.value
+                                textFormat: Text.PlainText   // off the workshop: never HTML
                                 wrapMode: Text.Wrap
                             }
                         }

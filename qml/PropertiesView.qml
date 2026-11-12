@@ -57,28 +57,21 @@ ColumnLayout {
         return set !== undefined ? set : (panel.declared[name] || {}).value;
     }
 
-    /// Whether a setting's condition holds. One that cannot be worked out --
-    /// a name nothing declares, a typo -- is shown rather than lost.
+    /// Whether a setting's condition holds. Read in C++, never run: the
+    /// condition comes off the workshop, and run here it could do anything
+    /// this window can. One that cannot be read is shown rather than lost.
     function shown(entry) {
-        if (!entry.condition)
-            return true;
-        const names = Object.keys(panel.declared);
-        try {
-            // The condition is the author's JavaScript, run with each
-            // setting as `{ value }` under its own name.
-            // qmllint disable literal-constructor
-            const test = new Function(...names, "return (" + entry.condition + ");");
-            // qmllint enable literal-constructor
-            return !!test(...names.map(n => ({ value: panel.now(n) })));
-        } catch (e) {
-            return true;
-        }
+        const values = {};
+        for (const name of Object.keys(panel.declared))
+            values[name] = panel.now(name);
+        return Wallpapers.holds(String(entry.condition || ""), values);
     }
 
     /// Authors write labels as HTML with line breaks around them; the
     /// breaks at either end only push the words away from the control.
     function label(text) {
         return Tags.phrase(String(text || ""), panel.catalogue)
+            .replace(/<img\b[^>]*>/gi, "")
             .replace(/^(\s|<br\s*\/?>)+|(\s|<br\s*\/?>)+$/gi, "");
     }
 

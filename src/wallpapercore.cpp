@@ -23,6 +23,7 @@
 #include <QLoggingCategory>
 
 #include <algorithm>
+#include <functional>
 #include <optional>
 
 Q_LOGGING_CATEGORY(lcScan, "wallflux.scan")
@@ -299,7 +300,249 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     return wallpaper;
 }
 
+/// A property's condition, read rather than run: see `WallpaperCore::holds`.
+/// Recursive descent over JavaScript's own precedence -- `||` under `&&`
+/// under `!` under a comparison -- with its loose and strict equality.
+class Condition
+{
+public:
+    Condition(const QString &text, const QVariantMap &values)
+        : m_text(text)
+        , m_values(values)
+    {
+    }
+
+    /// The answer, or nothing when the text is not something this reads.
+    std::optional<bool> holds()
+    {
+        const QVariant answer = either();
+        skipSpace();
+        if (m_failed || m_at != m_text.size())
+            return std::nullopt;
+        return truthy(answer);
+    }
+
+private:
+    static bool isNumber(const QVariant &v)
+    {
+        return v.typeId() == QMetaType::Bool || v.typeId() == QMetaType::Int
+               || v.typeId() == QMetaType::Double || v.typeId() == QMetaType::LongLong;
+    }
+    static bool isText(const QVariant &v) { return v.typeId() == QMetaType::QString; }
+
+    static double asNumber(const QVariant &v)
+    {
+        if (isText(v)) {
+            const QString t = v.toString().trimmed();
+            bool ok = false;
+            const double d = t.isEmpty() ? 0 : t.toDouble(&ok);
+            return t.isEmpty() || ok ? d : qQNaN();
+        }
+        return v.isValid() ? v.toDouble() : qQNaN();
+    }
+
+    static bool truthy(const QVariant &v)
+    {
+        if (isText(v))
+            return !v.toString().isEmpty();
+        if (isNumber(v)) {
+            const double d = v.toDouble();
+            return d != 0 && !qIsNaN(d);
+        }
+        return false;
+    }
+
+    static bool strictlyEqual(const QVariant &a, const QVariant &b)
+    {
+        if (isText(a) || isText(b))
+            return isText(a) && isText(b) && a.toString() == b.toString();
+        const bool aBool = a.typeId() == QMetaType::Bool, bBool = b.typeId() == QMetaType::Bool;
+        if (aBool != bBool)
+            return false;
+        if (!a.isValid() || !b.isValid())
+            return a.isValid() == b.isValid();
+        return a.toDouble() == b.toDouble();
+    }
+
+    static bool looselyEqual(const QVariant &a, const QVariant &b)
+    {
+        if (!a.isValid() || !b.isValid())
+            return a.isValid() == b.isValid();
+        if (isText(a) && isText(b))
+            return a.toString() == b.toString();
+        return asNumber(a) == asNumber(b);
+    }
+
+    void skipSpace()
+    {
+        while (m_at < m_text.size() && m_text.at(m_at).isSpace())
+            ++m_at;
+    }
+
+    bool take(QLatin1StringView token)
+    {
+        skipSpace();
+        if (QStringView(m_text).mid(m_at).startsWith(token)) {
+            m_at += token.size();
+            return true;
+        }
+        return false;
+    }
+
+    QVariant fail()
+    {
+        m_failed = true;
+        return {};
+    }
+
+    QVariant either()
+    {
+        QVariant left = both();
+        while (!m_failed && take(QLatin1StringView("||"))) {
+            const QVariant right = both();
+            left = truthy(left) ? left : right;
+        }
+        return left;
+    }
+
+    QVariant both()
+    {
+        QVariant left = negated();
+        while (!m_failed && take(QLatin1StringView("&&"))) {
+            const QVariant right = negated();
+            left = truthy(left) ? right : left;
+        }
+        return left;
+    }
+
+    QVariant negated()
+    {
+        skipSpace();
+        if (m_at + 1 < m_text.size() && m_text.at(m_at) == QLatin1Char('!')
+            && m_text.at(m_at + 1) != QLatin1Char('=')) {
+            ++m_at;
+            return !truthy(negated());
+        }
+        return compared();
+    }
+
+    QVariant compared()
+    {
+        const QVariant left = single();
+        if (m_failed)
+            return {};
+        // Longest first, so that `===` is not read as `==` and a stray `=`.
+        if (take(QLatin1StringView("===")))
+            return strictlyEqual(left, single());
+        if (take(QLatin1StringView("!==")))
+            return !strictlyEqual(left, single());
+        if (take(QLatin1StringView("==")))
+            return looselyEqual(left, single());
+        if (take(QLatin1StringView("!=")))
+            return !looselyEqual(left, single());
+        const auto order = [&](auto compare) -> QVariant {
+            const QVariant right = single();
+            if (isText(left) && isText(right))
+                return compare(left.toString().compare(right.toString()), 0);
+            return compare(asNumber(left), asNumber(right));
+        };
+        if (take(QLatin1StringView("<=")))
+            return order(std::less_equal<>());
+        if (take(QLatin1StringView(">=")))
+            return order(std::greater_equal<>());
+        if (take(QLatin1StringView("<")))
+            return order(std::less<>());
+        if (take(QLatin1StringView(">")))
+            return order(std::greater<>());
+        return left;
+    }
+
+    QVariant single()
+    {
+        skipSpace();
+        if (m_at >= m_text.size())
+            return fail();
+        const QChar c = m_text.at(m_at);
+
+        if (c == QLatin1Char('(')) {
+            ++m_at;
+            const QVariant inside = either();
+            return take(QLatin1StringView(")")) ? inside : fail();
+        }
+        if (c == QLatin1Char('\'') || c == QLatin1Char('"')) {
+            const qsizetype end = m_text.indexOf(c, m_at + 1);
+            if (end < 0)
+                return fail();
+            const QString text = m_text.mid(m_at + 1, end - m_at - 1);
+            m_at = end + 1;
+            return text;
+        }
+        if (c.isDigit() || c == QLatin1Char('-') || c == QLatin1Char('.')) {
+            qsizetype end = m_at + 1;
+            while (end < m_text.size() && (m_text.at(end).isDigit() || m_text.at(end) == QLatin1Char('.')))
+                ++end;
+            bool ok = false;
+            const double number = m_text.mid(m_at, end - m_at).toDouble(&ok);
+            if (!ok)
+                return fail();
+            m_at = end;
+            return number;
+        }
+        if (!c.isLetter() && c != QLatin1Char('_') && c != QLatin1Char('$'))
+            return fail();
+
+        const QString name = word();
+        if (name == QLatin1StringView("true"))
+            return true;
+        if (name == QLatin1StringView("false"))
+            return false;
+        if (!m_values.contains(name) || !take(QLatin1StringView(".value")))
+            return fail();
+        const QVariant value = m_values.value(name);
+
+        if (!take(QLatin1StringView(".")))
+            return value;
+        const QString method = word();
+        if (!take(QLatin1StringView("(")))
+            return fail();
+        const QString argument = single().toString();
+        if (m_failed || !take(QLatin1StringView(")")))
+            return fail();
+        const QString self = value.toString();
+        if (method == QLatin1StringView("startsWith"))
+            return self.startsWith(argument);
+        if (method == QLatin1StringView("endsWith"))
+            return self.endsWith(argument);
+        if (method == QLatin1StringView("includes"))
+            return self.contains(argument);
+        return fail();
+    }
+
+    QString word()
+    {
+        skipSpace();
+        const qsizetype start = m_at;
+        while (m_at < m_text.size()
+               && (m_text.at(m_at).isLetterOrNumber() || m_text.at(m_at) == QLatin1Char('_')
+                   || m_text.at(m_at) == QLatin1Char('$')))
+            ++m_at;
+        return m_text.mid(start, m_at - start);
+    }
+
+    const QString m_text;
+    const QVariantMap m_values;
+    qsizetype m_at = 0;
+    bool m_failed = false;
+};
+
 } // namespace
+
+bool WallpaperCore::holds(const QString &condition, const QVariantMap &values)
+{
+    if (condition.trimmed().isEmpty())
+        return true;
+    return Condition(condition, values).holds().value_or(true);
+}
 
 /// What ffprobe printed, read back.
 ///

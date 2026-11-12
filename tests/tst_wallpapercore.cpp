@@ -70,6 +70,7 @@ class TestWallpaperCore : public QObject
 private slots:
     void leavesOutWhatOnlyEastAsiaReads();
     void putsLettersBeforeDigitsBeforeTheRest();
+    void readsAConditionWithoutRunningIt();
     void drawsAPresetAsTheWallpaperItSitsOn();
     void listsWhatComesWithWallpaperEngine();
     void hidesOneOfWallpaperEnginesOwn();
@@ -549,6 +550,40 @@ void TestWallpaperCore::leavesOutWhatOnlyEastAsiaReads()
     // Untouched where there is nothing to leave out.
     QCOMPARE(WallpaperCore::readable(QStringLiteral("DOOM -- Eternal (4K)")),
              QStringLiteral("DOOM -- Eternal (4K)"));
+}
+
+void TestWallpaperCore::readsAConditionWithoutRunningIt()
+{
+    const QVariantMap values{{QStringLiteral("mode"), 3},
+                             {QStringLiteral("on"), true},
+                             {QStringLiteral("off"), false},
+                             {QStringLiteral("style"), 1},
+                             {QStringLiteral("effect"), QStringLiteral("rainbowwave")},
+                             {QStringLiteral("empty"), QString()}};
+    const auto holds = [&](const char *c) { return WallpaperCore::holds(QString::fromUtf8(c), values); };
+
+    // What the library's own conditions look like.
+    QVERIFY(holds("mode.value == 3"));
+    QVERIFY(!holds("mode.value == 2"));
+    QVERIFY(holds("on.value == true && mode.value != 1"));
+    QVERIFY(!holds("off.value == true || mode.value === 2"));
+    QVERIFY(holds("(mode.value == 2 && on.value) || (mode.value == 3 && off.value == false )"));
+    QVERIFY(holds("style.value=='1'"));      // loose: a number and its digits
+    QVERIFY(!holds("style.value==='1'"));    // strict: not the same type
+    QVERIFY(holds("effect.value.startsWith('rainbow') === true"));
+    QVERIFY(holds("effect.value.endsWith(\"wave\")"));
+    QVERIFY(!holds("effect.value.endsWith('spiral') === true"));
+    QVERIFY(holds("mode.value > 0 && mode.value <= 3"));
+    QVERIFY(holds("!off.value"));
+    QVERIFY(!holds("empty.value != ''"));
+    QVERIFY(!holds("on.value === 1"));
+
+    // Anything else is shown, as an error was -- and never run.
+    QVERIFY(holds(""));
+    QVERIFY(holds("unknown.value == 3"));
+    QVERIFY(holds("Wallpapers.discard('1')"));
+    QVERIFY(holds("mode.value == 3; Qt.quit()"));
+    QVERIFY(holds("mode.value.constructor('return 1')()"));
 }
 
 void TestWallpaperCore::putsLettersBeforeDigitsBeforeTheRest()

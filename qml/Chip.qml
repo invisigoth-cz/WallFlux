@@ -27,6 +27,7 @@ Control {
 
     contentItem: Label {
         text: chip.label
+        textFormat: Text.PlainText   // off the workshop: never HTML
         font.pixelSize: 12
         verticalAlignment: Text.AlignVCenter
         // A chip is as wide as the panel now, so a long name has room --
