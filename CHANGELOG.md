@@ -6,6 +6,14 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.1] — 2026-11-12
+
+### Changed
+
+- **Following the music, its sensitivity and what to do while another
+  program plays sound** are in Settings › Audio, beside the volume.
+- **The workshop's single page arrows** match the double ones.
+
 ## [0.38.0] — 2026-11-12
 
 ### Added
@@ -1548,7 +1556,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.38.1...HEAD
+[0.38.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.3...v0.38.0
 [0.37.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.2...v0.37.3
 [0.37.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.1...v0.37.2

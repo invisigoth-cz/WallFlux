@@ -193,8 +193,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **Name order is Latin letters, then digits, then the rest**
   (`WallpaperCore::readsBefore`), each group in the locale's order.
 - **What the wallpaper does when it is not wanted is Wallpaper Engine's
-  four** (12 November, Settings › Performance): keep playing, mute, pause or
-  stop, for a covering window, another program with the keyboard, another
+  four** (12 November; Settings › Audio for another program's sound, with
+  following the music and its sensitivity, and Performance for the rest):
+  keep playing, mute, pause or stop, for a covering window, another program with the keyboard, another
   program's sound (no stop) and the screens off or locked. `reasons` in
   `Main.qml`; Stop takes the first screen's `showing*` away, so the scene,
   video or page is freed and loaded again from the start. They replaced
@@ -2078,7 +2079,11 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   read as "the package is missing my change" before the method was
   suspected.
 - **`qmllint` is not in `PATH`** on this machine; it is
-  `/usr/lib/qt6/bin/qmllint`.
+  `/usr/lib/qt6/bin/qmllint`. Linting the files in `qml/` warns once, that
+  `Look` is a singleton not declared in a qmldir: there is none in the
+  source folder, and the module CMake builds declares it. Everything else
+  should be clean -- `Application.screens` and `Application.font`, not
+  `Qt.application`'s, which the linter does not know.
 - **A `GridView` puts `currentIndex` back to nought whenever its model
   changes**, and this grid's model is a fresh array every time anything
   about any wallpaper changes -- a video answering with its size, Steam
@@ -2543,7 +2548,7 @@ alone is enough and this problem does not exist.
 
 ```sh
 cmake --build build && ctest --test-dir build --output-on-failure
-/usr/lib/qt6/bin/qmllint -I build/ qml/Main.qml qml/Picker.qml
+/usr/lib/qt6/bin/qmllint -I build/ qml/*.qml   # one warning is expected, below
 cargo test --offline     # the scene renderer, when crates/ was touched
 ```
 
