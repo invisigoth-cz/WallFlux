@@ -791,13 +791,11 @@ ApplicationWindow {
             told.push({ label: qsTr("Sound of its own"), icon: "audio-volume-high",
                         value: one.hasSound ? qsTr("Yes") : qsTr("No") });
         const grade = picker.compatibility(one);
-        const left = (picker.tried[one.id] || { why: [] }).why.length;
         told.push({ label: qsTr("Compatibility"),
                     icon: grade === "perfect" ? "emblem-success"
                         : grade === "minor" ? "emblem-warning"
                         : grade === "broken" ? "emblem-error" : "emblem-question",
-                    value: picker.compatibilityName(grade, language)
-                           + (grade === "minor" ? " " + qsTr("(%n part(s) left out)", "", left) : "") });
+                    value: picker.compatibilityName(grade, language) });
         if (picker.fromWorkshop(one))
             told.push({ label: qsTr("Workshop id"), icon: "documentinfo", value: one.id });
         return told;
@@ -2761,7 +2759,7 @@ ApplicationWindow {
 
                         below: PropertiesView {
                             Layout.fillWidth: true
-                            Layout.topMargin: 12
+                            Layout.topMargin: 20
                             Layout.bottomMargin: 10
                             wallpaper: picker.inspected
                             values: picker.inspected ? (picker.propertiesOf[picker.inspected.id] || {}) : {}

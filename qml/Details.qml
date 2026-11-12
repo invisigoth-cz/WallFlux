@@ -42,9 +42,9 @@ Rectangle {
 
     /// Whatever can be done about this one. One button, so far.
     default property alias actions: doing.data
-    /// Whatever goes under the author, scrolled with the list: the
-    /// wallpaper's own settings, in the library -- what can be changed
-    /// before what is merely so.
+    /// Whatever goes under the tags, scrolled with the list: the
+    /// wallpaper's own settings, in the library -- under what it is, the
+    /// user's order of 12 November.
     property alias below: under.data
 
     /// Asked for when somebody wants the rest of this author's work.
@@ -273,13 +273,6 @@ Rectangle {
                     }
                 }
 
-                ColumnLayout {
-                    id: under
-
-                    Layout.fillWidth: true
-                    spacing: 0
-                }
-
                 Item {
                     // Only where there is a button over it to step down
                     // from.
@@ -398,6 +391,13 @@ Rectangle {
                             }
                         }
                     }
+                }
+
+                ColumnLayout {
+                    id: under
+
+                    Layout.fillWidth: true
+                    spacing: 0
                 }
             }
         }
