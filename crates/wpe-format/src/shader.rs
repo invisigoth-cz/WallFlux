@@ -472,7 +472,13 @@ fn include_name(line: &str) -> Option<&str> {
 ///
 /// A pass over statements rather than a parser: what it cannot read as one of
 /// those three it leaves alone, and the compiler says so.
+///
+/// And `max(0, v)` becomes `max(v, 0.0)`, `min` likewise: HLSL spreads the
+/// number over the vector, GLSL has only the vector-and-number way round.
+/// Lightning Thunderstorm's `pulse` wrote `max(0, albedo.rgb)`.
 pub fn spell_out_conversions(source: &str) -> String {
+    let turned = number_last(source);
+    let source = turned.as_str();
     let mut types: BTreeMap<String, &'static str> = BTreeMap::new();
     let mut returns: Option<&'static str> = None;
     let mut out = String::with_capacity(source.len() + source.len() / 8);
@@ -502,6 +508,57 @@ pub fn spell_out_conversions(source: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// `max(<number>, x)` and `min(<number>, x)` turned round, the number a float.
+fn number_last(source: &str) -> String {
+    let mut out = String::with_capacity(source.len());
+    let mut rest = source;
+    while let Some(at) = rest.find(['m']) {
+        let (before, here) = rest.split_at(at);
+        out.push_str(before);
+        let named = ["max(", "min("].iter().find(|f| here.starts_with(**f));
+        let starts_a_word = !out.ends_with(|c: char| c.is_alphanumeric() || c == '_');
+        if let (Some(function), true) = (named, starts_a_word)
+            && let Some(turned) = turned_round(&here[4..])
+        {
+            out.push_str(&function[..3]);
+            out.push('(');
+            out.push_str(&turned.0);
+            rest = &here[4 + turned.1..];
+            continue;
+        }
+        out.push('m');
+        rest = &here[1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// After `max(`: a number, a comma and one more argument up to the closing
+/// bracket, handed back the other way round with how much of `after` it took.
+fn turned_round(after: &str) -> Option<(String, usize)> {
+    let comma = after.find(',')?;
+    let number = after[..comma].trim();
+    let digits = number.trim_end_matches(['f', 'F']);
+    if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return None;
+    }
+    let mut depth = 0;
+    for (i, c) in after[comma + 1..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ',' if depth == 0 => return None,
+            ')' if depth == 0 => {
+                let other = after[comma + 1..comma + 1 + i].trim();
+                let float = if digits.contains('.') { digits.to_owned() } else { format!("{digits}.0") };
+                return Some((format!("{other}, {float})"), comma + 1 + i + 1));
+            }
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// The next `;`, `{` or `}` that is not in a `//` comment.
@@ -757,6 +814,16 @@ mod tests {
         let (out, _) = preprocess(source, Stage::Fragment, &combos, none);
         assert!(out.contains("#define BLENDMODE 2"));
         assert!(!out.contains("#define BLENDMODE 9"));
+    }
+
+    #[test]
+    fn a_number_first_in_max_or_min_goes_last() {
+        assert_eq!(number_last("c = vec4(max(0, a.rgb), a.a);"), "c = vec4(max(a.rgb, 0.0), a.a);");
+        assert_eq!(number_last("x = min(1.5f, f(y, z));"), "x = min(f(y, z), 1.5);");
+        // Left alone: already GLSL's way round, or not a number first.
+        assert_eq!(number_last("x = max(a, 0.0);"), "x = max(a, 0.0);");
+        assert_eq!(number_last("x = fmax(0, a);"), "x = fmax(0, a);");
+        assert_eq!(number_last("x = max(b, c);"), "x = max(b, c);");
     }
 
     #[test]

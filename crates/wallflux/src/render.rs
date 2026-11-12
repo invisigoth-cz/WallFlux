@@ -519,7 +519,7 @@ fn build_text(
         points: object.pointsize.value,
         size: object.size.map(|s| s.0),
         // Effect padding: nothing else has any room set aside for it.
-        padding: if object.effects.is_empty() { 0.0 } else { object.padding.value.max(0.0) },
+        padding: if object.effects.is_empty() { [0.0; 2] } else { object.padding.value.0.map(|p| p.max(0.0)) },
         across: Align::parse(&object.horizontalalign.value),
         down: Align::parse(&object.verticalalign.value),
         fill: brighter(object.color.value.0, object.brightness),
@@ -1271,6 +1271,21 @@ impl Scene {
         if let Some(scripts) = &scripts {
             skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
         }
+        // A script on the camera is not run: the value written beside it is
+        // what the camera gets.
+        let camera = &file.general;
+        for (name, bound) in [
+            ("camerashakeamplitude", &camera.camerashakeamplitude),
+            ("camerashakeroughness", &camera.camerashakeroughness),
+            ("camerashakespeed", &camera.camerashakespeed),
+            ("cameraparallaxamount", &camera.cameraparallaxamount),
+            ("cameraparallaxdelay", &camera.cameraparallaxdelay),
+            ("cameraparallaxmouseinfluence", &camera.cameraparallaxmouseinfluence),
+        ] {
+            if bound.script.is_some() {
+                skipped.push(format!("general/{name}: its script is not run yet"));
+            }
+        }
         let scene = Self {
             objects,
             quad,
@@ -1282,18 +1297,18 @@ impl Scene {
             bloom,
             videos,
             parallax: (file.general.cameraparallax.value
-                && file.general.cameraparallaxmouseinfluence != 0.0)
+                && file.general.cameraparallaxmouseinfluence.value != 0.0)
                 .then_some(Parallax {
-                    amount: file.general.cameraparallaxamount,
-                    delay: file.general.cameraparallaxdelay,
-                    influence: file.general.cameraparallaxmouseinfluence,
+                    amount: file.general.cameraparallaxamount.value,
+                    delay: file.general.cameraparallaxdelay.value,
+                    influence: file.general.cameraparallaxmouseinfluence.value,
                     aim: [0.0; 2],
                     drift: [0.0; 2],
                     eased_at: 0.0,
                 }),
             shake: file.general.camerashake.value.then_some(Shake {
-                amplitude: file.general.camerashakeamplitude,
-                speed: file.general.camerashakespeed,
+                amplitude: file.general.camerashakeamplitude.value,
+                speed: file.general.camerashakespeed.value,
             }),
             zoom: file.general.zoom,
             lighting: wpe_format::scene::Lighting::read(bytes),

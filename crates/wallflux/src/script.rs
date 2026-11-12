@@ -155,10 +155,23 @@ impl Scripts {
         let deadline = Rc::new(Cell::new(Instant::now() + DEADLINE));
         let watched = deadline.clone();
         runtime.set_interrupt_handler(Some(Box::new(move || Instant::now() > watched.get())));
-        runtime.set_loader(
-            BuiltinResolver::default().with_module("WEMath"),
-            BuiltinLoader::default().with_module("WEMath", WEMATH),
-        );
+        // WEMath is ours; WEColor and WEVector are read out of Wallpaper
+        // Engine's own install, as its shaders are -- they are its code, not
+        // ours to carry. Magical Orb imports WEColor and drew nothing of what
+        // its colour script does without it.
+        let mut resolver = BuiltinResolver::default().with_module("WEMath");
+        let mut loader = BuiltinLoader::default().with_module("WEMath", WEMATH);
+        if let Some(assets) = wpe_format::assets::Assets::locate() {
+            for (name, file) in
+                [("WEColor", "scripts/jsmodules/wecolor.js"), ("WEVector", "scripts/jsmodules/wevector.js")]
+            {
+                if let Some(code) = assets.get(file) {
+                    resolver = resolver.with_module(name);
+                    loader = loader.with_module(name, code);
+                }
+            }
+        }
+        runtime.set_loader(resolver, loader);
         let context = Context::full(&runtime)?;
 
         let layers = layers_json(file);

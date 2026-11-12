@@ -77,7 +77,8 @@ pub struct Style {
     /// The box the editor measured, if the file says.
     pub size: Option<[f32; 2]>,
     /// Room kept clear inside the box for the object's effects.
-    pub padding: f32,
+    /// Across and down.
+    pub padding: [f32; 2],
     pub across: Align,
     pub down: Align,
     pub fill: [f32; 3],
@@ -203,9 +204,9 @@ impl Face {
         // measured, and half of what is left of it inside the padding.
         let half: [f32; 2] = std::array::from_fn(|i| {
             let box_half = style.size.map_or(0.0, |size| size[i].abs() / 2.0);
-            box_half.max(measured[i] / 2.0 + style.padding).min(MOST_PIXELS / 2.0)
+            box_half.max(measured[i] / 2.0 + style.padding[i]).min(MOST_PIXELS / 2.0)
         });
-        let room = half.map(|h| (h - style.padding).max(0.0));
+        let room: [f32; 2] = std::array::from_fn(|i| (half[i] - style.padding[i]).max(0.0));
 
         let top = style.down.place(block, room[1]);
         let starts: Vec<f32> = widths.iter().map(|w| style.across.place(*w, room[0])).collect();
@@ -289,7 +290,7 @@ mod tests {
         Style {
             points: 18.0,
             size: None,
-            padding: 0.0,
+            padding: [0.0; 2],
             across: Align::Middle,
             down: Align::Middle,
             fill: [1.0; 3],
@@ -340,7 +341,7 @@ mod tests {
     #[test]
     fn an_aligned_text_has_its_edge_on_the_origin() {
         let Some(face) = face() else { return };
-        let boxed = Style { size: Some([1000.0, 200.0]), padding: 100.0, ..style() };
+        let boxed = Style { size: Some([1000.0, 200.0]), padding: [100.0; 2], ..style() };
         let right = face.draw("0", &Style { across: Align::End, ..boxed.clone() });
         assert!((right.anchor[0] - 0.4).abs() < 1e-3, "{:?}", right.anchor);
         let left = face.draw("0", &Style { across: Align::Start, ..boxed.clone() });
@@ -355,7 +356,7 @@ mod tests {
         let Some(face) = face() else { return };
         let padded = Style {
             size: Some([1000.0, 200.0]),
-            padding: 101.0,
+            padding: [101.0; 2],
             across: Align::Start,
             ..style()
         };
