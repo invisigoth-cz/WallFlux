@@ -217,7 +217,7 @@ Item {
                     visible: view.searching
                     text: view.sections[setting.home].name.toUpperCase()
                     font.pixelSize: 10
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Bold
                     font.letterSpacing: 0.8
                     color: setting.palette.highlight
                 }
@@ -228,7 +228,7 @@ Item {
                     Layout.fillWidth: true
                     text: setting.title
                     font.pixelSize: 15
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Bold
                 }
 
                 Label {
@@ -400,7 +400,7 @@ Item {
                     Layout.bottomMargin: 8
                     text: view.searching ? qsTr("Results") : view.sections[view.section].name
                     font.pixelSize: 26
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Bold
                 }
 
                 Label {
@@ -956,6 +956,8 @@ Item {
                     about: qsTr("• Steam has to be running, with Wallpaper Engine in your library.\n"
                                 + "• Discover is rows picked for you; See more opens a whole row. "
                                 + "Workshop is the whole catalogue, with search, filters, order and pages.\n"
+                                + "• Search finds words in names and descriptions, not authors; a "
+                                + "wallpaper's number or the link to its page finds that one.\n"
                                 + "• Click a wallpaper for its panel, then Download. Steam fetches it, "
                                 + "and a few seconds later it is in the library by itself.\n"
                                 + "• The author's button in the panel shows everything else they made.")

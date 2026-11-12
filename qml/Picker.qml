@@ -2157,7 +2157,7 @@ ApplicationWindow {
                     // are, and five tabs under one title would be a lie.
                     text: picker.sections[tabs.currentIndex].name
                     font.pixelSize: 30
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Bold
                 }
                 Label {
                     text: picker.sections[tabs.currentIndex].blurb
@@ -2332,7 +2332,7 @@ ApplicationWindow {
                                 text: qsTr("SORT BY")
                                 font.pixelSize: 11
                                 font.letterSpacing: 1.2
-                                font.weight: Font.DemiBold
+                                font.weight: Font.Bold
                                 opacity: 0.55
                             }
 

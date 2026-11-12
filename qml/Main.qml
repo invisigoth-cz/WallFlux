@@ -6,7 +6,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Window
-import Qt.labs.platform as Platform
 import WallFlux
 import "emblem.js" as Emblem
 
@@ -296,19 +295,11 @@ Item {
     // The only thing a person can click: the wallpapers are in the
     // background layer and transparent to input, so without this there
     // would be no way to reach the picker at all.
-    /// One row of the tray's Recent wallpapers: the `place`th chosen.
-    component RecentRow: Platform.MenuItem {
-        required property int place
-        readonly property string one: Wallpapers.recent[place] || ""
-        visible: one !== ""
-        text: picker.titleOf(one)
-        enabled: one !== Wallpapers.current.id
-        onTriggered: Wallpapers.select(one)
-    }
-
     /// The tray's Next and Previous: through the running playlist if there
     /// is one, and otherwise through the library in the order the grid
-    /// shows it, round from the end to the start.
+    /// shows it, round from the end to the start. Counted from the one on
+    /// show, or -- switched off, which leaves nothing on show -- from the one
+    /// played last, so that Next after Off is the next one and not the first.
     function step(by) {
         if (Playlists.playing !== "") {
             if (by > 0)
@@ -320,83 +311,61 @@ Item {
         const order = picker.shown.filter(w => w.playable);
         if (order.length === 0)
             return;
-        const at = order.findIndex(w => w.id === Wallpapers.current.id);
+        const from = Wallpapers.current.id || Wallpapers.recent[0] || "";
+        const at = order.findIndex(w => w.id === from);
         const to = at < 0 ? (by > 0 ? 0 : order.length - 1)
                           : (at + by + order.length) % order.length;
         Wallpapers.select(order[to].id);
     }
 
-    Platform.SystemTrayIcon {
+    Tray {
         visible: picker.tray
         // Ours, in the window's colours: the theme's target colours rather
         // than the ones easing towards them, or a change of theme would
         // send the panel a new picture every frame of the fade.
-        icon.source: {
+        svg: {
             const set = picker.theme === "system" ? picker.systemColours
                                                   : (picker.themes[picker.theme] || picker.themes.dark);
             const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
-            return Emblem.url(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
+            return Emblem.svg(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
         }
         tooltip: !Wallpapers.current.playable ? qsTr("WallFlux")
                  : root.paused ? qsTr("WallFlux — %1 (paused)").arg(Wallpapers.current.title)
                  : qsTr("WallFlux — %1").arg(Wallpapers.current.title)
 
-        onActivated: (reason) => {
-            if (reason === Platform.SystemTrayIcon.Trigger)
-                root.showPicker();
-        }
+        // Not one checkable item here: the words say the state. Recent is
+        // the last five chosen in this run, the one on show among them and
+        // greyed out; nothing of it is kept for the next start.
+        items: [
+            { id: "choose", text: qsTr("Choose wallpaper…") },
+            { separator: true },
+            { id: "pause", text: root.paused ? qsTr("Resume") : qsTr("Pause"),
+              icon: root.paused ? "media-playback-start" : "media-playback-pause",
+              enabled: root.playing },
+            { id: "previous", text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
+            { id: "next", text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
+            { id: "mute", text: picker.muted ? qsTr("Unmute") : qsTr("Mute"),
+              icon: picker.muted ? "audio-volume-high" : "audio-volume-muted" },
+            { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
+              enabled: Wallpapers.recent.length > 0,
+              submenu: Wallpapers.recent.slice(0, 5).map(id => ({
+                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== Wallpapers.current.id })) },
+            { separator: true },
+            { id: "quit", text: qsTr("Quit") }
+        ]
 
-        // Not one checkable item here: a checkable item ticks itself on a
-        // click, which breaks the binding saying whether it is ticked. The
-        // words say the state instead.
-        menu: Platform.Menu {
-            Platform.MenuItem {
-                text: qsTr("Choose wallpaper…")
-                onTriggered: root.showPicker()
-            }
-            Platform.MenuSeparator {}
-            Platform.MenuItem {
-                text: root.paused ? qsTr("Resume") : qsTr("Pause")
-                icon.name: root.paused ? "media-playback-start" : "media-playback-pause"
-                enabled: root.playing
-                onTriggered: root.paused = !root.paused
-            }
-            Platform.MenuItem {
-                text: qsTr("Previous wallpaper")
-                icon.name: "media-skip-backward"
-                onTriggered: root.step(-1)
-            }
-            Platform.MenuItem {
-                text: qsTr("Next wallpaper")
-                icon.name: "media-skip-forward"
-                onTriggered: root.step(1)
-            }
-            Platform.MenuItem {
-                text: picker.muted ? qsTr("Unmute") : qsTr("Mute")
-                icon.name: picker.muted ? "audio-volume-high" : "audio-volume-muted"
-                onTriggered: picker.muted = !picker.muted
-            }
-            Platform.Menu {
-                id: lately
-
-                title: qsTr("Recent wallpapers")
-                enabled: Wallpapers.recent.length > 0
-
-                // The last five chosen in this run, the one on show among
-                // them. Five rows that are there from the start and only
-                // shown or hidden: rows put into a tray's submenu later are
-                // a change of the menu's shape, which the panel has to be
-                // told about separately and is not always.
-                RecentRow { place: 0 }
-                RecentRow { place: 1 }
-                RecentRow { place: 2 }
-                RecentRow { place: 3 }
-                RecentRow { place: 4 }
-            }
-            Platform.MenuSeparator {}
-            Platform.MenuItem {
-                text: qsTr("Quit")
-                onTriggered: Qt.quit()
+        onClicked: root.showPicker()
+        onTriggered: (id) => {
+            switch (id) {
+            case "choose": root.showPicker(); break;
+            case "pause": root.paused = !root.paused; break;
+            case "previous": root.step(-1); break;
+            case "next": root.step(1); break;
+            case "mute": picker.muted = !picker.muted; break;
+            case "quit": Qt.quit(); break;
+            default:
+                if (id.startsWith("recent:"))
+                    Wallpapers.select(id.slice(7));
             }
         }
     }

@@ -269,6 +269,7 @@ private:
     quint64 (*m_createQuery)(void *, int, int, quint32, quint32, quint32) = nullptr;
     quint64 (*m_createUserQuery)(void *, quint32, int, int, int, quint32, quint32,
                                  quint32) = nullptr;
+    quint64 (*m_detailsQuery)(void *, quint64 *, quint32) = nullptr;
     quint64 (*m_sendQuery)(void *, quint64) = nullptr;
     bool (*m_queryResult)(void *, quint64, quint32, void *) = nullptr;
     bool (*m_previewUrl)(void *, quint64, quint32, char *, quint32) = nullptr;

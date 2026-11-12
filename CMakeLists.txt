@@ -135,6 +135,8 @@ qt_add_qml_module(wallflux
         src/compatibility.h
         src/compatibility.cpp
         src/webguard.h
+        src/tray.h
+        src/tray.cpp
 )
 
 # The Czech catalogue, compiled into the binary under /i18n -- which is where

@@ -633,7 +633,7 @@ Item {
             Label {
                 text: row.section.title
                 font.pixelSize: 17
-                font.weight: Font.DemiBold
+                font.weight: Font.Bold
             }
 
             RoundedButton {
@@ -754,7 +754,9 @@ Item {
                 id: searchField
 
                 Layout.preferredWidth: 300
-                placeholderText: qsTr("Search workshop…")
+                // Steam reads the words against titles and descriptions; a number
+                // or a pasted address is asked about directly (Steamworks).
+                placeholderText: qsTr("Name, ID or link…")
 
                 // Typing is not a question. Steam is asked once the typing
                 // stops, or at once if somebody presses return.
@@ -874,7 +876,7 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("The workshop is not available")
                 font.pixelSize: 20
-                font.weight: Font.DemiBold
+                font.weight: Font.Bold
             }
 
             Label {
@@ -1005,7 +1007,7 @@ Item {
                                 // arrow beside it says where it goes back to.
                                 text: workshop.section ? workshop.section.title : ""
                                 font.pixelSize: 17
-                                font.weight: Font.DemiBold
+                                font.weight: Font.Bold
                             }
 
                             Item { Layout.fillWidth: true }

@@ -3,6 +3,8 @@
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
 #include "steamworks.h"
+
+#include <QRegularExpression>
 #include "wallpapercore.h"
 
 #include <QFileInfo>
@@ -158,6 +160,19 @@ constexpr int UserSortByCreationDesc = 0; // k_EUserUGCListSortOrder_CreationOrd
 constexpr int RankedByTextSearch = 11;
 
 /// EUGCQuery, for the three orders the picker offers.
+/// The workshop item a search names outright, or nought: a number on its
+/// own, or the address of an item's page as Steam's own links write it
+/// (`...filedetails/?id=2880525500`).
+quint64 askedFor(const QString &search)
+{
+    static const QRegularExpression number(QStringLiteral(R"(^\s*(\d{6,20})\s*$)"));
+    static const QRegularExpression page(QStringLiteral(R"(steamcommunity\.com/.*[?&]id=(\d{6,20}))"));
+    QRegularExpressionMatch found = number.match(search);
+    if (!found.hasMatch())
+        found = page.match(search);
+    return found.hasMatch() ? found.captured(1).toULongLong() : 0;
+}
+
 int ugcOrder(Steamworks::Order order)
 {
     switch (order) {
@@ -241,6 +256,8 @@ bool Steamworks::open()
     WALLFLUX_RESOLVE(m_createUserQuery,
                      quint64 (*)(void *, quint32, int, int, int, quint32, quint32, quint32),
                      "SteamAPI_ISteamUGC_CreateQueryUserUGCRequest");
+    WALLFLUX_RESOLVE(m_detailsQuery, quint64 (*)(void *, quint64 *, quint32),
+                     "SteamAPI_ISteamUGC_CreateQueryUGCDetailsRequest");
     WALLFLUX_RESOLVE(m_sendQuery, quint64 (*)(void *, quint64),
                      "SteamAPI_ISteamUGC_SendQueryUGCRequest");
     WALLFLUX_RESOLVE(m_queryResult, bool (*)(void *, quint64, quint32, void *),
@@ -272,7 +289,7 @@ bool Steamworks::open()
 
     if (!initSafe || !steamUser || !findInterface || !dispatchInit || !steamPipe || !m_runFrame
         || !m_nextCallback || !m_freeCallback || !m_callResult || !m_createQuery
-        || !m_createUserQuery || !m_sendQuery
+        || !m_createUserQuery || !m_detailsQuery || !m_sendQuery
         || !m_queryResult || !m_previewUrl || !m_releaseQuery || !m_subscribe
         || !m_unsubscribe || !m_downloadItem || !m_downloadInfo || !m_requireTag || !m_excludeTag
         || !m_searchText || !m_addFavorite || !m_removeFavorite) {
@@ -403,12 +420,20 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     const quint32 app = QByteArrayView(WallpaperEngineAppId).toByteArray().toUInt();
     const quint32 at = static_cast<quint32>(qMax(1, page));
 
+    bool named = false;
     if (order == MyFavorites) {
         // The account's own list, which -- like an author's -- is a
         // question about one account rather than a ranking of all.
         m_query = m_createUserQuery(m_ugc, static_cast<quint32>(m_self & 0xFFFFFFFFULL),
                                     UserListFavorited, MatchingAll, UserSortByCreationDesc,
                                     app, app, at);
+    } else if (quint64 id = askedFor(search); creator.isEmpty() && id != 0) {
+        // Steam's text search reads titles and descriptions and has never
+        // heard of an item's number, so a number -- or the address of an
+        // item's page, pasted -- is asked about directly. Tags and Anime
+        // mean nothing here: this one was named.
+        m_query = m_detailsQuery(m_ugc, &id, 1);
+        named = true;
     } else if (creator.isEmpty()) {
         const int ranking = search.isEmpty() ? ugcOrder(order) : RankedByTextSearch;
         m_query = m_createQuery(m_ugc, ranking, MatchingItemsReadyToUse, 0, app, at);
@@ -429,13 +454,13 @@ void Steamworks::browse(const QString &key, Steamworks::Order order, int page,
     }
 
     // Narrowing has to be said before the question is sent, never after.
-    for (const QString &tag : tags) {
+    for (const QString &tag : named ? QStringList() : tags) {
         if (tag.startsWith(u'-'))
             m_excludeTag(m_ugc, m_query, tag.mid(1).toUtf8().constData());
         else
             m_requireTag(m_ugc, m_query, tag.toUtf8().constData());
     }
-    if (!search.isEmpty())
+    if (!search.isEmpty() && !named)
         m_searchText(m_ugc, m_query, search.toUtf8().constData());
 
     m_call = m_sendQuery(m_ugc, m_query);

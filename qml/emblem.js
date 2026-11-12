@@ -10,8 +10,7 @@
 // The shape is icons/wallflux.svg's, which is what is installed for the
 // application menu; change one, change the other.
 //
-// Handed back as a data URL, which the tray takes as it takes a file:
-// measured, Plasma got the 64 by 64 picture through StatusNotifierItem.
+// Handed back as SVG text, which Tray draws at each size a panel asks for.
 
 function hex(c) {
     const two = v => ("0" + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2);
@@ -37,7 +36,7 @@ function turned(c, turn) {
 
 /// `set` is one of the picker's themes ({ dark, window, base, highlight })
 /// and `accent` the chosen colour, both as QML colours.
-function url(set, accent) {
+function svg(set, accent) {
     const dark = set.dark;
     const ink = { r: accent.r, g: accent.g, b: accent.b };
     // The tile: the theme's own ground, a little of the accent in it, and
@@ -49,7 +48,7 @@ function url(set, accent) {
     // On a light tile the start is not lightened, or it would vanish.
     const from = dark ? mix(ink, { r: 1, g: 1, b: 1 }, 0.3) : ink;
     const to = turned(accent, 0.1);
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">'
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">'
         + '<defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="1">'
         + '<stop offset="0" stop-color="' + hex(top) + '"/><stop offset="1" stop-color="' + hex(bottom) + '"/>'
         + '</linearGradient><linearGradient id="s" x1="0" y1="1" x2="1" y2="0">'
@@ -61,5 +60,4 @@ function url(set, accent) {
         + '/>'
         + '<path d="M13 20 L22 45 L32 26 L42 45 L51 20" fill="none" stroke="url(#s)" stroke-width="6.5" '
         + 'stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }

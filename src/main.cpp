@@ -91,9 +91,8 @@ int main(int argc, char *argv[])
     if (argc > 1 && qstrcmp(argv[1], "--grade") == 0)
         return Compatibility::grade(argc, argv);
 
-    // QApplication rather than QGuiApplication: Qt.labs.platform, which the
-    // tray icon comes from, falls back to the Qt Widgets tray where the
-    // desktop has no native one of its own, and that fallback needs this.
+    // QApplication rather than QGuiApplication: the tray icon and its menu
+    // are Qt Widgets' (Tray), which need it.
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wallflux"));
     // Read in QML as `Application.version`, which is what the footer's
