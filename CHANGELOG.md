@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.37.3] — 2026-11-12
+
+### Security
+
+- **An update is installed only if it is the file GitHub published**: its
+  SHA-256 is checked after the download and again with administrator
+  rights, on a copy nothing else can touch, before it is installed.
+- **A wallpaper's videos are opened as videos and nothing else**: no
+  network, no other files, and a "video" that is not one is not played.
+- **Only KWin can tell WallFlux that a window covers the desktop** or where
+  the mouse is; other programs' calls are refused.
+- **A web wallpaper cannot open other programs** through links such as
+  `steam://` or `mailto:`.
+
 ## [0.37.2] — 2026-11-12
 
 ### Changed
@@ -1510,7 +1524,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.3...HEAD
+[0.37.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.2...v0.37.3
 [0.37.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.1...v0.37.2
 [0.37.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.0...v0.37.1
 [0.37.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.36.0...v0.37.0

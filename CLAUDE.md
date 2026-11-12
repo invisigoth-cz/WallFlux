@@ -217,6 +217,24 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   singleton -- and a web wallpaper may fetch `file://` only under the
   wallpapers' folders (`WallpaperFilesOnly`, `src/webguard.h`); measured, a
   page read `/etc/hostname` before. Workshop text is `Text.PlainText`.
+  **Hardened further on 12 November, at the user's asking** ("somebody who
+  downloads it and tries"): the update is taken only from github.com with
+  GitHub's SHA-256 (`digest` in the release answer), checked after the
+  download and again by root on a copy root alone can write, before pacman
+  -- tested with a fake pacman, a wrong sum stops it; the release page opens
+  only on github.com; ffmpeg and ffprobe are told `-protocol_whitelist file`
+  and a video `-format_whitelist`, and a video wallpaper whose file does not
+  begin as a container does is not played (`looksLikeVideo`), since Qt's
+  player cannot be told the same; the KWin callbacks on the session bus
+  answer KWin's connection only (`fromKWin`, measured: a spoofed
+  `setCovered` from busctl refused); the single-copy socket is the user's
+  only; a page may navigate to file, http(s), data, blob and about and no
+  other scheme. Measured as already safe: today's ffmpeg refuses an HLS or
+  concat list disguised as `.mp4` by itself; Chromium launches no external
+  scheme without a click, and a wallpaper gets none; the web renderer runs
+  under seccomp; package and texture sizes are capped. Still standing: a
+  release is trusted as GitHub serves it (signing would close that), and
+  ffmpeg, QuickJS and Chromium are as safe as their own code.
 - **A Settings tab, laid out as a desktop's settings are now** (the user's
   sections of 9 November, after linux-wallpaper-engine-ux): a search and the
   sections down the left, the section's name large over one card to a
