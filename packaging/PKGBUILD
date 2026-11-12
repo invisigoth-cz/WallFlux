@@ -83,6 +83,15 @@ prepare() {
 
 build() {
     export RUSTUP_TOOLCHAIN=stable
+    # A package is for any x86-64, not for the machine it was built on:
+    # CachyOS's makepkg.conf says -march=native and target-cpu=native, which
+    # built for a Ryzen 5900X and would not start on an older processor.
+    # x86-64-v2 is every x86-64 since about 2009 (SSE4.2, POPCNT) -- an AMD
+    # A8-6410 among them, which has no AVX2 and so is not v3.
+    CFLAGS="${CFLAGS//-march=native/-march=x86-64-v2 -mtune=generic}"
+    CXXFLAGS="${CXXFLAGS//-march=native/-march=x86-64-v2 -mtune=generic}"
+    RUSTFLAGS="${RUSTFLAGS//target-cpu=native/target-cpu=x86-64-v2}"
+    export CFLAGS CXXFLAGS RUSTFLAGS
     cmake -S "$pkgname" -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=None \
         -DCMAKE_INSTALL_PREFIX=/usr \
