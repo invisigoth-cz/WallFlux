@@ -140,8 +140,15 @@ class SceneSounds : public QObject
     QML_ELEMENT
     QML_SINGLETON
 
+    /// How strongly the music is heard by everything that follows it, one
+    /// being Wallpaper Engine's default recording volume.
+    Q_PROPERTY(double gain READ gain WRITE setGain NOTIFY gainChanged)
+
 public:
     explicit SceneSounds(QObject *parent = nullptr);
+
+    double gain() const { return m_gain; }
+    void setGain(double gain);
 
     /// What the scene at `source` -- its `scene.pkg` -- plays: a list of
     /// `{ files, mode, volume, mintime, maxtime, startsilent }`, one per
@@ -156,5 +163,11 @@ public:
     /// wants it: 64 bands of the left ear and 64 of the right, nought to one.
     /// Reading it is what keeps the renderer listening.
     Q_INVOKABLE QList<float> speakers() const;
+
+signals:
+    void gainChanged();
+
+private:
+    double m_gain = 1.0;
 };
 

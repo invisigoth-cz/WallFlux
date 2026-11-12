@@ -25,6 +25,10 @@ find_package(Qt6 6.5 QUIET COMPONENTS Test)
 # compositor's background layer. KDE ships it; so do the wlroots distributions.
 find_package(LayerShellQt REQUIRED)
 
+# Whether KWin has switched the screens off is said over Wayland only, in
+# its org_kde_kwin_dpms; KWayland is the client for it. See src/asleep.h.
+find_package(KWayland REQUIRED)
+
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(wallflux
@@ -137,6 +141,8 @@ qt_add_qml_module(wallflux
         src/webguard.h
         src/tray.h
         src/tray.cpp
+        src/asleep.h
+        src/asleep.cpp
 )
 
 # The Czech catalogue, compiled into the binary under /i18n -- which is where
@@ -204,6 +210,7 @@ target_compile_definitions(wallflux PRIVATE WALLFLUX_VERSION="${PROJECT_VERSION}
 
 target_link_libraries(wallflux PRIVATE
     LayerShellQt::Interface
+    Plasma::KWaylandClient
     Qt6::Core
     Qt6::DBus
     Qt6::Gui
@@ -217,8 +224,7 @@ target_link_libraries(wallflux PRIVATE
     Qt6::Quick
     Qt6::WebEngineCore
     Qt6::WebEngineQuick
-    # Only for the tray icon's fallback, which Qt.labs.platform needs linked
-    # whether or not this desktop ends up using it.
+    # The tray icon and its menu (Tray).
     Qt6::Widgets
     # The scene renderer.
     wallflux_scene

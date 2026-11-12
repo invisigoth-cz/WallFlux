@@ -39,7 +39,23 @@ Item {
     /// playing something, or a window pulled up to cover the wallpaper
     /// nobody can then see anyway. Neither is a setting -- what is left to
     /// choose is whether the wallpaper has sound at all.
-    readonly property bool silent: picker.muted || (picker.quietForOthers && OtherAudio.playing) || root.covered
+    readonly property bool silent: picker.muted || root.covered
+        || root.reasons.some(r => r.on && r.mode !== "keep")
+
+    /// What is happening that the wallpaper may answer, each with what
+    /// Settings › Performance says to do about it: "keep", "mute", "pause"
+    /// or "stop".
+    readonly property var reasons: [
+        { on: ScreenCover.covered, mode: picker.underWindow },
+        { on: ScreenCover.focused, mode: picker.forFocus },
+        { on: OtherAudio.playing, mode: picker.forOtherSound },
+        { on: Asleep.asleep, mode: picker.whenAsleep }
+    ]
+
+    /// Let go of altogether while one of those holds and was told Stop:
+    /// the first screen draws nothing, so the scene, the video or the page
+    /// is freed, and it is loaded again from the start afterwards.
+    readonly property bool stopped: root.reasons.some(r => r.on && r.mode === "stop")
 
     /// Whether the wallpaper is to stand still: a window filling the screen
     /// in front of it, another program with the keyboard where that was
@@ -55,8 +71,7 @@ Item {
     /// stopped along with the first; worth knowing before it is called a
     /// bug.
     readonly property bool covered: root.paused
-        || (ScreenCover.covered && picker.quietUnderWindows)
-        || (ScreenCover.focused && picker.pauseOnFocus)
+        || root.reasons.some(r => r.on && (r.mode === "pause" || r.mode === "stop"))
         || (Power.onBattery && Power.hasBattery && Power.percent < picker.batteryFloor)
 
     /// Paused from the tray: stood still and quiet as under a window, and
@@ -86,6 +101,13 @@ Item {
         target: Pointer
         property: "watching"
         value: root.showingScene && !root.covered && picker.mouse
+    }
+
+    // How strongly the music is heard, for scenes and pages alike.
+    Binding {
+        target: SceneSounds
+        property: "gain"
+        value: picker.musicGain / 100
     }
 
     // The window at the start only when the Settings tab says so; otherwise
@@ -134,9 +156,9 @@ Item {
             primary: index === 0
             mirrorOf: index === 0 ? null : root.firstPicture
             cloned: index === 0 && surfaces.count > 1
-            showingWeb: index === 0 && root.showingWeb
-            showingVideo: index === 0 && root.showingVideo
-            showingScene: index === 0 && root.showingScene
+            showingWeb: index === 0 && root.showingWeb && !root.stopped
+            showingVideo: index === 0 && root.showingVideo && !root.stopped
+            showingScene: index === 0 && root.showingScene && !root.stopped
             playing: root.playing
             silent: root.silent
             covered: root.covered
@@ -160,7 +182,7 @@ Item {
     // a player on every surface would play it as many times over as there
     // are monitors.
     Repeater {
-        model: root.showingScene ? SceneSounds.of(Wallpapers.current.source) : []
+        model: root.showingScene && !root.stopped ? SceneSounds.of(Wallpapers.current.source) : []
 
         delegate: SceneSound {
             required property var modelData

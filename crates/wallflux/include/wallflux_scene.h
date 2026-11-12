@@ -48,6 +48,9 @@ size_t wallflux_scene_skipped(const WallfluxScene *scene, char *out, size_t out_
  * (`half_textures`, which reaches only scenes loaded afterwards). */
 void wallflux_options(uint32_t fps, bool music, bool parallax, bool particles, uint32_t scaling,
                       bool bloom, bool half_textures);
+/* How strongly the music is heard: one is Wallpaper Engine's default
+ * recording volume, two twice as strong. Scenes and web wallpapers alike. */
+void wallflux_audio_gain(float gain);
 size_t wallflux_scene_sounds(const char *folder, const char *cache, char *out, size_t out_len);
 bool wallflux_scene_has_sound(const char *folder);
 void wallflux_speakers(float *out);

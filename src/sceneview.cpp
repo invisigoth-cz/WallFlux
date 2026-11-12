@@ -442,6 +442,15 @@ SceneSounds::SceneSounds(QObject *parent)
 {
 }
 
+void SceneSounds::setGain(double gain)
+{
+    if (qFuzzyCompare(gain, m_gain))
+        return;
+    m_gain = gain;
+    wallflux_audio_gain(float(gain));
+    emit gainChanged();
+}
+
 QList<float> SceneSounds::speakers() const
 {
     QList<float> bands(128);

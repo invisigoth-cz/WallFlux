@@ -39,6 +39,14 @@ impl Drop for WallfluxScene {
     }
 }
 
+/// How strongly the music is heard, one being Wallpaper Engine's default
+/// recording volume. Reaches scenes and web wallpapers alike, whose bands
+/// come from the same meter.
+#[unsafe(no_mangle)]
+pub extern "C" fn wallflux_audio_gain(gain: f32) {
+    crate::audio::set_gain(gain);
+}
+
 /// What the speakers are playing, listened to once for every scene on every
 /// screen, and only while a scene that follows the sound is being drawn --
 /// see `audio` for why. `None` where there is no sound server, and the

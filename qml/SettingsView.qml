@@ -41,6 +41,15 @@ Item {
         { name: qsTr("Controls"), icon: "help-contents" }
     ]
 
+    /// What the wallpaper can do when something else needs the screen or
+    /// the speakers, Wallpaper Engine's four; the words never reach a file.
+    readonly property var cases: [
+        { value: "keep", name: qsTr("Keep playing") },
+        { value: "mute", name: qsTr("Mute", "what the wallpaper does: one of four") },
+        { value: "pause", name: qsTr("Pause") },
+        { value: "stop", name: qsTr("Stop") }
+    ]
+
     /// Wallpaper Engine's presets, by the pictures a second each draws.
     readonly property var rates: [
         { value: 10, name: "10" },
@@ -136,6 +145,11 @@ Item {
         p.quietForOthers = true;
         p.quietUnderWindows = true;
         p.pauseOnFocus = false;
+        p.whenCovered = "pause";
+        p.whenOtherSound = "mute";
+        p.whenFocused = "keep";
+        p.whenAsleep = "pause";
+        p.musicGain = 100;
         p.checkUpdates = true;
         p.batteryLow = true;
         p.batteryFloor = 20;
@@ -612,42 +626,6 @@ Item {
                     }
                 }
 
-                Setting {
-                    home: 1
-                    title: qsTr("Pause sound while another program plays")
-                    about: qsTr("A video or a game with sound of its own quietens the wallpaper until it stops.")
-
-                    Toggle {
-                        value: view.picker.quietForOthers
-                        onChanged: (to) => view.picker.quietForOthers = to
-                    }
-                }
-
-                Setting {
-                    home: 1
-                    title: qsTr("Pause sound under a maximised window")
-                    about: qsTr("A window over the whole screen quietens and stops the wallpaper. "
-                                + "Off, it goes on playing behind the window, sound and all.")
-
-                    Toggle {
-                        value: view.picker.quietUnderWindows
-                        onChanged: (to) => view.picker.quietUnderWindows = to
-                    }
-                }
-
-                Setting {
-                    home: 1
-                    title: qsTr("Pause while another program is in use")
-                    about: qsTr("Whenever another program's window has the keyboard, however small "
-                                + "it is, the wallpaper stops and goes quiet; clicking the desktop "
-                                + "brings it back. This window does not count.")
-
-                    Toggle {
-                        value: view.picker.pauseOnFocus
-                        onChanged: (to) => view.picker.pauseOnFocus = to
-                    }
-                }
-
                 // Performance / Display.
 
                 Setting {
@@ -768,6 +746,38 @@ Item {
 
                 Setting {
                     home: 2
+                    title: qsTr("Sensitivity to music")
+                    about: qsTr("How strongly the wallpapers that follow the music hear it. 100 % is "
+                                + "Wallpaper Engine's own; quiet music wants more, loud music less.")
+
+                    RowLayout {
+                        spacing: 12
+                        enabled: view.picker.music
+                        opacity: enabled ? 1 : 0.45
+
+                        RoundSlider {
+                            id: gain
+
+                            implicitWidth: 240
+                            from: 0
+                            to: 400
+                            value: view.picker.musicGain
+                            stepSize: 10
+                            wheelEnabled: true
+                            onMoved: view.picker.musicGain = Math.round(gain.value)
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 52
+                            horizontalAlignment: Text.AlignRight
+                            text: view.picker.musicGain + " %"
+                            font.features: { "tnum": 1 }
+                        }
+                    }
+                }
+
+                Setting {
+                    home: 2
                     title: qsTr("Follow the mouse")
                     about: qsTr("Particles that move away from the pointer, light that goes where it goes.")
 
@@ -797,6 +807,61 @@ Item {
                     Toggle {
                         value: view.picker.particles
                         onChanged: (to) => view.picker.particles = to
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("When a window covers the screen")
+                    about: qsTr("A maximised or full-screen window. Pause stands the wallpaper still "
+                                + "and quiet; Stop lets go of it altogether, freeing its memory, and "
+                                + "loads it again when the window goes.")
+
+                    Choice {
+                        options: view.cases
+                        current: view.picker.underWindow
+                        onChosen: (value) => view.picker.whenCovered = value
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("When another program plays sound")
+                    about: qsTr("A video or a game with sound of its own. It comes back by itself "
+                                + "when the other program stops.")
+
+                    Choice {
+                        options: view.cases.slice(0, 3)
+                        current: view.picker.forOtherSound
+                        onChosen: (value) => view.picker.whenOtherSound = value
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("When you work in another program")
+                    about: qsTr("Whenever another program's window has the keyboard, however small "
+                                + "it is; clicking the desktop brings the wallpaper back. This "
+                                + "window does not count.")
+
+                    Choice {
+                        options: view.cases
+                        current: view.picker.forFocus
+                        onChosen: (value) => view.picker.whenFocused = value
+                    }
+                }
+
+                Setting {
+                    home: 2
+                    title: qsTr("When the screens are off or locked")
+                    about: qsTr("Every screen switched off by power saving, or the session locked: "
+                                + "nobody can see the wallpaper, and under the lock it would go on "
+                                + "playing its sound.")
+
+                    Choice {
+                        options: view.cases
+                        current: view.picker.whenAsleep
+                        onChosen: (value) => view.picker.whenAsleep = value
                     }
                 }
 
@@ -937,7 +1002,7 @@ Item {
                 // each line one thing to do.
 
                 Guide {
-                    glyph: "download"
+                    glyph: "view-list-icons"
                     title: qsTr("The library")
                     about: qsTr("• One click on a wallpaper opens its panel on the right: the picture, "
                                 + "what is known about it, its own settings and its quality. A second "
@@ -1012,9 +1077,10 @@ Item {
                     glyph: "audio-volume-high"
                     title: qsTr("Sound and pausing")
                     about: qsTr("• The wallpaper goes quiet while another program plays sound, and "
-                                + "quiet and still under a maximised window. Both come back by "
-                                + "themselves, and both can be switched off in Audio. Audio can also pause "
-                                + "it while you work in another program.\n"
+                                + "quiet and still under a maximised window, while you work in another "
+                                + "program or while the screens are off or locked -- each as "
+                                + "Performance says: keep playing, mute, pause or stop and free its "
+                                + "memory. It comes back by itself.\n"
                                 + "• On a battery it can drop to Low quality and stop when the battery "
                                 + "runs low (Performance).\n"
                                 + "• The speaker in the status bar mutes it.")
@@ -1031,7 +1097,7 @@ Item {
                 }
 
                 Guide {
-                    glyph: "emblem-success"
+                    glyph: "dialog-ok-apply"
                     title: qsTr("Compatibility")
                     about: qsTr("• The panel says how a wallpaper plays here: Works, Minor issues "
                                 + "(something in it is not drawn yet) or Broken. It is filled in the "

@@ -155,6 +155,26 @@ ApplicationWindow {
     /// Engine's "other application focused". Off unless asked for.
     property bool pauseOnFocus: false
 
+    /// What the wallpaper does in each case, Wallpaper Engine's four:
+    /// "keep" playing, "mute", "pause" (still and quiet) or "stop" (let go
+    /// of altogether, memory freed, loaded again afterwards). Empty means
+    /// not chosen since these replaced the three switches above, whose
+    /// answer is then read as the nearest of the four.
+    property string whenCovered: ""
+    property string whenOtherSound: ""
+    property string whenFocused: ""
+    property string whenAsleep: "pause"
+    readonly property string underWindow: whenCovered !== "" ? whenCovered
+                                          : (quietUnderWindows ? "pause" : "keep")
+    readonly property string forOtherSound: whenOtherSound !== "" ? whenOtherSound
+                                            : (quietForOthers ? "mute" : "keep")
+    readonly property string forFocus: whenFocused !== "" ? whenFocused
+                                       : (pauseOnFocus ? "pause" : "keep")
+
+    /// How strongly the music is heard, per cent of Wallpaper Engine's
+    /// default recording volume.
+    property int musicGain: 100
+
     /// Whether GitHub is asked about a newer WallFlux when the window first
     /// opens -- not at startup: a program nobody has looked at yet should not
     /// be talking to anybody.
@@ -360,6 +380,11 @@ ApplicationWindow {
         property alias quietForOthers: picker.quietForOthers
         property alias quietUnderWindows: picker.quietUnderWindows
         property alias pauseOnFocus: picker.pauseOnFocus
+        property alias whenCovered: picker.whenCovered
+        property alias whenOtherSound: picker.whenOtherSound
+        property alias whenFocused: picker.whenFocused
+        property alias whenAsleep: picker.whenAsleep
+        property alias musicGain: picker.musicGain
         property alias checkUpdates: picker.checkUpdates
         property alias batteryLow: picker.batteryLow
         property alias batteryFloor: picker.batteryFloor
@@ -792,7 +817,7 @@ ApplicationWindow {
                         value: one.hasSound ? qsTr("Yes") : qsTr("No") });
         const grade = picker.compatibility(one);
         told.push({ label: qsTr("Compatibility"),
-                    icon: grade === "perfect" ? "emblem-success"
+                    icon: grade === "perfect" ? "dialog-ok-apply"
                         : grade === "minor" ? "emblem-warning"
                         : grade === "broken" ? "emblem-error" : "emblem-question",
                     value: picker.compatibilityName(grade, language) });

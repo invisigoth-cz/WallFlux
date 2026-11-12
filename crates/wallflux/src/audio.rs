@@ -27,7 +27,7 @@
 //! scene that answers to nothing, and no scene at all look like from here.
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use libpulse_binding::def::BufferAttr;
@@ -72,6 +72,21 @@ const ITS_BINS: usize = 640;
 const TILT: f32 = 0.501;
 const PLACING: f32 = 0.25;
 const SCALE: f32 = 127.0 * 0.001 * ITS_BINS as f32 / (ITS_WINDOW / 2.0);
+
+/// Wallpaper Engine's recording volume as a multiplier on `SCALE`: one at
+/// its default of 50, which is where `SCALE` already stands. Settings ›
+/// Performance moves it, as the user's "sensitivity to music". Kept as the
+/// bits of an f32, since the meter reads it on its own thread.
+static GAIN: AtomicU32 = AtomicU32::new(0x3f80_0000);
+
+/// Sets the recording volume, one being Wallpaper Engine's default.
+pub fn set_gain(gain: f32) {
+    GAIN.store(gain.clamp(0.0, 8.0).to_bits(), Ordering::Relaxed);
+}
+
+fn gain() -> f32 {
+    f32::from_bits(GAIN.load(Ordering::Relaxed))
+}
 
 /// How long the bands may go unread before the stream is closed.
 const QUIET: Duration = Duration::from_secs(1);
@@ -267,6 +282,12 @@ fn listen(stream: Simple, bands: &Mutex<Spectrum>, asked: &AtomicU64, epoch: Ins
 /// The 64 entries of one window of samples, as Wallpaper Engine reads them:
 /// its transform of the newest 1920, bin for bin.
 fn spectrum(samples: &[f32; WINDOW]) -> [f32; AUDIO_ENTRIES] {
+    heard_at(samples, gain())
+}
+
+/// The same at a given recording volume, one being Wallpaper Engine's
+/// default -- apart from the setting, so it can be tested without it.
+fn heard_at(samples: &[f32; WINDOW], gain: f32) -> [f32; AUDIO_ENTRIES] {
     let (real, imaginary) = its_transform(&samples[WINDOW - ITS_LENGTH..]);
     let mut out = [0f32; AUDIO_ENTRIES];
     let mut entry = 0;
@@ -278,7 +299,8 @@ fn spectrum(samples: &[f32; WINDOW]) -> [f32; AUDIO_ENTRIES] {
         entry = placed.min(if bin == 1 { 0 } else { entry + 1 });
         out[entry] = out[entry].max((weight * power).max(0.0).sqrt());
     }
-    out.map(|level| level * SCALE)
+    let scale = SCALE * gain;
+    out.map(|level| level * scale)
 }
 
 const ITS_LENGTH: usize = ITS_WINDOW as usize;
@@ -384,6 +406,23 @@ mod tests {
     }
 
     /// Silence has to read as silence rather than as a floor of noise.
+    /// Sensitivity to music: twice the recording volume hears every entry
+    /// twice as loud, and nought hears nothing.
+    #[test]
+    fn the_recording_volume_scales_what_is_heard() {
+        let mut samples = [0f32; WINDOW];
+        for (i, s) in samples.iter_mut().enumerate() {
+            *s = (i as f32 * 0.3).sin() * 0.2;
+        }
+        let once = heard_at(&samples, 1.0);
+        let twice = heard_at(&samples, 2.0);
+        assert!(once.iter().any(|&v| v > 0.0));
+        for (a, b) in once.iter().zip(twice) {
+            assert!((b - 2.0 * a).abs() <= 1e-4 * a.max(1.0), "{a} {b}");
+        }
+        assert_eq!(heard_at(&samples, 0.0), [0.0; AUDIO_ENTRIES]);
+    }
+
     #[test]
     fn silence_reads_as_nothing_in_every_entry() {
         assert_eq!(spectrum(&[0.0; WINDOW]), [0.0; AUDIO_ENTRIES]);
