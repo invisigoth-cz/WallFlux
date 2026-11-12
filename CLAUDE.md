@@ -203,7 +203,14 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   shape in the window's theme and accent (`qml/emblem.js`), so it follows a
   theme, a custom accent and the desktop's own colours under System.
 - **Next and Previous in the tray** (12 November) go through the running
-  playlist, or through the library in the grid's order when none runs.
+  playlist, or through the library in the grid's order when none runs --
+  counted from the one on show or, after Off, from the one played last.
+  **Recent wallpapers** is a real submenu since `Tray` (0.37.1); nothing of
+  it is kept for the next start, the user's word.
+- **The workshop's search takes a number or a link** (12 November):
+  Steam's text search reads titles and descriptions only, so an item's
+  number or its page's address is asked for with
+  `CreateQueryUGCDetailsRequest` instead (`askedFor` in `steamworks.cpp`).
 - **A stranger's wallpaper runs nothing in the window** (12 November): a
   property's `condition` is read by `WallpaperCore::holds`, not run -- it was
   `new Function` inside the picker's engine, where it could reach every
@@ -485,7 +492,9 @@ src/usage.cpp         /proc: stat, status and fdinfo of it and its children
 src/compatibility.h   Compatibility: the library tried out, and `--grade`
 src/compatibility.cpp the trial process and the window's end of it
 src/webguard.h        WallpaperFilesOnly: a page's file:// kept to wallpapers
-qml/emblem.js         the tray's icon in the window's colours, as a data URL
+qml/emblem.js         the tray's icon in the window's colours, as SVG text
+src/tray.h            Tray: the panel's icon and its menu, built with Qt Widgets
+src/tray.cpp          the menu built from QML's list, the icon drawn per size
 icons/wallflux.svg    the application's icon, installed to hicolor
 fonts/                the seven typefaces and their OFL licences
 qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
@@ -1809,6 +1818,12 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   the user's A8-6410. Reproduced with Arch's own `ld-linux-x86-64.so.2`
   under `qemu-x86_64 -cpu Nehalem` (the host's glibc cannot run there at
   all). The PKGBUILD builds for v2 and takes `.note.gnu.property` off.
+- **Qt.labs.platform hands the panel a submenu with nothing in it.** Read
+  over D-Bus (`com.canonical.dbusmenu GetLayout`): the submenu is a bare
+  label, no `children-display`, no children -- a static one too, and
+  `addMenu` no better -- so Recent wallpapers never opened. A `QMenu`
+  submenu through `QSystemTrayIcon` arrives whole; `Tray` is that, fed a
+  list from QML. Check a tray menu that way, not by trusting the QML.
 - **A Popup takes its font from the window, and only an ApplicationWindow
   has one to give.** A `font.family` on a Control that wraps everything
   reaches the controls and not one popup or menu; `QGuiApplication::setFont`

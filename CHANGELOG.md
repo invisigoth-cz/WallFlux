@@ -6,6 +6,24 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.37.1] — 2026-11-12
+
+### Added
+
+- **The workshop finds a wallpaper by its number or its link**: paste
+  `2880525500` or the address of its Steam page into the search.
+
+### Changed
+
+- **Every heading is bold.**
+
+### Fixed
+
+- **Recent wallpapers in the tray opens.** The submenu reached the panel
+  empty; the tray menu is built another way now.
+- **Next and Previous after Off** go on from the wallpaper that was last
+  on, instead of starting from the first in the grid.
+
 ## [0.37.0] — 2026-11-12
 
 ### Added
@@ -1478,7 +1496,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.1...HEAD
+[0.37.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.0...v0.37.1
 [0.37.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.34.0...v0.35.0
