@@ -1095,7 +1095,7 @@ Item {
                             }
 
                             RoundedTool {
-                                icon.name: "go-previous"
+                                icon.name: "arrow-left"
                                 icon.color: workshop.palette.windowText
                                 visible: workshop.page > 1
                                 enabled: !Steamworks.busy
@@ -1133,7 +1133,7 @@ Item {
                             }
 
                             RoundedTool {
-                                icon.name: "go-next"
+                                icon.name: "arrow-right"
                                 icon.color: workshop.palette.windowText
                                 visible: workshop.page < workshop.pages
                                 enabled: !Steamworks.busy

@@ -16,7 +16,7 @@ import WallFlux
 /// per screen: that needs a player and a web view per screen at once, and
 /// `Wallpapers.current` stops being one answer.
 ///
-/// The screens are Qt's own -- `Qt.application.screens` -- so there is no
+/// The screens are Qt's own -- `Application.screens` -- so there is no
 /// `xrandr`, no `kscreen-doctor` and nobody's output to parse. Qt names a
 /// screen after its connector, which is the same name KDE's display
 /// settings show and the same one under /sys/class/drm.
@@ -29,7 +29,7 @@ Item {
     property var wanted: []
 
     /// Everything Qt can see, in the order it hands them over.
-    readonly property var screens: Qt.application.screens
+    readonly property var screens: Application.screens
 
     function toggle(name) {
         view.wanted = view.wanted.indexOf(name) >= 0

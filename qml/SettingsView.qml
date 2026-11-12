@@ -626,6 +626,63 @@ Item {
                     }
                 }
 
+                Setting {
+                    home: 1
+                    title: qsTr("Follow the music")
+                    about: qsTr("Wallpapers that answer to what the speakers play. Off, nothing "
+                                + "listens, and Plasma shows no microphone icon for it.")
+
+                    Toggle {
+                        value: view.picker.music
+                        onChanged: (to) => view.picker.music = to
+                    }
+                }
+
+                Setting {
+                    home: 1
+                    title: qsTr("Sensitivity to music")
+                    about: qsTr("How strongly the wallpapers that follow the music hear it. 100 % is "
+                                + "Wallpaper Engine's own; quiet music wants more, loud music less.")
+
+                    RowLayout {
+                        spacing: 12
+                        enabled: view.picker.music
+                        opacity: enabled ? 1 : 0.45
+
+                        RoundSlider {
+                            id: gain
+
+                            implicitWidth: 240
+                            from: 0
+                            to: 400
+                            value: view.picker.musicGain
+                            stepSize: 10
+                            wheelEnabled: true
+                            onMoved: view.picker.musicGain = Math.round(gain.value)
+                        }
+
+                        Label {
+                            Layout.preferredWidth: 52
+                            horizontalAlignment: Text.AlignRight
+                            text: view.picker.musicGain + " %"
+                            font.features: { "tnum": 1 }
+                        }
+                    }
+                }
+
+                Setting {
+                    home: 1
+                    title: qsTr("When another program plays sound")
+                    about: qsTr("A video or a game with sound of its own. It comes back by itself "
+                                + "when the other program stops.")
+
+                    Choice {
+                        options: view.cases.slice(0, 3)
+                        current: view.picker.forOtherSound
+                        onChosen: (value) => view.picker.whenOtherSound = value
+                    }
+                }
+
                 // Performance / Display.
 
                 Setting {
@@ -734,50 +791,6 @@ Item {
 
                 Setting {
                     home: 2
-                    title: qsTr("Follow the music")
-                    about: qsTr("Wallpapers that answer to what the speakers play. Off, nothing "
-                                + "listens, and Plasma shows no microphone icon for it.")
-
-                    Toggle {
-                        value: view.picker.music
-                        onChanged: (to) => view.picker.music = to
-                    }
-                }
-
-                Setting {
-                    home: 2
-                    title: qsTr("Sensitivity to music")
-                    about: qsTr("How strongly the wallpapers that follow the music hear it. 100 % is "
-                                + "Wallpaper Engine's own; quiet music wants more, loud music less.")
-
-                    RowLayout {
-                        spacing: 12
-                        enabled: view.picker.music
-                        opacity: enabled ? 1 : 0.45
-
-                        RoundSlider {
-                            id: gain
-
-                            implicitWidth: 240
-                            from: 0
-                            to: 400
-                            value: view.picker.musicGain
-                            stepSize: 10
-                            wheelEnabled: true
-                            onMoved: view.picker.musicGain = Math.round(gain.value)
-                        }
-
-                        Label {
-                            Layout.preferredWidth: 52
-                            horizontalAlignment: Text.AlignRight
-                            text: view.picker.musicGain + " %"
-                            font.features: { "tnum": 1 }
-                        }
-                    }
-                }
-
-                Setting {
-                    home: 2
                     title: qsTr("Follow the mouse")
                     about: qsTr("Particles that move away from the pointer, light that goes where it goes.")
 
@@ -821,19 +834,6 @@ Item {
                         options: view.cases
                         current: view.picker.underWindow
                         onChosen: (value) => view.picker.whenCovered = value
-                    }
-                }
-
-                Setting {
-                    home: 2
-                    title: qsTr("When another program plays sound")
-                    about: qsTr("A video or a game with sound of its own. It comes back by itself "
-                                + "when the other program stops.")
-
-                    Choice {
-                        options: view.cases.slice(0, 3)
-                        current: view.picker.forOtherSound
-                        onChosen: (value) => view.picker.whenOtherSound = value
                     }
                 }
 
@@ -1078,9 +1078,9 @@ Item {
                     title: qsTr("Sound and pausing")
                     about: qsTr("• The wallpaper goes quiet while another program plays sound, and "
                                 + "quiet and still under a maximised window, while you work in another "
-                                + "program or while the screens are off or locked -- each as "
-                                + "Performance says: keep playing, mute, pause or stop and free its "
-                                + "memory. It comes back by itself.\n"
+                                + "program or while the screens are off or locked -- each as Audio "
+                                + "and Performance say: keep playing, mute, pause or stop and free "
+                                + "its memory. It comes back by itself.\n"
                                 + "• On a battery it can drop to Low quality and stop when the battery "
                                 + "runs low (Performance).\n"
                                 + "• The speaker in the status bar mutes it.")
@@ -1127,7 +1127,7 @@ Item {
                 required property string modelData
                 readonly property bool chosen: view.picker.typeface === face.modelData
                 readonly property string family: face.modelData !== "" ? face.modelData
-                                                                        : Qt.application.font.family
+                                                                        : Application.font.family
 
                 width: 116
                 height: 108

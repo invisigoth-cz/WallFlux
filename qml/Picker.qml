@@ -56,7 +56,7 @@ ApplicationWindow {
     /// The typeface the window is written in, or empty for the desktop's
     /// own -- Noto Sans on Plasma unless somebody changed it there.
     property string typeface: ""
-    font.family: picker.typeface !== "" ? picker.typeface : Qt.application.font.family
+    font.family: picker.typeface !== "" ? picker.typeface : Application.font.family
     /// Whether the colours are the dark kind, whichever theme gave them.
     readonly property bool dark: shades.dark
     /// The desktop's own colours, for the System theme's tile.
@@ -2971,7 +2971,7 @@ ApplicationWindow {
                 // Or the ones ticked last time, those of them still plugged in.
                 Component.onCompleted: {
                     const names = [];
-                    const all = Qt.application.screens;
+                    const all = Application.screens;
                     for (let i = 0; i < all.length; ++i)
                         names.push(all[i].name);
                     const kept = (remembered.screens || []).filter((name) => names.indexOf(name) >= 0);

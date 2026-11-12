@@ -138,7 +138,7 @@ Item {
         // The screens the Displays tab has ticked, as screen objects.
         model: {
             const kept = [];
-            const all = Qt.application.screens;
+            const all = Application.screens;
             for (let i = 0; i < all.length; ++i) {
                 if (picker.screensWanted.indexOf(all[i].name) >= 0)
                     kept.push(all[i]);

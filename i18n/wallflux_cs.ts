@@ -1050,7 +1050,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Okno přebírá barvy tapety, jejíž podrobnosti jsou otevřené.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="670"/>
+        <location filename="../qml/SettingsView.qml" line="727"/>
         <source>Frame rate</source>
         <translation>Snímková frekvence</translation>
     </message>
@@ -1204,42 +1204,42 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Anime ve workshopu</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="633"/>
+        <location filename="../qml/SettingsView.qml" line="690"/>
         <source>Compatibility test</source>
         <translation>Test kompatibility</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="637"/>
+        <location filename="../qml/SettingsView.qml" line="694"/>
         <source>Trying %1 of %2: %3</source>
         <translation>Zkouším %1 z %2: %3</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="640"/>
+        <location filename="../qml/SettingsView.qml" line="697"/>
         <source>Tried %1 wallpapers. Each card in the library says how it fared.</source>
         <translation>Vyzkoušeno %1 tapet. Každá karta v knihovně říká, jak dopadla.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="642"/>
+        <location filename="../qml/SettingsView.qml" line="699"/>
         <source>Plays every wallpaper in the library for a moment, unseen and unheard, and marks each one Works, Minor issues or Broken. Run it again after downloading new ones.</source>
         <translation>Na chvíli spustí každou tapetu v knihovně, neviditelně a potichu, a označí ji Funguje, Drobné potíže nebo Nefunkční. Po stažení nových tapet ho spusť znovu.</translation>
     </message>
     <message>
         <location filename="../qml/SettingsView.qml" line="1079"/>
-        <source>• The wallpaper goes quiet while another program plays sound, and quiet and still under a maximised window, while you work in another program or while the screens are off or locked -- each as Performance says: keep playing, mute, pause or stop and free its memory. It comes back by itself.
+        <source>• The wallpaper goes quiet while another program plays sound, and quiet and still under a maximised window, while you work in another program or while the screens are off or locked -- each as Audio and Performance say: keep playing, mute, pause or stop and free its memory. It comes back by itself.
 • On a battery it can drop to Low quality and stop when the battery runs low (Performance).
 • The speaker in the status bar mutes it.</source>
-        <translation>• Tapeta ztichne, když zvuk přehrává jiný program, a pod maximalizovaným oknem, při práci v jiném programu nebo při zhasnutých či zamčených obrazovkách ztichne a zastaví se – vždy podle Výkonu: hrát dál, ztlumit, pozastavit, nebo zastavit a uvolnit paměť. Sama se pak vrátí.
+        <translation>• Tapeta ztichne, když zvuk přehrává jiný program, a pod maximalizovaným oknem, při práci v jiném programu nebo při zhasnutých či zamčených obrazovkách ztichne a zastaví se – vždy podle Zvuku a Výkonu: hrát dál, ztlumit, pozastavit, nebo zastavit a uvolnit paměť. Sama se pak vrátí.
 • Na baterii může přejít na nízkou kvalitu a zastavit se, když je baterie skoro vybitá (Výkon).
 • Reproduktor ve stavovém řádku ji ztlumí.</translation>
     </message>
     <message>
         <location filename="../qml/SettingsView.qml" line="50"/>
-        <location filename="../qml/SettingsView.qml" line="648"/>
+        <location filename="../qml/SettingsView.qml" line="705"/>
         <source>Stop</source>
         <translation>Zastavit</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="648"/>
+        <location filename="../qml/SettingsView.qml" line="705"/>
         <source>Test the library</source>
         <translation>Otestovat knihovnu</translation>
     </message>
@@ -1481,47 +1481,47 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Kdykoli má klávesnici okno jiného programu, ať je jakkoli malé, tapeta se zastaví a ztichne; klepnutí na plochu ji vrátí. Toto okno se nepočítá.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="656"/>
+        <location filename="../qml/SettingsView.qml" line="713"/>
         <source>Quality</source>
         <translation>Kvalita</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="657"/>
+        <location filename="../qml/SettingsView.qml" line="714"/>
         <source>Wallpaper Engine&apos;s presets, setting the three below at once. Changed one by one they are your own, and no preset is lit. A wallpaper can have a preset of its own in the panel beside the grid.</source>
         <translation>Předvolby Wallpaper Engine, které nastaví tři volby pod sebou najednou. Když je změníte jednotlivě, nastavení je vaše vlastní a nesvítí žádná předvolba. Tapeta může mít vlastní předvolbu v panelu vedle mřížky.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="671"/>
+        <location filename="../qml/SettingsView.qml" line="728"/>
         <source>Pictures a second, for scenes and web wallpapers. More is smoother and costs more; a heavy scene that cannot keep up simply draws fewer.</source>
         <translation>Snímky za sekundu pro scény a webové tapety. Víc je plynulejší a stojí víc výkonu; těžká scéna, která nestíhá, prostě nakreslí méně.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="683"/>
+        <location filename="../qml/SettingsView.qml" line="740"/>
         <source>Smooth edges (MSAA)</source>
         <translation>Vyhlazování hran (MSAA)</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="684"/>
+        <location filename="../qml/SettingsView.qml" line="741"/>
         <source>Samples a pixel, for the edges of turned layers and particles in scenes. More is smoother and asks more of the graphics card.</source>
         <translation>Vzorků na pixel pro hrany natočených vrstev a částic ve scénách. Víc je hladší a víc zatíží grafickou kartu.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="696"/>
+        <location filename="../qml/SettingsView.qml" line="753"/>
         <source>Glow (post-processing)</source>
         <translation>Záře (efekty po vykreslení)</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="697"/>
+        <location filename="../qml/SettingsView.qml" line="754"/>
         <source>The glow round bright places that some scenes ask for. Wallpaper Engine&apos;s Low turns it off, and nothing else with it.</source>
         <translation>Záře kolem jasných míst, kterou chtějí některé scény. Předvolba Nízká ve Wallpaper Engine ji vypíná, a nic dalšího s ní.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="708"/>
+        <location filename="../qml/SettingsView.qml" line="765"/>
         <source>Texture resolution</source>
         <translation>Rozlišení textur</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="709"/>
+        <location filename="../qml/SettingsView.qml" line="766"/>
         <source>Half loads a scene&apos;s pictures at half their width and height: less memory on the graphics card, a little softer. The scene on show is loaded again.</source>
         <translation>Poloviční načte obrázky scény v poloviční šířce i výšce: méně paměti grafické karty, o něco měkčí obraz. Právě zobrazená scéna se načte znovu.</translation>
     </message>
@@ -1530,12 +1530,12 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Snímků za sekundu pro scény a webové tapety, podle předvoleb Wallpaper Engine. Víc je plynulejší a stojí víc výkonu; náročná scéna, která nestíhá, prostě vykreslí méně.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="722"/>
+        <location filename="../qml/SettingsView.qml" line="779"/>
         <source>Default scaling</source>
         <translation>Výchozí škálování</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="723"/>
+        <location filename="../qml/SettingsView.qml" line="780"/>
         <source>How a wallpaper meets a screen of another shape: as Wallpaper Engine draws it, cropped to fill the screen, fitted inside it with bars, or stretched to it. A wallpaper the screen&apos;s own shape looks the same every way.</source>
         <translation>Jak se tapeta vejde na obrazovku jiného tvaru: jak ji kreslí Wallpaper Engine, oříznutá, aby vyplnila obrazovku, vložená celá s pruhy, nebo roztažená. Tapeta stejného tvaru jako obrazovka vypadá pokaždé stejně.</translation>
     </message>
@@ -1544,32 +1544,32 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Jak se tapeta přizpůsobí obrazovce jiného tvaru: jako ve Wallpaper Engine, oříznutá na celou obrazovku, vložená celá s pruhy, nebo roztažená.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="737"/>
+        <location filename="../qml/SettingsView.qml" line="631"/>
         <source>Follow the music</source>
         <translation>Reagovat na hudbu</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="738"/>
+        <location filename="../qml/SettingsView.qml" line="632"/>
         <source>Wallpapers that answer to what the speakers play. Off, nothing listens, and Plasma shows no microphone icon for it.</source>
         <translation>Tapety, které reagují na to, co hraje z reproduktorů. Vypnuto nic neposlouchá a Plasma kvůli tomu neukazuje ikonu mikrofonu.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="781"/>
+        <location filename="../qml/SettingsView.qml" line="794"/>
         <source>Follow the mouse</source>
         <translation>Reagovat na myš</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="782"/>
+        <location filename="../qml/SettingsView.qml" line="795"/>
         <source>Particles that move away from the pointer, light that goes where it goes.</source>
         <translation>Částice, které uhýbají kurzoru, a světlo, které ho následuje.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="792"/>
+        <location filename="../qml/SettingsView.qml" line="805"/>
         <source>Parallax</source>
         <translation>Paralaxa</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="793"/>
+        <location filename="../qml/SettingsView.qml" line="806"/>
         <source>Layers of a scene that lean as the mouse moves, for depth.</source>
         <translation>Vrstvy scény se s pohybem myši naklánějí a dávají hloubku.</translation>
     </message>
@@ -1600,7 +1600,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Pod touto úrovní baterie se tapeta úplně zastaví, dokud nepřipojíte nabíječku.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="803"/>
+        <location filename="../qml/SettingsView.qml" line="816"/>
         <source>Particles</source>
         <translation>Částice</translation>
     </message>
@@ -1631,37 +1631,37 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Vypnuto: karta Steam vynechá tapety se štítkem Anime – v Objevování, kde zmizí i řádek Anime, i ve Workshopu, z jehož filtru zmizí i čip Anime. Jako Zobrazit / Skrýt Anime ve Wallpaper Engine; tvé oblíbené je ukazují dál.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="749"/>
+        <location filename="../qml/SettingsView.qml" line="643"/>
         <source>Sensitivity to music</source>
         <translation>Citlivost na hudbu</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="750"/>
+        <location filename="../qml/SettingsView.qml" line="644"/>
         <source>How strongly the wallpapers that follow the music hear it. 100 % is Wallpaper Engine&apos;s own; quiet music wants more, loud music less.</source>
         <translation>Jak silně slyší hudbu tapety, které na ni reagují. 100 % odpovídá Wallpaper Engine; tichá hudba chce víc, hlasitá méně.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="804"/>
+        <location filename="../qml/SettingsView.qml" line="817"/>
         <source>Smoke, sparks, snow and the like in scenes. They are most of what a scene costs; off, they are neither worked out nor drawn.</source>
         <translation>Kouř, jiskry, sníh a podobně ve scénách. Tvoří většinu toho, co scéna stojí; vypnuté se nepočítají ani nekreslí.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="815"/>
+        <location filename="../qml/SettingsView.qml" line="828"/>
         <source>When a window covers the screen</source>
         <translation>Když obrazovku zakryje okno</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="816"/>
+        <location filename="../qml/SettingsView.qml" line="829"/>
         <source>A maximised or full-screen window. Pause stands the wallpaper still and quiet; Stop lets go of it altogether, freeing its memory, and loads it again when the window goes.</source>
         <translation>Maximalizované okno nebo okno přes celou obrazovku. Pozastavit tapetu zastaví a ztiší; Zastavit ji úplně uvolní, takže se uvolní i paměť, a až okno zmizí, načte ji znovu.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="829"/>
+        <location filename="../qml/SettingsView.qml" line="675"/>
         <source>When another program plays sound</source>
         <translation>Když jiný program přehrává zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="830"/>
+        <location filename="../qml/SettingsView.qml" line="676"/>
         <source>A video or a game with sound of its own. It comes back by itself when the other program stops.</source>
         <translation>Video nebo hra s vlastním zvukem. Když druhý program přestane, tapeta se sama vrátí.</translation>
     </message>
