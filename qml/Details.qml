@@ -313,8 +313,9 @@ Rectangle {
                             }
 
                             Label {
+                                // What the row is, quieter than what it says.
                                 text: fact.modelData.label
-                                opacity: 0.7
+                                opacity: 0.6
                             }
 
                             Item { Layout.fillWidth: true }
@@ -325,6 +326,7 @@ Rectangle {
                                 text: fact.modelData.value
                                 textFormat: Text.PlainText   // off the workshop: never HTML
                                 wrapMode: Text.Wrap
+                                font.weight: Font.DemiBold
                             }
                         }
 
