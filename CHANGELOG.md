@@ -6,6 +6,34 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-11-12
+
+### Added
+
+- **A compatibility test for the whole library**, in Settings › Performance:
+  every wallpaper is played for a moment, unseen and unheard, and its card
+  says Works, Minor issues or Broken.
+- **A choice of typeface** in Settings › Appearance: the desktop's own, or
+  Inter, Geist, Manrope, Plus Jakarta Sans, Figtree, Onest or DM Sans.
+- **WallFlux's own icon**, which in the tray takes the window's theme and
+  accent colour.
+- **Previous wallpaper** in the tray menu.
+
+### Changed
+
+- **Next and Previous in the tray work without a playlist**, going through
+  the library in the order the grid shows it.
+- **Installing is two lines** in the README, and removing one.
+
+### Fixed
+
+- **The package starts on older processors.** It was built for the machine
+  that built it and refused to start elsewhere with "CPU ISA level is lower
+  than required".
+- **A wallpaper's settings no longer run its author's code in the window**,
+  and a web wallpaper can no longer read files outside the wallpapers'
+  folders. Titles and names from the workshop are shown as plain text.
+
 ## [0.36.0] — 2026-11-10
 
 ### Added
@@ -1450,7 +1478,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.33.0...v0.34.0

@@ -192,6 +192,24 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   the settings search. Keep it true when behaviour changes.
 - **Name order is Latin letters, then digits, then the rest**
   (`WallpaperCore::readsBefore`), each group in the locale's order.
+- **The window's typeface is a setting** (12 November, Settings ›
+  Appearance): the desktop's own (Noto Sans here, the default) or one of
+  seven carried in the binary -- Inter, Geist, Manrope, Plus Jakarta Sans,
+  Figtree, Onest, DM Sans, all OFL with the whole of Czech, licences in
+  `fonts/` and installed beside the package's. `picker.typeface`, set as
+  `font.family` on the window.
+- **WallFlux's own icon** (12 November, the user's pick of three): a W on a
+  rounded tile, `icons/wallflux.svg` for the menu, and in the tray the same
+  shape in the window's theme and accent (`qml/emblem.js`), so it follows a
+  theme, a custom accent and the desktop's own colours under System.
+- **Next and Previous in the tray** (12 November) go through the running
+  playlist, or through the library in the grid's order when none runs.
+- **A stranger's wallpaper runs nothing in the window** (12 November): a
+  property's `condition` is read by `WallpaperCore::holds`, not run -- it was
+  `new Function` inside the picker's engine, where it could reach every
+  singleton -- and a web wallpaper may fetch `file://` only under the
+  wallpapers' folders (`WallpaperFilesOnly`, `src/webguard.h`); measured, a
+  page read `/etc/hostname` before. Workshop text is `Text.PlainText`.
 - **A Settings tab, laid out as a desktop's settings are now** (the user's
   sections of 9 November, after linux-wallpaper-engine-ux): a search and the
   sections down the left, the section's name large over one card to a
@@ -296,6 +314,19 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   Kept and not removed, by the user's choice of 10 November, because the
   renderer does not draw everything: 3D models, applications and 15 of
   Wallpaper Engine's 19 own scenes, whatever the workshop sends next.
+
+  **And tested for the whole library at once** (12 November, Settings ›
+  Performance, the user's place for it): `Compatibility` starts this same
+  binary as `wallflux --grade`, hands it every playable wallpaper as a JSON
+  line on stdin and reads `wallflux-trial {...}` lines back -- a scene loaded
+  with its settings and drawn 46 frames at 640x360 off screen (all black is
+  Broken), a video opened by a `QMediaPlayer` with no output, a page by a
+  muted `QWebEnginePage`: the window's own rules. A separate process so that a
+  wallpaper that crashes the renderer crashes nothing on show; the one it was
+  trying is marked Broken and a new process takes the rest. 63 in about 20
+  s, `nice` 10, no sound, no microphone (`wallflux_options` with no music).
+  Checked against the grades the library had from being played: all 25 the
+  same, plus SCP's `chromatic_aberration` found as Minor issues by itself.
 
 - **Favourites, as Wallpaper Engine's heart** (10 November): the workshop's
   own favourite on the account (`AddItemToFavorites`), so the same on every
@@ -451,6 +482,12 @@ src/updater.h         Updater: a newer WallFlux on GitHub, and installing it
 src/updater.cpp       releases/latest, the package, pkexec pacman -U, restart
 src/usage.h           Usage: what WallFlux costs, for the status bar
 src/usage.cpp         /proc: stat, status and fdinfo of it and its children
+src/compatibility.h   Compatibility: the library tried out, and `--grade`
+src/compatibility.cpp the trial process and the window's end of it
+src/webguard.h        WallpaperFilesOnly: a page's file:// kept to wallpapers
+qml/emblem.js         the tray's icon in the window's colours, as a data URL
+icons/wallflux.svg    the application's icon, installed to hicolor
+fonts/                the seven typefaces and their OFL licences
 qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
                       switch for each
 qml/Picker.qml        the picker window: header, search, grid, footer
@@ -1765,6 +1802,18 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **The picker needs `transientParent: null`.** The wallpaper window is a
   background layer-shell surface that takes no input; a window belonging to
   it gets dragged down there and cannot be clicked.
+- **Every program linked on this machine is marked as needing x86-64-v3.**
+  CachyOS's v3 repositories build glibc's `Scrt1.o` for v3 and it carries
+  the mark into the binary whatever `-march` said, and glibc's loader
+  elsewhere refuses to start it: "CPU ISA level is lower than required" on
+  the user's A8-6410. Reproduced with Arch's own `ld-linux-x86-64.so.2`
+  under `qemu-x86_64 -cpu Nehalem` (the host's glibc cannot run there at
+  all). The PKGBUILD builds for v2 and takes `.note.gnu.property` off.
+- **A Popup takes its font from the window, and only an ApplicationWindow
+  has one to give.** A `font.family` on a Control that wraps everything
+  reaches the controls and not one popup or menu; `QGuiApplication::setFont`
+  at run time reaches nothing already built. Hence the picker is an
+  `ApplicationWindow`. There are no plain `Text` items here to miss it.
 - **`GNUInstallDirs` keeps sysconfdir under the prefix**, so with `/usr` the
   autostart file would land in `/usr/etc/xdg/autostart`, silently. Hence the
   `if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")` in CMakeLists.txt.
@@ -2509,7 +2558,9 @@ packaging/PKGBUILD. Then, in this order:
    repository is one too many.
 4. `git push origin main && git push origin v<version>`.
 5. `gh release create v<version> --notes-file <the changelog entry>`, with
-   the built package attached if there is one.
+   the built package attached **twice**: as makepkg names it (the updater
+   takes only that name) and as `wallflux-x86_64.pkg.tar.zst`, which is what
+   the README's one-line install fetches from `releases/latest/download/`.
 6. `cd packaging && makepkg -f`, which builds from the tag now that it is
    committed, then `sudo pacman -U wallflux-<version>-1-x86_64.pkg.tar.zst`.
 
@@ -2525,7 +2576,11 @@ day; everything asked for on 9 November is in it.
 
 0. **Waiting on decisions of the user's:**
    - **Making the repository public.** Asked and answered "not yet" on
-     9 November. Until it is, Settings > General > Updates says 404 and
+     9 November. 12 November: the e-mail is in every commit and the full
+     name in one (Almamu's and jagrat7's carry theirs too); rewriting it is
+     the user's call. The reverse engineering of `wallpaper64.exe` comes out
+     of this file into an untracked `CLAUDE.local.md` before the repository
+     goes public -- not sooner -- and out of the history with the e-mail. Until it is, Settings > General > Updates says 404 and
      WallFlux cannot update itself. History checked: no secrets; the e-mail
      and one commit's full name would be public.
    - **Trying it on the laptop** (the user's, with help asked for): a
