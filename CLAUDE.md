@@ -924,6 +924,14 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   was not found. Without them Future Clock's digits sit above the middle of the
   lamps on their tiles.
 
+- **`padding` is one number in older scenes and "x y" in newer ones.**
+  Rain Window with clock writes `"32.00000 32.00000"`, and read as one number
+  the whole scene was refused ("did not match any variant of untagged enum
+  Either"). `Vector<2>` takes both, one number standing for both axes.
+- **WEColor and WEVector are Wallpaper Engine's own script modules**, in
+  `assets/scripts/jsmodules/` beside its `wemath.js`; WEMath is written out in
+  `script.rs`, the other two are read from the install at load, as its shaders
+  are -- its code, not ours to carry.
 - **Text's `padding` is *effect padding*.** Only the objects with effects have
   it inside their stored `size`, and the box is what those effects are stretched
   over: Future Clock draws one clock four times, each behind a mask with one
@@ -3076,7 +3084,8 @@ day; everything asked for on 9 November is in it.
   neither an object nor a file in 120 entries; its YouTube video does.
 
 - What a scene's scripts do not reach yet: an effect switched on and off, a particle override other than the
-  rate and the alpha, an object hidden in scene.json that a script would show -- it is
+  rate and the alpha (Magical Orb's vortex `speed`), the camera's shake and parallax numbers (Magical Orb
+  drives its shake with the music; the value beside the script is used and the scene is Minor issues), an object hidden in scene.json that a script would show -- it is
   never loaded -- and the children of a particle system whose parent a
   script moves, which were placed once from where the parent started.
 
