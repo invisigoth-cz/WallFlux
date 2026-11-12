@@ -81,6 +81,8 @@ void Pointer::setWatching(bool watching)
 
 void Pointer::setPosition(int x, int y)
 {
+    if (!fromKWin(*this))
+        return;
     // A call already on the bus when the script was unloaded.
     if (!m_watching)
         return;

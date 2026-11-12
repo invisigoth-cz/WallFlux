@@ -19,7 +19,7 @@
 /// and calls back here -- only while somebody is `watching`, so a desktop
 /// with no scene on it sends nothing at all. Elsewhere the mouse is never
 /// `known`, and a scene runs as it would with nobody at the computer.
-class Pointer : public QObject
+class Pointer : public QObject, protected QDBusContext
 {
     Q_OBJECT
     QML_NAMED_ELEMENT(Pointer)

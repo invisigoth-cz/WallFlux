@@ -162,8 +162,9 @@ public:
     /// item the workshop is asked instead.
     QString author;
 
-    /// Whether the renderer can draw it. False only for those of Wallpaper
-    /// Engine's own scenes it is known not to: 3D models, or black.
+    /// Whether it can be drawn. False for those of Wallpaper Engine's own
+    /// scenes the renderer is known not to draw -- 3D models, or black --
+    /// and for a video whose file does not begin as any video does.
     bool drawable = true;
 
     /// Whether the file this wallpaper is made of was found on disk.

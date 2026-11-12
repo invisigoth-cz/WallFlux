@@ -32,7 +32,10 @@ void makeWallpaper(const QString &root, const QString &id, const QByteArray &pro
     for (const QString &name : alsoWrite) {
         QFile entry(folder + QLatin1Char('/') + name);
         QVERIFY(entry.open(QIODevice::WriteOnly));
-        entry.write("<html></html>");
+        // A video's file begins as an MP4 does, or it would not be played.
+        entry.write(name.endsWith(QLatin1StringView(".mp4"))
+                        ? QByteArray("\0\0\0\x18" "ftypmp42", 12)
+                        : QByteArray("<html></html>"));
     }
 }
 
@@ -71,6 +74,7 @@ private slots:
     void leavesOutWhatOnlyEastAsiaReads();
     void putsLettersBeforeDigitsBeforeTheRest();
     void readsAConditionWithoutRunningIt();
+    void playsOnlyWhatIsReallyAVideo();
     void drawsAPresetAsTheWallpaperItSitsOn();
     void listsWhatComesWithWallpaperEngine();
     void hidesOneOfWallpaperEnginesOwn();
@@ -550,6 +554,23 @@ void TestWallpaperCore::leavesOutWhatOnlyEastAsiaReads()
     // Untouched where there is nothing to leave out.
     QCOMPARE(WallpaperCore::readable(QStringLiteral("DOOM -- Eternal (4K)")),
              QStringLiteral("DOOM -- Eternal (4K)"));
+}
+
+void TestWallpaperCore::playsOnlyWhatIsReallyAVideo()
+{
+    QTemporaryDir steam;
+    makeWallpaper(steam.path(), QStringLiteral("1"), R"({"type":"video","file":"a.mp4"})",
+                  {QStringLiteral("a.mp4")});
+    makeWallpaper(steam.path(), QStringLiteral("2"), R"({"type":"video","file":"b.mp4"})");
+    QFile playlist(steam.path() + QStringLiteral("/steamapps/workshop/content/431960/2/b.mp4"));
+    QVERIFY(playlist.open(QIODevice::WriteOnly));
+    playlist.write("#EXTM3U\nfile:///etc/hostname\n");
+    playlist.close();
+
+    const QList<Wallpaper> found = WallpaperCore::scan({steam.path()});
+    QCOMPARE(found.size(), 2);
+    for (const Wallpaper &one : found)
+        QCOMPARE(one.playable(), one.id == QLatin1StringView("1"));
 }
 
 void TestWallpaperCore::readsAConditionWithoutRunningIt()

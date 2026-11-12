@@ -220,12 +220,27 @@ fn file_name(name: &str) -> String {
     format!("{plain}.mp4")
 }
 
+/// What ffmpeg and ffprobe are allowed to make of a clip, said before it.
+///
+/// The clip comes out of somebody's package, and ffmpeg goes by what a file
+/// holds, not by its name: a playlist or a concat list saved as `.mp4`
+/// could have it read other files or reach the network. Today's ffmpeg
+/// refuses both of its own accord, measured; this does not depend on it.
+/// Only a local file, and only a video container.
+const ONLY_A_VIDEO: [&str; 4] = [
+    "-protocol_whitelist",
+    "file",
+    "-format_whitelist",
+    "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,asf,mpegts,flv,ogg",
+];
+
 /// The clip's size as it will be decoded, its frame rate and its length.
 fn probe(path: &Path) -> Result<((u32, u32), f64, f64), String> {
     let out = Command::new("ffprobe")
         .args(["-v", "error", "-select_streams", "v:0", "-show_entries"])
         .arg("stream=width,height,avg_frame_rate:format=duration")
         .args(["-of", "default=noprint_wrappers=1"])
+        .args(ONLY_A_VIDEO)
         .arg(path)
         .stdin(Stdio::null())
         .output()
@@ -267,7 +282,9 @@ fn decode(path: &Path, size: (u32, u32), into: f64) -> Result<Decoder, String> {
     let mut child = Command::new("ffmpeg")
         .args(["-v", "error", "-nostdin", "-ss"])
         .arg(format!("{into:.3}"))
-        .args(["-stream_loop", "-1", "-i"])
+        .args(["-stream_loop", "-1"])
+        .args(ONLY_A_VIDEO)
+        .arg("-i")
         .arg(path)
         .args(["-an", "-f", "rawvideo", "-pix_fmt", "rgba", "-s"])
         .arg(format!("{}x{}", size.0, size.1))

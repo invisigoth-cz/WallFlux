@@ -51,6 +51,29 @@ WallpaperKind::Kind kindFromType(const QString &type)
     return WallpaperKind::Unknown;
 }
 
+/// Whether a file begins the way a video container does.
+///
+/// A video wallpaper is played by Qt's FFmpeg backend, which goes by what a
+/// file holds rather than its name and cannot be told what it may open --
+/// so a playlist or a concat list saved as `.mp4` would be read as one, and
+/// could reach other files or the network. Only these containers are let
+/// through: MP4/MOV, Matroska/WebM, AVI, ASF/WMV, FLV, Ogg, MPEG-TS.
+bool looksLikeVideo(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray head = file.read(192);
+    const auto at = [&](qsizetype i, QByteArrayView what) { return head.mid(i, what.size()) == what; };
+    for (const char *box : {"ftyp", "moov", "mdat", "wide", "free", "skip", "pnot"}) {
+        if (at(4, box))
+            return true;
+    }
+    return at(0, "\x1A\x45\xDF\xA3") || (at(0, "RIFF") && at(8, "AVI "))
+           || at(0, "\x30\x26\xB2\x75\x8E\x66\xCF\x11") || at(0, "FLV") || at(0, "OggS")
+           || (head.size() > 188 && head.at(0) == 0x47 && head.at(188) == 0x47);
+}
+
 /// What a wallpaper that states no type is, going by its file. Four of
 /// Wallpaper Engine's own say nothing -- Audiophile, Ricepod and Techno name
 /// a .json, Sheep an .exe -- and Wallpaper Engine lists them all the same.
@@ -114,6 +137,11 @@ QStringList probeArguments(const QString &file)
     return {QStringLiteral("-v"),        QStringLiteral("error"),
             QStringLiteral("-show_entries"),   QStringLiteral("stream=codec_type,width,height"),
             QStringLiteral("-of"),       QStringLiteral("csv=p=0"),
+            // A local file and a video container only: see ONLY_A_VIDEO in
+            // the renderer's video.rs, which says why.
+            QStringLiteral("-protocol_whitelist"), QStringLiteral("file"),
+            QStringLiteral("-format_whitelist"),
+            QStringLiteral("mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,asf,mpegts,flv,ogg"),
             file};
 }
 
@@ -274,6 +302,12 @@ std::optional<Wallpaper> readWallpaper(const QDir &folder)
     wallpaper.source = entryPoint(drawnFrom, wallpaper.kind == WallpaperKind::Scene ? package : named);
     if (wallpaper.kind == WallpaperKind::Scene && wallpaper.source.isEmpty())
         wallpaper.source = entryPoint(drawnFrom, named);
+    if (wallpaper.kind == WallpaperKind::Video && wallpaper.hasFile()
+        && !looksLikeVideo(wallpaper.source.toLocalFile())) {
+        qCWarning(lcScan) << "wallpaper" << wallpaper.id << "says it is a video, and" << named
+                          << "is not one: not played";
+        wallpaper.drawable = false;
+    }
     if (wallpaper.kind == WallpaperKind::Web || wallpaper.kind == WallpaperKind::Scene)
         wallpaper.properties = webProperties(*drawn, preset, folder);
     wallpaper.preview = entryPoint(folder, root.value(QLatin1StringView("preview")).toString());

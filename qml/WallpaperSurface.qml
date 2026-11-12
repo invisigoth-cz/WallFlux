@@ -238,6 +238,17 @@ Window {
 
             settings.playbackRequiresUserGesture: false
 
+            // A page may go to another page and to files of its own, and
+            // nowhere else: `steam://`, `mailto:` and the rest are handed to
+            // other programs, which a wallpaper has no business starting.
+            onNavigationRequested: (request) => {
+                const scheme = request.url.toString().split(":")[0].toLowerCase();
+                if (["file", "http", "https", "data", "blob", "about"].indexOf(scheme) < 0) {
+                    console.warn("wallflux: a web wallpaper tried to open", request.url, "-- refused");
+                    request.reject();
+                }
+            }
+
             // What Wallpaper Engine gives every page. It has to be there before
             // the page's own scripts run, which call it while they load.
             userScripts.collection: [{

@@ -20,7 +20,7 @@
 /// answer has to come from the compositor. On KWin a script is loaded into
 /// it over D-Bus and calls back here. Elsewhere this reports an uncovered
 /// screen for ever and nothing else goes wrong.
-class ScreenCover : public QObject
+class ScreenCover : public QObject, protected QDBusContext
 {
     Q_OBJECT
     QML_NAMED_ELEMENT(ScreenCover)

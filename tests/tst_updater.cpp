@@ -25,21 +25,35 @@ private slots:
 
     void takesThePackageAndNothingElse()
     {
-        const auto asset = [](const char *name, const char *url) {
-            return QJsonObject{{QStringLiteral("name"), QString::fromLatin1(name)},
-                               {QStringLiteral("browser_download_url"), QString::fromLatin1(url)}};
+        const QString sum = QStringLiteral("a996beb0ca3a8ac33f0773c3b4fdc0e48eac9c1076f3b6ef4566652663a5158e");
+        const auto asset = [&](const char *name, const char *url, bool summed = true) {
+            QJsonObject one{{QStringLiteral("name"), QString::fromLatin1(name)},
+                            {QStringLiteral("browser_download_url"), QString::fromLatin1(url)}};
+            if (summed)
+                one.insert(QStringLiteral("digest"), QStringLiteral("sha256:") + sum);
+            return one;
         };
+        const char *from = "https://github.com/invisigoth-cz/WallFlux/releases/download/v0.33.0/w.pkg.tar.zst";
         const QJsonObject release{{QStringLiteral("assets"), QJsonArray{
-            asset("notes.txt", "https://example.org/notes.txt"),
-            asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst.sig", "https://example.org/a.sig"),
-            asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst", "https://example.org/w.pkg.tar.zst")}}};
-        QCOMPARE(Updater::packageIn(release), QUrl(QStringLiteral("https://example.org/w.pkg.tar.zst")));
+            asset("notes.txt", "https://github.com/x/notes.txt"),
+            asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst.sig", "https://github.com/x/a.sig"),
+            asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst", from)}}};
+        const Updater::Package found = Updater::packageIn(release);
+        QCOMPARE(found.url, QUrl(QString::fromLatin1(from)));
+        QCOMPARE(found.sha256, sum.toLatin1());
 
-        // Not over plain http, which anybody on the way could swap.
-        const QJsonObject plain{{QStringLiteral("assets"), QJsonArray{
-            asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst", "http://example.org/w")}}};
-        QVERIFY(Updater::packageIn(plain).isEmpty());
-        QVERIFY(Updater::packageIn({}).isEmpty());
+        // Not over plain http, which anybody on the way could swap; not from
+        // anywhere but GitHub; and not without the checksum GitHub states.
+        const auto alone = [&](QJsonObject one) {
+            return QJsonObject{{QStringLiteral("assets"), QJsonArray{one}}};
+        };
+        QVERIFY(Updater::packageIn(alone(asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst",
+                                               "http://github.com/w"))).url.isEmpty());
+        QVERIFY(Updater::packageIn(alone(asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst",
+                                               "https://example.org/w"))).url.isEmpty());
+        QVERIFY(Updater::packageIn(alone(asset("wallflux-0.33.0-1-x86_64.pkg.tar.zst", from,
+                                               false))).url.isEmpty());
+        QVERIFY(Updater::packageIn({}).url.isEmpty());
     }
 };
 

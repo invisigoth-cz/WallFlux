@@ -4,6 +4,10 @@
 
 #pragma once
 
+#include <QDBusConnectionInterface>
+#include <QDBusContext>
+#include <QDBusReply>
+
 #include <QString>
 #include <QTemporaryFile>
 
@@ -34,3 +38,27 @@ private:
     /// file, and one that stays put while it runs.
     QTemporaryFile m_file;
 };
+
+/// Whether a call came from KWin, or was not made over D-Bus at all.
+///
+/// What the scripts call back is on the session bus, where any program of
+/// the session could call it too -- to stop the wallpaper as if covered, or
+/// move a scene's mouse. Only KWin's own connection is listened to. Its
+/// name is remembered, and looked up again only when a call comes from
+/// another, so a mouse moving sixty times a second costs no lookups.
+inline bool fromKWin(const QDBusContext &call)
+{
+    if (!call.calledFromDBus())
+        return true;
+    static QString kwin;
+    const QString sender = call.message().service();
+    if (!kwin.isEmpty() && sender == kwin)
+        return true;
+    const QDBusReply<QString> owner =
+        call.connection().interface()->serviceOwner(QStringLiteral("org.kde.KWin"));
+    kwin = owner.isValid() ? owner.value() : QString();
+    if (!kwin.isEmpty() && sender == kwin)
+        return true;
+    qWarning("a D-Bus call from %s, which is not KWin: refused", qPrintable(sender));
+    return false;
+}

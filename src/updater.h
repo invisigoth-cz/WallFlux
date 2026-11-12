@@ -59,15 +59,23 @@ public:
     /// Whether `candidate` is a later version than `current`, number by
     /// number: 0.10.0 is later than 0.9.0, which as text it is not.
     static bool newer(const QString &candidate, const QString &current);
-    /// The Arch package among a release's assets, or nothing.
-    static QUrl packageIn(const QJsonObject &release);
+    /// A release's package: where it is and the SHA-256 GitHub states for
+    /// it, as 64 hex digits.
+    struct Package
+    {
+        QUrl url;
+        QByteArray sha256;
+    };
+    /// The Arch package among a release's assets, or an empty one: only
+    /// over https, only from github.com, and only with GitHub's checksum.
+    static Package packageIn(const QJsonObject &release);
 
 signals:
     void changed();
 
 private:
     void set(State state, const QString &detail = {});
-    void installFrom(const QString &file);
+    void installFrom(const QString &file, const QByteArray &sha256);
 
     QNetworkAccessManager m_network;
     QProcess m_pacman;
@@ -75,7 +83,7 @@ private:
     QString m_latest;
     QString m_notes;
     QUrl m_page;
-    QUrl m_package;
+    Package m_package;
     int m_progress = 0;
     QString m_detail;
 };

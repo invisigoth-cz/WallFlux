@@ -155,18 +155,24 @@ ScreenCover::~ScreenCover() = default;
 
 void ScreenCover::setCovered(bool covered)
 {
+    if (!fromKWin(*this))
+        return;
     m_windowCovers = covered;
     settle();
 }
 
 void ScreenCover::setFocused(bool focused)
 {
+    if (!fromKWin(*this))
+        return;
     m_otherHasFocus = focused;
     settle();
 }
 
 void ScreenCover::setShowingDesktop(bool showing)
 {
+    if (!fromKWin(*this))
+        return;
     m_showingDesktop = showing;
     settle();
 }

@@ -181,6 +181,9 @@ int main(int argc, char *argv[])
 
     QLocalServer::removeServer(door);
     QLocalServer listening;
+    // The runtime folder is the user's alone already; said here as well,
+    // so the door does not depend on it.
+    listening.setSocketOptions(QLocalServer::UserAccessOption);
     if (!listening.listen(door))
         qWarning("wallflux: cannot listen for a second start: %s", qPrintable(listening.errorString()));
     QObject *root = engine.rootObjects().constFirst();
