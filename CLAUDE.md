@@ -2641,6 +2641,26 @@ even when all they write is "pokračujeme", list everything below that is
 open and let them choose. Do not pick for them.** 0.33.0 was released that
 day; everything asked for on 9 November is in it.
 
+**The list as the user left it on 12 November, evening (0.38.1 released),
+to be offered first:**
+
+- **Wallpapers against Windows**: Augmentation's bolts (white-violet there,
+  blue here), Space Visualizer's lava spark fans (fewer a minute), DOOM's D
+  and M (follow the music at 0.75), red specks in Star Citizen (unchecked),
+  Alien Isolation's reflections and lit particles, Blue Dawn's flare moved
+  by hand (`MOVED` in `render.rs`, until its cause is found).
+- **Minor issues in three wallpapers**, all of them what scene scripts do
+  not reach yet: SCP Terminal Lockdown (`chromatic_aberration`, a `vec2`
+  into a `float` that `spell_out_conversions` does not catch), Ender Dark
+  Angels Unforgiven (a script switching an effect's visibility), Magical
+  Orb (scripts on the camera's shake and on an instance's `speed`).
+- **Playlists and their configuration**, to be gone through with the user.
+- **The grid**, to be optimised.
+- **The Filters' sections**, perhaps reordered.
+- **WallFlux itself, checked**: speed, size, installing, uninstalling,
+  what it takes of the machine.
+- **Further improvements and changes** as the user brings them.
+
 0. **Waiting on decisions of the user's:**
    - **Making the repository public.** Asked and answered "not yet" on
      9 November. 12 November: the e-mail is in every commit and the full
