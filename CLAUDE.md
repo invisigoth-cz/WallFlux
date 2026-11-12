@@ -192,6 +192,18 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   the settings search. Keep it true when behaviour changes.
 - **Name order is Latin letters, then digits, then the rest**
   (`WallpaperCore::readsBefore`), each group in the locale's order.
+- **What the wallpaper does when it is not wanted is Wallpaper Engine's
+  four** (12 November, Settings › Performance): keep playing, mute, pause or
+  stop, for a covering window, another program with the keyboard, another
+  program's sound (no stop) and the screens off or locked. `reasons` in
+  `Main.qml`; Stop takes the first screen's `showing*` away, so the scene,
+  video or page is freed and loaded again from the start. They replaced
+  three switches, whose answers are read as the nearest of the four until
+  one is chosen (`underWindow` and the rest in `Picker.qml`). Off or locked
+  is `Asleep`: KWin's `org_kde_kwin_dpms` through KWayland (every screen
+  off), and the screen saver's ActiveChanged. **Sensitivity to music** is
+  Wallpaper Engine's recording volume, 100 % its default
+  (`wallflux_audio_gain`), for scenes and pages alike.
 - **The window's typeface is a setting** (12 November, Settings ›
   Appearance): the desktop's own (Noto Sans here, the default) or one of
   seven carried in the binary -- Inter, Geist, Manrope, Plus Jakarta Sans,
@@ -507,6 +519,8 @@ src/updater.h         Updater: a newer WallFlux on GitHub, and installing it
 src/updater.cpp       releases/latest, the package, pkexec pacman -U, restart
 src/usage.h           Usage: what WallFlux costs, for the status bar
 src/usage.cpp         /proc: stat, status and fdinfo of it and its children
+src/asleep.h          Asleep: every screen off (DPMS) or the session locked
+src/asleep.cpp        KWayland's Dpms per output, the screen saver's signal
 src/compatibility.h   Compatibility: the library tried out, and `--grade`
 src/compatibility.cpp the trial process and the window's end of it
 src/webguard.h        WallpaperFilesOnly: a page's file:// kept to wallpapers
@@ -1850,6 +1864,13 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `addMenu` no better -- so Recent wallpapers never opened. A `QMenu`
   submenu through `QSystemTrayIcon` arrives whole; `Tray` is that, fed a
   list from QML. Check a tray menu that way, not by trusting the QML.
+- **Whether KWin has switched the screens off is said over Wayland and
+  nowhere else.** Not in KWin's scripting (an Output has no dpms, read off
+  `for (k in output)`), not on the session bus (every KWin and kded path
+  looked through), not by PowerDevil. `org_kde_kwin_dpms` through KWayland
+  is it, and **its `isSupported` is not to be trusted**: KWin's virtual
+  outputs say false and report Off and On all the same, which is how it was
+  tested -- `kscreen-doctor --dpms off` inside `kwin_wayland --virtual`.
 - **A Popup takes its font from the window, and only an ApplicationWindow
   has one to give.** A `font.family` on a Control that wraps everything
   reaches the controls and not one popup or menu; `QGuiApplication::setFont`

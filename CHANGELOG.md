@@ -6,6 +6,30 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-11-12
+
+### Added
+
+- **What the wallpaper does** under a window, while you work in another
+  program, while another program plays sound and while the screens are off
+  or the session is locked -- keep playing, mute, pause, or stop and free
+  its memory -- in Settings › Performance.
+- **Sensitivity to music**, for the wallpapers that follow it.
+- **The status bar's usage** shows how much memory the machine has free.
+- **Compatibility** in Settings › Controls, and what was missing there.
+
+### Changed
+
+- **The usage line reads at a glance**: names in the accent, a bar between.
+- **A wallpaper's facts**: the value stands out, the label steps back.
+- **Double arrows** go to the first and last page of the workshop.
+- **New icons** for Works and for the library in Controls.
+
+### Fixed
+
+- **A locked screen silences the wallpaper**, which went on playing its
+  sound under the lock.
+
 ## [0.37.3] — 2026-11-12
 
 ### Security
@@ -1524,7 +1548,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.3...v0.38.0
 [0.37.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.2...v0.37.3
 [0.37.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.1...v0.37.2
 [0.37.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.0...v0.37.1
