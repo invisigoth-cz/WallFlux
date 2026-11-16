@@ -6,6 +6,22 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Each saved playlist in Load says how it runs** -- how often it
+  changes, in what order and with which transition -- a size larger than
+  the bare interval it showed, so playlists with different times can be
+  told apart.
+
+### Fixed
+
+- **A playlist started from the Playlists button is shown on the strip**,
+  its wallpapers and its settings, as one opened from Load always was: the
+  strip showed whatever was put together last.
+- **Turn off stops a running playlist too.** It took the wallpaper off and
+  left the playlist ticked, and its clock put the next wallpaper back on
+  the desktop by itself.
+
 ## [0.39.0] — 2026-11-16
 
 ### Fixed

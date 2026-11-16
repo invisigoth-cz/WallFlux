@@ -117,7 +117,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **Wallpapers that take turns.** A strip along the bottom of the library
   from the moment the window opens, empty or not -- the place a playlist is
   made has to be visible before there is anything in it. Along its top:
-  Playlists, then Load, Save, Configure and Add wallpaper; under them the
+  Playlists, then Load, Save, Configure and Add wallpaper (a line beside
+  Configure saying what it was set to was tried on 16 November and taken
+  out again, the user's word; Load's rows say each saved one's settings in
+  `playlistSummary`'s words, and the Playlists menu says nothing but the
+  names); under them the
   chosen wallpapers, twenty to a row. Hovering a card shows a tick box --
   white with a black edge, blue when it is ticked, fixed colours rather
   than the palette's because the box sits on a picture and not on the
@@ -131,7 +135,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   that name; Configure is how it runs. A saved playlist is started from the
   Playlists button beside the filters, and stopped by clicking it again;
   that button always says Playlists and the tick in its menu says which
-  one is on, as the sort menu does.
+  one is on, as the sort menu does. **Whatever starts a playlist puts it on
+  the strip** (16 November, `onPlayingChanged` in `Picker.qml`), so the
+  strip and its line are always about the one playing; a rename of the one
+  playing keeps the strip as it is.
   There is no Playlists tab: a playlist is made out of the grid, so it is
   made in the grid.
 

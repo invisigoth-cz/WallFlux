@@ -559,6 +559,33 @@ ApplicationWindow {
         Playlists.start(name);
     }
 
+    /// The playlist that played last, to tell a rename from another start.
+    property string lastPlaying: ""
+
+    // Whatever starts a playlist -- Load, the Playlists button beside the
+    // filters -- the strip shows it, its wallpapers and its settings: the
+    // strip is about what is playing. The
+    // Playlists button used to start one and leave the strip showing
+    // another. A rename of the one playing is the same playlist under a new
+    // name, and keeps whatever is on the strip.
+    Connections {
+        target: Playlists
+
+        function onPlayingChanged() {
+            const now = Playlists.playing;
+            const before = picker.lastPlaying;
+            picker.lastPlaying = now;
+            if (now === "")
+                return;
+            if (before !== "" && Playlists.named(before).name === undefined) {
+                if (picker.playlistName === before)
+                    picker.playlistName = now;
+                return;
+            }
+            picker.loadPlaylist(now);
+        }
+    }
+
     /// Puts a saved playlist back on the strip, settings and all, so it can
     /// be looked at and changed rather than only started.
     function loadPlaylist(name) {
@@ -761,6 +788,33 @@ ApplicationWindow {
         case 4: return qsTr("Fade to black");
         }
         return "";
+    }
+
+    /// A saved playlist's settings in one line -- how long each wallpaper
+    /// stays, in what order, and how one goes into the next -- for its row
+    /// in Load, so that saved playlists with different times can be told
+    /// apart without opening each one. The time goes through `asClock`, the rule the
+    /// playlist itself keeps: three noughts read as the five seconds it
+    /// really waits.
+    function playlistSummary(how, language) {
+        const clock = Playlists.asClock(how.hours * 3600 + how.minutes * 60 + how.seconds);
+        const parts = [];
+        if (clock.hours)
+            parts.push(qsTr("%1 h").arg(clock.hours));
+        if (clock.minutes)
+            parts.push(qsTr("%1 min").arg(clock.minutes));
+        if (clock.seconds)
+            parts.push(qsTr("%1 s").arg(clock.seconds));
+        let transition = qsTr("without transition");
+        switch (how.transition) {
+        case "soft": transition = qsTr("without flicker"); break;
+        case "fade": transition = qsTr("fading"); break;
+        case "black": transition = qsTr("through black"); break;
+        case "random": transition = qsTr("random transition"); break;
+        }
+        return qsTr("Every %1").arg(parts.join(" "))
+               + " · " + (how.shuffle ? qsTr("in random order") : qsTr("in order"))
+               + " · " + transition;
     }
 
     /// Which of Wallpaper Engine's catalogues to call the tags by.
@@ -1750,13 +1804,9 @@ ApplicationWindow {
                             }
 
                             Label {
-                                font.pixelSize: 11
-                                opacity: 0.8
+                                font.pixelSize: 12
                                 text: qsTr("Wallpapers: %1").arg(row.modelData.ids.length)
-                                      + " · " + row.modelData.hours + " h "
-                                      + row.modelData.minutes + " min"
-                                      + (row.modelData.seconds
-                                             ? " " + row.modelData.seconds + " s" : "")
+                                      + " · " + picker.playlistSummary(row.modelData, Language.czech)
                                 color: loading.picked === row.modelData.name
                                            ? picker.palette.highlightedText
                                            : picker.palette.windowText
@@ -3088,7 +3138,12 @@ ApplicationWindow {
                     // Nothing to turn off until something plays, which is the
                     // state the program starts in.
                     enabled: Wallpapers.current.playable
-                    onClicked: Wallpapers.clear()
+                    // A playlist too, or its clock would put the next one
+                    // on the desktop by itself a moment later.
+                    onClicked: {
+                        Playlists.stop();
+                        Wallpapers.clear();
+                    }
                 }
 
                 RoundedTool {

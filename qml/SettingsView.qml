@@ -1040,9 +1040,9 @@ Item {
                                 + "wallpaper to show every box at once. They line up along the bottom.\n"
                                 + "• Save gives the playlist a name; Load opens a saved one and starts "
                                 + "it, renames it or throws it away; Configure sets how long each stays, "
-                                + "the order and the transition.\n"
+                                + "the order and the transition, and Load shows what each saved one is set to.\n"
                                 + "• The Playlists button beside the filters starts a saved playlist, "
-                                + "and stops it when clicked again.")
+                                + "and stops it when clicked again. Turn off in the footer stops it too.")
                 }
 
                 Guide {
