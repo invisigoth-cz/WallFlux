@@ -455,9 +455,9 @@ impl InstanceOverride {
         }
     }
 
-    /// The control points the scene moves, by number. `wallpaper64.exe`
-    /// (`FUN_14022bd40`) puts each in place of the file's offset for that
-    /// point, in the system's own space unless the point is on the mouse.
+    /// The control points the scene moves, by number. Wallpaper Engine puts
+    /// each in place of the file's offset for that point, in the system's
+    /// own space unless the point is on the mouse.
     pub fn points(&self) -> Vec<(usize, [f32; 3])> {
         [
             &self.controlpoint0,

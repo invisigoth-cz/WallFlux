@@ -668,7 +668,7 @@ pub struct Scene {
     particles_on: bool,
     /// Whether the glow may be drawn: Wallpaper Engine's post-processing,
     /// which its Low preset turns off and which reaches the scene's bloom
-    /// and nothing else (`wallpaper64.exe`, `0x140180a41`).
+    /// and nothing else.
     bloom_on: bool,
     /// Set when the scene turns on its glow.
     bloom: Option<Bloom>,
@@ -2201,10 +2201,9 @@ fn load_particles(
         // parent's, a child and its siblings would all emit in step.
         placed.id = object.id.wrapping_mul(1_000_003).wrapping_add(index as i64 + 1);
         // The whole of the instance's override goes on down, as the parent's
-        // object keeps it: `wallpaper64.exe` binds a child it spawns
-        // (`FUN_140236cd0` -> `FUN_14022f890`) through `FUN_1401d15a0` with
-        // the child's own bindings and the same object's values, exactly as
-        // the parent was bound. Space Visualizer's spark trails are children
+        // object keeps it: Wallpaper Engine binds a child it spawns with the
+        // child's own bindings and the same object's values, exactly as the
+        // parent was bound. Space Visualizer's spark trails are children
         // of systems set to a size of 0.2, and on Windows they are hair-thin.
         placed.origin.value.0 = transform::apply(&parent, child.origin);
         placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
@@ -2343,7 +2342,7 @@ const MOST_SCRIPT_STEPS: f32 = 300.0;
 /// as many as it asks for.
 ///
 /// Wallpaper Engine never thins a scene -- none of its quality presets touches
-/// particles, and `wallpaper64.exe` reads nothing about them with its settings;
+/// particles, and nothing about them is read with its settings;
 /// a heavy scene simply gets fewer frames. So neither does the program, which
 /// draws fifteen a second as Wallpaper Engine does by default. Unthinned, Space
 /// Visualizer (167 917) and DOOM (177 307), the heaviest here, step in about

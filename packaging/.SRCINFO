@@ -1,0 +1,31 @@
+pkgbase = wallflux
+	pkgdesc = Plays the Wallpaper Engine wallpapers you already own
+	pkgver = 0.39.2
+	pkgrel = 1
+	url = https://github.com/invisigoth-cz/WallFlux
+	arch = x86_64
+	license = GPL-3.0-or-later
+	license = custom:Steamworks-SDK-linking-exception
+	license = OFL-1.1
+	makedepends = cargo
+	makedepends = cmake
+	makedepends = git
+	makedepends = ninja
+	makedepends = qt6-tools
+	depends = breeze-icons
+	depends = ffmpeg
+	depends = kwayland
+	depends = layer-shell-qt
+	depends = libpulse
+	depends = pipewire
+	depends = qt6-base
+	depends = qt6-declarative
+	depends = qt6-multimedia
+	depends = qt6-webengine
+	depends = steamworks-sdk
+	optdepends = steam: to install Wallpaper Engine and fetch wallpapers from its workshop
+	options = !lto
+	source = wallflux::git+https://github.com/invisigoth-cz/WallFlux.git#tag=v0.39.2
+	sha256sums = SKIP
+
+pkgname = wallflux

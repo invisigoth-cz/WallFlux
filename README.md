@@ -51,27 +51,35 @@ Valve's Steamworks SDK.
 
 ## Install
 
-For **Arch Linux users** and Arch-based systems. You need an **AUR helper**
--- `paru` (CachyOS has it already) or `yay`. Open a terminal and paste
-these two lines, one after the other:
+For **Arch Linux users** and Arch-based systems, from the
+[AUR](https://aur.archlinux.org/packages/wallflux). You need an **AUR
+helper** -- `paru` (CachyOS has it already) or `yay`. Open a terminal and
+paste one line:
 
-    paru -S steamworks-sdk
-    sudo pacman -U https://github.com/invisigoth-cz/WallFlux/releases/latest/download/wallflux-x86_64.pkg.tar.zst
+    paru -S wallflux
 
-The first installs Valve's Steamworks SDK, which only the AUR carries and
-which the Steam Workshop tab needs. The second installs WallFlux itself.
-Both ask for your password and then for a `Y` to go ahead.
+or, with yay:
+
+    yay -S wallflux
+
+It builds WallFlux on your machine, which takes a few minutes, and brings
+everything it needs with it -- Valve's Steamworks SDK included, which only
+the AUR carries and which the Steam Workshop tab needs. It asks for your
+password and then for a `Y` to go ahead.
 
 WallFlux is then in the application menu. Start it and its icon appears in
-the panel; click the icon to choose a wallpaper. New versions are offered
-in Settings and install themselves.
+the panel; click the icon to choose a wallpaper. When a new version is out,
+Settings says so, and it is updated with the rest of the system:
+`paru -Syu` or `yay -Syu`.
 
 ## Uninstall
 
-One line removes WallFlux, its settings, its playlists and its cache.
-The Steamworks SDK and everything else it needed stay installed:
+One line removes WallFlux, whatever it needed that nothing else does, its
+settings, its playlists and its cache:
 
-    sudo pacman -R wallflux; rm -rf ~/.config/WallFlux ~/.cache/WallFlux ~/.config/autostart/wallflux.desktop
+    paru -Rns wallflux; rm -rf ~/.config/WallFlux ~/.cache/WallFlux ~/.config/autostart/wallflux.desktop
+
+(`yay -Rns wallflux` does the same as the first half.)
 
 ## How it works
 

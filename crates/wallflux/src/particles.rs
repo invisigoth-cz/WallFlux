@@ -76,10 +76,10 @@ const EVENT_POOLS: usize = 100_000;
 const DRAG_FRAME: f32 = 0.025;
 
 /// How much of a step's time drag, turbulence, a vortex and a pull are felt
-/// over, in a frame this long. `wallpaper64.exe` (`FUN_140236cd0`) hands its
+/// over, in a frame this long. Wallpaper Engine hands its
 /// operators two times: the step, which gravity and the move take, and the
 /// step times `min(0.025 / frame, 1)^0.7`, which the pushes take -- the frame
-/// being the one the scene keeps at +0x15c. At fifteen a second, 0.50.
+/// being the one the scene measured. At fifteen a second, 0.50.
 fn felt(frame: f32) -> f32 {
     (DRAG_FRAME / frame).min(1.0).powf(0.7)
 }
@@ -88,7 +88,7 @@ fn felt(frame: f32) -> f32 {
 /// as Wallpaper Engine has it. It runs a frame's operators once -- twice at
 /// half the time when it is held to 20 frames a second or fewer -- and after
 /// each step multiplies the velocity by `1 - min(drag x step x felt,
-/// 0.99999988)` (the `movement` case of `0x14023fbc0`). Our steps are
+/// 0.99999988)` in its `movement` step. Our steps are
 /// sixtieths, so that factor is spread over them: over a whole frame it comes
 /// to the same, and at 15 a second it is about half the drag a plain
 /// `1 / (1 + drag x dt)` gave.
@@ -330,8 +330,7 @@ fn remap_weight(remap: &Remap, progress: f32) -> f32 {
 /// One remap, reading the particle and writing it back. `born` is whether the
 /// particle is being made, when what it is born with is what is written.
 ///
-/// ponytail: the engine's update for this is inside a 49 kB function the
-/// decompiler gives up on, so its defaults are read and its working is the
+/// ponytail: its defaults are Wallpaper Engine's and its working is the
 /// editor's description of it. Compare against Wallpaper Engine once a wallpaper
 /// in the library uses one -- none does today; Valve's rain and thunderbolt do.
 fn apply_remap(remap: &Remap, particle: &mut Particle, moment: &Moment, born: bool) {
@@ -519,7 +518,7 @@ fn flock(live: &[Particle], boids: &Boids, step: u32, dt: f32) -> Vec<[f32; 3]> 
 }
 
 /// What a system's speeds are before the scene's `speed` multiplies them --
-/// the binary's list, `FUN_1401c5490`: the emitters' speeds, `velocityrandom`,
+/// Wallpaper Engine's list: the emitters' speeds, `velocityrandom`,
 /// `turbulentvelocityrandom`, `mapsequencearoundcontrolpoint`, the pull of
 /// `controlpointattract`, the speeds of a vortex and of `turbulence`, and the
 /// frequency of `oscillateposition`.
@@ -603,7 +602,7 @@ fn to_hsv([r, g, b]: [f32; 3]) -> [f32; 3] {
 }
 
 /// The colour a system's particles have before a scene says otherwise, as
-/// `wallpaper64.exe` takes it: the middle of the last colour initializer, the
+/// Wallpaper Engine takes it: the middle of the last colour initializer, the
 /// start of the first `colorchange` where there is none, or white.
 fn own_color(definition: &ParticleSystem) -> [f32; 3] {
     let middle = |r: &Range<[f32; 3]>| std::array::from_fn(|i| (r.min[i] + r.max[i]) / 2.0);
@@ -893,10 +892,9 @@ impl System {
         start.lifetime = times(start.lifetime, over.lifetime.value);
         // The scene's colour moves the system's colours by how far it is, in
         // hue, saturation and value, from the colour the system already has:
-        // `wallpaper64.exe` works out that colour when it reads the system
-        // (`FUN_1401c45f0`) and moves every colour range by the difference
-        // (`FUN_1401d15a0`, cases 11 to 13), the hue going round and the other
-        // two held between nought and one.
+        // Wallpaper Engine works out that colour when it reads the system
+        // and moves every colour range by the difference, the hue going round
+        // and the other two held between nought and one.
         let mut operators = definition.operators.clone();
         if let Some(tint) = over.tint() {
             let by = std::array::from_fn::<f32, 3, _>(|i| {
@@ -932,9 +930,8 @@ impl System {
                 *value = held(*value, by[2]);
             }
         }
-        // The rest of what `wallpaper64.exe` binds the scene's `size` and
-        // `speed` to (`FUN_1401c5490`, each step's entries reading 0xcc and
-        // 0xd4 of the override): `size` the ends of every `sizechange` as well
+        // The rest of what Wallpaper Engine binds the scene's `size` and
+        // `speed` to: `size` the ends of every `sizechange` as well
         // as `sizerandom`, so a step that grows a particle grows it from the
         // scene's size; `speed` the pull of `controlpointattract`, the speeds of
         // a vortex and of `turbulence`, and the frequency of `oscillateposition`.
@@ -954,9 +951,8 @@ impl System {
             .cloned()
             .map(|mut e| {
                 // The scene's `count` is how many are let out, not how many
-                // may live: `wallpaper64.exe` binds it to each emitter's rate
-                // and burst (`FUN_1401c5490`, the entries at `0x1401c626c`)
-                // and to nothing that sizes the pool. Gears of War's ripple,
+                // may live: Wallpaper Engine binds it to each emitter's rate
+                // and burst and to nothing that sizes the pool. Gears of War's ripple,
                 // one a second times 0.03, comes every 33 s as on Windows; with
                 // the pool scaled instead, 16 x 0.03 left it none at all.
                 e.rate *= count;
@@ -983,7 +979,7 @@ impl System {
             .map(|((steps, mirror), (from, to))| Line {
                 from: *from,
                 to: *to,
-                // Bound to the scene's `count` too (`0x1401ca6b3`).
+                // Bound to the scene's `count` too.
                 steps: ((steps as f32 * count).round() as u32).max(2),
                 mirror,
             });
@@ -1099,7 +1095,7 @@ impl System {
     }
 
     /// Waits to be told where, as a burst for each event of the parent, each
-    /// with a pool of its own. `wallpaper64.exe` (`FUN_140236cd0`) starts a
+    /// with a pool of its own. Wallpaper Engine starts a
     /// whole system for every particle the parent lets out, up to the child's
     /// `maxcount` of them at once; a burst sharing one pool with the bursts
     /// before it got what they had left. Space Visualizer's spark trails
@@ -1395,9 +1391,9 @@ impl System {
 
     /// Whether its particles are seen through a camera.
     /// Multiplies every colour by the scene's, on top of moving them in hue,
-    /// saturation and value. `wallpaper64.exe` sets a flag (`0x200000`,
-    /// `FUN_1401c5490`) under which the instance's colour becomes a
-    /// multiplier on the particles drawn (`FUN_1401d15a0`), for a scene whose
+    /// saturation and value. Wallpaper Engine sets a flag under which the
+    /// instance's colour becomes a
+    /// multiplier on the particles drawn, for a scene whose
     /// `version` is below 5 -- every one here but Ender Spartan -- and for a
     /// system with no colour of its own, which has nothing to move: Dark
     /// Core's fire, white and set to orange, is orange, where moved and then
@@ -1528,7 +1524,7 @@ impl System {
         let hosts = &self.hosts;
         let (frame, clock) = (self.frame, self.clock);
         // The pushes -- turbulence, a vortex, a pull -- are felt over this
-        // much time, as drag is: `wallpaper64.exe` hands its operators the
+        // much time, as drag is: Wallpaper Engine hands its operators the
         // step and this second time, and gravity and the move take the first.
         let felt_dt = dt * felt(frame);
         // A system in world space feels its gravity at its object's size but
@@ -1586,7 +1582,7 @@ impl System {
                         }
                     }
                     // Gravity, then the move, then drag -- in that order, as
-                    // `wallpaper64.exe` does it.
+                    // Wallpaper Engine does it.
                     Operator::Movement { gravity, drag } => {
                         let kept = drag_left(*drag, dt, frame, clock);
                         for (axis, gravity) in gravity.iter().enumerate() {
@@ -1622,7 +1618,7 @@ impl System {
                             particle.rotation[axis] += particle.spin[axis] * dt;
                         }
                     }
-                    // As `wallpaper64.exe` pulls (`0x140241630`): the whole
+                    // As Wallpaper Engine pulls: the whole
                     // strength at the point, none at the reach the file states
                     // -- all of it, not half -- and, as `flags` has it unless
                     // told otherwise, never further than the particle is from
@@ -1656,9 +1652,8 @@ impl System {
                     // drag holds to a speed: Augmentation's eye asks for 8000 and
                     // swirls on the beat. As degrees a second that was a turn and
                     // a half a frame, and a mess of straight spikes.
-                    // As `wallpaper64.exe` steps it (`0x1402432e2`, four particles
-                    // at a time): the way from the middle -- less the part along
-                    // the axis only where `flags` asks -- made of length one,
+                    // As Wallpaper Engine steps it: the way from the middle --
+                    // less the part along the axis only where `flags` asks -- made of length one,
                     // crossed with the axis and pushed by the speed at that
                     // distance. The cross is not made of length one again, so a
                     // particle out along the axis is hardly pushed at all:
@@ -2862,7 +2857,7 @@ mod tests {
     }
 
     /// The scene's `size` reaches every `sizechange` and its `speed` every pull,
-    /// swirl, turbulence and sway, as `wallpaper64.exe` binds them: Romulus'
+    /// swirl, turbulence and sway, as Wallpaper Engine binds them: Romulus'
     /// specks, at 0.51 and 0.5, are that much smaller and slower again.
     #[test]
     fn a_scenes_size_and_speed_reach_the_steps_that_use_them() {
@@ -3615,7 +3610,7 @@ mod tests {
     }
 
     /// The whole pull at the point, half of it half way to the reach, none past
-    /// it -- the reach the file states, not half of it -- as `wallpaper64.exe`
+    /// it -- the reach the file states, not half of it -- as Wallpaper Engine
     /// pulls; and never further than the particle is from the point, unless
     /// `flags` drops that.
     #[test]
@@ -3637,7 +3632,7 @@ mod tests {
     }
 
     /// Out along its axis a particle is far from the vortex and hardly turned,
-    /// as `wallpaper64.exe` has it; told by `flags` to measure from the axis,
+    /// as Wallpaper Engine has it; told by `flags` to measure from the axis,
     /// it is as near as where it started.
     #[test]
     fn a_vortex_measures_from_its_middle_unless_told_otherwise() {

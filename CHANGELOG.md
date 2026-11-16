@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **WallFlux is installed from the AUR**: `paru -S wallflux` or
+  `yay -S wallflux` builds it and brings everything it needs, Valve's
+  Steamworks SDK included. The README says so, and how to take it out
+  again.
+- **Settings only says that a new version is out**, and to update with the
+  rest of the system (`paru -Syu` or `yay -Syu`); "What is new" opens the
+  release's notes. WallFlux no longer downloads and installs a package
+  itself, which an AUR install would have gone round.
+
 ## [0.39.2] — 2026-11-16
 
 ### Changed
@@ -389,7 +400,7 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Particles move as Wallpaper Engine moves them at fifteen frames a
-  second.** Read out of `wallpaper64.exe`: at 20 frames a second or fewer it
+  second.** At 20 frames a second or fewer Wallpaper Engine
   runs each frame's particle step twice at half the time, and drag,
   turbulence, vortices and pulls are felt over less time than gravity and
   the move -- about half at the desktop's fifteen. Gears of War and Star wars
@@ -427,7 +438,7 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Alien Romulus' specks round the mouse are back, and look as on Windows**:
   small sparse dots, where they used to be splats several times too large and
   were left out for it. A placed particle system's size and speed now reach
-  every step Wallpaper Engine binds them to (read off `wallpaper64.exe`): the
+  every step Wallpaper Engine binds them to: the
   size also its growth and shrinking, the speed also its pulls, swirls,
   turbulence and sway.
 - **A pull towards a control point works as Wallpaper Engine's does**: full
@@ -441,8 +452,7 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **A particle vortex pushes as Wallpaper Engine's does**, read off
-  `wallpaper64.exe`: a particle's distance is from the vortex's middle (from
+- **A particle vortex pushes as Wallpaper Engine's does**: a particle's distance is from the vortex's middle (from
   its axis only where the file's `flags` say so), the axis is normalised, and
   the push weakens with the angle between the particle and the axis. Space
   Visualizer's red star streaks cross the sky flatter, nearer Windows'. Snow
@@ -481,8 +491,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Nothing in the program**: this release carries the notes of 5 November --
   Wallpaper Engine on the user's Windows draws fifteen frames a second where
-  this program has no cap at all, the meter re-read against `wallpaper64.exe`
-  and found the same, and what is known about Space Visualizer's sky and Alien
+  this program has no cap at all, the meter checked again and found the
+  same, and what is known about Space Visualizer's sky and Alien
   Romulus' specks -- so the version number says which notes go with which
   build.
 
@@ -643,8 +653,8 @@ behave as they do on Windows.
 
 ### Sound
 
-- **The music is read as Wallpaper Engine reads it.** Its own reading, taken out of
-  `wallpaper64.exe`: 64 numbers per ear, the bass weighed down so music comes out
+- **The music is read as Wallpaper Engine reads it.** Its own reading: 64
+  numbers per ear, the bass weighed down so music comes out
   level, nothing held from one reading to the next and nothing capped at one. The
   old meter held every band near the top, so a wallpaper that smooths the sound for
   itself stood still: Dark Core's equaliser bars under STANDBY hardly moved and its

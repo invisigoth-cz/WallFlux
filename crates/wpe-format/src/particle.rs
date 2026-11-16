@@ -168,7 +168,7 @@ pub enum RemapTransform {
 }
 
 /// Reads one value of a particle, maps it from one range to another and writes
-/// it into another. The defaults are the engine's, out of `wallpaper64.exe`.
+/// it into another. The defaults are the engine's.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Remap {
     pub operation: RemapOperation,
@@ -291,7 +291,7 @@ impl Spectrum {
 
     /// The same sound in fewer entries, each the loudest of those it covers:
     /// 32 are the louder of each pair and 16 the louder of each pair of those,
-    /// as the scene's render loop in `wallpaper64.exe` (`FUN_140110630`) fills
+    /// as the scene's render loop in Wallpaper Engine fills
     /// them.
     pub fn fewer<const N: usize>(entries: &[f32; AUDIO_ENTRIES]) -> [f32; N] {
         let per = AUDIO_ENTRIES / N;
@@ -300,8 +300,8 @@ impl Spectrum {
 
     /// The loudness across a range of bands, which is the loudest of them.
     ///
-    /// `wallpaper64.exe` reads a particle step's sound in one function
-    /// (`0x14022a8a0`, called by emitters and operators alike): one ear, the
+    /// Wallpaper Engine reads a particle step's sound the same way for
+    /// emitters and operators alike: one ear, the
     /// other, or both ears added band by band and halved, and the largest of
     /// those over the range -- not their average, which the stock effect
     /// shaders take for themselves and which this was read as until
@@ -323,7 +323,7 @@ impl Spectrum {
 
 /// What a scene does with the meter's readings before anything sees them.
 ///
-/// Read off the render loop of a scene in `wallpaper64.exe` (`FUN_140110630`),
+/// Read off the render loop of a scene in Wallpaper Engine,
 /// once a frame and by the time the frame took. The 64 entries of each ear go
 /// in eight groups of eight, and each group is divided by an envelope that
 /// rises towards the louder of the group's loudest entry and a third of the
@@ -506,7 +506,7 @@ pub struct Collision {
 pub struct Vortex {
     /// Set where the speed of the swirl follows the sound.
     pub audio: Option<AudioResponse>,
-    /// Of length one, as `wallpaper64.exe` makes it when it reads the file.
+    /// Of length one, as Wallpaper Engine makes it when it reads the file.
     pub axis: [f32; 3],
     /// Bit 0 of the step's `flags`: measure a particle's distance from the
     /// axis rather than from the vortex's middle. Off unless the file says so.
@@ -560,7 +560,7 @@ pub enum Operator {
     /// `fade_out` of the way. Both are fractions of the lifetime, not seconds:
     /// across 510 uses no value is above one, lifetimes of twenty seconds
     /// included, and the usual pairs are 0.1 and 0.9. Missing, each is 0.5 --
-    /// Wallpaper Engine's own default, read out of `wallpaper64.exe`.
+    /// Wallpaper Engine's own default.
     AlphaFade {
         fade_in: f32,
         fade_out: f32,
@@ -752,7 +752,7 @@ impl ParticleSystem {
     /// The control points the file places in the scene rather than in the
     /// system's own space -- `flags` bit 1, as `discharge.json`'s far end --
     /// by number with the file's offset, and whether the system lives in the
-    /// scene's axes. `wallpaper64.exe` (`FUN_14022bd40`) turns such a point
+    /// scene's axes. Wallpaper Engine turns such a point
     /// into the system's own space through the object's inverse.
     pub fn scene_points(bytes: &[u8]) -> (Vec<(usize, [f32; 3])>, bool) {
         let Ok(root) = serde_json::from_slice::<Value>(bytes) else {
@@ -824,8 +824,8 @@ impl ParticleSystem {
                     })
                 }
                 "velocityrandom" => Initializer::Velocity(triple(0.0)),
-                // The engine's defaults for a flat scene, out of
-                // `wallpaper64.exe`, and Almamu's renderer has the same: a
+                // Wallpaper Engine's defaults for a flat scene, and Almamu's
+                // renderer has the same: a
                 // hundred to two hundred and fifty, a scale and a time scale
                 // of one, no offset. Read as nought, Star wars' embers were
                 // born still and never rose.
@@ -867,7 +867,7 @@ impl ParticleSystem {
                 },
                 // A turn at random about the axis out of the screen, and up to
                 // five radians a second either way, each end on its own: the
-                // engine's defaults, out of `wallpaper64.exe`. 112 steps state
+                // engine's defaults. 112 steps state
                 // neither end and 32 only the top, and with a stated end
                 // standing for both, all of Warhammer's rays lay at one angle
                 // and every puff of a smoke at the same.
@@ -1006,10 +1006,10 @@ impl ParticleSystem {
                             .push("operator controlpointattract has no such control point".into());
                         continue;
                     };
-                    // Defaults out of `wallpaper64.exe` (`FUN_1401bdee0`, a flat
-                    // scene's side): a pull of 512 out to 512, and `flags` 2.
-                    // It reads an `offset` and leaves it out of the pull
-                    // (`0x140241630`), and reads no `origin` at all -- which is
+                    // Wallpaper Engine's defaults for a flat scene: a pull of
+                    // 512 out to 512, and `flags` 2. It reads an `offset` and
+                    // leaves it out of the pull, and reads no `origin` at all
+                    // -- which is
                     // what the files here write, two of them in Blue Dawn not
                     // nought.
                     let reach = num(step, "threshold", 512.0);
@@ -1027,9 +1027,8 @@ impl ParticleSystem {
                 }
                 "vortex" | "vortex_v2" => Operator::Vortex(Vortex {
                     audio: audio_response(step),
-                    // Defaults out of `wallpaper64.exe` (`0x1401bf0a0`, a flat
-                    // scene's side of each `test sil,sil`): within 500 at 2500,
-                    // nothing from 650 out.
+                    // Wallpaper Engine's defaults for a flat scene: within 500
+                    // at 2500, nothing from 650 out.
                     // Normalised there too, and "0 0 1" when it has no length.
                     axis: {
                         let axis = vector(step, "axis", [0.0, 0.0, 1.0]);
@@ -1110,9 +1109,9 @@ impl ParticleSystem {
                 // and cheap enough for a system of five hundred.
                 points: num(r, "segments", 8.0).clamp(2.0, 48.0) as u32,
             },
-            // Defaults out of `wallpaper64.exe` (`FUN_1401c0af0`): a length
-            // of 0.05 and a cap of 10, and no floor. The cap is in sizes of
-            // the particle -- `ComputeParticleTrailTangents` draws it
+            // Wallpaper Engine's defaults: a length of 0.05 and a cap of 10,
+            // and no floor. The cap is in sizes of the particle --
+            // `ComputeParticleTrailTangents` draws it
             // `size x min(speed x length, maxlength)` long -- and half the
             // systems that trail leave it out. Uncapped, Space Visualizer's
             // sparks, 3 to 10 across at hundreds a second, drew lines across
@@ -1386,7 +1385,7 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
     Emitter {
         shape,
         origin: vector(step, "origin", [0.0; 3]),
-        // The flat scene's defaults, out of `wallpaper64.exe`: in the plane,
+        // The flat scene's defaults: in the plane,
         // and a radius of 256.
         directions: vector(step, "directions", [1.0, 1.0, 0.0]),
         sign: vector(step, "sign", [0.0; 3]),
@@ -1404,8 +1403,8 @@ fn emitter(step: &Value, shape: Shape) -> Emitter {
             min: vector(step, "distancemin", [0.0; 3]),
             max: vector(step, "distancemax", [256.0; 3]),
         },
-        // Ten a second, what `wallpaper64.exe` fills in for every kind of
-        // emitter (`FUN_1401b8df0`). Read as nought they let nothing out: no
+        // Ten a second, what Wallpaper Engine fills in for every kind of
+        // emitter. Read as nought they let nothing out: no
         // embers in Terminator Resistance and no lava on Space Visualizer's
         // planet; read as five, Dark Core's tubes burned half full.
         rate: num(step, "rate", 10.0),
@@ -1435,8 +1434,8 @@ fn audio_response(step: &Value) -> Option<AudioResponse> {
         ..=0 => return None,
         _ => Channels::Both,
     };
-    // What `wallpaper64.exe` fills in for an emitter that leaves these out
-    // (`FUN_1401c1e20`): the two lowest bands, squared, heard from 0.8 to 1.
+    // What Wallpaper Engine fills in for an emitter that leaves these out:
+    // the two lowest bands, squared, heard from 0.8 to 1.
     // A start past the end swaps them, and neither goes past the last band.
     let last = AUDIO_BANDS - 1;
     let start = (num(step, "audioprocessingfrequencystart", 0.0).max(0.0) as usize).min(last);
@@ -1506,7 +1505,7 @@ fn bounds3(step: &Value, low: &str, high: &str, default: f32) -> Range<[f32; 3]>
     }
 }
 
-/// Each end has its own default, out of `wallpaper64.exe`: `scalemin` 0.7 alone
+/// Each end has its own default: `scalemin` 0.7 alone
 /// is an ember swinging between 0.7 and 1, not a steady 0.7.
 fn oscillation(step: &Value, top_frequency: f32, low_scale: f32, high_scale: f32) -> Oscillation {
     Oscillation {
@@ -1530,7 +1529,7 @@ fn oscillation(step: &Value, top_frequency: f32, low_scale: f32, high_scale: f32
 /// the same way and stop being turbulence.
 /// A value driven from `startvalue` to `endvalue` between `starttime` and
 /// `endtime` of a particle's life: one to nought across the whole of it where
-/// the file says nothing, which is what `wallpaper64.exe` fills in.
+/// the file says nothing, which is what Wallpaper Engine fills in.
 fn ramp(step: &Value) -> Ramp {
     Ramp {
         time: Range {
@@ -2019,7 +2018,7 @@ mod tests {
 
     #[test]
     /// The point is the control point's, and an `origin` beside it is not read:
-    /// `wallpaper64.exe` knows the key as `offset`, and leaves even that out.
+    /// Wallpaper Engine knows the key as `offset`, and leaves even that out.
     fn attracting_to_a_point_that_stays_put_reads_it() {
         let json = br#"{
             "material": "m.json", "maxcount": 10,

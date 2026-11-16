@@ -501,18 +501,12 @@ Item {
                         case Updater.Current:
                             return qsTr("WallFlux %1 is the newest release.").arg(Application.version);
                         case Updater.Available:
-                            return Updater.canInstall
-                                ? qsTr("WallFlux %1 is out; this is %2. Installing asks for your "
-                                       + "password, and WallFlux starts again on its own.")
-                                      .arg(Updater.latest).arg(Application.version)
-                                : qsTr("WallFlux %1 is out; this is %2, run from outside the "
-                                       + "installed package, so it is fetched by hand.")
+                            // Installed from the AUR, so updated by the AUR
+                            // helper with the rest of the system: it is what
+                            // keeps the dependencies in step.
+                            return qsTr("WallFlux %1 is out; this is %2. Update it with the rest "
+                                        + "of the system: yay -Syu or paru -Syu.")
                                       .arg(Updater.latest).arg(Application.version);
-                        case Updater.Downloading:
-                            return qsTr("Downloading WallFlux %1… %2 %").arg(Updater.latest)
-                                                                        .arg(Updater.progress);
-                        case Updater.Installing:
-                            return qsTr("Installing WallFlux %1…").arg(Updater.latest);
                         case Updater.Failed:
                             return qsTr("That did not work: %1").arg(Updater.detail);
                         default:
@@ -520,22 +514,15 @@ Item {
                         }
                     }
 
+                    // What the new version brings, before updating to it.
                     RoundedButton {
-                        visible: Updater.state === Updater.Available && Updater.canInstall
-                        text: qsTr("Install %1").arg(Updater.latest)
-                        accent: Look.highlight
-                        onClicked: Updater.install()
-                    }
-                    RoundedButton {
-                        visible: Updater.state === Updater.Available && !Updater.canInstall
-                        text: qsTr("Release page")
+                        visible: Updater.state === Updater.Available
+                        text: qsTr("What is new")
                         onClicked: Qt.openUrlExternally(Updater.page)
                     }
                     RoundedButton {
                         visible: Updater.state !== Updater.Available
                         enabled: Updater.state !== Updater.Checking
-                                 && Updater.state !== Updater.Downloading
-                                 && Updater.state !== Updater.Installing
                         text: qsTr("Check now")
                         onClicked: Updater.check()
                     }
@@ -545,7 +532,7 @@ Item {
                     home: 0
                     title: qsTr("Check for updates")
                     about: qsTr("Asks GitHub once, the first time the window opens after WallFlux "
-                                + "starts. Nothing is installed without your click.")
+                                + "starts, and only says so. WallFlux installs nothing itself.")
 
                     Toggle {
                         value: view.picker.checkUpdates

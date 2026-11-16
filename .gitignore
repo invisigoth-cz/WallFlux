@@ -9,3 +9,7 @@
 
 # The scene renderer, which cargo builds into here.
 /target/
+
+# Where Wallpaper Engine's behaviour was read in its binaries: kept off
+# the public repository, read by Claude Code beside CLAUDE.md.
+/CLAUDE.local.md

@@ -54,7 +54,7 @@ depends=('breeze-icons' 'ffmpeg' 'kwayland' 'layer-shell-qt' 'libpulse' 'pipewir
 #
 # cargo builds the scene renderer under crates/ into a static library that
 # goes inside the binary, so it is needed to build and never to run.
-makedepends=('binutils' 'cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
+makedepends=('cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
 
 # Not a dependency of running: WallFlux reads the folder Steam has already
 # filled and needs nothing of Steam's while it plays. It is a dependency of
@@ -63,14 +63,13 @@ makedepends=('binutils' 'cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
 # it. Anyone who already has the folder does not need this installed.
 optdepends=('steam: to install Wallpaper Engine and fetch wallpapers from its workshop')
 
-# Built from this checkout rather than from the remote, so what is packaged
-# is what is in front of you -- committed, though: the clone cannot see
-# anything still sitting in the working tree.
+# This is the PKGBUILD the AUR carries: the release's tag off GitHub, so a
+# version is built only once it is tagged and pushed.
 #
-# This file lives in a directory of its own because makepkg works in src/
-# and pkg/ beside it, and the project already has a src/ holding the
-# program. Run from the project root, makepkg -C would empty it.
-source=("$pkgname::git+file://$startdir/..")
+# It lives in a directory of its own in the repository because makepkg
+# works in src/ and pkg/ beside it, and the project already has a src/
+# holding the program. Run from the project root, makepkg -C would empty it.
+source=("$pkgname::git+https://github.com/invisigoth-cz/WallFlux.git#tag=v$pkgver")
 sha256sums=('SKIP')
 
 # The renderer's crates are fetched here, where makepkg allows the network,
@@ -81,17 +80,11 @@ prepare() {
     cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
+# Built on the machine it is for, with that machine's own makepkg.conf: the
+# x86-64-v2 flags and the stripped ISA note that a package built here for
+# every machine needed are not needed any more.
 build() {
     export RUSTUP_TOOLCHAIN=stable
-    # A package is for any x86-64, not for the machine it was built on:
-    # CachyOS's makepkg.conf says -march=native and target-cpu=native, which
-    # built for a Ryzen 5900X and would not start on an older processor.
-    # x86-64-v2 is every x86-64 since about 2009 (SSE4.2, POPCNT) -- an AMD
-    # A8-6410 among them, which has no AVX2 and so is not v3.
-    CFLAGS="${CFLAGS//-march=native/-march=x86-64-v2 -mtune=generic}"
-    CXXFLAGS="${CXXFLAGS//-march=native/-march=x86-64-v2 -mtune=generic}"
-    RUSTFLAGS="${RUSTFLAGS//target-cpu=native/target-cpu=x86-64-v2}"
-    export CFLAGS CXXFLAGS RUSTFLAGS
     cmake -S "$pkgname" -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=None \
         -DCMAKE_INSTALL_PREFIX=/usr \
@@ -99,20 +92,14 @@ build() {
     cmake --build build
 }
 
+# Not the two that draw: they want a window, a GPU and particular
+# wallpapers on the disk, and an AUR helper may build where there is none.
 check() {
-    ctest --test-dir build --output-on-failure
+    ctest --test-dir build --output-on-failure -E '^(sceneview|mirror)$'
 }
 
 package() {
     DESTDIR="$pkgdir" cmake --install build
-    # The flags above keep our own code to x86-64-v2, but the binary was
-    # still marked as needing v3: the mark comes from glibc's Scrt1.o, and
-    # on a CachyOS machine with the v3 repositories that file is built for
-    # v3 and marks every program linked against it. Elsewhere glibc's loader
-    # then refuses to start it -- "CPU ISA level is lower than required" on
-    # the A8-6410, reproduced with Arch's own ld.so under qemu -cpu Nehalem.
-    # The note only says what was assumed; the code itself is v2.
-    objcopy --remove-section=.note.gnu.property "$pkgdir/usr/bin/wallflux"
     # The added permission travels with the binary it applies to.
     install -Dm644 "$pkgname/LICENSE-EXCEPTION" \
         "$pkgdir/usr/share/licenses/$pkgname/LICENSE-EXCEPTION"

@@ -241,11 +241,8 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   wallpapers' folders (`WallpaperFilesOnly`, `src/webguard.h`); measured, a
   page read `/etc/hostname` before. Workshop text is `Text.PlainText`.
   **Hardened further on 12 November, at the user's asking** ("somebody who
-  downloads it and tries"): the update is taken only from github.com with
-  GitHub's SHA-256 (`digest` in the release answer), checked after the
-  download and again by root on a copy root alone can write, before pacman
-  -- tested with a fake pacman, a wrong sum stops it; the release page opens
-  only on github.com; ffmpeg and ffprobe are told `-protocol_whitelist file`
+  downloads it and tries"): the release page opens only on github.com (and
+  since 16 November WallFlux installs nothing itself, see Updates); ffmpeg and ffprobe are told `-protocol_whitelist file`
   and a video `-format_whitelist`, and a video wallpaper whose file does not
   begin as a container does is not played (`looksLikeVideo`), since Qt's
   player cannot be told the same; the KWin callbacks on the session bus
@@ -255,8 +252,7 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   other scheme. Measured as already safe: today's ffmpeg refuses an HLS or
   concat list disguised as `.mp4` by itself; Chromium launches no external
   scheme without a click, and a wallpaper gets none; the web renderer runs
-  under seccomp; package and texture sizes are capped. Still standing: a
-  release is trusted as GitHub serves it (signing would close that), and
+  under seccomp; package and texture sizes are capped. Still standing:
   ffmpeg, QuickJS and Chromium are as safe as their own code.
 - **A Settings tab, laid out as a desktop's settings are now** (the user's
   sections of 9 November, after linux-wallpaper-engine-ux): a search and the
@@ -292,17 +288,14 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 
 - **Updates of WallFlux itself** (`Updater`): `releases/latest` of
   invisigoth-cz/WallFlux, asked without a key when the window first opens
-  and `checkUpdates` allows. The asset must be named as makepkg names it and
-  come over https; it is fetched into the cache and installed with `pkexec
-  pacman -U --noconfirm` -- pkexec is the desktop's password window, 126 is
-  its "cancelled". Then a shell waits for this pid to be gone (the new copy
-  would knock on the old one's door and leave) and starts `/usr/bin/wallflux
-  --show`, which opens the window. Only `/usr/bin/wallflux` installs; a
-  build tree gets the release page. **The repository has to be public for
-  any of it**: private, GitHub answers 404 to a request without a login,
-  measured on 9 November. The packages are not signed, and pacman's
-  `LocalFileSigLevel = Optional` lets a local file in unsigned: whoever can
-  publish a release can put code on the machine as root, after the password.
+  and `checkUpdates` allows, and **only said**: Settings › General names the
+  new version, tells to update with `yay -Syu` or `paru -Syu`, and opens the
+  release page on a click. WallFlux is installed from the AUR (16 November,
+  the user's choice), so the AUR helper is what updates it and keeps its
+  dependencies in step; until then it fetched the package off the release and
+  installed it with `pkexec pacman -U`, which an AUR install would have gone
+  round. **The repository has to be public for any of it**: private, GitHub
+  answers 404 to a request without a login, measured on 9 November.
 
 - **Updates from the workshop.** `installedAt` and `latestAt` on each
   `Wallpaper` are `timeupdated` and `latest_timeupdated` out of Steam's
@@ -469,8 +462,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   and does nothing when it is clicked -- `Application.version`, out of
   `WALLFLUX_VERSION` in CMakeLists.txt, which is `project()`'s own number
   rather than a third place to keep it.
-- **An Arch package** (`packaging/PKGBUILD`), installed, with an autostart
-  entry that has been verified through a real logout and login.
+- **An Arch package in the AUR** (`packaging/PKGBUILD`, `wallflux`, built
+  from the release's tag on GitHub), with an autostart entry that has been
+  verified through a real logout and login. Its `check()` leaves out
+  `sceneview` and `mirror`, which want a window, a GPU and this machine's
+  wallpapers.
 
 Of the wallpapers found on the development machine -- 53 at the last count,
 and the number grows as the workshop is used -- 12 are web and video and
@@ -526,8 +522,8 @@ src/autostart.h       Autostart: starting at login, by the user's own entry
 src/autostart.cpp     ~/.config/autostart/wallflux.desktop, Hidden or not
 src/power.h           Power: on a battery or not, and how full, off UPower
 src/power.cpp         the system bus, OnBattery and the display device
-src/updater.h         Updater: a newer WallFlux on GitHub, and installing it
-src/updater.cpp       releases/latest, the package, pkexec pacman -U, restart
+src/updater.h         Updater: whether a newer WallFlux is on GitHub
+src/updater.cpp       releases/latest, its tag against this version
 src/usage.h           Usage: what WallFlux costs, for the status bar
 src/usage.cpp         /proc: stat, status and fdinfo of it and its children
 src/asleep.h          Asleep: every screen off (DPMS) or the session locked
@@ -582,7 +578,7 @@ tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 tests/tst_autostart.cpp       the user's entry written hidden and not
 tests/tst_usage.cpp           /proc's lines read, and this process read
 tests/tst_power.cpp           mains for ever without UPower
-tests/tst_updater.cpp         versions as numbers, the package and only it
+tests/tst_updater.cpp         versions as numbers
 tests/tst_mirror.cpp          one window's picture in another, the right way
                               up and cropped, and kept up to date
 tests/tst_sceneview.cpp       a scene drawn through the item, checked against
@@ -821,12 +817,11 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   either as `colorn` (0-1) or, in older scenes, `color` (0-255), never
   both. Unread, every smoke kept its preset's colours, which is where the
   pastel blobs in half the library came from. **A child takes the whole of
-  it**, read out of `wallpaper64.exe` on 9 November: a child spawned in
-  `FUN_140236cd0` is bound by `FUN_14022f890` -> `FUN_1401d15a0` with its
-  own bindings and the same object's values (+0x778), exactly as the parent
+  it**, found on 9 November: a child Wallpaper Engine spawns is bound with
+  its own bindings and the same object's values, exactly as the parent
   was. `rate` is not a binding at all except to `turbulence`'s
-  `timescale`: the object multiplies the system's step by it
-  (`0x1402307ff`), and the children run in that time. Until then children
+  `timescale`: the object multiplies the system's step by it, and the
+  children run in that time. Until then children
   took only alpha, rate and colour -- a rule read off Star Citizen's embers
   burning the sky white, which other mistakes of the time explain -- and
   Space Visualizer's lava spark trails, children of systems at a size of
@@ -836,8 +831,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
   **And a child that bursts at its parent's events is a whole system per
   event**, up to the child entry's `maxcount` of them at once (missing, it
-  reads as nought and nothing stops it): `FUN_140236cd0` starts one for each
-  particle born. One shared pool let a new burst have only what the last ones
+  reads as nought and nothing stops it): Wallpaper Engine starts one for
+  each particle born. One shared pool let a new burst have only what the last ones
   left; `burst_per_event` gives each burst the file's `maxcount`. Space
   Visualizer's sparks against Windows, the brightest half-percent of what
   they add: 42/72/22 against 49/75/25 for the white ones, 48/25/17 against
@@ -897,11 +892,9 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   have no `registerAudioBuffers` -- the same reason his blue ring is lit
   and ours is dark until something plays.
 
-- **A particle operator's missing values are Wallpaper Engine's, and they
-  are in `wallpaper64.exe`.** Each operator has a small function that fills
-  in what the file leaves out -- found by the key's string and its
-  references (REA, Ghidra), and read as doubles: `0x3fe0000000000000` is
-  0.5. Guessed instead, smoke was the worst of it. `alphafade`'s two times
+- **A particle operator's missing values are Wallpaper Engine's own, and
+  they are known.** Wallpaper Engine fills in what the file leaves out for
+  each operator, and those values are what is used here. Guessed instead, smoke was the worst of it. `alphafade`'s two times
   are **fractions of the particle's life**, in until the first and out from
   the second, 0.5 each when missing -- they were read as seconds with no
   fade out, so smoke held its full alpha all its life and vanished at once.
@@ -926,7 +919,7 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
 - **`rotationrandom` is any turn unless it says otherwise**: `min` "0 0 0", `max`
   "0 0 6.28318530717", and `angularvelocityrandom` "0 0 -5" to "0 0 5", both out
-  of `wallpaper64.exe`. 112 steps state neither end and 32 only the top. With a
+  of Wallpaper Engine. 112 steps state neither end and 32 only the top. With a
   stated end standing for both, as it does for colours, all of Warhammer's rays
   lay at one angle: a single beam across the picture, where Wallpaper Engine has a
   fan -- the "star-shaped flares" that were open for two days.
@@ -1006,7 +999,7 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **An emitter that listens and says no more hears the two lowest bands,
   squared, from 0.8 to 1** -- `audioprocessingfrequencystart` 0, `...end` 1,
   `audioprocessingexponent` 2 and `audioprocessingbounds` "0.8 1.0", filled in by
-  `FUN_1401c1e20` in `wallpaper64.exe`. They were taken as the whole spectrum,
+  Wallpaper Engine. They were taken as the whole spectrum,
   unsquared, from 0 to 1.5. DOOM, Space Visualizer, Snow Lights and Augmentation
   leave some of them out; in DOOM it moved the picture by a quarter of a level.
 
@@ -1018,9 +1011,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   Wildfire has no audio mode and burns. Read the other way round, DOOM ran
   flat out in a silent room.
 
-- **A step hears the loudest of its bands, not their average.** One function in
-  `wallpaper64.exe` reads the sound for every emitter and operator
-  (`0x14022a8a0`, seven callers): mode 1 the left ear, 2 the right, 3 the two
+- **A step hears the loudest of its bands, not their average.** Wallpaper
+  Engine reads the sound the same way for every emitter and operator: mode 1 the left ear, 2 the right, 3 the two
   added band by band and halved, then the largest over the range, then the
   bounds, `smoothstep` and `pow` by the exponent. The stock *effect* shaders
   average a range for themselves, which is where the average came from. Space
@@ -1071,15 +1063,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   the recording does. Pixels brighter than Windows' in the brightest moment of
   a minute fell from 3.9 % to 3.2 %. DOOM, Snow Lights, Rainbow Six and STAR
   WARS carry such systems too: DOOM measured the same against its recording
-  within noise, the others did not move. Read off recordings, not the binary.
+  within noise, the others did not move. Read off recordings.
 
   **A `ropetrail`'s `length` is not multiplied by its `subdivision`**, though
   that reading drew Space Visualizer's bursts as straight lines from where each
   spark was born, as Windows does: Augmentation's vortex (0.5, 16 and 16) then
   kept eight seconds of path and filled the iris with green and white tangles
-  where Windows has one thin ring. Taken out again. `wallpaper64.exe` fills a
-  missing `segments` with 4 (here 8), `subdivision` with 1 and `length` with 1
-  (`FUN_1401c1070`), and leaves `fadealpha` and `fadesize` off.
+  where Windows has one thin ring. Taken out again. Wallpaper Engine fills a
+  missing `segments` with 4 (here 8), `subdivision` with 1 and `length` with 1,
+  and leaves `fadealpha` and `fadesize` off.
 
   **And every renderer in the list draws.** `sparktrails` in Space Visualizer
   -- the only system here with two -- says `spritetrail` and `ropetrail`, and
@@ -1100,8 +1092,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   kept 2.8 % of 25 000 and its white stars 17 %, which was most of what its sky
   lacked against Windows). See the budget trap below for what it costs.
 
-- **A `spritetrail` that says no more is 0.05 long and capped at 10**
-  (`FUN_1401c0af0`; no floor). The cap is in sizes of the particle:
+- **A `spritetrail` that says no more is 0.05 long and capped at 10**,
+  with no floor. The cap is in sizes of the particle:
   `ComputeParticleTrailTangents` draws it `size x min(speed x length,
   maxlength)`. Read as uncapped, Space Visualizer's lava sparks -- 3 to 10
   across, hundreds a second, `length` 3.03 -- drew lines across the whole
@@ -1111,17 +1103,16 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **`sphererandom` is an even disc times `directions`, not a direction and a
   distance.** `directions` multiplies the place drawn; normalised after the
   mask, "1 0.07 0" sent some of Star Destroyer's fire well off the hull it
-  lies along. Almamu's reading, and the video agrees. The defaults out of
-  `wallpaper64.exe` for a flat scene are "1 1 0" and a radius of 256; a box
+  lies along. Almamu's reading, and the video agrees. Wallpaper Engine's
+  defaults for a flat scene are "1 1 0" and a radius of 256; a box
   draws min to max per axis with a random sign.
 
 - **An instance's `count` is how many are let out, not how many may live.**
-  `wallpaper64.exe` builds a list of bindings from the instance's values to the
-  system's fields (applied in `FUN_1401d15a0`; offsets in the override: alpha
-  0xc8, size 0xcc, count 0xd0, speed 0xd4, lifetime 0xd8, rate 0xdc), and the only
-  entries reading `count` are each emitter's `rate` and `instantaneous` (the
-  latter truncated), the steps of `mapsequencebetweencontrolpoints` (`1 / (count x
-  steps - 1)`, `0x1401ca6b3`) and those of `mapsequencearoundcontrolpoint`.
+  Wallpaper Engine binds the instance's values to the system's fields, and
+  the only bindings reading `count` are each emitter's `rate` and
+  `instantaneous` (the latter truncated), the steps of
+  `mapsequencebetweencontrolpoints` (`1 / (count x steps - 1)`) and those of
+  `mapsequencearoundcontrolpoint`.
   Nothing binds it to `maxcount`. Scaling the pool instead left Gears of War's
   ripple -- `magic_pulse`, one a second, a pool of 16, count 0.03 -- with a pool
   of nought: never drawn, where Windows throws one every 33 s (30.5 and 63.5 in
@@ -1133,8 +1124,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   in the rest; `fov` itself is 50 in all of them. Through 50 the camera stood
   1158 back instead of 495 and Snow Lights' nearest flakes, which pass the
   camera as large stars in the recording, were dots like the rest. The key is
-  in `wallpaper64.exe`'s scene properties (offset 0x144, `fov` at 0x140); where
-  it is read for the camera was not found, so the meaning is the recording's.
+  one of Wallpaper Engine's scene properties beside `fov`; where it is read
+  for the camera was not found, so the meaning is the recording's.
   Windows' largest stars are still two or three times ours.
 
 - **`shot` cannot show motion blur, and a muzzle flash leans on it.** Dark
@@ -1186,11 +1177,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   `getQualityPreset` makes Low 10, Medium 15, High 25 and Ultra 30 frames a
   second; the settings warn above 30. **No preset touches particles** -- they
   set MSAA, post-processing, reflections, shadows and volumetrics -- and
-  `wallpaper64.exe` reads `fps` with the rest of the general settings
-  (`FUN_1401154c0`, into `+0x18c`) and nothing about particles. Its limiter is
-  in the main loop round `0x1401135fa`: after a frame, `Sleep` for what is left
-  of the second shared out over the frames still owed in it
-  (`QueryPerformanceCounter`), and no limit at all at 0. So Wallpaper Engine
+  Wallpaper Engine reads `fps` with the rest of the general settings and
+  nothing about particles. Its limiter, after a frame, `Sleep` for what is left
+  of the second shared out over the frames still owed in it, and no
+  limit at all at 0. So Wallpaper Engine
   never thins a scene: a heavy one simply gets fewer frames. Thinning more at a
   higher rate is ours, decided on 6 November so a heavy scene stays smooth and
   cheap. The Settings tab is to offer the four rates.
@@ -1248,9 +1238,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   smaller than the scene, and Dark Angels' light missed its cathedral. Only that
   wallpaper moved in a sweep.
 
-- **The sound is read as Wallpaper Engine reads it, out of `wallpaper64.exe`**, not
-  as a visualiser would. `FUN_1400d02b0` (its defaults in the constructor at
-  `0x1400c0c80`): a DFT of 1920 samples, no window, bins 1 to 639, each bin's power
+- **The sound is read as Wallpaper Engine reads it**, not as a visualiser
+  would: a DFT of 1920 samples, no window, bins 1 to 639, each bin's power
   weighted by `0.501 - cos(pi x) 0.499` -- the bass a five-hundredth of the top,
   which levels music out -- its root put into one of 64 entries by `x^0.25`, the
   loudest bin winning, and the lot times 127 x 0.001 x 640/960 x the recording
@@ -1274,8 +1263,7 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   much, the monitor's 0.12 s.
 
   **And then the scene evens the music out before anything sees it** --
-  `wpe_format::particle::Response`, read off the scene's render loop
-  (`FUN_140110630`, after its call through the meter object's vtable at `+0x58`),
+  `wpe_format::particle::Response`, as the scene's render loop does it,
   once a frame and by the frame's own time. Each ear's 64 in eight groups of
   eight, each group divided by an envelope that goes towards the louder of the
   group's loudest and a third of the loudest of all -- up at one a second, down
@@ -1317,12 +1305,11 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   stays -- Space Visualizer's rays, at a rate of 0.01, are only there from the
   first frame because `starttime` is not slowed by the rate.
 
-- **Pushes are felt over less time at fifteen.** `wallpaper64.exe` runs a
+- **Pushes are felt over less time at fifteen.** Wallpaper Engine runs a
   frame's particle operators once, or twice at half the time when its frame
-  rate is set to 1-20 (`FUN_140236cd0`; the setting reaches the scene at
-  +0x158 from the general settings' +0x18c). Each run is handed the step and
+  rate is set to 1-20. Each run is handed the step and
   a second time, the step times `min(0.025 / frame, 1)^0.7` with the frame
-  as the scene measured it (+0x15c): gravity, the move and a spin take the
+  as the scene measured it: gravity, the move and a spin take the
   first, and drag, `turbulence`, `vortex` and `controlpointattract` the
   second. `movement` is gravity, then the move, then `velocity x= 1 -
   min(drag x felt, 0.99999988)`. At 15 a second that is half the push our
@@ -1339,10 +1326,9 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
 - **A scene moves a system's control points, and a point can be in the
   scene's own coordinates.** `instanceoverride` carries `controlpoint0` to `7`
-  (and `controlpointangle0` to `7`, not read here); `wallpaper64.exe`
-  (`FUN_14022bd40`, the override's table in `FUN_14024d940`: points from
-  +0xf0, angles from +0x150, also a `brightness` at +0xe0 that nothing here
-  reads) puts each in place of the file's offset. A point whose `flags` has
+  (and `controlpointangle0` to `7`, not read here, and a `brightness` that
+  nothing here reads); Wallpaper Engine puts each in place of the file's
+  offset. A point whose `flags` has
   bit 1 is given in the scene: `discharge.json`'s far end, which the scene
   drags to where the bolt strikes. For a system in its own space the point
   goes through the object's inverse, for one in the scene's axes it is
@@ -1356,7 +1342,7 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   An ember's "frequencymax 20, scalemin 0.7" is alpha swinging between 0.7 and 1 up
   to three times a second. Read as cycles, with the missing end taken as the stated
   one, it was twenty blinks a second down to 0.3: the flicker the user saw on the
-  flying lights of four wallpapers. Defaults out of `wallpaper64.exe`: frequency 1
+  flying lights of four wallpapers. Wallpaper Engine's defaults: frequency 1
   to 10 (position 1 to 5), alpha 0 to 1, size 0.8 to 1.2, phase 0 to 2 pi.
 
 - **An fbo marked `unique` is the effect's own, whatever its name.** Motion blur keeps
@@ -1387,13 +1373,11 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   the camera, so no turn of the object explains it, only the swirl's own sense.
   Reversed, DOOM and Snow Lights moved by less than a fifth of a level over half a
   minute with their recordings' sound, and Augmentation's rings are rings either
-  way. The defaults are `wallpaper64.exe`'s (`0x1401bf0a0`, a flat scene's side of
-  each `test sil,sil`): `distanceinner` 500, `distanceouter` 650, `speedinner`
+  way. The defaults are Wallpaper Engine's, for a flat scene: `distanceinner` 500, `distanceouter` 650, `speedinner`
   2500, `speedouter` nought, axis "0 0 1"; 30 vortices here leave some out, and
   read as nought they swirled at their inner speed everywhere.
 
-  **How it pushes is `wallpaper64.exe`'s, read off its step** (`0x1402432e2`, four
-  particles at a time; the record laid out by `0x1401cd8a2`): the way from the
+  **How it pushes is Wallpaper Engine's own step**: the way from the
   middle -- control point plus `offset` -- less the part along the axis **only
   where bit 0 of `flags` is set**, made of length one; the distance is that way's
   length; the speed is the inner one plus `clamp((d - inner) / (outer - inner))`
@@ -1415,8 +1399,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   drag of 20 it swirls on the beat as in the video.
 
 - **A sound in `random` plays one track at once, from its start**, and the next after
-  that track's length plus `mintime` to `maxtime` -- `FUN_1401f5980` in
-  `wallpaper64.exe`, which is also the play of a script's `play()`: the pick is
+  that track's length plus `mintime` to `maxtime` -- in Wallpaper Engine,
+  the same as a script's `play()`: the pick is
   `rand() / 32767` times the count. So a scene whose tracks open quietly (Space
   Marine II's five fade in over 2 to 10 s) is quiet for those seconds on Windows
   too. **Almamu's renderer plays every file of a sound object at once**, each its own
@@ -1484,7 +1468,7 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 
 - **`sizerandom` is twice the size a particle is drawn.** The shader
   draws a particle as wide as the size it is handed, and the file's number
-  is halved before that -- `wallpaper64.exe` stores min, range and exponent
+  is halved before that -- Wallpaper Engine stores min, range and exponent
   unchanged, so the halving is somewhere after, and was not found there;
   what settled it is measurement. Against Wallpaper Engine on Windows, at
   the same size of window: Arkham Knight 21.7 whole, 12.7 halved, 13.0 in
@@ -1495,13 +1479,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   scene is cropped at the sides and everything in it is larger than in a
   16:9 picture.
 
-- **A default that depends on whether the scene is flat is in
-  `wallpaper64.exe` twice.** Each defaults function there takes a flag --
-  bit 10 of a setting, picking pixels over metres -- and loads one of two
-  constants: `sizerandom` 5 to 50 against 0.001 to 1,
+- **A default can depend on whether the scene is flat.** Wallpaper Engine
+  has two sets, pixels or metres: `sizerandom` 5 to 50 against 0.001 to 1,
   `turbulentvelocityrandom` 100 to 250 against 0.5 to 1. The flat ones are
-  ours. Every two-way default in the binary is found by `test dl,dl`
-  followed by two `movss` loads.
+  ours.
 
 - **`turbulentvelocityrandom` is a direction, not a field.** Its `scale`
   is how far from `forward` (up) a start may stray, in half turns, and its
@@ -1526,16 +1507,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   trail is as long as that velocity.
 
 - **An instance's colour moves a system's colours in HSV, and in an old scene
-  multiplies them too.** `wallpaper64.exe` works out the colour a system already
-  has (`FUN_1401c45f0`: the middle of its last colour initializer, else the start
-  of its first `colorchange`, else white) and moves each colour range by the
+  multiplies them too.** Wallpaper Engine works out the colour a system already
+  has (the middle of its last colour initializer, else the start of its first
+  `colorchange`, else white) and moves each colour range by the
   difference between the scene's colour and that one in hue, saturation and
-  value, the hue going round and the other two held to nought to one
-  (`FUN_1401d15a0`, cases 11 to 13). A flag (`0x200000`, set in `FUN_1401c5490`)
+  value, the hue going round and the other two held to nought to one. A flag
   makes the scene's colour a multiplier on the particles as well: for a scene
   whose `version` is below 5 -- all of them here but Ender Spartan -- and for a
   system with no colour of its own. `colorchange`'s two ends are moved as well;
-  that binding was not found in the binary, the recordings say so: Tomb Raider's
+  the recordings say so: Tomb Raider's
   torch, orange to red and set to white, burns white on Windows and orange if they
   are not. Dark Angels' flash went from blue to red 0.77 and white over 9.5 % of
   it to 0.64 and 4.6 % (Windows 0.58 and 1.7 %); Ender Spartan from 13.7 apart
@@ -1561,9 +1541,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **A web page is handed a path with no leading slash**, as Wallpaper Engine's `C:/...`
   has none: pages put `file:///` in front, and four slashes is a file that will not play.
 
-- **An emitter's rate defaults to ten**, for every kind of emitter, out of
-  `wallpaper64.exe` (`FUN_1401b8df0`, which each emitter's defaults call first:
-  `0x4024000000000000`). Ten wallpapers here have an emitter that states none,
+- **An emitter's rate defaults to ten**, for every kind of emitter, as
+  Wallpaper Engine fills it in. Ten wallpapers here have an emitter that states none,
   `ember_small`, `dust_motes_0` and `wildfire` among them. Read as nought they let
   nothing out, which looks like a wallpaper that has no embers; read as five, a
   guess that stood until 3 November, Dark Core's tubes burned half full -- a
@@ -1640,8 +1619,8 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   **All nineteen are listed, as Wallpaper Engine lists them, less what its
   `projects/defaultprojects/visibility.json` hides** -- `false` against a name,
   three of them so on this machine. Removing one is what Wallpaper Engine's own
-  Remove does (`removeOfficialWallpaper` in its `scripts.js`, the file written by
-  `wallpaperui.exe`): `false` written there, files left alone, since they belong to
+  Remove does (`removeOfficialWallpaper` in its `scripts.js`): `false`
+  written there, files left alone, since they belong to
   the install. There is no way back in Wallpaper Engine's window either. Four say no
   `type` and are taken by their file (`.json` a scene, `.exe` an application), and
   their `authorsteamid` names who made them, which is the panel's author. Only four
@@ -1893,7 +1872,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   elsewhere refuses to start it: "CPU ISA level is lower than required" on
   the user's A8-6410. Reproduced with Arch's own `ld-linux-x86-64.so.2`
   under `qemu-x86_64 -cpu Nehalem` (the host's glibc cannot run there at
-  all). The PKGBUILD builds for v2 and takes `.note.gnu.property` off.
+  all). It mattered while the package was built here for every machine; the
+  AUR builds it on the machine it is for, so the PKGBUILD no longer builds
+  for v2 or takes `.note.gnu.property` off. A binary built here and copied
+  elsewhere still needs both.
 - **Qt.labs.platform hands the panel a submenu with nothing in it.** Read
   over D-Bus (`com.canonical.dbusmenu GetLayout`): the submenu is a bare
   label, no `children-display`, no children -- a static one too, and
@@ -1927,8 +1909,9 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   flags of the first configure: switching LTO off changed nothing until
   `-C` cleaned it. (`-C` from `packaging/` cleans `packaging/src`, which is
   the point of the PKGBUILD not being in the root.)
-- **`makepkg` builds from git, not from the working tree.** Commit first,
-  then `makepkg -f`, then `pacman -U`, or the package carries old code.
+- **`makepkg` builds from the tag on GitHub, not from the working tree.**
+  Commit, tag and push first; a version with no tag on GitHub does not build
+  at all.
 - **An uncorked stream is not a stream that plays, and pactl cannot tell them
   apart.** speech-dispatcher's `sd_dummy` holds a stream open for as long as it
   runs; PipeWire pauses it after five seconds of underrun (`pulse.idle.timeout`,
@@ -2023,12 +2006,10 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   alignment, and it is one odd cell. Count the cells.
 
 - **Wallpaper Engine's "post-processing" is the scene's bloom and nothing
-  else.** `postprocessing: "disabled"` clears bit 0x40 of the window's flags
-  (`FUN_14010df40`), and the one place the scene tests it (`0x140180a41`)
-  guards `FUN_140183610`, which is the bloom's three passes or, with 0x2000,
-  the HDR bloom's ladder. An effect on a layer -- motion blur included -- is
-  drawn whatever the setting. "ultra" sets 0x2000 only for a scene whose
-  `general` asks for both `bloom` and HDR; none here does, so Ultra is High at
+  else.** `postprocessing: "disabled"` switches off the bloom's three passes,
+  or the HDR bloom's ladder, and nothing else. An effect on a layer -- motion
+  blur included -- is drawn whatever the setting. "ultra" turns on the HDR
+  bloom only for a scene whose `general` asks for both `bloom` and HDR; none here does, so Ultra is High at
   thirty. Two packages here have bloom at all.
 
   **And a wallpaper's own preset is the picker's `qualityOf`**, by id, read
@@ -2659,12 +2640,16 @@ packaging/PKGBUILD. Then, in this order:
    **With the `v`** -- v0.1.0 is tagged that way and two conventions in one
    repository is one too many.
 4. `git push origin main && git push origin v<version>`.
-5. `gh release create v<version> --notes-file <the changelog entry>`, with
-   the built package attached **twice**: as makepkg names it (the updater
-   takes only that name) and as `wallflux-x86_64.pkg.tar.zst`, which is what
-   the README's one-line install fetches from `releases/latest/download/`.
-6. `cd packaging && makepkg -f`, which builds from the tag now that it is
-   committed, then `sudo pacman -U wallflux-<version>-1-x86_64.pkg.tar.zst`.
+5. `gh release create v<version> --notes-file <the changelog entry>`: the
+   notes are what Settings' "What is new" opens, and `releases/latest` is
+   what the updater asks. No package is attached any more.
+6. `cd packaging && makepkg -f`, which builds from the tag on GitHub -- the
+   check that the AUR will build it -- then `makepkg --printsrcinfo >
+   .SRCINFO`, and commit the two with the release if they changed.
+7. Into the AUR: copy `packaging/PKGBUILD` and `packaging/.SRCINFO` into the
+   clone of `ssh://aur@aur.archlinux.org/wallflux.git` (kept outside this
+   repository), commit with the version, push. The user installs with
+   `paru -Syu`, as everybody else does.
 
 0.2.0 was tagged before CHANGELOG.md existed, so its tag does not contain
 the file. Everything after it should.
@@ -2692,14 +2677,13 @@ to be offered first:**
 - **Further improvements and changes** as the user brings them.
 
 0. **Waiting on decisions of the user's:**
-   - **Making the repository public.** Asked and answered "not yet" on
-     9 November. 12 November: the e-mail is in every commit and the full
-     name in one (Almamu's and jagrat7's carry theirs too); rewriting it is
-     the user's call. The reverse engineering of `wallpaper64.exe` comes out
-     of this file into an untracked `CLAUDE.local.md` before the repository
-     goes public -- not sooner -- and out of the history with the e-mail. Until it is, Settings > General > Updates says 404 and
-     WallFlux cannot update itself. History checked: no secrets; the e-mail
-     and one commit's full name would be public.
+   - **Making the repository public: decided on 16 November.** The history
+     stays as it is, e-mail and all (the user's word). Where Wallpaper
+     Engine's behaviour was found in its binaries came out of this file, the
+     code's comments and CHANGELOG.md into `CLAUDE.local.md`, untracked; new
+     findings of that kind go there and only the behaviour goes here.
+     WallFlux goes to the AUR as `wallflux`, built from the tag, and the
+     updater only says a new version is out.
    - **Trying it on the laptop** (the user's, with help asked for): a
      battery and several monitors there; then the repository public and an
      update installed end to end. Properties on a web wallpaper changing
@@ -2712,7 +2696,7 @@ to be offered first:**
    in Star Citizen (unchecked), Alien Isolation's reflections and lit
    particles; formats nothing here uses yet (`controlpointangle*`,
    `brightness`, `movement` flags bit 0, `alphafade` and `oscillate*`
-   against the binary, what scene scripts cannot reach); Blue Dawn's hand
+   against Wallpaper Engine, what scene scripts cannot reach); Blue Dawn's hand
    offset to take out once its cause is found. Put off by the user on
    10 November, to come back to.
 
@@ -2755,9 +2739,8 @@ to be offered first:**
 
    **30 October, the rest of the vocabulary:** `boids`, `collision*`, `remap*`,
    `maintaindistance*`, `inherit*` and `once` are read and run. Their defaults
-   are out of `wallpaper64.exe`; **how they work is the editor's description of
-   them**, since the function holding the engine's update is 49 kB and the
-   decompiler gives up on it, and no wallpaper here uses one to compare with.
+   are Wallpaper Engine's; **how they work is the editor's description of
+   them**, and no wallpaper here uses one to compare with.
    Stock rain (`rain_screen`), lightning (`thunderbolt`) and `dripping_water`
    are the ones to look at first when one turns up. Not done: `collisionmodel`
    (there are no models) and the `layerimage` emitter, both reported.
@@ -2767,46 +2750,18 @@ to be offered first:**
    pointer was the specks now left out. Space Marine 2 was looked at by the
    user on 2 November and is right: its light goes where the mouse goes.
 
-4. **Start here next time (the user's word, 6 November evening): read the
-   particle step out of `wallpaper64.exe` until particles move as Wallpaper
-   Engine moves them.** Nothing else first. Space Visualizer's swarm is the
-   case that shows it (entry below and its 6 November paragraph). What to
-   read, in order:
-   - **`movement`** -- gravity and drag. Built in `FUN_1401c5490` at
-     `0x1401cb35e`: a record of 0x20 (allocated by `FUN_1401d89b0`), gravity
-     at +0/+4/+8, `flags` at +0xc, drag at +0x10. Our drag
-     (`velocity /= 1 + drag dt`) is a guess. Find the step that reads +0x10.
-   - **`colorchange`** -- whether it multiplies the born colour (ours,
-     Almamu's) or replaces it. Built just after the string at `0x1401cbb93`
-     (`FUN_1401d8a70`); `startvalue` and `endvalue` follow.
-   - Then the other steps the swarm uses -- `turbulence`, `vortex` with axis
-     "1 1 1" (z grows here in a flat scene: check whether Wallpaper Engine
-     keeps z), `alphafade` -- against what `particles.rs` does.
-   **How to find a step:** the update code is not a Ghidra procedure (the
-   vortex at `0x1402432e2` resolves to none), so disassemble the region with
-   `objdump -d -M intel --start-address=0x140200000
-   --stop-address=0x140260000` and look for loads at the record's offsets;
-   the attract step is at `0x140241630`. Ghidra's analysis is saved as
-   `~/WallFlux-ukazky/2026-11-06/wallpaper64.rea-snapshot` (REA `open_binary`
-   with `snapshot_path`), which saves the auto-analysis wait. Check each finding by drawing the
-   swarm alone (`~/WallFlux-ukazky/2026-11-06/nastroje/README.txt`: copies of
-   the scene with one preset changed, motion maps beside Windows) and then
-   the whole library in a sweep, since a step's meaning changes every scene
-   that has it.
+4. **6 November evening, the user's word: particles to move as Wallpaper
+   Engine moves them, before anything else.** Space Visualizer's swarm is the
+   case that shows it (entry below and its 6 November paragraph). Check each
+   finding by drawing the swarm alone (`~/WallFlux-ukazky/2026-11-06/nastroje/
+   README.txt`: copies of the scene with one preset changed, motion maps
+   beside Windows) and then the whole library in a sweep, since a step's
+   meaning changes every scene that has it. Where each step was read is in
+   `CLAUDE.local.md`.
 
    **9 November: `movement` and `colorchange` read; see the trap "Pushes
    are felt over less time at fifteen".** `colorchange` multiplies the born
-   colour, as ours did: each operator pass first copies the born colour
-   (+0x318..) over the working one (+0x2f8..). **Where the operators are:**
-   `FUN_140236cd0` (one system's frame) calls `0x14023fbc0(this, step,
-   felt)`, which walks the operator records -- type byte at +0, length at
-   +2, values from +0x10 -- through the jump table at `0x14024bb58`. Types:
-   1 movement `0x14023fdc9`, 2 angularmovement, 3 alphafade, 4 sizechange,
-   5 colorchange `0x1402403a2`, 6 alphachange, 7-9 oscillate position, alpha,
-   size, 10 controlpointattract `0x140241554`, 11-12 maintaindistance*,
-   13 reducemovementnearcontrolpoint, 14 turbulence `0x14024295a`, 15 vortex
-   `0x1402431be`, 16 vortex_v2, 17 boids. The initializers have a table of
-   their own at `0x14023fa78`. The lava sparks of Space Visualizer were the
+   colour, as ours did. The lava sparks of Space Visualizer were the
    size a child did not take (see the instance-override trap); their shape
    is Windows' now, and there are fewer fans in a minute than in the
    recording, which comes down to how often their parents hear bands 5 to 15
@@ -2840,17 +2795,16 @@ to be offered first:**
      `REFRACT` with an overbright of 5, so it shows only where something
      bright is behind it -- over the black sky it is nothing, which is why it
      reads as a "veil" over the small planet's face on Windows. Its birth ring
-     is right: `distancemax` defaults to 256 in `wallpaper64.exe` too
-     (`FUN_1401b9100`, `0x43800000` on a flat scene's side), and drawn alone
+     is right: `distancemax` defaults to 256 in Wallpaper Engine too, for a
+     flat scene, and drawn alone
      ours is born at 179 screen pixels of 1280, where Windows' arc of specks
      is. Ruled out, each drawn and mapped against the recording: the vortex,
      the turbulence and the pull switched off; the pull with the recording's
      mouse, as read and with its sign turned over (identical to the pixel: no
      particle comes within its 128); the instance `rate` taken out. A third
      of the drag gives straighter strokes at Windows' 45 degrees, but our
-     drag was fitted to this wallpaper's sparks and the binary's `movement`
-     step was not found (the record is gravity at +0 and drag at +0x10,
-     built at `0x1401cb35e`). Without the instance colour the strokes over
+     drag was fitted to this wallpaper's sparks and Wallpaper Engine's
+     `movement` step was not known yet. Without the instance colour the strokes over
      the face come out white as on Windows, but by numbers over 12 s the
      face is within 1 to 4 levels of Windows either way and moves 25 to 35 %
      less (above its darkest: Windows 13.7/11.4/10.4 on the right of the
@@ -2873,13 +2827,13 @@ to be offered first:**
      and round the D and the M every system that listens -- the Torches, both
      Smoke clouds D, `new_particle_system_3` -- states no band range, so hears
      bands 0 and 1, both ears, bounds "0.9 1"; the Os' torches hear 10 to 14
-     and 10 to 15. `0x14022a8a0` reads 16 entries an ear (the right 0x40 bytes
-     after the left), mode 3 the largest of left plus right halved -- as ours.
+     and 10 to 15. Wallpaper Engine reads 16 entries an ear, mode 3 the
+     largest of left plus right halved -- as ours.
      So the letters, effects and flames alike, all come back to the meter's two
      lowest bands of sixteen.
    - Done: **Alien Romulus' specks round the mouse**, drawn again in 0.25.2.
-     **6 November:** `controlpointattract` read off `wallpaper64.exe`
-     (`0x140241630`, defaults `FUN_1401bdee0`): the whole strength at the point,
+     **6 November:** `controlpointattract` as Wallpaper Engine has it: the
+     whole strength at the point,
      none at the full `threshold`, a straight line between, never past the
      particle with `flags` bit 1 (on by default), 512 and 512 when unstated, and
      the file's `origin` not read (the engine's key is `offset`, left out of the
@@ -2893,8 +2847,7 @@ to be offered first:**
      we hand it the same three -- so a still speck is a sliver on Windows; what
      makes ours larger is the size or the speed it is handed, not found yet.
      **Found the same day: the override reaches more than we bound.**
-     `FUN_1401c5490` builds the bindings from a placed system's
-     `instanceoverride` (entries writing 0xc8 to 0xdc at +0x14/+0x18): `count`
+     Wallpaper Engine binds a placed system's `instanceoverride` so: `count`
      the emitters' rates and the sequences' counts; `lifetime`
      `lifetimerandom`; `size` **`sizerandom` and both ends of every
      `sizechange`**; `speed` the emitters' and `velocityrandom`'s and
@@ -2936,15 +2889,14 @@ to be offered first:**
      126, the ring round the sun 169 against 166, the sun's core 246 against
      238 (white over more of the picture than Windows). So Windows has the
      system about 308 scene pixels higher, seemingly fixed; why is not found.
-     `wallpaper64.exe` gives a script `size` only on image layers (property
-     table at `0x1401ee5bd`; the layer's own at `0x1401e05d2`: origin 0x128,
-     scale 0x134, angles 0x140, parallaxDepth 0x170), so `thisLayer.size` is
+     Wallpaper Engine gives a script `size` only on image layers, so
+     `thisLayer.size` is
      undefined for this one, and `lib.sceneScript.d.ts` declares only
      `Vec3(x: Number|Vec2|String, ...)`.
 
      **The script is ruled out too.** Wallpaper Engine's script classes are
-     JavaScript on the disk, `assets/scripts/jsclasses/baseclasses.js` (named in
-     `scenescript64.dll`), and its `Vec3` gives (0, 0, 0) for `undefined` and
+     JavaScript on the disk, `assets/scripts/jsclasses/baseclasses.js`, and
+     its `Vec3` gives (0, 0, 0) for `undefined` and
      z = 0 for two numbers -- so the pivot is nought there as here, and the
      script only turns the system about its origin. **That file is the reference
      for every script class**; `host.js` should be checked against it. Also
@@ -3013,7 +2965,7 @@ to be offered first:**
      the small planet, stars all over the sky and rays round the sun (the shine on
      composition layer 5767 picking up a sun the background's audio `pulse` makes
      brighter). The planet's surface follows Windows at 0.8 to 0.97. **Half of it
-     was how a range is heard**: the loudest band, as `wallpaper64.exe` reads it
+     was how a range is heard**: the loudest band, as Wallpaper Engine reads it
      (see the trap), moved the sky halfway (std 1.9, 2.5), and with it the lava
      sparks fired often enough to show their trails uncapped -- fixed too. Still
      short of Windows: fewer red streaks across the sky; the lava's fans of
@@ -3051,7 +3003,7 @@ to be offered first:**
      `Stars` streaks** rise at a median of 33 degrees here and 16 on Windows:
      their vortex (50 inside, 100 outside, bands 5 to 9) is measured from its
      middle while they fly thousands along its axis, so it pushes them at its
-     outer speed all the way. (Superseded on 6 November: `wallpaper64.exe` measures
+     outer speed all the way. (Superseded on 6 November: Wallpaper Engine measures
      from the middle and weakens the push with the angle, see the vortex trap.)
      Measured from the axis instead: 26, Augmentation
      the same to the byte, DOOM and Snow Lights moved by less than a hundredth
@@ -3101,15 +3053,14 @@ to be offered first:**
      band 0 hardly at all (0.19); the Os follow 13 and 14 best where they read
      8 to 14. So the lowest entries are where ours and Wallpaper Engine's part:
      bins 1 to 4 of the 1920 (23 to 92 Hz) read off our 2048, or how the meter
-     treats them in `wallpaper64.exe`, which was not re-read. Nothing changed.
+     treats them in Wallpaper Engine, which was not re-read. Nothing changed.
 
      **Re-read the same night, and it is not the meter's reading either.**
-     `FUN_1400d02b0` decompiled: bins 1 to N-1, the place `pow((bin-1)/(N-1),
+     Wallpaper Engine's meter: bins 1 to N-1, the place `pow((bin-1)/(N-1),
      PLACING) x 64`, never more than one ahead, the weight `TILT -
      cos(pi (bin-1)/(N-1)) (1 - TILT)`, the root of weight times power, the
      loudest in each entry, then times the volume, 0.001 and N over half the
-     window -- all as `audio.rs` has it. The evening out in `FUN_140110630`
-     likewise: sixteen groups of eight, the loudest of all times 0.333 as a
+     window -- all as `audio.rs` has it. The evening out likewise: sixteen groups of eight, the loudest of all times 0.333 as a
      floor, envelopes put back to one after silence. Tried and worse: the
      meter's input three and ten times louder before the evening out (D
      followed at 0.23 and 0.09), and the bins read as at 48 kHz, 25 Hz apart
@@ -3124,9 +3075,8 @@ to be offered first:**
      Engine the wub reads far below whatever the evening out divides by. And
      **Windows' output device was 5.1**: the recording carries six channels,
      FL and FR with the music, BL and BR a tenth of it, FC and LFE silent.
-     `FUN_1400d02b0` takes channel 0 and channel 1 of the loopback's own
-     format and nothing else (`data[i * channels]` and `+ 1`, as `sample x 127
-     + 127`), so the recording's FL and FR are what it heard. The user's Linux
+     Wallpaper Engine's meter takes channel 0 and channel 1 of the loopback's
+     own format and nothing else, so the recording's FL and FR are what it heard. The user's Linux
      is 5.1 as well and stays so: measured with a tone at -50 dB from `pacat`
      and from `pw-play`, PipeWire upmixes nothing into the 5.1 sink here, and
      the meter's two channels off its monitor are FL and FR to the sample.
@@ -3149,7 +3099,7 @@ to be offered first:**
      the sound read as Wallpaper Engine reads it. The "ceiling" was wrong too:
      ours against ours with the time-driven noise in another phase follows at
      0.84 for the D and 0.86 for the M.
-   - **The volume of a scene's sounds**: `wallpaper64.exe` sets `volume^2` times the
+   - **The volume of a scene's sounds**: Wallpaper Engine sets `volume^2` times the
      scene's, ours plays the square root measured off recordings. The user finds the
      volume right as it is; left for later, by the user's word.
    - Done and confirmed on 2 November: Romulus' specks left out, Time Reactor's and

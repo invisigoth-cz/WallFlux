@@ -10,9 +10,8 @@ import QtMultimedia
 /// One sound object of a scene wallpaper, played the way the scene asks.
 ///
 /// Whatever the mode, the first file is one picked at random, as Wallpaper
-/// Engine picks it (`FUN_1401f5980` in its wallpaper64.exe), and it starts at
-/// once. `loop` then goes through the files in order and round again -- most
-/// scenes hold one, which simply repeats. `random` waits between `mintime`
+/// Engine picks it, and it starts at once. `loop` then goes through the
+/// files in order and round again -- most scenes hold one, which simply repeats. `random` waits between `mintime`
 /// and `maxtime` seconds after each and picks again, which is how a scene
 /// carrying a whole album shuffles it. `single` plays the one it picked once. A sound that starts silent waits for a script to start it, and
 /// there are no scripts here yet, so it stays silent.

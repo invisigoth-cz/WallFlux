@@ -52,8 +52,7 @@ const WINDOW: usize = 2048;
 /// Windows at 0.64; 0.76 at 48 kHz).
 pub const RATE: u32 = 48_000;
 
-/// Wallpaper Engine's own reading of the sound, out of `wallpaper64.exe`
-/// (`FUN_1400d02b0`, its defaults in the constructor at `0x1400c0c80`): a
+/// Wallpaper Engine's own reading of the sound: a
 /// discrete Fourier transform of 1920 samples, no window, of which bins 1 to
 /// 639 are read. Each bin's power is weighted by `TILT - cos(pi x)(1 - TILT)`,
 /// `x` how far up the 639 it is, so the bass counts a five-hundredth as much as
