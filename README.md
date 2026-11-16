@@ -34,9 +34,12 @@ you choose in Settings whether it then keeps playing, mutes, pauses or stops.
 - **Arch Linux** or a system built on it -- CachyOS, EndeavourOS, Manjaro
   and the like. WallFlux is a pacman package.
 - **KDE Plasma 6 on Wayland.** Not X11; other desktops are not supported.
-- **A 64-bit x86 processor from about 2009 or later** (x86-64-v2: SSE4.2,
-  POPCNT).
-- **A graphics card and driver with OpenGL 3.3.**
+- **A 64-bit x86 processor with SSE4.2** (x86-64-v2). Without it WallFlux
+  does not start at all.
+- **A graphics card and driver with OpenGL 3.3.** Video and web wallpapers
+  are light; **scene** wallpapers are drawn by WallFlux itself and ask far
+  more of the machine. They are known to play on a current desktop graphics
+  card, and on an older laptop (AMD A8-6410, 2014) they do not play yet.
 - **PipeWire** with its PulseAudio server, which is what Plasma uses by
   default -- for the wallpapers' sound and for the ones that follow your
   music.
