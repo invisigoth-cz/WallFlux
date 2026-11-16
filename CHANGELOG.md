@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.39.1] — 2026-11-16
+
 ### Added
 
 - **Each saved playlist in Load says how it runs** -- how often it
@@ -1597,7 +1599,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.1...HEAD
+[0.39.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.0...v0.39.1
 [0.39.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.37.3...v0.38.0
