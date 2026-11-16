@@ -13,6 +13,11 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Steam's own folder, so such a library showed an empty grid. Every library
   Steam lists in `libraryfolders.vdf` is read now.
 
+### Changed
+
+- **The README** has system requirements, says Wayland only, and no longer
+  explains building from source.
+
 ## [0.38.1] — 2026-11-12
 
 ### Changed

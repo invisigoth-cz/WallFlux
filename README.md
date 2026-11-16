@@ -1,40 +1,56 @@
 # WallFlux
 
 Live wallpapers for Linux. Plays the Wallpaper Engine wallpapers you already
-own, on KDE Plasma 6 under Wayland.
+own, on KDE Plasma 6 under Wayland. Wayland only: WallFlux does not run on
+X11.
 
-A copy of Wallpaper Engine on Steam is required: WallFlux reads the wallpapers
-from your Steam workshop folder and ships no assets of its own.
+A purchased copy of Wallpaper Engine on Steam is required: WallFlux reads the
+wallpapers from your Steam workshop folder and ships no assets of its own.
 
 ## What it does
 
 WallFlux sits in the panel as a tray icon. The icon opens a window with:
 
 - **Your library** -- every installed wallpaper, with search, filters,
-  favourites and a panel saying what each one is.
+  favourites and a panel saying what each one is, and playlists along the
+  bottom: wallpapers that take turns, with fades between them.
 - **The Steam Workshop** -- browse, search and download without leaving
   the window.
-- **Playlists** -- wallpapers that take turns, with fades between them.
 - **Displays** -- one wallpaper on every screen you tick.
 - **Settings** -- language (English, Czech), quality presets, sound,
   themes, starting at login.
 
 All three kinds of Wallpaper Engine wallpaper play: **web**, **video** and
 **scene**, scenes with their music, particles, scripts and the mouse. The
-sound gets out of the way by itself when another program plays, and the
-wallpaper pauses under a maximised window.
+wallpaper knows when it is not being looked at -- a window over it, another
+program with the keyboard or playing sound, the screens off or locked -- and
+you choose in Settings whether it then keeps playing, mutes, pauses or stops.
+
+## System requirements
+
+- **Wallpaper Engine**, purchased on Steam, and the **Steam client** to
+  download it and its wallpapers. Steam has to be running only for the Steam
+  Workshop tab; wallpapers already downloaded play without it.
+- **Arch Linux** or a system built on it -- CachyOS, EndeavourOS, Manjaro
+  and the like. WallFlux is a pacman package.
+- **KDE Plasma 6 on Wayland.** Not X11; other desktops are not supported.
+- **A 64-bit x86 processor from about 2009 or later** (x86-64-v2: SSE4.2,
+  POPCNT).
+- **A graphics card and driver with OpenGL 3.3.**
+- **PipeWire** with its PulseAudio server, which is what Plasma uses by
+  default -- for the wallpapers' sound and for the ones that follow your
+  music.
+- **An internet connection** for the Steam Workshop tab and for updates.
+
+Everything else is installed along with WallFlux: Qt 6 (with QtWebEngine
+and QtMultimedia), layer-shell-qt, KWayland, FFmpeg, the Breeze icons and
+Valve's Steamworks SDK.
 
 ## Install
 
-**Before you start**, you need:
-
-1. **Wallpaper Engine** bought on Steam and installed -- WallFlux plays the
-   wallpapers Steam has downloaded for it, and ships none of its own.
-2. **KDE Plasma 6 on Wayland**, on an Arch-based system: Arch Linux,
-   CachyOS, EndeavourOS, Manjaro and the like.
-3. **An AUR helper** -- `paru` (CachyOS has it already) or `yay`.
-
-Then open a terminal and paste these two lines, one after the other:
+For **Arch Linux users** and Arch-based systems. You need an **AUR helper**
+-- `paru` (CachyOS has it already) or `yay`. Open a terminal and paste
+these two lines, one after the other:
 
     paru -S steamworks-sdk
     sudo pacman -U https://github.com/invisigoth-cz/WallFlux/releases/latest/download/wallflux-x86_64.pkg.tar.zst
@@ -42,13 +58,6 @@ Then open a terminal and paste these two lines, one after the other:
 The first installs Valve's Steamworks SDK, which only the AUR carries and
 which the Steam Workshop tab needs. The second installs WallFlux itself.
 Both ask for your password and then for a `Y` to go ahead.
-
-For example, on a fresh CachyOS:
-
-    $ paru -S steamworks-sdk
-    :: Proceed with installation? [Y/n] y
-    $ sudo pacman -U https://github.com/invisigoth-cz/WallFlux/releases/latest/download/wallflux-x86_64.pkg.tar.zst
-    :: Proceed with installation? [Y/n] y
 
 WallFlux is then in the application menu. Start it and its icon appears in
 the panel; click the icon to choose a wallpaper. New versions are offered
@@ -74,22 +83,6 @@ those, so WallFlux has a renderer of its own for them, in Rust and OpenGL,
 under `crates/`. It reads the packages, translates the shaders and draws
 into the same window as the other two kinds, linked into the program rather
 than run beside it.
-
-## Building from source
-
-You need Qt 6.5 or newer with QtWebEngine and QtMultimedia, layer-shell-qt,
-CMake 3.21 or newer, a C++20 compiler and Rust with `cargo`.
-
-    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-    cmake --build build
-    ./build/wallflux --show
-
-The tests: `ctest --test-dir build --output-on-failure`. An Arch package is
-built with `cd packaging && makepkg -si`.
-
-Qt prints its messages to the terminal when there is one and sends them to
-the journal when there is not, so a run started from the menu is read with
-`journalctl --user -t wallflux`.
 
 ## Thanks
 
