@@ -6,6 +6,12 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The README builds WallFlux from the repository** until the AUR package
+  is up -- new accounts on the AUR are closed for the moment -- with the
+  same PKGBUILD the AUR will carry.
+
 ## [0.40.0] — 2026-11-16
 
 ### Changed

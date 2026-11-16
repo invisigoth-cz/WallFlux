@@ -51,35 +51,40 @@ Valve's Steamworks SDK.
 
 ## Install
 
-For **Arch Linux users** and Arch-based systems, from the
-[AUR](https://aur.archlinux.org/packages/wallflux). You need an **AUR
-helper** -- `paru` (CachyOS has it already) or `yay`. Open a terminal and
-paste one line:
+For **Arch Linux users** and Arch-based systems.
 
-    paru -S wallflux
+**WallFlux is on its way to the AUR**: new accounts there are closed for
+the moment, so until the package is up it is built straight from this
+repository, with the same PKGBUILD the AUR will carry. You need an **AUR
+helper** -- `paru` (CachyOS has it already) or `yay` -- for Valve's
+Steamworks SDK, which only the AUR carries and which the Steam Workshop
+tab needs. Open a terminal and paste these lines, one after the other:
 
-or, with yay:
+    paru -S steamworks-sdk
+    git clone https://github.com/invisigoth-cz/WallFlux.git
+    cd WallFlux/packaging
+    makepkg -si
 
-    yay -S wallflux
-
-It builds WallFlux on your machine, which takes a few minutes, and brings
-everything it needs with it -- Valve's Steamworks SDK included, which only
-the AUR carries and which the Steam Workshop tab needs. It asks for your
-password and then for a `Y` to go ahead.
+(`yay -S steamworks-sdk` in place of the first, with yay.) The first
+installs the Steamworks SDK; the other three fetch WallFlux and build it
+on your machine, which takes a few minutes. Both ask for your password and
+then for a `Y` to go ahead.
 
 WallFlux is then in the application menu. Start it and its icon appears in
-the panel; click the icon to choose a wallpaper. When a new version is out,
-Settings says so, and it is updated with the rest of the system:
-`paru -Syu` or `yay -Syu`.
+the panel; click the icon to choose a wallpaper. Settings says when a new
+version is out. To update, go back to the same folder and build again:
+
+    cd WallFlux && git pull && cd packaging && makepkg -si
+
+Once the package is in the AUR, all of this becomes `paru -S wallflux`,
+and updating it `paru -Syu`.
 
 ## Uninstall
 
 One line removes WallFlux, whatever it needed that nothing else does, its
 settings, its playlists and its cache:
 
-    paru -Rns wallflux; rm -rf ~/.config/WallFlux ~/.cache/WallFlux ~/.config/autostart/wallflux.desktop
-
-(`yay -Rns wallflux` does the same as the first half.)
+    sudo pacman -Rns wallflux; rm -rf ~/.config/WallFlux ~/.cache/WallFlux ~/.config/autostart/wallflux.desktop
 
 ## How it works
 

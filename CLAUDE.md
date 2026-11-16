@@ -2651,6 +2651,11 @@ packaging/PKGBUILD. Then, in this order:
    repository), commit with the version, push. The user installs with
    `paru -Syu`, as everybody else does.
 
+   **Not in the AUR yet** (16 November): new AUR accounts were closed, so
+   the README builds from a clone of this repository with the same PKGBUILD,
+   `makepkg -si` in `packaging/`. Put the README back to `paru -S wallflux`
+   once the package is up.
+
 0.2.0 was tagged before CHANGELOG.md existed, so its tag does not contain
 the file. Everything after it should.
 
