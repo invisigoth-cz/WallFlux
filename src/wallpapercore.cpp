@@ -622,26 +622,40 @@ WallpaperCore::WallpaperCore(QObject *parent)
 QStringList WallpaperCore::steamRoots()
 {
     const QString home = QDir::homePath();
-    const QStringList candidates = {
+    return steamRoots({
         home + QLatin1StringView("/.local/share/Steam"),
         home + QLatin1StringView("/.steam/steam"),
         home + QLatin1StringView("/.steam/root"),
         home + QLatin1StringView("/.var/app/com.valvesoftware.Steam/.local/share/Steam"),
         home + QLatin1StringView("/Steam"),
-    };
+    });
+}
 
-    // Most of those are symlinks to the first one. Resolving each to its real
-    // path and dropping repeats is what stops every wallpaper being found
-    // three times over.
-    //
-    // ponytail: only the default library of each install. A second Steam
-    // library on another drive is listed in steamapps/libraryfolders.vdf;
-    // parse that here if anyone turns out to keep wallpapers on one.
+QStringList WallpaperCore::steamRoots(const QStringList &installs)
+{
+    // Steam writes its libraries as `"path"  "/mnt/games/SteamLibrary"`, with
+    // a backslash before a backslash or a quote, as in a C string.
+    static const QRegularExpression pathLine(
+        QStringLiteral(R"re("path"\s+"((?:[^"\\]|\\.)*)")re"));
+    static const QRegularExpression escaped(QStringLiteral(R"re(\\(.))re"));
+
+    // Most of the installs are symlinks to the first one, and every install
+    // lists itself as a library. Resolving each to its real path and
+    // dropping repeats is what stops every wallpaper being found twice over.
     QStringList roots;
-    for (const QString &candidate : candidates) {
-        const QString real = QFileInfo(candidate).canonicalFilePath();
+    const auto add = [&roots](const QString &path) {
+        const QString real = QFileInfo(path).canonicalFilePath();
         if (!real.isEmpty() && !roots.contains(real))
             roots.append(real);
+    };
+    for (const QString &install : installs) {
+        add(install);
+        QFile vdf(install + QLatin1StringView("/steamapps/libraryfolders.vdf"));
+        if (!vdf.open(QIODevice::ReadOnly))
+            continue;
+        const QString text = QString::fromUtf8(vdf.readAll());
+        for (const auto &match : pathLine.globalMatch(text))
+            add(QString(match.captured(1)).replace(escaped, QStringLiteral("\\1")));
     }
     return roots;
 }

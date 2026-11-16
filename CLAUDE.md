@@ -610,7 +610,9 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
   `discard(id)` (deletes the workshop folder -- the other half of giving a
   wallpaper back, see the trap), `details(id)` (`{ size, resolution }`,
   read off the disk when the picker shows one card and kept afterwards)
-- static: `scan(roots)`, `steamRoots()`, `readable(text)` -- the text
+- static: `scan(roots)`, `steamRoots()` (the usual Steam installs and every
+  library their `steamapps/libraryfolders.vdf` lists; `Assets::locate()` in
+  `wpe-format` reads the same file for the renderer), `readable(text)` -- the text
   without Chinese, Japanese and Korean (the user's word of 10 November),
   tidied, or whole where nothing readable would be left; applied to a
   wallpaper's title at the scan and a workshop answer's title -- **not** to

@@ -297,9 +297,15 @@ public:
     /// making rather than at whatever Steam happens to have installed.
     static QList<Wallpaper> scan(const QStringList &steamRoots);
 
-    /// The places a Steam install is normally found on Linux, reduced to the
-    /// ones that exist.
+    /// The places a Steam install is normally found on Linux, and every
+    /// library those installs list, reduced to the ones that exist.
     static QStringList steamRoots();
+
+    /// These Steam installs and every library each one lists in its
+    /// `steamapps/libraryfolders.vdf` -- a second library on another drive
+    /// is where Wallpaper Engine and its workshop folder may well be. Each
+    /// once, by its real path, and only those that exist.
+    static QStringList steamRoots(const QStringList &installs);
 
     /// A name or a label without its Chinese, Japanese and Korean, the
     /// user's word of 10 November: for somebody who reads neither it is

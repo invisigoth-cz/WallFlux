@@ -71,6 +71,7 @@ class TestWallpaperCore : public QObject
     Q_OBJECT
 
 private slots:
+    void findsALibraryOnAnotherDrive();
     void leavesOutWhatOnlyEastAsiaReads();
     void putsLettersBeforeDigitsBeforeTheRest();
     void readsAConditionWithoutRunningIt();
@@ -119,6 +120,47 @@ private slots:
     /// that is not that folder is left alone.
     void takesOneOffTheDisk();
 };
+
+void TestWallpaperCore::findsALibraryOnAnotherDrive()
+{
+    // Steam in the home folder, Wallpaper Engine in a library elsewhere --
+    // whose name has a quote in it, which Steam writes escaped.
+    QTemporaryDir home;
+    QTemporaryDir drive;
+    const QString steam = home.path() + QStringLiteral("/Steam");
+    const QString library = drive.path() + QStringLiteral("/Games \"2\"");
+    QVERIFY(QDir().mkpath(steam + QStringLiteral("/steamapps")));
+    const QString content = library + QStringLiteral("/steamapps/workshop/content/431960/7");
+    QVERIFY(QDir().mkpath(content));
+
+    QString escaped = library;
+    escaped.replace(QStringLiteral("\""), QStringLiteral("\\\""));
+    QFile vdf(steam + QStringLiteral("/steamapps/libraryfolders.vdf"));
+    QVERIFY(vdf.open(QIODevice::WriteOnly));
+    vdf.write(QStringLiteral("\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"%1\"\n"
+                             "\t}\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"%2\"\n\t\t\"apps\"\n\t\t{\n"
+                             "\t\t\t\"431960\"\t\t\"1\"\n\t\t}\n\t}\n}\n")
+                  .arg(steam, escaped).toUtf8());
+    vdf.close();
+
+    QFile project(content + QStringLiteral("/project.json"));
+    QVERIFY(project.open(QIODevice::WriteOnly));
+    project.write(R"({"title":"Far away","type":"web","file":"index.html"})");
+    project.close();
+    QFile page(content + QStringLiteral("/index.html"));
+    QVERIFY(page.open(QIODevice::WriteOnly));
+    page.close();
+
+    // The install lists itself too, and a missing one is left out.
+    const QStringList roots = WallpaperCore::steamRoots(
+        {steam, steam, home.path() + QStringLiteral("/nowhere")});
+    QCOMPARE(roots, QStringList({QFileInfo(steam).canonicalFilePath(),
+                                 QFileInfo(library).canonicalFilePath()}));
+
+    const QList<Wallpaper> found = WallpaperCore::scan(roots);
+    QCOMPARE(found.size(), 1);
+    QCOMPARE(found.at(0).title, QStringLiteral("Far away"));
+}
 
 void TestWallpaperCore::drawsAPresetAsTheWallpaperItSitsOn()
 {
