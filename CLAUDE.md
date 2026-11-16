@@ -2666,20 +2666,35 @@ even when all they write is "pokračujeme", list everything below that is
 open and let them choose. Do not pick for them.** 0.33.0 was released that
 day; everything asked for on 9 November is in it.
 
-**The list as the user left it on 12 November, evening (0.38.1 released),
-to be offered first:**
+**First, before anything else -- the user's word on 16 November, evening
+(0.40.0 released, the repository public): "Registering on the AUR stays the
+priority until it is solved. Without it we make no further updates."** New
+AUR accounts were closed that day. At the start of every session, remind
+the user to try https://aur.archlinux.org/register again; release nothing
+until the package is up (see step 7 of How a release is made and the README
+note under it). The user's key for the AUR is `~/.ssh/id_ed25519.pub`.
+
+**Then the list as the user left it on 16 November, to be offered:**
 
 - **Wallpapers against Windows**: Augmentation's bolts (white-violet there,
   blue here), Space Visualizer's lava spark fans (fewer a minute), DOOM's D
   and M (follow the music at 0.75), red specks in Star Citizen (unchecked),
   Alien Isolation's reflections and lit particles, Blue Dawn's flare moved
   by hand (`MOVED` in `render.rs`, until its cause is found).
-- **Playlists and their configuration**, to be gone through with the user.
 - **The grid**, to be optimised.
-- **The Filters' sections**, perhaps reordered.
 - **WallFlux itself, checked**: speed, size, installing, uninstalling,
   what it takes of the machine.
+- **Scenes on the laptop** (AMD A8-6410, Radeon R5, 2014): only videos and
+  pages play there, no scene; the cause is not known -- its log, `glxinfo
+  -B` and the compatibility test, with the user.
+- **SCP Terminal Lockdown with following the mouse off** gets the unknown
+  mouse's `-10` and shows a red copy of its bar; what Wallpaper Engine hands
+  then was not found.
 - **Further improvements and changes** as the user brings them.
+
+Done on 16 November: playlists gone through with the user (0.39.1), the
+filters' sections in one order (0.39.2), the three wallpapers' minor issues
+(0.39.0).
 
 0. **Waiting on decisions of the user's:**
    - **Making the repository public: decided on 16 November.** The history
