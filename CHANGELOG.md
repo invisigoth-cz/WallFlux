@@ -8,6 +8,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **SCP Terminal Lockdown's chromatic aberration** is drawn: its shader
+  writes to its own input and takes a `vec4` from a `vec2`, which Wallpaper
+  Engine's HLSL allows and GLSL did not.
+- **Effects that read the mouse** are handed it even while it is on another
+  screen, as Wallpaper Engine hands it, instead of a value far off that
+  shifted SCP's whole picture.
+- **Scripts that switch an effect on and off** are followed: Ender Dark
+  Angels' muzzle light goes out with the gun's settings.
+- **Scripts on the camera's shake and parallax, and on a particle system's
+  speed**, run, and a script can ask the scene about its camera: Magical
+  Orb's ripple, light and vortex follow the music as it was made to.
 - **Wallpaper Engine in a Steam library on another drive** is found: the
   wallpapers, the scenes' shaders and the tag names were looked for only in
   Steam's own folder, so such a library showed an empty grid. Every library

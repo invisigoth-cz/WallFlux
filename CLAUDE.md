@@ -35,9 +35,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   A scene that answers to the music hears what the speakers are playing
   -- 7 of the 40 here do -- read off the default output's monitor by the
   renderer itself, once for every screen. A scene's JavaScript runs --
-  92 of the 93 scripts in 7 packages, under QuickJS: what writes a clock's digits, turns
-  its hands, swells a ring with the bass and keeps a particle system's rate and
-  alpha on the beat. The other one switches an effect, and is reported. And a scene
+  all 93 scripts in 7 packages, under QuickJS: what writes a clock's digits, turns
+  its hands, swells a ring with the bass, keeps a particle system's rate, alpha
+  and speed on the beat, shakes the camera and switches an effect on and off
+  (16 November). And a scene
   follows the mouse -- layers that lean away from it, particles pushed
   aside -- with the position asked of KWin, since the wallpaper's surfaces
   take no input and must not.
@@ -1432,8 +1433,31 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
 - **Some workshop shaders lean on HLSL shortening a value** -- `float x =
   vec2`, `vec3 c = vec4`. A shader that fails to link is passed through
   `spell_out_conversions` and tried once more, so nothing that compiles is
-  touched. SCP's `chromatic_aberration` still fails after that: it also writes
-  to a varying.
+  touched. Since 16 November that pass also follows a value's vector widths
+  (`Fit`) and swizzles the longer side down where two meet in arithmetic --
+  `v_TexCoord.xy - (offset * timer + pointer)`, a `vec2` less a `vec4` -- and
+  a fragment input the shader writes (`v_TexCoord += ...`, read-only in GLSL,
+  a copy in HLSL) gets a global copy first (`copy_written_inputs`). That is
+  what SCP's `chromatic_aberration` needed; nothing else here takes the path.
+
+- **A shader is handed the mouse wherever it is, off its screen too.** SCP's
+  aberration adds a hundredth of `g_PointerPosition` to every channel's
+  offset, and the `-10` that stood for "no mouse" moved its whole picture a
+  tenth of the way: a red copy of TERMINAL LOCKOUT hung over the logo. With
+  the recording's cursor it is closer to Windows than without the effect
+  (6.6 levels off against 7.7). Particles and the parallax still feel only a
+  mouse on their own screen (`point_at`). With following the mouse off in
+  Settings the mouse is unknown, `-10` goes in, and the copy comes back --
+  what Wallpaper Engine hands then was not found. **`shot` passes no mouse
+  unless `WALLFLUX_POINTER` says so**: judge SCP with it.
+
+- **A scene's scripts ask `thisScene` for the camera.** Magical Orb's
+  ripple, fisheye, blur, god rays and pulse all start `if
+  (thisScene.camerashake)`; with no such field every one of them kept its
+  file value and the orb sat filled and still. Told it (`scene_json`, the
+  names of `lib.sceneScript.d.ts`'s `IScene`), they follow the music as
+  written: a calm ring in silence, the preview's diamond of light with
+  music. The preview was taken with music.
 
 - **Editor Extensions (DLC 1790230) holds no format knowledge.** It is all
   `dlc/pymidas`: Python, PyTorch and MiDaS, the depth map generator for the
@@ -2651,11 +2675,6 @@ to be offered first:**
   and M (follow the music at 0.75), red specks in Star Citizen (unchecked),
   Alien Isolation's reflections and lit particles, Blue Dawn's flare moved
   by hand (`MOVED` in `render.rs`, until its cause is found).
-- **Minor issues in three wallpapers**, all of them what scene scripts do
-  not reach yet: SCP Terminal Lockdown (`chromatic_aberration`, a `vec2`
-  into a `float` that `spell_out_conversions` does not catch), Ender Dark
-  Angels Unforgiven (a script switching an effect's visibility), Magical
-  Orb (scripts on the camera's shake and on an instance's `speed`).
 - **Playlists and their configuration**, to be gone through with the user.
 - **The grid**, to be optimised.
 - **The Filters' sections**, perhaps reordered.
@@ -3140,7 +3159,7 @@ to be offered first:**
 
 - Against the Windows recordings on 31 October, by eye, 39 scenes and 5 web
   pages (Mourning for Icarus, Blue Dawn, Dark Core, Diablo 4 and StarCraft: Shakuras
-  have no recording). Sheets in `~/WallFlux-ukazky/2026-10-31/<id>/`. Left: SCP's `chromatic_aberration` still does not build; Tomb Raider has some pink haze at
+  have no recording). Sheets in `~/WallFlux-ukazky/2026-10-31/<id>/`. Left: Tomb Raider has some pink haze at
   her feet at some moments, from the torch's red smoke; Terminator Factory's sky is
   a little brighter.
 
@@ -3149,11 +3168,17 @@ to be offered first:**
   2560x1440 (11.3 and 11.5 for the small one). Dark Angels carries no sound at all,
   neither an object nor a file in 120 entries; its YouTube video does.
 
-- What a scene's scripts do not reach yet: an effect switched on and off, a particle override other than the
-  rate and the alpha (Magical Orb's vortex `speed`), the camera's shake and parallax numbers (Magical Orb
-  drives its shake with the music; the value beside the script is used and the scene is Minor issues), an object hidden in scene.json that a script would show -- it is
-  never loaded -- and the children of a particle system whose parent a
-  script moves, which were placed once from where the parent started.
+- What a scene's scripts do not reach yet: a particle override's `size`,
+  `lifetime` and `count`; the camera's `camerashakeroughness`, which is not
+  drawn at all; the last effect of a chain switched off, which draws into the
+  scene and has nothing to hand on to (reported); an object hidden in
+  scene.json that a script would show -- it is never loaded -- and the
+  children of a particle system whose parent a script moves, which were
+  placed once from where the parent started. An effect switched off by a
+  script (16 November) is copied over (`Step::off`); a system's `speed` is
+  set again from what it was before the override (`Unsped`); the shake's
+  waves run on the speed added up, so a speed moved by the music quickens
+  them rather than jumping.
 
 - A saved playlist is renamed in Load (10 November): Rename turns the picked
   row into a field, Enter takes the name and Escape gives the row back. A

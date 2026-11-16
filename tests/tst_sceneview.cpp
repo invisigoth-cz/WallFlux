@@ -175,13 +175,12 @@ private slots:
         QVERIFY(view.error().isEmpty());
         if (qEnvironmentVariableIsSet("WALLFLUX_SCENE_GRAB"))
             picture.save(qEnvironmentVariable("WALLFLUX_SCENE_GRAB"));
-        // The one thing of Dark Angels' the renderer leaves out -- a script
-        // that switches an effect -- is what it says it left out, which is
-        // what grades the wallpaper as having minor issues.
+        // Dark Angels' one gap, a script that switches an effect, is run since
+        // 16 November: the item hears it loaded and that nothing was left out,
+        // which is what grades the wallpaper as working.
         QTRY_COMPARE(loaded.count(), 1);
         const QStringList skipped = loaded.first().first().toStringList();
-        QVERIFY2(skipped.size() == 1 && skipped.first().contains(QStringLiteral("M5")),
-                 qPrintable(skipped.join(QStringLiteral(" | "))));
+        QVERIFY2(skipped.isEmpty(), qPrintable(skipped.join(QStringLiteral(" | "))));
 
         // A scene that loaded and drew nothing is the failure to catch: the
         // framebuffer would be the clear colour from edge to edge.

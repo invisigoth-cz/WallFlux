@@ -107,10 +107,10 @@ public:
         std::optional<QPointF> pointer;
         const QSizeF size = view->size();
         if (view->m_pointer && size.width() > 0 && size.height() > 0) {
-            const QPointF at(view->m_pointer->x() / size.width(),
-                             view->m_pointer->y() / size.height());
-            if (at.x() >= 0 && at.x() < 1 && at.y() >= 0 && at.y() < 1)
-                pointer = at;
+            // Off this screen too: the renderer keeps that from the particles
+            // and the parallax, and hands it to the shaders as it is.
+            pointer = QPointF(view->m_pointer->x() / size.width(),
+                              view->m_pointer->y() / size.height());
         }
         if (pointer != m_pointer) {
             m_pointer = pointer;

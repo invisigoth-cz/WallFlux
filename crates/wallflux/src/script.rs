@@ -66,6 +66,12 @@ pub enum Drives {
         pass: usize,
         name: String,
     },
+    /// Whether effect `effect` on object `id` is drawn.
+    EffectVisible { id: i64, effect: usize },
+    /// The speed the override gives the particle system object `id` places.
+    Speed { id: i64 },
+    /// One of the camera's numbers in `general`, by its name there.
+    Camera { name: &'static str },
 }
 
 /// Where an object stands after a frame of scripts.
@@ -183,6 +189,7 @@ impl Scripts {
             deadline.set(Instant::now() + DEADLINE);
             ctx.eval::<(), _>(HOST)?;
             call::<()>(&ctx, "__layers", (serde_json::Value::Array(layers.clone()).to_string(),))?;
+            call::<()>(&ctx, "__scene", (scene_json(file).to_string(),))?;
             for (index, one) in found.into_iter().enumerate() {
                 deadline.set(Instant::now() + DEADLINE);
                 let module = format!("{}#{index}", one.name);
@@ -424,6 +431,23 @@ fn layers_json(file: &SceneFile) -> Vec<serde_json::Value> {
     layers
 }
 
+/// What `thisScene` says of the scene besides its layers: the camera, as
+/// `lib.sceneScript.d.ts` names it. Magical Orb's shake asks
+/// `thisScene.camerashake` before it follows the music.
+fn scene_json(file: &SceneFile) -> serde_json::Value {
+    let g = &file.general;
+    serde_json::json!({
+        "camerashake": g.camerashake.value,
+        "camerashakeamplitude": g.camerashakeamplitude.value,
+        "camerashakeroughness": g.camerashakeroughness.value,
+        "camerashakespeed": g.camerashakespeed.value,
+        "cameraparallax": g.cameraparallax.value,
+        "cameraparallaxamount": g.cameraparallaxamount.value,
+        "cameraparallaxdelay": g.cameraparallaxdelay.value,
+        "cameraparallaxmouseinfluence": g.cameraparallaxmouseinfluence.value,
+    })
+}
+
 /// The wallpaper's settings by name, as `applyUserProperties` is handed
 /// them: every one of them, since at the start none has been sent yet.
 fn user_json(project: Option<&[u8]>) -> serde_json::Map<String, serde_json::Value> {
@@ -518,27 +542,37 @@ fn find<'a>(file: &'a SceneFile, skipped: &mut Vec<String>) -> Vec<Found<'a>> {
                 serde_json::json!(alpha.value),
                 &alpha.scriptproperties,
             );
+            let speed = &over.speed;
+            take(
+                None,
+                Drives::Speed { id: object.id },
+                "speed",
+                &speed.script,
+                serde_json::json!(speed.value),
+                &speed.scriptproperties,
+            );
             for (what, bound) in [
                 ("size", &over.size),
                 ("lifetime", &over.lifetime),
-                ("speed", &over.speed),
                 ("count", &over.count),
             ] {
                 if bound.script.is_some() {
                     skipped.push(format!(
-                        "{}/instanceoverride/{what}: only the rate and the alpha follow a script yet",
+                        "{}/instanceoverride/{what}: only the rate, the alpha and the speed follow a script yet",
                         object.name
                     ));
                 }
             }
         }
         for (effect, used) in object.effects.iter().enumerate() {
-            if used.visible.script.is_some() {
-                skipped.push(format!(
-                    "{}/effects/{effect}/visible: not run yet",
-                    object.name
-                ));
-            }
+            take(
+                None,
+                Drives::EffectVisible { id: object.id, effect },
+                "visible",
+                &used.visible.script,
+                serde_json::json!(used.visible.value),
+                &used.visible.scriptproperties,
+            );
             for (pass, over) in used.passes.iter().enumerate() {
                 for (name, bound) in &over.constantshadervalues {
                     let target = Drives::Constant {
@@ -567,6 +601,29 @@ fn find<'a>(file: &'a SceneFile, skipped: &mut Vec<String>) -> Vec<Found<'a>> {
                 text.value.clone(),
                 &text.scriptproperties,
             );
+        }
+    }
+    // The camera's, which belong to no layer: past the last one, so a script
+    // there finds no `thisLayer`, as in Wallpaper Engine.
+    let general = &file.general;
+    for (name, bound) in [
+        ("camerashakeamplitude", &general.camerashakeamplitude),
+        ("camerashakeroughness", &general.camerashakeroughness),
+        ("camerashakespeed", &general.camerashakespeed),
+        ("cameraparallaxamount", &general.cameraparallaxamount),
+        ("cameraparallaxdelay", &general.cameraparallaxdelay),
+        ("cameraparallaxmouseinfluence", &general.cameraparallaxmouseinfluence),
+    ] {
+        if let Some(script) = &bound.script {
+            found.push(Found {
+                layer: file.objects.len(),
+                property: None,
+                target: Drives::Camera { name },
+                script,
+                start: serde_json::json!(bound.value),
+                chosen: bound.scriptproperties.as_ref(),
+                name: format!("general/{name}"),
+            });
         }
     }
     found
@@ -627,6 +684,36 @@ mod tests {
         assert!(scripts.skipped.is_empty(), "{:?}", scripts.skipped);
         let frame = scripts.run(0.0, 0.0, &SILENCE).unwrap();
         assert_eq!(frame.values, vec![(&Drives::Alpha { id: 3 }, serde_json::json!(0.2))]);
+    }
+
+    /// Scripts on the camera, on an effect's visibility and on an override's
+    /// speed are all run. Magical Orb asks `thisScene.camerashake` before it
+    /// shakes, and Dark Angels switches its muzzle light off with the gun.
+    #[test]
+    fn a_script_drives_the_camera_an_effect_and_a_speed() {
+        let shake = script("export function update(v) { return thisScene.camerashake ? 0.7 : v; }");
+        let off = script("export function update() { return false; }");
+        let faster = script("export function update() { return 0.1; }");
+        let file = SceneFile::parse(
+            format!(
+                r#"{{"general":{{"camerashake":true,"camerashakeamplitude":{{"script":{shake},"value":0}}}},
+                    "objects":[{{"id":4,"name":"gun","effects":[{{"file":"effects/blend/effect.json","visible":{{"script":{off},"value":true}}}}]}},
+                               {{"id":5,"name":"vortex","instanceoverride":{{"speed":{{"script":{faster},"value":0}}}}}}]}}"#
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        let mut scripts = Scripts::load(&file, None).unwrap();
+        assert!(scripts.skipped.is_empty(), "{:?}", scripts.skipped);
+        let frame = scripts.run(0.0, 0.0, &SILENCE).unwrap();
+        assert_eq!(
+            frame.values,
+            vec![
+                (&Drives::EffectVisible { id: 4, effect: 0 }, serde_json::json!(false)),
+                (&Drives::Speed { id: 5 }, serde_json::json!(0.1)),
+                (&Drives::Camera { name: "camerashakeamplitude" }, serde_json::json!(0.7)),
+            ]
+        );
     }
 
     /// A script answering with a number still leaves words: `date.getDate()`

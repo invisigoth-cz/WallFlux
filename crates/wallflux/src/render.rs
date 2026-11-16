@@ -586,11 +586,19 @@ impl Answer {
 struct Shake {
     amplitude: f32,
     speed: f32,
+    /// The speed added up over time, which is the waves' clock: a script
+    /// moves the speed with the music every frame (Magical Orb), and speed
+    /// times time would then jump about instead of quickening.
+    travelled: f32,
+    /// When it was last added up.
+    at: f32,
 }
 
 impl Shake {
-    fn at(&self, time: f32) -> [f32; 2] {
-        let wave = |hz: f32| (std::f32::consts::TAU * hz * self.speed * time).sin();
+    fn at(&mut self, time: f32) -> [f32; 2] {
+        self.travelled += self.speed * (time - self.at).max(0.0);
+        self.at = time;
+        let wave = |hz: f32| (std::f32::consts::TAU * hz * self.travelled).sin();
         [wave(0.168), wave(0.22)].map(|w| 0.0064 * self.amplitude * w)
     }
 }
@@ -789,6 +797,8 @@ struct Step {
     /// Which of the object's effects in scene.json this is a pass of, and
     /// which pass, which is how a script names the constant it drives.
     scene_pass: (usize, usize),
+    /// Switched off by a script: the effect's picture goes on unchanged.
+    off: bool,
 }
 
 /// Maps an object's own quad onto the whole of whatever it is drawn into,
@@ -1271,21 +1281,6 @@ impl Scene {
         if let Some(scripts) = &scripts {
             skipped.extend(scripts.skipped.iter().map(|why| format!("script {why}")));
         }
-        // A script on the camera is not run: the value written beside it is
-        // what the camera gets.
-        let camera = &file.general;
-        for (name, bound) in [
-            ("camerashakeamplitude", &camera.camerashakeamplitude),
-            ("camerashakeroughness", &camera.camerashakeroughness),
-            ("camerashakespeed", &camera.camerashakespeed),
-            ("cameraparallaxamount", &camera.cameraparallaxamount),
-            ("cameraparallaxdelay", &camera.cameraparallaxdelay),
-            ("cameraparallaxmouseinfluence", &camera.cameraparallaxmouseinfluence),
-        ] {
-            if bound.script.is_some() {
-                skipped.push(format!("general/{name}: its script is not run yet"));
-            }
-        }
         let scene = Self {
             objects,
             quad,
@@ -1309,6 +1304,8 @@ impl Scene {
             shake: file.general.camerashake.value.then_some(Shake {
                 amplitude: file.general.camerashakeamplitude.value,
                 speed: file.general.camerashakespeed.value,
+                travelled: 0.0,
+                at: 0.0,
             }),
             zoom: file.general.zoom,
             lighting: wpe_format::scene::Lighting::read(bytes),
@@ -1519,7 +1516,13 @@ impl Scene {
             (self.scene_size.0 as f32, self.scene_size.1 as f32),
             (output.0 as f32, output.1 as f32),
         );
+        // A shader is handed the mouse wherever it is, off this screen too, as
+        // Wallpaper Engine hands it: SCP's chromatic aberration adds a
+        // hundredth of it to every channel's offset, and the "well off it" of
+        // an unknown mouse moved its whole picture a tenth of the way. The
+        // parallax and the particles feel only a mouse on this screen.
         self.pointer = pointer;
+        let pointer = pointer.filter(|(x, y)| (0.0..1.0).contains(x) && (0.0..1.0).contains(y));
         // Clip space runs up the screen, the pointer down it.
         let clip = pointer.map(|(x, y)| [x * 2.0 - 1.0, 1.0 - y * 2.0]);
         if let Some(parallax) = &mut self.parallax {
@@ -1597,7 +1600,7 @@ impl Scene {
             video.show(gl, time);
         }
         let aspect = output.0 as f32 / output.1.max(1) as f32;
-        let shift = self.shake.as_ref().map_or([0.0; 2], |s| {
+        let shift = self.shake.as_mut().map_or([0.0; 2], |s| {
             let [x, y] = s.at(time);
             [x * 2.0, y * 2.0 * aspect]
         });
@@ -1925,6 +1928,36 @@ impl Scene {
                     for index in placed(&mut self.objects, *id) {
                         if let Drawing::Particles(system) = &mut self.objects[index].drawing {
                             system.set_alpha(alpha as f32);
+                        }
+                    }
+                }
+                Drives::Speed { id } => {
+                    let Some(speed) = value.as_f64() else { continue };
+                    for index in placed(&mut self.objects, *id) {
+                        if let Drawing::Particles(system) = &mut self.objects[index].drawing {
+                            system.set_speed(speed as f32);
+                        }
+                    }
+                }
+                Drives::Camera { name } => {
+                    let Some(number) = value.as_f64().map(|v| v as f32) else { continue };
+                    match *name {
+                        "camerashakeamplitude" => self.shake.iter_mut().for_each(|s| s.amplitude = number),
+                        "camerashakespeed" => self.shake.iter_mut().for_each(|s| s.speed = number),
+                        "cameraparallaxamount" => self.parallax.iter_mut().for_each(|p| p.amount = number),
+                        "cameraparallaxdelay" => self.parallax.iter_mut().for_each(|p| p.delay = number),
+                        "cameraparallaxmouseinfluence" => {
+                            self.parallax.iter_mut().for_each(|p| p.influence = number)
+                        }
+                        // Roughness is not drawn at all; see `Shake`.
+                        _ => {}
+                    }
+                }
+                Drives::EffectVisible { id, effect } => {
+                    let on = value.as_bool().unwrap_or_else(|| value.as_f64().is_some_and(|v| v != 0.0));
+                    for index in placed(&mut self.objects, *id) {
+                        for step in self.objects[index].effects.iter_mut().filter(|s| s.scene_pass.0 == *effect) {
+                            step.off = !on;
                         }
                     }
                 }
@@ -2500,7 +2533,10 @@ unsafe fn draw_through_effects(
             );
         }
 
-        for step in &object.effects {
+        // What an effect a script switched off would have read, handed on to
+        // where it would have written.
+        let mut passed_over = None;
+        for (n, step) in object.effects.iter().enumerate() {
             // A buffer a step names is one the canvas was built with, since
             // the canvas is built from the same list -- or another layer's
             // picture, missing only if that layer's effects all failed to
@@ -2517,6 +2553,38 @@ unsafe fn draw_through_effects(
                 continue;
             };
             let read = read.1;
+
+            if step.off {
+                let effect = step.scene_pass.0;
+                if n == 0 || object.effects[n - 1].scene_pass.0 != effect {
+                    passed_over = Some(read);
+                }
+                let last = object.effects.get(n + 1).is_none_or(|s| s.scene_pass.0 != effect);
+                if last
+                    && let (Some(from), Some(target)) = (passed_over.take(), find(&step.into))
+                {
+                    let size = from.size();
+                    gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(from.frame));
+                    gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(target.frame));
+                    gl.blit_framebuffer(
+                        0,
+                        0,
+                        size.0 as i32,
+                        size.1 as i32,
+                        0,
+                        0,
+                        size.0 as i32,
+                        size.1 as i32,
+                        glow::COLOR_BUFFER_BIT,
+                        glow::NEAREST,
+                    );
+                }
+                // The last effect of a chain draws into the scene and has
+                // nothing to hand on to; it is drawn, and said so at load.
+                if find(&step.into).is_some() {
+                    continue;
+                }
+            }
 
             let Some(pass) = &step.pass else {
                 // A copy command, which is how a chain keeps a picture of its
@@ -2652,12 +2720,14 @@ fn build_effects(
         .effects
         .iter()
         .enumerate()
-        .filter(|(_, effect)| effect.visible.value)
+        // One a script may show is built even while it starts hidden.
+        .filter(|(_, effect)| effect.visible.value || effect.visible.script.is_some())
         .filter_map(|(index, effect)| {
             build_effect(gl, resolve, effect, object.id, carriers, &incoming, &outgoing, buffers)
                 .map(|mut steps| {
                     for step in &mut steps {
                         step.scene_pass.0 = index;
+                        step.off = !effect.visible.value;
                     }
                     steps
                 })
@@ -2703,6 +2773,17 @@ fn build_effects(
             }
             steps.push(step);
         }
+    }
+    // The last effect draws into the scene itself, so switched off there is
+    // nothing to hand its picture on to: it is drawn whatever the script says.
+    if let Some(last) = steps.iter().find(|s| matches!(s.into, Buffer::Screen))
+        && let Some(effect) = object.effects.get(last.scene_pass.0)
+        && effect.visible.script.is_some()
+    {
+        skipped.push(format!(
+            "{}/effects/{}/visible: a script switching the last effect is not followed yet",
+            object.name, last.scene_pass.0
+        ));
     }
     // A buffer an effect binds without ever declaring it still has to exist,
     // or the pass reading it would read nothing at all.
@@ -2768,6 +2849,7 @@ fn build_effect(
                 into,
                 reads: vec![(0, which_buffer(&own_name(&pass.source), input))],
                 scene_pass: (0, at),
+                off: false,
             });
             continue;
         }
@@ -2828,6 +2910,7 @@ fn build_effect(
             into,
             reads,
             scene_pass: (0, at),
+            off: false,
         });
     }
     Ok(steps)
@@ -3063,6 +3146,7 @@ fn build_blend(
             _ => vec![(0, Buffer::Canvas(0)), (4, Buffer::Frame)],
         },
         scene_pass: (after, 0),
+        off: false,
     }])
 }
 
@@ -3680,13 +3764,16 @@ fn build_pass(
         let fragment = fragment.clone();
         wpe_format::shader::widen_varyings(vertex, &fragment);
     }
-    // A workshop shader may lean on HLSL shortening a wider value to fit, which
-    // GLSL refuses. Those are written out and tried again, only for a shader
+    // A workshop shader may lean on HLSL shortening a wider value to fit, or
+    // on writing to one of its inputs, both of which GLSL refuses. Those are written out and tried again, only for a shader
     // that needs it, so one that compiles stays exactly as it was.
     let program = match unsafe { link(gl, &stages) } {
         Ok(program) => program,
         Err(why) => {
-            for (_, source) in &mut stages {
+            for (stage, source) in &mut stages {
+                if *stage == Stage::Fragment {
+                    *source = wpe_format::shader::copy_written_inputs(source);
+                }
                 *source = wpe_format::shader::spell_out_conversions(source);
             }
             unsafe { link(gl, &stages) }.map_err(|_| why)?

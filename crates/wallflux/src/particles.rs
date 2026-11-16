@@ -518,6 +518,19 @@ fn flock(live: &[Particle], boids: &Boids, step: u32, dt: f32) -> Vec<[f32; 3]> 
         .collect()
 }
 
+/// What a system's speeds are before the scene's `speed` multiplies them --
+/// the binary's list, `FUN_1401c5490`: the emitters' speeds, `velocityrandom`,
+/// `turbulentvelocityrandom`, `mapsequencearoundcontrolpoint`, the pull of
+/// `controlpointattract`, the speeds of a vortex and of `turbulence`, and the
+/// frequency of `oscillateposition`.
+struct Unsped {
+    velocity: Range<[f32; 3]>,
+    turbulent: Vec<Range<f32>>,
+    around: Option<Range<[f32; 3]>>,
+    operators: Vec<Operator>,
+    emitters: Vec<Range<f32>>,
+}
+
 /// The ranges the initializers draw a new particle's values from.
 struct Start {
     lifetime: Range<f32>,
@@ -718,6 +731,8 @@ enum Ribbon {
 }
 
 pub struct System {
+    /// What the scene's `speed` multiplies, before it does.
+    unsped: Unsped,
     /// Whether the particles are strung onto ribbons, and how.
     ribbon: Ribbon,
     /// Each emitter with the fraction of a particle it is owed.
@@ -868,15 +883,10 @@ impl System {
         // On the ranges rather than on each particle, so a system the file
         // gives no alpha or colour at all is changed too.
         let times = |r: Range<f32>, by: f32| Range { min: r.min * by, max: r.max * by };
-        let times3 = |r: Range<[f32; 3]>, by: [f32; 3]| Range {
-            min: std::array::from_fn(|i| r.min[i] * by[i]),
-            max: std::array::from_fn(|i| r.max[i] * by[i]),
-        };
         let speed = over.speed.value;
         let count = over.count.value.max(0.0);
-        if let Some((_, steps, around)) = &mut start.around {
+        if let Some((_, steps, _)) = &mut start.around {
             *steps *= count;
-            *around = times3(*around, [speed; 3]);
         }
         start.alpha = times(start.alpha, over.alpha.value);
         start.size = times(start.size, over.size.value);
@@ -922,10 +932,6 @@ impl System {
                 *value = held(*value, by[2]);
             }
         }
-        start.velocity = times3(start.velocity, [speed; 3]);
-        for field in &mut start.turbulent {
-            field.speed = times(field.speed, speed);
-        }
         // The rest of what `wallpaper64.exe` binds the scene's `size` and
         // `speed` to (`FUN_1401c5490`, each step's entries reading 0xcc and
         // 0xd4 of the override): `size` the ends of every `sizechange` as well
@@ -939,19 +945,14 @@ impl System {
                     ramp.from *= size;
                     ramp.to *= size;
                 }
-                Operator::Attract { strength, .. } => *strength *= speed,
-                Operator::Vortex(vortex) => vortex.speed = times(vortex.speed, speed),
-                Operator::Turbulence { field, .. } => field.speed = times(field.speed, speed),
-                Operator::OscillatePosition { wave, .. } => wave.frequency = times(wave.frequency, speed),
                 _ => {}
             }
         }
-        let emitters = definition
+        let emitters: Vec<(Emitter, f32)> = definition
             .emitters
             .iter()
             .cloned()
             .map(|mut e| {
-                e.speed = times(e.speed, speed);
                 // The scene's `count` is how many are let out, not how many
                 // may live: `wallpaper64.exe` binds it to each emitter's rate
                 // and burst (`FUN_1401c5490`, the entries at `0x1401c626c`)
@@ -986,7 +987,18 @@ impl System {
                 steps: ((steps as f32 * count).round() as u32).max(2),
                 mirror,
             });
-        Self {
+        // Everything `speed` multiplies, kept as it was before, so that a
+        // script on the override can set it again: Magical Orb's vortex says
+        // nought in the file and a tenth and more with the music.
+        let unsped = Unsped {
+            velocity: start.velocity,
+            turbulent: start.turbulent.iter().map(|field| field.speed).collect(),
+            around: start.around.map(|(_, _, around)| around),
+            operators: operators.clone(),
+            emitters: emitters.iter().map(|(e, _)| e.speed).collect(),
+        };
+        let mut system = Self {
+            unsped,
             ribbon: match definition.renderer {
                 wpe_format::particle::Renderer::Rope { .. } => Ribbon::Chain,
                 wpe_format::particle::Renderer::RopeTrail { length, points } => Ribbon::Trail {
@@ -1031,6 +1043,38 @@ impl System {
             hosts: Vec::new(),
             ride_limit: 0,
             per_burst: usize::MAX,
+        };
+        system.set_speed(speed);
+        system
+    }
+
+    /// Sets the scene's `speed` override, as the file or a script on it says.
+    pub fn set_speed(&mut self, speed: f32) {
+        let times = |r: Range<f32>| Range { min: r.min * speed, max: r.max * speed };
+        let times3 = |r: Range<[f32; 3]>| Range { min: r.min.map(|c| c * speed), max: r.max.map(|c| c * speed) };
+        let unsped = &self.unsped;
+        self.start.velocity = times3(unsped.velocity);
+        for (field, speed) in self.start.turbulent.iter_mut().zip(&unsped.turbulent) {
+            field.speed = times(*speed);
+        }
+        if let (Some((_, _, around)), Some(unsped)) = (&mut self.start.around, unsped.around) {
+            *around = times3(unsped);
+        }
+        for (operator, was) in self.operators.iter_mut().zip(&unsped.operators) {
+            match (operator, was) {
+                (Operator::Attract { strength, .. }, Operator::Attract { strength: was, .. }) => *strength = was * speed,
+                (Operator::Vortex(vortex), Operator::Vortex(was)) => vortex.speed = times(was.speed),
+                (Operator::Turbulence { field, .. }, Operator::Turbulence { field: was, .. }) => {
+                    field.speed = times(was.speed)
+                }
+                (Operator::OscillatePosition { wave, .. }, Operator::OscillatePosition { wave: was, .. }) => {
+                    wave.frequency = times(was.frequency)
+                }
+                _ => {}
+            }
+        }
+        for ((emitter, _), was) in self.emitters.iter_mut().zip(&unsped.emitters) {
+            emitter.speed = times(*was);
         }
     }
 

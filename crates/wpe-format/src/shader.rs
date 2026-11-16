@@ -473,6 +473,11 @@ fn include_name(line: &str) -> Option<&str> {
 /// A pass over statements rather than a parser: what it cannot read as one of
 /// those three it leaves alone, and the compiler says so.
 ///
+/// The value itself is followed through too, as far as its names' types are
+/// known: where HLSL takes a `vec4` from a `vec2` it shortens the `vec4`
+/// first, so the longer side gets a swizzle down to the shorter one. A value
+/// with a name or a call of unknown type is left as it was.
+///
 /// And `max(0, v)` becomes `max(v, 0.0)`, `min` likewise: HLSL spreads the
 /// number over the vector, GLSL has only the vector-and-number way round.
 /// Lightning Thunderstorm's `pulse` wrote `max(0, albedo.rgb)`.
@@ -481,6 +486,7 @@ pub fn spell_out_conversions(source: &str) -> String {
     let source = turned.as_str();
     let mut types: BTreeMap<String, &'static str> = BTreeMap::new();
     let mut returns: Option<&'static str> = None;
+    let mut functions: BTreeMap<String, &'static str> = BTreeMap::new();
     let mut out = String::with_capacity(source.len() + source.len() / 8);
     let mut rest = source;
     while let Some(end) = next_mark(rest) {
@@ -495,13 +501,18 @@ pub fn spell_out_conversions(source: &str) -> String {
             "{" => {
                 if let Some((kind, parameters)) = function_header(code) {
                     returns = kind;
+                    if let (Some(kind), Some(name)) =
+                        (kind, code.split('(').next().and_then(|b| b.split_whitespace().last()))
+                    {
+                        functions.insert(name.to_owned(), kind);
+                    }
                     for (name, kind) in parameters {
                         types.insert(name, kind);
                     }
                 }
                 out.push_str(code);
             }
-            ";" => out.push_str(&convert_statement(code, &mut types, returns)),
+            ";" => out.push_str(&convert_statement(code, &mut types, &functions, returns)),
             _ => out.push_str(code),
         }
         out.push_str(mark);
@@ -655,13 +666,16 @@ fn assignment(code: &str) -> Option<(usize, usize)> {
 fn convert_statement(
     code: &str,
     types: &mut BTreeMap<String, &'static str>,
+    functions: &BTreeMap<String, &'static str>,
     returns: Option<&'static str>,
 ) -> String {
-    let wrap = |kind: &str, left: &str, value: &str| format!("{left} {kind}({})", value.trim());
+    let known = types.clone();
+    let fit = |value: &str| Fit::new(value, &known, functions).map_or_else(|| value.to_owned(), |t| t);
+    let wrap = |kind: &str, left: &str, value: &str| format!("{left} {kind}({})", fit(value.trim()));
     if let Some(value) = code.strip_prefix("return").filter(|v| v.starts_with(char::is_whitespace))
         && let Some(kind) = returns
     {
-        return format!("return {kind}({})", value.trim());
+        return format!("return {kind}({})", fit(value.trim()));
     }
     let assigned = assignment(code);
     let left = assigned.map_or(code, |(at, _)| &code[..at]);
@@ -710,6 +724,317 @@ fn convert_statement(
     wrap(kind, &code[..at + width], &code[at + width..])
 }
 
+/// A fragment shader's inputs are read-only in GLSL, and HLSL hands its
+/// function a copy that may be written: chromatic aberration does
+/// `v_TexCoord += ...` before sampling. Each input the shader writes gets a
+/// global of its own, filled from the input at the top of `main` and used
+/// everywhere else. The copy is a `#define` beside the declaration, so an
+/// input declared under an `#if` that is off copies nothing.
+pub fn copy_written_inputs(fragment: &str) -> String {
+    let written: Vec<(&str, &str)> = fragment
+        .lines()
+        .filter_map(varying_decl)
+        .filter(|(_, name)| writes(fragment, name))
+        .collect();
+    if written.is_empty() {
+        return fragment.to_owned();
+    }
+    let mut out = String::with_capacity(fragment.len() + 256);
+    let mut in_main = false;
+    for line in fragment.lines() {
+        if let Some((kind, name)) = varying_decl(line).filter(|d| written.contains(d)) {
+            out.push_str(&format!("{line}\n{kind} wf_{name};\n#define WF_COPY_{name} wf_{name} = {name}\n"));
+            continue;
+        }
+        let mut line = line.to_owned();
+        for (_, name) in &written {
+            line = rename(&line, name, &format!("wf_{name}"));
+        }
+        if !in_main && let Some(at) = line.find("void main").and_then(|m| line[m..].find('{').map(|b| m + b + 1)) {
+            in_main = true;
+            out.push_str(&line[..at]);
+            out.push('\n');
+            for (_, name) in &written {
+                out.push_str(&format!("#ifdef WF_COPY_{name}\nWF_COPY_{name};\n#endif\n"));
+            }
+            out.push_str(&line[at..]);
+        } else {
+            out.push_str(&line);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// Whether `name`, whole or through a swizzle, is ever assigned to -- not
+/// declared afresh, `vec4 timer = ...`, which in HLSL only hides the input.
+fn writes(source: &str, name: &str) -> bool {
+    source.match_indices(name).any(|(at, _)| {
+        let before = source[..at].chars().next_back();
+        let word_before = source[..at]
+            .trim_end()
+            .rsplit(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+            .next()
+            .unwrap_or("");
+        let declared = !word_before.is_empty() && !matches!(word_before, "else" | "do" | "return");
+        let after = &source[at + name.len()..];
+        let after = after.trim_start_matches(|c: char| c == '.' || c.is_ascii_alphabetic());
+        let after = after.trim_start();
+        before.is_none_or(|c| !c.is_alphanumeric() && c != '_' && c != '.')
+            && !declared
+            && !source[at + name.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_')
+            && (["+=", "-=", "*=", "/=", "++", "--"].iter().any(|op| after.starts_with(op))
+                || (after.starts_with('=') && !after.starts_with("==")))
+    })
+}
+
+/// Every whole-word `name` in `line` turned into `to`.
+fn rename(line: &str, name: &str, to: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(at) = rest.find(name) {
+        let before = rest[..at].chars().next_back().or_else(|| out.chars().next_back());
+        let after = rest[at + name.len()..].chars().next();
+        let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        out.push_str(&rest[..at]);
+        out.push_str(if word(before) || word(after) { name } else { to });
+        rest = &rest[at + name.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A value read through once for the widths of its vectors, with a swizzle
+/// put on the longer side wherever two different widths meet in arithmetic.
+/// `None` where it could not be read, which leaves it as it was.
+struct Fit<'a> {
+    tokens: Vec<(&'a str, &'a str)>,
+    at: usize,
+    types: &'a BTreeMap<String, &'static str>,
+    functions: &'a BTreeMap<String, &'static str>,
+}
+
+/// A width of nought is a type not followed: a matrix, a bool, a name not known.
+type Typed = (String, usize);
+
+impl<'a> Fit<'a> {
+    fn new(
+        value: &'a str,
+        types: &'a BTreeMap<String, &'static str>,
+        functions: &'a BTreeMap<String, &'static str>,
+    ) -> Option<String> {
+        let mut fit = Fit { tokens: lex(value)?, at: 0, types, functions };
+        let (text, _) = fit.ternary()?;
+        (fit.at == fit.tokens.len()).then_some(text)
+    }
+
+    fn peek(&self) -> Option<&'a str> {
+        self.tokens.get(self.at).map(|t| t.1)
+    }
+
+    /// The next token with the space before it.
+    fn take(&mut self) -> Option<String> {
+        let (space, token) = *self.tokens.get(self.at)?;
+        self.at += 1;
+        Some(format!("{space}{token}"))
+    }
+
+    fn ternary(&mut self) -> Option<Typed> {
+        let (mut text, width) = self.binary(0)?;
+        if self.peek() != Some("?") {
+            return Some((text, width));
+        }
+        text += &self.take()?;
+        let (yes, a) = self.ternary()?;
+        text += &yes;
+        (self.peek() == Some(":")).then_some(())?;
+        text += &self.take()?;
+        let (no, b) = self.ternary()?;
+        Some((text + &no, if a == b { a } else { 0 }))
+    }
+
+    fn binary(&mut self, level: usize) -> Option<Typed> {
+        const LEVELS: [&[&str]; 6] =
+            [&["||"], &["&&"], &["==", "!="], &["<", ">", "<=", ">="], &["+", "-"], &["*", "/", "%"]];
+        let Some(ops) = LEVELS.get(level) else {
+            return self.unary();
+        };
+        let (mut text, mut width) = self.binary(level + 1)?;
+        while self.peek().is_some_and(|t| ops.contains(&t)) {
+            let op_text = self.take()?;
+            let (right, other) = self.binary(level + 1)?;
+            if level < 4 {
+                (text, width) = (text + &op_text + &right, 0);
+                continue;
+            }
+            let shorter = width.min(other);
+            (text, width) = match (width, other) {
+                (a, b) if a > 1 && b > 1 && a != b => {
+                    let cut = |t: String, w: usize| match w > shorter {
+                        true => cut_to(&t, shorter),
+                        false => t,
+                    };
+                    (cut(text, width) + &op_text + &cut(right, other), shorter)
+                }
+                (0, _) | (_, 0) => (text + &op_text + &right, 0),
+                (a, b) => (text + &op_text + &right, a.max(b)),
+            };
+        }
+        Some((text, width))
+    }
+
+    fn unary(&mut self) -> Option<Typed> {
+        if matches!(self.peek(), Some("-" | "+" | "!")) {
+            let sign = self.take()?;
+            let (text, width) = self.unary()?;
+            return Some((sign + &text, width));
+        }
+        self.postfix()
+    }
+
+    fn postfix(&mut self) -> Option<Typed> {
+        let (mut text, mut width) = self.primary()?;
+        loop {
+            match self.peek() {
+                Some(".") => {
+                    text += &self.take()?;
+                    let member = self.peek()?;
+                    text += &self.take()?;
+                    width = match member.chars().all(|c| "xyzwrgba".contains(c)) && member.len() <= 4 {
+                        true => member.len(),
+                        false => 0,
+                    };
+                }
+                Some("[") => {
+                    text += &self.take()?;
+                    text += &self.ternary()?.0;
+                    (self.peek() == Some("]")).then_some(())?;
+                    text += &self.take()?;
+                    width = 0;
+                }
+                _ => return Some((text, width)),
+            }
+        }
+    }
+
+    fn primary(&mut self) -> Option<Typed> {
+        let token = self.peek()?;
+        if token == "(" {
+            let mut text = self.take()?;
+            let (inner, width) = self.ternary()?;
+            (self.peek() == Some(")")).then_some(())?;
+            text += &inner;
+            return Some((text + &self.take()?, width));
+        }
+        let first = token.chars().next()?;
+        if first.is_ascii_digit() || first == '.' {
+            return Some((self.take()?, 1));
+        }
+        if !is_name(token) {
+            return None;
+        }
+        let mut text = self.take()?;
+        if self.peek() != Some("(") {
+            let width = self.types.get(token).map_or(0, |kind| width(kind));
+            return Some((text, width));
+        }
+        text += &self.take()?;
+        let mut first_width = None;
+        while self.peek() != Some(")") {
+            let (argument, width) = self.ternary()?;
+            first_width.get_or_insert(width);
+            text += &argument;
+            match self.peek()? {
+                "," => text += &self.take()?,
+                ")" => {}
+                _ => return None,
+            }
+        }
+        text += &self.take()?;
+        let width = match token {
+            "float" | "int" | "dot" | "length" | "distance" => 1,
+            "vec2" => 2,
+            "vec3" | "cross" => 3,
+            "vec4" | "texture" | "textureLod" | "texSample2D" | "texSample2DLod" => 4,
+            "abs" | "sign" | "floor" | "ceil" | "fract" | "frac" | "mod" | "fmod" | "min" | "max"
+            | "clamp" | "saturate" | "mix" | "lerp" | "step" | "smoothstep" | "pow" | "exp" | "exp2"
+            | "log" | "log2" | "sqrt" | "inversesqrt" | "rsqrt" | "sin" | "cos" | "tan" | "asin"
+            | "acos" | "atan" | "atan2" | "normalize" | "reflect" => first_width.unwrap_or(0),
+            _ => self.functions.get(token).map_or(0, |kind| width(kind)),
+        };
+        Some((text, width))
+    }
+}
+
+/// `text` swizzled down to `width` components, in brackets unless it is
+/// already one name or one bracket.
+fn cut_to(text: &str, width: usize) -> String {
+    let body = text.trim_start();
+    let space = &text[..text.len() - body.len()];
+    let swizzle = &"xyzw"[..width];
+    if is_name(body) || (body.starts_with('(') && body.ends_with(')') && closes_at_end(body)) {
+        format!("{space}{body}.{swizzle}")
+    } else {
+        format!("{space}({body}).{swizzle}")
+    }
+}
+
+/// Whether the bracket a text opens with is the one it ends with.
+fn closes_at_end(text: &str) -> bool {
+    let mut depth = 0;
+    for (at, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return at == text.len() - 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// A value cut into tokens, each with the space in front of it. `None` for
+/// anything this does not read, such as a string or a `#`.
+fn lex(text: &str) -> Option<Vec<(&str, &str)>> {
+    let mut tokens = Vec::new();
+    let mut rest = text;
+    loop {
+        let trimmed = rest.trim_start();
+        let space = &rest[..rest.len() - trimmed.len()];
+        let Some(c) = trimmed.chars().next() else {
+            return Some(tokens);
+        };
+        let len = if c.is_ascii_alphabetic() || c == '_' {
+            trimmed.find(|c: char| !c.is_ascii_alphanumeric() && c != '_').unwrap_or(trimmed.len())
+        } else if c.is_ascii_digit() || (c == '.' && trimmed[1..].starts_with(|c: char| c.is_ascii_digit())) {
+            let bytes = trimmed.as_bytes();
+            let mut end = 0;
+            while end < bytes.len() {
+                let b = bytes[end];
+                let exponent_sign = matches!(b, b'+' | b'-') && end > 0 && matches!(bytes[end - 1], b'e' | b'E');
+                if b.is_ascii_alphanumeric() || b == b'.' || exponent_sign {
+                    end += 1;
+                } else {
+                    break;
+                }
+            }
+            end
+        } else if ["<=", ">=", "==", "!=", "&&", "||"].iter().any(|op| trimmed.starts_with(op)) {
+            2
+        } else if "+-*/%<>!?:()[],.".contains(c) {
+            1
+        } else {
+            return None;
+        };
+        tokens.push((space, &trimmed[..len]));
+        rest = &trimmed[len..];
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -726,6 +1051,32 @@ mod tests {
         assert!(out.contains("y += vec3(g_A);"), "{out}");
         assert!(out.contains("return vec3(g_A);"), "{out}");
         assert!(out.contains("// a; comment"), "{out}");
+    }
+
+    #[test]
+    fn a_longer_vector_is_shortened_where_two_widths_meet() {
+        let out = spell_out_conversions(
+            "uniform float u_r;\nvarying vec4 v_T;\nvoid main() {\n  vec4 t = v_T;\n  float p = 1.0;\n  vec2 a = v_T.xy - (u_r * t + p);\n  vec4 c = texSample2D(g_S, v_T.xy - u_r * t);\n  vec3 d = t * 2.0 + v_T.xyz;\n  vec2 e = unknown - t;\n}\n",
+        );
+        assert!(out.contains("vec2 a = vec2(v_T.xy - (u_r * t + p).xy);"), "{out}");
+        assert!(out.contains("texSample2D(g_S, v_T.xy - (u_r * t).xy)"), "{out}");
+        assert!(out.contains("vec3 d = vec3((t * 2.0).xyz + v_T.xyz);"), "{out}");
+        assert!(out.contains("vec2 e = vec2(unknown - t);"), "{out}");
+    }
+
+    #[test]
+    fn an_input_the_fragment_shader_writes_is_copied_first() {
+        let out = copy_written_inputs(
+            "varying vec4 v_TexCoord;\nvarying vec2 v_Kept;\nvec4 f() { return v_TexCoord; }\nvoid main() {\n  v_TexCoord.xy += v_Kept;\n  gl_FragColor = v_TexCoord + vec4(v_TexCoord2);\n}\n",
+        );
+        assert!(out.contains("varying vec4 v_TexCoord;\nvec4 wf_v_TexCoord;\n#define WF_COPY_v_TexCoord wf_v_TexCoord = v_TexCoord\n"), "{out}");
+        assert!(out.contains("return wf_v_TexCoord;"), "{out}");
+        assert!(out.contains("void main() {\n#ifdef WF_COPY_v_TexCoord\nWF_COPY_v_TexCoord;\n#endif\n"), "{out}");
+        assert!(out.contains("wf_v_TexCoord.xy += v_Kept;"), "{out}");
+        assert!(out.contains("wf_v_TexCoord + vec4(v_TexCoord2)"), "{out}");
+        assert!(!out.contains("wf_v_Kept"), "{out}");
+        let untouched = "varying vec2 v_A;\nvoid main() { vec2 v_A = vec2(1.0); gl_FragColor = vec4(v_A, 0.0, 1.0); }\n";
+        assert_eq!(copy_written_inputs(untouched), untouched);
     }
 
     #[test]

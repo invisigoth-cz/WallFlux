@@ -136,6 +136,12 @@ globalThis.thisScene = {
     getLayer(name) { return byName.get(String(name)) ?? null; },
 };
 
+// The camera's numbers out of the scene's `general`, as `__scene` is handed
+// them.
+globalThis.__scene = function (json) {
+    Object.assign(thisScene, JSON.parse(json));
+};
+
 const scripts = [];
 
 function plain(value) {
