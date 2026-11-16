@@ -6,6 +6,12 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The library's filter lists its sections in the workshop's order** --
+  type, age rating, resolution, genre, tags -- with favourites and
+  compatibility, which only the library has, after them.
+
 ## [0.39.1] — 2026-11-16
 
 ### Added

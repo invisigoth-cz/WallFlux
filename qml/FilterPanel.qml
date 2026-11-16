@@ -173,14 +173,34 @@ Rectangle {
                 width: parent.width - 18
                 spacing: 16
 
+                // The five the workshop's filter has too, in its order, so a
+                // section is in the same place in both tabs; then the two
+                // only the library has.
                 ChipSection {
-                    title: qsTr("FAVOURITES")
-                    // The account's hearts on Steam, so only while it can
-                    // be asked.
-                    visible: Steamworks.available
-                    values: [{ v: "only", l: qsTr("Only favourites") }]
-                    picked: panel.favorites
-                    onAsked: (value) => panel.favorites = panel.toggled(panel.favorites, value)
+                    title: qsTr("TYPE")
+                    values: [{ v: WallpaperKind.Scene, l: qsTr("Scene") },
+                             { v: WallpaperKind.Video, l: qsTr("Video") },
+                             { v: WallpaperKind.Web, l: qsTr("Web") },
+                             { v: WallpaperKind.Application, l: qsTr("Application") }]
+                    picked: panel.kinds
+                    onAsked: (value) => panel.kinds = panel.toggled(panel.kinds, value)
+                }
+
+                ChipSection {
+                    title: qsTr("AGE RATING")
+                    // Steam's three words, which is what a wallpaper's rating is
+                    // kept as whether it came off the disk or out of a query -- so
+                    // the same chip means the same thing in both filters.
+                    values: Tags.labelled(Tags.ratings, panel.catalogue)
+                    picked: panel.ratings
+                    onAsked: (value) => panel.ratings = panel.toggled(panel.ratings, value)
+                }
+
+                ChipSection {
+                    title: qsTr("RESOLUTION")
+                    values: panel.resolutionValues
+                    picked: panel.resolutions
+                    onAsked: (value) => panel.resolutions = panel.toggled(panel.resolutions, value)
                 }
 
                 ChipSection {
@@ -198,13 +218,13 @@ Rectangle {
                 }
 
                 ChipSection {
-                    title: qsTr("AGE RATING")
-                    // Steam's three words, which is what a wallpaper's rating is
-                    // kept as whether it came off the disk or out of a query -- so
-                    // the same chip means the same thing in both filters.
-                    values: Tags.labelled(Tags.ratings, panel.catalogue)
-                    picked: panel.ratings
-                    onAsked: (value) => panel.ratings = panel.toggled(panel.ratings, value)
+                    title: qsTr("FAVOURITES")
+                    // The account's hearts on Steam, so only while it can
+                    // be asked.
+                    visible: Steamworks.available
+                    values: [{ v: "only", l: qsTr("Only favourites") }]
+                    picked: panel.favorites
+                    onAsked: (value) => panel.favorites = panel.toggled(panel.favorites, value)
                 }
 
                 ChipSection {
@@ -219,23 +239,6 @@ Rectangle {
                              { v: "unknown", l: qsTr("Not tried yet") }]
                     picked: panel.grades
                     onAsked: (value) => panel.grades = panel.toggled(panel.grades, value)
-                }
-
-                ChipSection {
-                    title: qsTr("RESOLUTION")
-                    values: panel.resolutionValues
-                    picked: panel.resolutions
-                    onAsked: (value) => panel.resolutions = panel.toggled(panel.resolutions, value)
-                }
-
-                ChipSection {
-                    title: qsTr("TYPE")
-                    values: [{ v: WallpaperKind.Scene, l: qsTr("Scene") },
-                             { v: WallpaperKind.Video, l: qsTr("Video") },
-                             { v: WallpaperKind.Web, l: qsTr("Web") },
-                             { v: WallpaperKind.Application, l: qsTr("Application") }]
-                    picked: panel.kinds
-                    onAsked: (value) => panel.kinds = panel.toggled(panel.kinds, value)
                 }
             }
         }

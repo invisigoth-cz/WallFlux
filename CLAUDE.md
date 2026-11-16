@@ -105,7 +105,9 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **One vocabulary for both filters.** Type, age rating, picture size,
   genre and the rest are all tags as far as Steam is concerned, so a genre
   row and a ticked chip are the same required tag. Both panels read DRUH,
-  PŘÍSTUPNOST, ROZLIŠENÍ, ŽÁNR, ŠTÍTKY, and every tag is called what Valve
+  PŘÍSTUPNOST, ROZLIŠENÍ, ŽÁNR, ŠTÍTKY in that order (the library's had its
+  own until 16 November), the library's OBLÍBENÉ and KOMPATIBILITA after
+  them, and every tag is called what Valve
   calls it in whichever of its 36 languages the window is in.
 - **An empty Steam tab that says why**, with a Try again that works: the
   Steamworks library is opened again rather than once at startup, so

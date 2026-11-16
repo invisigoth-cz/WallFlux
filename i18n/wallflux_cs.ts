@@ -40,32 +40,32 @@
         <translation>Neznámé</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="177"/>
+        <location filename="../qml/FilterPanel.qml" line="221"/>
         <source>FAVOURITES</source>
         <translation>OBLÍBENÉ</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="181"/>
+        <location filename="../qml/FilterPanel.qml" line="225"/>
         <source>Only favourites</source>
         <translation>Jen oblíbené</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="187"/>
+        <location filename="../qml/FilterPanel.qml" line="207"/>
         <source>GENRE</source>
         <translation>ŽÁNR</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="194"/>
+        <location filename="../qml/FilterPanel.qml" line="214"/>
         <source>TAGS</source>
         <translation>ŠTÍTKY</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="201"/>
+        <location filename="../qml/FilterPanel.qml" line="190"/>
         <source>AGE RATING</source>
         <translation>PŘÍSTUPNOST</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="211"/>
+        <location filename="../qml/FilterPanel.qml" line="231"/>
         <source>COMPATIBILITY</source>
         <translation>KOMPATIBILITA</translation>
     </message>
@@ -74,7 +74,7 @@
         <translation type="vanished">Bez chyby</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="217"/>
+        <location filename="../qml/FilterPanel.qml" line="237"/>
         <source>Minor issues</source>
         <translation>Drobné potíže</translation>
     </message>
@@ -83,52 +83,52 @@
         <translation type="vanished">Vážné potíže</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="216"/>
+        <location filename="../qml/FilterPanel.qml" line="236"/>
         <source>Works</source>
         <translation>Funguje</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="218"/>
+        <location filename="../qml/FilterPanel.qml" line="238"/>
         <source>Broken</source>
         <translation>Nefunkční</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="219"/>
+        <location filename="../qml/FilterPanel.qml" line="239"/>
         <source>Not tried yet</source>
         <translation>Nevyzkoušeno</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="225"/>
+        <location filename="../qml/FilterPanel.qml" line="200"/>
         <source>RESOLUTION</source>
         <translation>ROZLIŠENÍ</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="232"/>
+        <location filename="../qml/FilterPanel.qml" line="180"/>
         <source>TYPE</source>
         <translation>DRUH</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="233"/>
+        <location filename="../qml/FilterPanel.qml" line="181"/>
         <source>Scene</source>
         <translation>Scéna</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="234"/>
+        <location filename="../qml/FilterPanel.qml" line="182"/>
         <source>Video</source>
         <translation>Video</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="235"/>
+        <location filename="../qml/FilterPanel.qml" line="183"/>
         <source>Web</source>
         <translation>Web</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="236"/>
+        <location filename="../qml/FilterPanel.qml" line="184"/>
         <source>Application</source>
         <translation>Aplikace</translation>
     </message>
     <message>
-        <location filename="../qml/FilterPanel.qml" line="251"/>
+        <location filename="../qml/FilterPanel.qml" line="254"/>
         <source>Clear selection</source>
         <translation>Zrušit výběr</translation>
     </message>
