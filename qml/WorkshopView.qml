@@ -113,7 +113,7 @@ Item {
     function shut() {
         workshop.neverMind();
         shown.open = false;
-        filters.visible = false;
+        filters.open = false;
     }
 
     /// Shows one wallpaper of the workshop in the panel. There is nothing
@@ -521,7 +521,7 @@ Item {
     /// back.
     function seeMore(section) {
         workshop.section = section;
-        filters.visible = false;
+        filters.open = false;
         searchField.text = "";
         workshop.search = "";
         workshop.mode = 2;
@@ -809,8 +809,8 @@ Item {
                 // whatever size the window is -- see WorkshopFilters.qml.
                 // Blue while the panel it opens is open, so the
                 // button says which of its two states it is in.
-                accent: filters.visible ? Look.highlight : "transparent"
-                onClicked: filters.visible = !filters.visible
+                accent: filters.open ? Look.highlight : "transparent"
+                onClicked: filters.open = !filters.open
             }
 
             RoundedButton {
@@ -900,6 +900,8 @@ Item {
         }
 
         RowLayout {
+            id: stageRow
+
             visible: Steamworks.available
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -1013,54 +1015,116 @@ Item {
                             Item { Layout.fillWidth: true }
                         }
 
-                        GridView {
-                            id: everything
+                        // What is left beside the panels: the grid is laid
+                        // out once at the width it will have, as the
+                        // library's is (see `gridArea` in Picker.qml).
+                        Item {
+                            id: gridArea
 
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
 
-                            // The same sum the library's grid does: as many columns
-                            // of about the card width as fit, then the width shared
-                            // out between them -- less a strip down the right for
-                            // the scrollbar to live in, since a bar drawn over the
-                            // last column of previews reads as part of the picture.
-                            readonly property int room: everything.width - 30
+                            readonly property real held: stageRow.width
+                                - (shown.open ? shown.implicitWidth + stageRow.spacing : 0)
+                                - (filters.open ? filters.implicitWidth + stageRow.spacing : 0)
 
-                            readonly property int columns:
-                                Math.max(1, Math.floor(everything.room / workshop.cardWidth))
+                            GridView {
+                                id: everything
 
-                            cellWidth: Math.floor(everything.room / everything.columns)
-                            cellHeight: cellWidth
-                            model: workshop.grid
+                                // Laid out at the width it is going to have,
+                                // and scaled to the room there is meanwhile:
+                                // the library's grid does the same, and says
+                                // why at its `gridArea`.
+                                width: gridArea.held
+                                height: gridArea.height / everything.scale
+                                scale: gridArea.held > 30
+                                       ? (gridArea.width - 30) / (gridArea.held - 30) : 1
+                                transformOrigin: Item.TopLeft
+                                clip: true
+                                cacheBuffer: 800
 
-                            // A new answer starts at its own beginning. Page
-                            // two opened where page one had been scrolled to,
-                            // and so did a section opened out of Discover.
-                            onModelChanged: everything.positionViewAtBeginning()
+                                // The same sum the library's grid does: as many columns
+                                // of about the card width as fit, then the width shared
+                                // out between them -- less a strip down the right for
+                                // the scrollbar to live in, since a bar drawn over the
+                                // last column of previews reads as part of the picture.
+                                readonly property int room: everything.width - 30
 
-                            // Out of the way while a new answer is on its way:
-                            // what is on the screen is the answer to the last
-                            // question, and leaving it at full strength under a
-                            // new one is what made searching look like nothing
-                            // happening at all.
-                            opacity: Steamworks.busy ? 0.35 : 1
-                            Behavior on opacity {
-                                NumberAnimation { duration: 120 }
-                            }
+                                //
+                                // Counted off the width with no panel out, so
+                                // a panel shrinks the cards rather than moving
+                                // them to other rows -- unless they would come
+                                // out under 170 across.
+                                readonly property int columns: Math.max(1, Math.min(
+                                    Math.floor((stageRow.width - 30) / workshop.cardWidth),
+                                    Math.floor(everything.room / 170)))
 
-                            ScrollBar.vertical: Scroller {}
+                                // The same rows kept in view when it is laid
+                                // out again at another size, and a glide when
+                                // the columns change -- as the library's.
+                                property real laidCell: 0
+                                property int laidColumns: 0
+                                onCellWidthChanged: {
+                                    if (everything.laidCell > 0 && everything.columns === everything.laidColumns)
+                                        everything.contentY = everything.contentY * everything.cellWidth / everything.laidCell;
+                                    else if (everything.laidColumns > 0)
+                                        glide.restart();
+                                    everything.laidCell = everything.cellWidth;
+                                    everything.laidColumns = everything.columns;
+                                }
+                                readonly property bool gliding: glide.running
+                                Timer {
+                                    id: glide
+                                    interval: 300
+                                }
 
-                            delegate: Item {
-                                required property var modelData
+                                cellWidth: Math.floor(everything.room / everything.columns)
+                                cellHeight: cellWidth
+                                model: workshop.grid
 
-                                width: everything.cellWidth
-                                height: everything.cellHeight
+                                // A new answer starts at its own beginning. Page
+                                // two opened where page one had been scrolled to,
+                                // and so did a section opened out of Discover.
+                                onModelChanged: everything.positionViewAtBeginning()
 
-                                WorkshopCard {
-                                    anchors.fill: parent
-                                    anchors.margins: 6
-                                    item: parent.modelData
+                                // Out of the way while a new answer is on its way:
+                                // what is on the screen is the answer to the last
+                                // question, and leaving it at full strength under a
+                                // new one is what made searching look like nothing
+                                // happening at all.
+                                opacity: Steamworks.busy ? 0.35 : 1
+                                Behavior on opacity {
+                                    NumberAnimation { duration: 120 }
+                                }
+
+                                ScrollBar.vertical: Scroller {}
+
+                                delegate: Item {
+                                    id: cell
+
+                                    required property var modelData
+
+                                    property bool placed: false
+                                    onXChanged: cell.placed = true
+                                    onYChanged: cell.placed = true
+                                    Behavior on x {
+                                        enabled: everything.gliding && cell.placed
+                                        NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                                    }
+                                    Behavior on y {
+                                        enabled: everything.gliding && cell.placed
+                                        NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                                    }
+
+                                    width: everything.cellWidth
+                                    height: everything.cellHeight
+
+                                    WorkshopCard {
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        item: parent.modelData
+                                    }
                                 }
                             }
                         }

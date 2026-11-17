@@ -16,6 +16,9 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   jumped a column at a time. Only where the cards would come out under 170
   pixels across is there a column fewer, and then they glide to their new
   places. The filter panel slides out too, where it used to appear at once.
+  The Steam tab's Workshop grid does the same.
+- **The filters' scrollbar shows only when there is something to scroll**,
+  and Clear selection sits at the left under the chips, in both tabs.
 
 - **Settings and the README no longer promise the password once.** CachyOS
   asks for it again before installing a package built outside its

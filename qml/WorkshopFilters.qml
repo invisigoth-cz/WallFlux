@@ -60,11 +60,32 @@ Rectangle {
     }
 
     implicitWidth: 300
-    // Shown by the Filters button, which is the only way in.
-    visible: false
+
+    /// Whether it is out. Shown by the Filters button, which is the only
+    /// way in.
+    property bool open: false
+
+    /// How far out it is, nought to one. It slides as the library's filter
+    /// does: the width moves, and the grid beside it shrinks as a picture
+    /// while it does (see `gridArea` in WorkshopView.qml).
+    property real slide: panel.open ? 1 : 0
+
+    Behavior on slide {
+        NumberAnimation {
+            duration: 220
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Layout.preferredWidth: Math.round(panel.implicitWidth * panel.slide)
+    // Away means away: a layout leaves no spacing for something invisible.
+    visible: panel.slide > 0
+    // The chips keep their full width and the moving edge cuts them off.
+    clip: true
+
     // Every section folded each time the panel is shown.
-    onVisibleChanged: {
-        if (!panel.visible)
+    onOpenChanged: {
+        if (!panel.open)
             return;
         for (let i = 0; i < body.children.length; ++i) {
             if (body.children[i].chosenHere !== undefined)
@@ -78,8 +99,11 @@ Rectangle {
     radius: 8
 
     ColumnLayout {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.margins: 14
+        width: panel.implicitWidth - 28
         spacing: 12
 
         Flickable {
@@ -90,17 +114,20 @@ Rectangle {
             contentHeight: body.implicitHeight
             clip: true
 
-            // Always on, which Scroller is: there are more chips here
-            // than fit any window, and a panel cut off at the bottom edge
-            // with nothing beside it says nothing about there being more.
-            ScrollBar.vertical: Scroller {}
+            // Only while there is more than fits: with the sections folded
+            // it usually all does, and a bar beside nothing is a line down
+            // the edge.
+            ScrollBar.vertical: Scroller {
+                id: bar
+                policy: ScrollBar.AsNeeded
+            }
 
             ColumnLayout {
                 id: body
 
-                // Short of the scrollbar, so the bar is not sitting on the
-                // chips it scrolls.
-                width: parent.width - 18
+                // Short of the scrollbar, while there is one, so the bar is
+                // not sitting on the chips it scrolls.
+                width: parent.width - (bar.visible ? 18 : 0)
                 spacing: 16
 
                 ChipSection {
@@ -147,6 +174,13 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
 
+            // On the left, under the chips it clears.
+            RoundedButton {
+                text: qsTr("Clear selection")
+                enabled: panel.chosen > 0
+                onClicked: panel.clear()
+            }
+
             Label {
                 Layout.fillWidth: true
                 // Worth saying, because it is the opposite of what a row of
@@ -156,12 +190,6 @@ Rectangle {
                 font.pixelSize: 11
                 opacity: 0.55
                 wrapMode: Text.WordWrap
-            }
-
-            RoundedButton {
-                text: qsTr("Clear selection")
-                enabled: panel.chosen > 0
-                onClicked: panel.clear()
             }
         }
     }

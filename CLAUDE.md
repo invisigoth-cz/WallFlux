@@ -452,7 +452,8 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   has placed once, or a new one flies in from the corner). `contentY` is
   scaled with the cell so the same rows stay in view. Measured in a
   virtual KWin: opening the details panel laid the grid out 11 times
-  (5, 4, 3, 2 columns), now once at 5.
+  (5, 4, 3, 2 columns), now once at 5. The Steam tab's Workshop grid
+  (`gridArea` in `WorkshopView.qml`) is the same, measured the same.
 - **A panel beside the grid saying what a wallpaper is.** A click opens
   it and a click on the same card puts it away again, in either tab; so
   does the cross in the picture's top right corner, back since 10 November

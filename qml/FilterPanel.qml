@@ -188,14 +188,20 @@ Rectangle {
             contentWidth: width
             contentHeight: body.implicitHeight
             clip: true
-            ScrollBar.vertical: Scroller {}
+            // Only while there is more than fits: with the sections folded
+            // it usually all does, and a bar beside nothing is a line down
+            // the edge.
+            ScrollBar.vertical: Scroller {
+                id: bar
+                policy: ScrollBar.AsNeeded
+            }
 
             ColumnLayout {
                 id: body
 
-                // Short of the scrollbar, so the bar is not sitting on the
-                // chips it scrolls.
-                width: parent.width - 18
+                // Short of the scrollbar, while there is one, so the bar is
+                // not sitting on the chips it scrolls.
+                width: parent.width - (bar.visible ? 18 : 0)
                 spacing: 16
 
                 // The five the workshop's filter has too, in its order, so a
@@ -273,13 +279,14 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
 
-            Item { Layout.fillWidth: true }
-
+            // On the left, under the chips it clears.
             RoundedButton {
                 text: qsTr("Clear selection")
                 enabled: panel.chosen > 0
                 onClicked: panel.clear()
             }
+
+            Item { Layout.fillWidth: true }
         }
     }
 }
