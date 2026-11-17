@@ -24,7 +24,9 @@
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <clocale>
+#include <cerrno>
 #include <malloc.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 Q_LOGGING_CATEGORY(lcTrial, "wallflux.trial")
@@ -43,8 +45,21 @@ struct Verdict
 
 void say(const QJsonObject &what)
 {
-    QByteArray line = Mark.toByteArray() + QJsonDocument(what).toJson(QJsonDocument::Compact) + '\n';
-    ::write(STDOUT_FILENO, line.constData(), size_t(line.size()));
+    const QByteArray line = Mark.toByteArray() + QJsonDocument(what).toJson(QJsonDocument::Compact) + '\n';
+    // Whole, however the pipe takes it. A write that fails means the window
+    // reading the other end has gone, and there is nobody left to tell.
+    const char *at = line.constData();
+    qsizetype left = line.size();
+    while (left > 0) {
+        const ssize_t written = ::write(STDOUT_FILENO, at, size_t(left));
+        if (written < 0) {
+            if (errno == EINTR)
+                continue;
+            return;
+        }
+        at += written;
+        left -= written;
+    }
 }
 
 const void *lookUp(const char *name, void *)
@@ -219,7 +234,10 @@ void Compatibility::launch()
     // Its messages go where the program's own go; only its answers come here.
     m_child->setProcessChannelMode(QProcess::ForwardedErrorChannel);
     // Out of the way of whatever is being done on the machine meanwhile.
-    m_child->setChildProcessModifier([] { (void)::nice(10); });
+    // Refused, the trial runs at the ordinary priority, which is slower for
+    // the rest of the machine and still a trial; nothing can be said from in
+    // here, between the fork and the exec.
+    m_child->setChildProcessModifier([] { ::setpriority(PRIO_PROCESS, 0, 10); });
     connect(m_child, &QProcess::readyReadStandardOutput, this, &Compatibility::read);
     connect(m_child, &QProcess::finished, this, &Compatibility::ended);
     m_child->start();

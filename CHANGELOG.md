@@ -6,6 +6,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **WallFlux started again after an update has the desktop session's own
+  settings**, its language among them, rather than whatever the terminal
+  the update ran in had: it is started by the session's service manager
+  now.
+- **The package no longer carries the path it was built in**, and two
+  compiler warnings about unchecked results are gone.
+
 ## [0.41.0] — 2026-11-17
 
 ### Changed

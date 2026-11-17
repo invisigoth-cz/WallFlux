@@ -111,8 +111,8 @@ main() {
     (cd "$work/wallflux" && makepkg -si "$@" <"$answers")
 
     # The one running is the old program until it is started again: quit it
-    # and start the new one, out of this terminal's session so that closing
-    # the terminal leaves it running. The wallpaper goes back to the
+    # and start the new one, out of this terminal so that closing the
+    # terminal leaves it running. The wallpaper goes back to the
     # desktop's own until one is chosen, as at any start.
     local me
     me=$(id -u)
@@ -125,7 +125,12 @@ main() {
             sleep 0.1
         done
         pkill -KILL -xu "$me" wallflux 2>/dev/null || true
-        setsid -f wallflux >/dev/null 2>&1 </dev/null
+        # Started by the session's own service manager rather than from
+        # this terminal, so it has the session's environment and nothing of
+        # the terminal's -- an LC_ALL=C in one sorted the grid by code
+        # point. Where there is no user manager, from here.
+        systemd-run --user --quiet --collect wallflux >/dev/null 2>&1 \
+            || setsid -f wallflux >/dev/null 2>&1 </dev/null
         say "WallFlux $version is installed and running."
     else
         say "WallFlux $version is installed. It is in the application menu."

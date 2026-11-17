@@ -86,6 +86,11 @@ prepare() {
 # every machine needed are not needed any more.
 build() {
     export RUSTUP_TOOLCHAIN=stable
+    # The build tree's path out of the binary: QuickJS's C, which Cargo
+    # compiles with these flags, names its own files in its asserts, and
+    # makepkg maps them only where its debug option is on.
+    export CFLAGS="$CFLAGS -ffile-prefix-map=$srcdir=/usr/src/debug/$pkgname"
+    export CXXFLAGS="$CXXFLAGS -ffile-prefix-map=$srcdir=/usr/src/debug/$pkgname"
     cmake -S "$pkgname" -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=None \
         -DCMAKE_INSTALL_PREFIX=/usr \

@@ -304,7 +304,10 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   then tells pacman and makepkg `--noconfirm`; keeps sudo's password alive
   while it builds (`sudo -v` and a loop); and if a
   `wallflux` of the user's is running, ends it and starts the new one with
-  `setsid -f`. **Update** in Settings is `Updater::install()`: that line in
+  `systemd-run --user`, so it has the session's environment -- its own
+  language, whatever country it is in -- and nothing of the terminal's: a
+  WallFlux restarted from a terminal with `LC_ALL=C` in it sorted by code
+  point (17 November). `setsid -f` where there is no user manager. **Update** in Settings is `Updater::install()`: that line in
   `konsole -e bash -c`, started detached so it outlives the WallFlux it
   ends, and held open at the end for a key; `Updater.command` is the line,
   in one place. Released 0.40.1 and earlier have only the line and Copy.
