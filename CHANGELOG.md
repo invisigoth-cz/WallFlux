@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.41.1] — 2026-11-17
+
 ### Fixed
 
 - **WallFlux started again after an update has the desktop session's own
@@ -1694,7 +1696,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.1...HEAD
+[0.41.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.0...v0.41.1
 [0.41.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.2...v0.41.0
 [0.40.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.0...v0.40.1
