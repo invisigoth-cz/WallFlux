@@ -1,7 +1,7 @@
 # Maintainer: invisigoth-cz <invisigoth@seznam.cz>
 
 pkgname=wallflux
-pkgver=0.40.1
+pkgver=0.40.2
 pkgrel=1
 pkgdesc='Plays the Wallpaper Engine wallpapers you already own'
 arch=('x86_64')
