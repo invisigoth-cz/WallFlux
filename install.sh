@@ -118,20 +118,24 @@ main() {
     me=$(id -u)
     if pgrep -xu "$me" wallflux >/dev/null; then
         say "Starting the new WallFlux in place of the old one"
-        pkill -xu "$me" wallflux || true
-        local wait
-        for wait in {1..50}; do
-            pgrep -xu "$me" wallflux >/dev/null || break
-            sleep 0.1
-        done
-        pkill -KILL -xu "$me" wallflux 2>/dev/null || true
-        # Started by the session's own service manager rather than from
-        # this terminal, so it has the session's environment and nothing of
-        # the terminal's -- an LC_ALL=C in one sorted the grid by code
-        # point. Where there is no user manager, from here.
-        systemd-run --user --quiet --collect wallflux >/dev/null 2>&1 \
-            || setsid -f wallflux >/dev/null 2>&1 </dev/null
-        say "WallFlux $version is installed and running."
+        # Quit the old, wait for it, start the new.
+        local replace="pkill -xu $me wallflux; for wait in \$(seq 50); do"
+        replace+=" pgrep -xu $me wallflux >/dev/null || break; sleep 0.1; done;"
+        replace+=" pkill -KILL -xu $me wallflux; exec wallflux"
+        # Handed whole to the session's service manager: the new WallFlux
+        # gets the session's environment rather than this terminal's -- an
+        # LC_ALL=C in one sorted the grid by code point -- and the swap
+        # cannot be cut off half way. Where the old WallFlux runs as a
+        # service, which an update starts it as, a terminal it opened lives
+        # in that service and is ended with it: on 17 November this script
+        # died there, and nothing started again. Where there is no user
+        # manager, from here.
+        if command -v systemd-run >/dev/null; then
+            systemd-run --user --quiet --collect bash -c "$replace" >/dev/null 2>&1
+        else
+            bash -c "${replace/exec wallflux/setsid -f wallflux >/dev/null 2>&1 </dev/null}"
+        fi
+        say "WallFlux $version is installed and starting."
     else
         say "WallFlux $version is installed. It is in the application menu."
     fi

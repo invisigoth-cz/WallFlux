@@ -10,6 +10,7 @@
 #include <QLoggingCategory>
 #include <QNetworkReply>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QVersionNumber>
 
 Q_LOGGING_CATEGORY(lcUpdate, "wallflux.update")
@@ -48,8 +49,21 @@ bool Updater::install()
     // the terminal has to outlive the program that opened it.
     const QString line = command()
         + QStringLiteral("; echo; read -rsn1 -p 'Press any key to close this window.'");
-    const bool started = QProcess::startDetached(
-        QStringLiteral("konsole"), {QStringLiteral("-e"), QStringLiteral("bash"), QStringLiteral("-c"), line});
+    const QStringList inKonsole{QStringLiteral("konsole"), QStringLiteral("-e"), QStringLiteral("bash"),
+                                QStringLiteral("-c"), line};
+    // In a scope of its own where there is a user manager. Started as a
+    // child of a WallFlux that runs as a service -- which an update starts
+    // it as -- the terminal and the script in it belong to that service,
+    // and systemd ends them with it the moment the script quits the old
+    // WallFlux: on 17 November the update stopped there and nothing
+    // started again.
+    const bool scoped = !QStandardPaths::findExecutable(QStringLiteral("systemd-run")).isEmpty();
+    const bool started = scoped
+        ? QProcess::startDetached(QStringLiteral("systemd-run"),
+                                  QStringList{QStringLiteral("--user"), QStringLiteral("--scope"),
+                                              QStringLiteral("--quiet"), QStringLiteral("--collect")}
+                                      + inKonsole)
+        : QProcess::startDetached(inKonsole.first(), inKonsole.mid(1));
     if (!started)
         qCWarning(lcUpdate) << "Konsole could not be started";
     return started;

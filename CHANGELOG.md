@@ -6,6 +6,16 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An update from Settings starts WallFlux again at the end.** Updating
+  0.41.1 to 0.41.2 installed the new version and then started nothing: the
+  WallFlux being replaced ran as a service, the update's terminal was part
+  of that service, and ending the old WallFlux ended the update with it.
+  The terminal now runs on its own, and quitting the old WallFlux and
+  starting the new one is handed whole to the session, so it finishes even
+  when an update is started from an older version.
+
 ## [0.41.2] — 2026-11-17
 
 ### Fixed

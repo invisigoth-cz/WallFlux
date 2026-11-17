@@ -307,9 +307,16 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   `systemd-run --user`, so it has the session's environment -- its own
   language, whatever country it is in -- and nothing of the terminal's: a
   WallFlux restarted from a terminal with `LC_ALL=C` in it sorted by code
-  point (17 November). `setsid -f` where there is no user manager. **Update** in Settings is `Updater::install()`: that line in
-  `konsole -e bash -c`, started detached so it outlives the WallFlux it
-  ends, and held open at the end for a key; `Updater.command` is the line,
+  point (17 November). `setsid -f` where there is no user manager.
+  **Update** in Settings is `Updater::install()`: that line in
+  `konsole -e bash -c` under `systemd-run --user --scope`, so it outlives
+  the WallFlux it ends, and held open at the end for a key. **Not detached
+  alone**: a WallFlux started by an update is a service, a child of it is
+  in that service's cgroup, and systemd ends the cgroup with the service --
+  0.41.1 to 0.41.2 died at the swap and started nothing (17 November,
+  reproduced with a dummy). The swap itself -- quit, wait, `exec wallflux`
+  -- is one `systemd-run --user bash -c` for the same reason, and survives
+  the script dying, which an older WallFlux's terminal still will; `Updater.command` is the line,
   in one place. Released 0.40.1 and earlier have only the line and Copy.
   **On CachyOS the password is asked for twice**, after the question and
   again before the package is installed: the system's own check on a
