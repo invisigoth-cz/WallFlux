@@ -6,11 +6,27 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.40.1] — 2026-11-17
+
 ### Changed
 
-- **The README builds WallFlux from the repository** until the AUR package
-  is up -- new accounts on the AUR are closed for the moment -- with the
-  same PKGBUILD the AUR will carry.
+- **WallFlux is installed and updated with one line**, `curl -fsSL
+  https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh
+  | bash`, in place of the AUR, whose new accounts are closed. The script
+  installs Valve's Steamworks SDK from the AUR if it is missing, with no
+  account or helper needed, and builds the newest release as an ordinary
+  pacman package. The README shows how to download it and read it first.
+- **Settings shows that line when a new version is out**, with a button
+  that copies it. It used to say `paru -Syu`, which finds nothing while
+  WallFlux is not in the AUR.
+
+### Fixed
+
+- **WallFlux builds on a machine that has never had it.** Two of the tests
+  the build runs leaned on this one: the autostart test on WallFlux being
+  installed already, the name order on the system having a language. On a
+  clean Arch install both failed and stopped the build, so 0.40.0 could not
+  be installed by anybody new.
 
 ## [0.40.0] — 2026-11-16
 
@@ -1625,7 +1641,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.1...HEAD
+[0.40.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.2...v0.40.0
 [0.39.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.1...v0.39.2
 [0.39.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.0...v0.39.1

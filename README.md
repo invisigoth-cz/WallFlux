@@ -51,33 +51,41 @@ Valve's Steamworks SDK.
 
 ## Install
 
-For **Arch Linux users** and Arch-based systems.
+For **Arch Linux users** and Arch-based systems. Open a terminal and paste
+this line:
 
-**WallFlux is on its way to the AUR**: new accounts there are closed for
-the moment, so until the package is up it is built straight from this
-repository, with the same PKGBUILD the AUR will carry. You need an **AUR
-helper** -- `paru` (CachyOS has it already) or `yay` -- for Valve's
-Steamworks SDK, which only the AUR carries and which the Steam Workshop
-tab needs. Open a terminal and paste these lines, one after the other:
+    curl -fsSL https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh | bash
 
-    paru -S steamworks-sdk
-    git clone https://github.com/invisigoth-cz/WallFlux.git
-    cd WallFlux/packaging
-    makepkg -si
+**Or read the script before running it**, which is wise with anything off
+the internet:
 
-(`yay -S steamworks-sdk` in place of the first, with yay.) The first
-installs the Steamworks SDK; the other three fetch WallFlux and build it
-on your machine, which takes a few minutes. Both ask for your password and
-then for a `Y` to go ahead.
+    curl -fsSLO https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh
+    less install.sh
+    bash install.sh
+
+The script ([install.sh](install.sh)) installs Valve's Steamworks SDK from
+the AUR if it is missing -- the Steam Workshop tab needs it, and no AUR
+account or helper is needed for it -- and then builds the newest release of
+WallFlux on your machine and installs it as an ordinary pacman package. The
+build takes a few minutes. It asks for your password, and for a `Y` before
+installing anything.
 
 WallFlux is then in the application menu. Start it and its icon appears in
-the panel; click the icon to choose a wallpaper. Settings says when a new
-version is out. To update, go back to the same folder and build again:
+the panel; click the icon to choose a wallpaper.
 
-    cd WallFlux && git pull && cd packaging && makepkg -si
+## Update
 
-Once the package is in the AUR, all of this becomes `paru -S wallflux`,
-and updating it `paru -Syu`.
+Settings says when a new version is out, and shows the same line with a
+button that copies it: run it again and it builds the newest release in
+place of the old one. Then quit WallFlux from its tray icon and start it
+again.
+
+Prefer to do it by hand? The script does nothing more than this, from a
+clone of this repository:
+
+    paru -S steamworks-sdk        # or yay -S, once
+    git clone https://github.com/invisigoth-cz/WallFlux.git
+    cd WallFlux/packaging && makepkg -si
 
 ## Uninstall
 

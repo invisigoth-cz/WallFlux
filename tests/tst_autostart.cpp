@@ -26,11 +26,13 @@ private slots:
     /// Off writes an entry saying hidden; on writes it again saying not.
     void switchesWithTheUsersOwnEntry()
     {
+        // Off and then on, so the entry is written whatever the machine has:
+        // with WallFlux installed its system entry says on and only off
+        // writes; on a clean build machine there is none, it is off already
+        // and only on writes.
         Autostart autostart;
         autostart.setEnabled(false);
-        QVERIFY(QFile::exists(Autostart::userEntry()));
         QVERIFY(!autostart.isEnabled());
-
         autostart.setEnabled(true);
         QVERIFY(autostart.isEnabled());
 
@@ -39,6 +41,13 @@ private slots:
         const QByteArray text = entry.readAll();
         QVERIFY(text.contains("Exec=wallflux"));
         QVERIFY(text.contains("Hidden=false"));
+        entry.close();
+
+        // Off is the entry kept and saying hidden, not taken away: taken
+        // away, the system's entry would start it all the same.
+        autostart.setEnabled(false);
+        QVERIFY(!autostart.isEnabled());
+        QVERIFY(QFile::exists(Autostart::userEntry()));
     }
 };
 

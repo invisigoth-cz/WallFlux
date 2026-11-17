@@ -289,13 +289,22 @@ Steam has already filled, and nothing of Steam's has to be running for that.
 - **Updates of WallFlux itself** (`Updater`): `releases/latest` of
   invisigoth-cz/WallFlux, asked without a key when the window first opens
   and `checkUpdates` allows, and **only said**: Settings › General names the
-  new version, tells to update with `yay -Syu` or `paru -Syu`, and opens the
-  release page on a click. WallFlux is installed from the AUR (16 November,
-  the user's choice), so the AUR helper is what updates it and keeps its
-  dependencies in step; until then it fetched the package off the release and
-  installed it with `pkexec pacman -U`, which an AUR install would have gone
-  round. **The repository has to be public for any of it**: private, GitHub
-  answers 404 to a request without a login, measured on 9 November.
+  new version and shows the line that installs it, with Copy beside it, and
+  opens the release page on a click. **WallFlux is installed and updated by
+  `install.sh`** (17 November, the user's choice, since the AUR's new
+  accounts stayed closed): `curl -fsSL
+  https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh |
+  bash`, or downloaded and read first, as the README shows. It builds
+  `steamworks-sdk` from the AUR (`--asdeps`, no account or helper needed) if
+  it is missing, and then `packaging/PKGBUILD` of the newest release's tag
+  with `makepkg -si`; the same version installed already, it says so and
+  stops. Piped, its stdin is the script, so pacman's questions are read from
+  `/dev/tty`; `| bash -s -- --noconfirm` asks nothing, which is how it is
+  tested in a clean `archlinux` container. Before 17 November the advice was
+  `paru -Syu`, and before 16 November WallFlux fetched the package and ran
+  `pkexec pacman -U` itself. **The repository has to be public for any of
+  it**: private, GitHub answers 404 to a request without a login, measured
+  on 9 November.
 
 - **Updates from the workshop.** `installedAt` and `latestAt` on each
   `Wallpaper` are `timeupdated` and `latest_timeupdated` out of Steam's
@@ -462,8 +471,8 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   and does nothing when it is clicked -- `Application.version`, out of
   `WALLFLUX_VERSION` in CMakeLists.txt, which is `project()`'s own number
   rather than a third place to keep it.
-- **An Arch package in the AUR** (`packaging/PKGBUILD`, `wallflux`, built
-  from the release's tag on GitHub), with an autostart entry that has been
+- **An Arch package** (`packaging/PKGBUILD`, `wallflux`, built from the
+  release's tag on GitHub by `install.sh`, ready for the AUR), with an autostart entry that has been
   verified through a real logout and login. Its `check()` leaves out
   `sceneview` and `mirror`, which want a window, a GPU and this machine's
   wallpapers.
@@ -586,6 +595,8 @@ tests/tst_sceneview.cpp       a scene drawn through the item, checked against
                               way up
 i18n/wallflux_cs.ts   the Czech catalogue, compiled into the binary
 packaging/PKGBUILD    builds from this checkout's git history
+install.sh            installs and updates: the SDK out of the AUR, then
+                      the newest release's PKGBUILD through makepkg
 wallflux.desktop      installed to applications/ and to /etc/xdg/autostart/
 Cargo.toml            the Rust workspace: the two crates below
 crates/wpe-format/    reads the scene format -- .pkg, .tex, scene.json,
@@ -2646,15 +2657,16 @@ packaging/PKGBUILD. Then, in this order:
 6. `cd packaging && makepkg -f`, which builds from the tag on GitHub -- the
    check that the AUR will build it -- then `makepkg --printsrcinfo >
    .SRCINFO`, and commit the two with the release if they changed.
-7. Into the AUR: copy `packaging/PKGBUILD` and `packaging/.SRCINFO` into the
-   clone of `ssh://aur@aur.archlinux.org/wallflux.git` (kept outside this
-   repository), commit with the version, push. The user installs with
-   `paru -Syu`, as everybody else does.
+7. The user updates with the line Settings shows, as everybody else does:
+   `install.sh` off main, which builds the tag `releases/latest` names --
+   so a release is installable the moment step 5 is done, and a change to
+   `install.sh` reaches everybody the moment it is on main.
 
-   **Not in the AUR yet** (16 November): new AUR accounts were closed, so
-   the README builds from a clone of this repository with the same PKGBUILD,
-   `makepkg -si` in `packaging/`. Put the README back to `paru -S wallflux`
-   once the package is up.
+   **Not in the AUR** (17 November, the user's word: registering there is
+   given up for now). Should it ever be: copy `packaging/PKGBUILD` and
+   `.SRCINFO` into a clone of `ssh://aur@aur.archlinux.org/wallflux.git`
+   kept outside this repository, push, and decide with the user whether the
+   README and Settings move to `paru`; the key is `~/.ssh/id_ed25519.pub`.
 
 0.2.0 was tagged before CHANGELOG.md existed, so its tag does not contain
 the file. Everything after it should.
@@ -2666,13 +2678,11 @@ even when all they write is "pokračujeme", list everything below that is
 open and let them choose. Do not pick for them.** 0.33.0 was released that
 day; everything asked for on 9 November is in it.
 
-**First, before anything else -- the user's word on 16 November, evening
-(0.40.0 released, the repository public): "Registering on the AUR stays the
-priority until it is solved. Without it we make no further updates."** New
-AUR accounts were closed that day. At the start of every session, remind
-the user to try https://aur.archlinux.org/register again; release nothing
-until the package is up (see step 7 of How a release is made and the README
-note under it). The user's key for the AUR is `~/.ssh/id_ed25519.pub`.
+**The AUR is given up for now** (17 November, the user's word): its new
+accounts stayed closed, and WallFlux is installed and updated by
+`install.sh` instead (see Updates of WallFlux itself). The rule of
+16 November -- no releases until the AUR -- no longer stands, and
+registering there is no longer to be reminded of.
 
 **Then the list as the user left it on 16 November, to be offered:**
 

@@ -1,7 +1,7 @@
 # Maintainer: invisigoth-cz <invisigoth@seznam.cz>
 
 pkgname=wallflux
-pkgver=0.40.0
+pkgver=0.40.1
 pkgrel=1
 pkgdesc='Plays the Wallpaper Engine wallpapers you already own'
 arch=('x86_64')
@@ -39,9 +39,9 @@ options=('!lto')
 # It is also the only way the SDK can arrive here without WallFlux being
 # the one to hand it on: that package puts it under /opt in its entirety,
 # unmodified, with Valve's own licence beside it, which is what the SDK's
-# terms require and what shipping it inside this package would break. An
-# AUR helper resolves it like any other AUR dependency; plain makepkg -si
-# will say it cannot find it and want it built first.
+# terms require and what shipping it inside this package would break.
+# install.sh builds it out of the AUR first; plain makepkg -si will say it
+# cannot find it and want it built first.
 # ffmpeg is here for the programs rather than the libraries, as libpulse is
 # for pactl: ffprobe reads a video wallpaper's size, and a scene's own
 # videos are decoded by ffmpeg run beside the renderer. qt6-multimedia
@@ -63,8 +63,9 @@ makedepends=('cargo' 'cmake' 'git' 'ninja' 'qt6-tools')
 # it. Anyone who already has the folder does not need this installed.
 optdepends=('steam: to install Wallpaper Engine and fetch wallpapers from its workshop')
 
-# This is the PKGBUILD the AUR carries: the release's tag off GitHub, so a
-# version is built only once it is tagged and pushed.
+# This is the PKGBUILD install.sh builds, and the one the AUR would carry:
+# the release's tag off GitHub, so a version is built only once it is
+# tagged and pushed.
 #
 # It lives in a directory of its own in the repository because makepkg
 # works in src/ and pkg/ beside it, and the project already has a src/

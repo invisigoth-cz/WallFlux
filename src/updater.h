@@ -12,9 +12,8 @@
 /// Whether a newer WallFlux has been released.
 ///
 /// Asked of GitHub's releases, without a key: the newest release's tag.
-/// Installing it is the AUR helper's -- `yay -Syu` or `paru -Syu` -- which is
-/// how WallFlux was installed and the only thing that keeps its dependencies
-/// in step; WallFlux only says so.
+/// Installing it is `install.sh`'s, the same line WallFlux was installed
+/// with, run in a terminal by whoever wants it; WallFlux only says so.
 ///
 /// Says what is happening as a `State` and never as a sentence: see the
 /// trap about a sentence built in C++ being built once.

@@ -191,6 +191,8 @@ Item {
         default property alias control: line.data
         /// What goes under the words, the card's whole width: the theme tiles.
         property alias below: under.data
+        /// Whether `below` is shown: the update's line, only while there is one.
+        property bool belowShown: true
 
         visible: view.searching ? view.matches(setting.title, setting.about) : setting.home === view.section
         Layout.fillWidth: true
@@ -260,7 +262,7 @@ Item {
             id: under
 
             Layout.fillWidth: true
-            visible: under.children.length > 0
+            visible: setting.belowShown && under.children.length > 0
             implicitHeight: under.childrenRect.height
         }
         }
@@ -501,11 +503,10 @@ Item {
                         case Updater.Current:
                             return qsTr("WallFlux %1 is the newest release.").arg(Application.version);
                         case Updater.Available:
-                            // Installed from the AUR, so updated by the AUR
-                            // helper with the rest of the system: it is what
-                            // keeps the dependencies in step.
-                            return qsTr("WallFlux %1 is out; this is %2. Update it with the rest "
-                                        + "of the system: yay -Syu or paru -Syu.")
+                            // Updated by the same line it was installed
+                            // with: install.sh builds the newest release.
+                            return qsTr("WallFlux %1 is out; this is %2. To update, paste this line "
+                                        + "into a terminal. The README shows how to read the script first.")
                                       .arg(Updater.latest).arg(Application.version);
                         case Updater.Failed:
                             return qsTr("That did not work: %1").arg(Updater.detail);
@@ -525,6 +526,42 @@ Item {
                         enabled: Updater.state !== Updater.Checking
                         text: qsTr("Check now")
                         onClicked: Updater.check()
+                    }
+
+                    belowShown: Updater.state === Updater.Available
+                    below: RowLayout {
+                        width: parent ? parent.width : 0
+                        spacing: 8
+
+                        TextField {
+                            id: updateLine
+
+                            Layout.fillWidth: true
+                            readOnly: true
+                            selectByMouse: true
+                            font.family: "monospace"
+                            text: "curl -fsSL https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh | bash"
+                        }
+                        RoundedButton {
+                            id: copyLine
+
+                            property bool copied: false
+
+                            text: copied ? qsTr("Copied") : qsTr("Copy")
+                            onClicked: {
+                                updateLine.selectAll();
+                                updateLine.copy();
+                                updateLine.deselect();
+                                copied = true;
+                                copiedFor.restart();
+                            }
+
+                            Timer {
+                                id: copiedFor
+                                interval: 2000
+                                onTriggered: copyLine.copied = false
+                            }
+                        }
                     }
                 }
 

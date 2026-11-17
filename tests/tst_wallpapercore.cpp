@@ -12,6 +12,7 @@
 #include <QTemporaryDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScopeGuard>
 #include <QTest>
 
 namespace {
@@ -651,6 +652,13 @@ void TestWallpaperCore::readsAConditionWithoutRunningIt()
 
 void TestWallpaperCore::putsLettersBeforeDigitsBeforeTheRest()
 {
+    // Within a group the order is the locale's, and a clean build machine
+    // has none -- LANG=C sorts by code point, "Zed" before "alien". Said
+    // here, so the test asks the same of every machine.
+    const QLocale before;
+    QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+    const auto restore = qScopeGuard([&] { QLocale::setDefault(before); });
+
     QStringList titles{QStringLiteral("三体"), QStringLiteral("3 SR-2"), QStringLiteral("Zed"),
                        QStringLiteral("[4K] Dune"), QStringLiteral("Árie"), QStringLiteral("alien"),
                        QStringLiteral("2077")};
