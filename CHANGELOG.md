@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-11-17
+
 ### Changed
 
 - **The library's grid no longer reshuffles when a panel slides out.** The
@@ -20,6 +22,10 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The filters' scrollbar shows only when there is something to scroll**,
   and Clear selection sits at the left under the chips, in both tabs. The
   Steam tab's line beside it is gone.
+- **Settings and the README no longer promise the password once.** CachyOS
+  asks for it again before installing a package built outside its
+  repositories and the AUR, on purpose, so they say only that it is asked
+  for.
 
 ### Fixed
 
@@ -27,11 +33,6 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stay on screen while every other window went, and now it is minimised to
   the panel and comes back when the peeking stops -- unless it was shut or
   minimised already.
-
-- **Settings and the README no longer promise the password once.** CachyOS
-  asks for it again before installing a package built outside its
-  repositories and the AUR, on purpose, so they say only that it is asked
-  for.
 
 ## [0.40.2] — 2026-11-17
 
@@ -1684,7 +1685,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.2...v0.41.0
 [0.40.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.1...v0.40.2
 [0.40.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.40.0...v0.40.1
 [0.40.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.39.2...v0.40.0
