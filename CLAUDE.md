@@ -513,7 +513,12 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   one value to a row beside the grid, and scrollbars that stay visible in
   a strip of their own rather than fading out over the pictures. In the
   corner of the footer an `i`, which says the version when it is hovered
-  and does nothing when it is clicked -- `Application.version`, out of
+  and does nothing when it is clicked -- unless a newer WallFlux is out:
+  then it is yellow (`Look.notice`, at least 3.5 to 1 against the window
+  in all six themes, System's by the desktop's brightness) and a click
+  opens Settings › General, where Update is (17 November; it replaced a
+  "WallFlux x is out" button beside it that was all but invisible in the
+  dark theme) -- `Application.version`, out of
   `WALLFLUX_VERSION` in CMakeLists.txt, which is `project()`'s own number
   rather than a third place to keep it.
 - **An Arch package** (`packaging/PKGBUILD`, `wallflux`, built from the

@@ -1351,6 +1351,7 @@ ApplicationWindow {
     // What the theme is besides its palette, for everything in the window.
     Binding { target: Look; property: "theme"; value: picker.theme }
     Binding { target: Look; property: "highlight"; value: shades.highlight }
+    Binding { target: Look; property: "dark"; value: picker.dark }
 
     /// Whether the workshop has been asked about the library yet.
     property bool askedAboutThemAll: false
@@ -3191,24 +3192,27 @@ ApplicationWindow {
                 }
 
                 RoundedTool {
+                    id: about
+
+                    /// A newer WallFlux is out: the `i` turns yellow and a
+                    /// click on it goes to where the update is, Settings'
+                    /// General -- the user's word of 17 November.
+                    readonly property bool newer: Updater.state === Updater.Available
+
                     icon.name: "help-about"
                     // See the magnifier above: without this it is invisible.
-                    icon.color: picker.palette.windowText
+                    icon.color: about.newer ? Look.notice : picker.palette.windowText
                     ToolTip.visible: hovered
-                    // What it has to say is said by hovering it. A dialog
-                    // with one line in it is a dialog nobody wants, so
-                    // there is nothing here for a click to do.
-                    ToolTip.text: qsTr("WallFlux %1").arg(Application.version)
-                }
-
-                // A newer WallFlux, said where it is seen without looking for
-                // it; the click goes to where it is installed from.
-                RoundedButton {
-                    visible: Updater.state === Updater.Available
-                    text: qsTr("WallFlux %1 is out").arg(Updater.latest)
-                    accent: Look.highlight
-                    flat: true
+                    // Otherwise what it has to say is said by hovering it. A
+                    // dialog with one line in it is a dialog nobody wants, so
+                    // there is nothing for a click to do then.
+                    ToolTip.text: about.newer
+                        ? qsTr("WallFlux %1 is out; this is %2. Click to update.")
+                              .arg(Updater.latest).arg(Application.version)
+                        : qsTr("WallFlux %1").arg(Application.version)
                     onClicked: {
+                        if (!about.newer)
+                            return;
                         tabs.currentIndex = 3;
                         settingsPage.section = 0;
                     }

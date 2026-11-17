@@ -19,6 +19,9 @@ QtObject {
     /// Set by the picker.
     property string theme: "dark"
     property color highlight: "#3daee9"
+    /// Whether the window's colours are the dark kind -- which System's are
+    /// is the desktop's business, so the picker says.
+    property bool dark: true
 
     /// Per theme:
     /// - `positive` and `negative`: Download, Save, Confirm and Remove.
@@ -31,19 +34,23 @@ QtObject {
     ///   window where a glow is lost; `outline` KDE's focus ring, a gap and a
     ///   line; `focus` Steam's Big Picture, grown and lit; `double` a thick
     ///   band and a second line, hard edged.
+    /// - `notice`: something waiting to be looked at -- a newer WallFlux, on
+    ///   the footer's `i`. Yellow, darker where the window is light: each at
+    ///   least 3.5 to 1 against the window, WCAG's 3 for an icon and some.
+    ///   System's follows the desktop, light or dark.
     readonly property var styles: ({
         dark: { positive: "#27ae60", negative: "#da4453", playable: "#27ae60",
-                listed: "#f67400", tags: "soft", ring: "glow" },
+                listed: "#f67400", tags: "soft", ring: "glow", notice: "#fdbc4b" },
         light: { positive: "#27ae60", negative: "#da4453", playable: "#27ae60",
-                 listed: "#f67400", tags: "tinted", ring: "lift" },
+                 listed: "#f67400", tags: "tinted", ring: "lift", notice: "#a87400" },
         system: { positive: "#27ae60", negative: "#da4453", playable: "#27ae60",
-                  listed: "#f67400", tags: "soft", ring: "outline" },
+                  listed: "#f67400", tags: "soft", ring: "outline", notice: "" },
         steam: { positive: "#5c7e10", negative: "#a33a35", playable: "#4c6b22",
-                 listed: "#a0742a", tags: "tinted", ring: "focus" },
+                 listed: "#a0742a", tags: "tinted", ring: "focus", notice: "#e5b33a" },
         hardLight: { positive: "#006b2e", negative: "#b00020", playable: "#006b2e",
-                     listed: "#8a4600", tags: "outline", ring: "double" },
+                     listed: "#8a4600", tags: "outline", ring: "double", notice: "#7a5c00" },
         hardDark: { positive: "#00e070", negative: "#ff4d4d", playable: "#00e070",
-                    listed: "#ffaa00", tags: "outline", ring: "double" }
+                    listed: "#ffaa00", tags: "outline", ring: "double", notice: "#ffd600" }
     })
     readonly property var current: styles[theme] || styles.dark
 
@@ -51,6 +58,8 @@ QtObject {
     readonly property color negative: current.negative
     readonly property color playable: current.playable
     readonly property color listed: current.listed
+    readonly property color notice: current.notice !== "" ? current.notice
+                                  : dark ? "#fdbc4b" : "#a87400"
     readonly property string tags: current.tags
     readonly property string ring: current.ring
 

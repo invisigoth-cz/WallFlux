@@ -6,6 +6,14 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The `i` in the footer turns yellow when a newer WallFlux is out**, and a
+  click on it opens Settings › General, where Update is. Otherwise it is
+  what it was: the version, said on hovering. Its yellow reads in all six
+  themes, System's following the desktop's light or dark. It replaces the
+  "WallFlux … is out" button beside it, which the dark theme all but hid.
+
 ## [0.41.3] — 2026-11-17
 
 ### Fixed
