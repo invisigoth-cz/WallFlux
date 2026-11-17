@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QNetworkReply>
+#include <QProcess>
 #include <QVersionNumber>
 
 Q_LOGGING_CATEGORY(lcUpdate, "wallflux.update")
@@ -33,6 +34,25 @@ QNetworkRequest asking(const QUrl &url)
 Updater::Updater(QObject *parent)
     : QObject(parent)
 {
+}
+
+QString Updater::command()
+{
+    return QStringLiteral("curl -fsSL https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh | bash");
+}
+
+bool Updater::install()
+{
+    // Konsole, being KDE's and so on every machine WallFlux runs on. Started
+    // detached: the script quits this WallFlux and starts the new one, and
+    // the terminal has to outlive the program that opened it.
+    const QString line = command()
+        + QStringLiteral("; echo; read -rsn1 -p 'Press any key to close this window.'");
+    const bool started = QProcess::startDetached(
+        QStringLiteral("konsole"), {QStringLiteral("-e"), QStringLiteral("bash"), QStringLiteral("-c"), line});
+    if (!started)
+        qCWarning(lcUpdate) << "Konsole could not be started";
+    return started;
 }
 
 bool Updater::newer(const QString &candidate, const QString &current)

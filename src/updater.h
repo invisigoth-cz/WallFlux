@@ -13,7 +13,8 @@
 ///
 /// Asked of GitHub's releases, without a key: the newest release's tag.
 /// Installing it is `install.sh`'s, the same line WallFlux was installed
-/// with, run in a terminal by whoever wants it; WallFlux only says so.
+/// with: `install()` runs it in Konsole on a click, where it asks once and
+/// for the password once, and starts the new WallFlux at the end.
 ///
 /// Says what is happening as a `State` and never as a sentence: see the
 /// trap about a sentence built in C++ being built once.
@@ -35,6 +36,8 @@ public:
     Q_PROPERTY(QUrl page READ page NOTIFY changed)
     /// What went wrong, as the network said it.
     Q_PROPERTY(QString detail READ detail NOTIFY changed)
+    /// The line that installs the newest release, for a terminal.
+    Q_PROPERTY(QString command READ command CONSTANT)
 
     explicit Updater(QObject *parent = nullptr);
 
@@ -44,7 +47,13 @@ public:
     QUrl page() const { return m_page; }
     QString detail() const { return m_detail; }
 
+    static QString command();
+
     Q_INVOKABLE void check();
+
+    /// Runs `command()` in Konsole, which stays open at the end until a key
+    /// is pressed. False if Konsole could not be started.
+    Q_INVOKABLE bool install();
 
     /// Whether `candidate` is a later version than `current`, number by
     /// number: 0.10.0 is later than 0.9.0, which as text it is not.

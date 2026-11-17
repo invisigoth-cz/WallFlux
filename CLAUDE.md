@@ -300,7 +300,17 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   with `makepkg -si`; the same version installed already, it says so and
   stops. Piped, its stdin is the script, so pacman's questions are read from
   `/dev/tty`; `| bash -s -- --noconfirm` asks nothing, which is how it is
-  tested in a clean `archlinux` container. Before 17 November the advice was
+  tested in a clean `archlinux` container. It asks one question itself and
+  then tells pacman and makepkg `--noconfirm`; keeps sudo's password alive
+  while it builds (`sudo -v` and a loop), so it is asked for once; and if a
+  `wallflux` of the user's is running, ends it and starts the new one with
+  `setsid -f`. **Update** in Settings is `Updater::install()`: that line in
+  `konsole -e bash -c`, started detached so it outlives the WallFlux it
+  ends, and held open at the end for a key; `Updater.command` is the line,
+  in one place. Released 0.40.1 and earlier have only the line and Copy.
+  **The trap's variables are global**: it runs after `main` has returned,
+  and with `local` ones 0.40.1's script died on `work: unbound variable`
+  and left the build behind. Before 17 November the advice was
   `paru -Syu`, and before 16 November WallFlux fetched the package and ran
   `pkexec pacman -U` itself. **The repository has to be public for any of
   it**: private, GitHub answers 404 to a request without a login, measured

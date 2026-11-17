@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Update in Settings does the update**: it opens Konsole and runs the
+  install line there, which asks once whether to go ahead and once for the
+  password, builds the new version and starts WallFlux again. The line and
+  its Copy button stay under it.
+
+### Fixed
+
+- **The install line cleans up after itself.** In 0.40.1 it ended with
+  `work: unbound variable` and left the build -- hundreds of megabytes -- in
+  `~/.cache/wallflux-install`; it also tries the AUR three times, which
+  drops connections while it is busy.
+
 ## [0.40.1] — 2026-11-17
 
 ### Changed

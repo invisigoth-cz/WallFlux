@@ -505,8 +505,12 @@ Item {
                         case Updater.Available:
                             // Updated by the same line it was installed
                             // with: install.sh builds the newest release.
-                            return qsTr("WallFlux %1 is out; this is %2. To update, paste this line "
-                                        + "into a terminal. The README shows how to read the script first.")
+                            if (updateButton.refused)
+                                return qsTr("Konsole could not be opened. To update, paste this line "
+                                            + "into a terminal.");
+                            return qsTr("WallFlux %1 is out; this is %2. Update opens a terminal, asks "
+                                        + "once and for your password, builds the new version and starts "
+                                        + "it again. Or paste the line into a terminal yourself.")
                                       .arg(Updater.latest).arg(Application.version);
                         case Updater.Failed:
                             return qsTr("That did not work: %1").arg(Updater.detail);
@@ -520,6 +524,17 @@ Item {
                         visible: Updater.state === Updater.Available
                         text: qsTr("What is new")
                         onClicked: Qt.openUrlExternally(Updater.page)
+                    }
+                    RoundedButton {
+                        id: updateButton
+
+                        /// Konsole would not start, so the line is the way.
+                        property bool refused: false
+
+                        visible: Updater.state === Updater.Available
+                        accent: Look.positive
+                        text: qsTr("Update")
+                        onClicked: refused = !Updater.install()
                     }
                     RoundedButton {
                         visible: Updater.state !== Updater.Available
@@ -540,7 +555,7 @@ Item {
                             readOnly: true
                             selectByMouse: true
                             font.family: "monospace"
-                            text: "curl -fsSL https://raw.githubusercontent.com/invisigoth-cz/WallFlux/main/install.sh | bash"
+                            text: Updater.command
                         }
                         RoundedButton {
                             id: copyLine
@@ -569,7 +584,7 @@ Item {
                     home: 0
                     title: qsTr("Check for updates")
                     about: qsTr("Asks GitHub once, the first time the window opens after WallFlux "
-                                + "starts, and only says so. WallFlux installs nothing itself.")
+                                + "starts, and only says so. Nothing is installed until Update is pressed.")
 
                     Toggle {
                         value: view.picker.checkUpdates

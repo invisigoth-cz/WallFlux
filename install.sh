@@ -10,6 +10,8 @@
 # AUR account or helper is needed to build from it), then the PKGBUILD of the
 # newest WallFlux release, built with makepkg on this machine and installed
 # as an ordinary pacman package -- `sudo pacman -R wallflux` removes it.
+# It asks once whether to go ahead, and sudo for the password once; then it
+# runs to the end, and starts the new WallFlux if the old one was running.
 # `--noconfirm` after it (`| bash -s -- --noconfirm`) asks nothing at all;
 # whatever is given there goes to pacman and makepkg alike.
 #
@@ -18,6 +20,8 @@
 set -euo pipefail
 
 repo=invisigoth-cz/WallFlux
+work=
+keeper=
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31m==> %s\033[0m\n' "$*" >&2; exit 1; }
@@ -37,7 +41,7 @@ main() {
     say "Asking GitHub for the newest release"
     local version
     version=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
-        | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+        | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' || true)
     [[ $version =~ ^[0-9]+(\.[0-9]+)*$ ]] || die "GitHub did not say what the newest release is."
 
     local installed
@@ -47,6 +51,35 @@ main() {
         exit 0
     fi
 
+    # One question, and after it none: pacman and makepkg are told
+    # --noconfirm. Given --noconfirm, not even this one.
+    local asked=1 option
+    for option in "$@"; do
+        [[ $option != --noconfirm ]] || asked=0
+    done
+    if ((asked)); then
+        local reply
+        printf '\nWallFlux is built on this computer, which takes a few minutes, and sudo asks\nfor your password once.\n\n'
+        local question="Install WallFlux $version?"
+        [[ -z $installed ]] || question="Update WallFlux $installed to $version?"
+        read -rp "$question [Y/n] " reply <"$answers"
+        [[ ! $reply =~ ^[Nn] ]] || { say "Nothing was changed."; exit 0; }
+        set -- --noconfirm "$@"
+    fi
+
+    # The password once: sudo is kept from forgetting it for as long as the
+    # build runs, which can be longer than sudo remembers on its own.
+    sudo -v <"$answers"
+    ( while sleep 50; do kill -0 "$$" 2>/dev/null || exit 0; sudo -n -v 2>/dev/null || exit 0; done ) &
+    keeper=$!
+
+    # Built on the disk: /tmp is often memory, and the build takes gigabytes.
+    # Global, not local: the trap runs after main has returned.
+    work="${XDG_CACHE_HOME:-$HOME/.cache}/wallflux-install"
+    rm -rf "$work"
+    mkdir -p "$work"
+    trap 'kill "$keeper" 2>/dev/null; rm -rf "$work"' EXIT
+
     local missing=()
     pacman -Qq base-devel >/dev/null 2>&1 || missing+=(base-devel)
     pacman -Qq git >/dev/null 2>&1 || missing+=(git)
@@ -55,15 +88,16 @@ main() {
         sudo pacman -S --needed "$@" "${missing[@]}" <"$answers"
     fi
 
-    # Built on the disk: /tmp is often memory, and the build takes gigabytes.
-    local work="${XDG_CACHE_HOME:-$HOME/.cache}/wallflux-install"
-    rm -rf "$work"
-    mkdir -p "$work"
-    trap 'rm -rf "$work"' EXIT
-
     if ! pacman -Qq steamworks-sdk >/dev/null 2>&1; then
         say "Installing Valve's Steamworks SDK from the AUR"
-        git clone --depth 1 https://aur.archlinux.org/steamworks-sdk.git "$work/steamworks-sdk"
+        # Three tries: the AUR drops connections when it is busy.
+        local try
+        for try in 1 2 3; do
+            git clone -q --depth 1 https://aur.archlinux.org/steamworks-sdk.git "$work/steamworks-sdk" && break
+            ((try < 3)) || die "The AUR did not answer. Try again in a while."
+            rm -rf "$work/steamworks-sdk"
+            sleep 5
+        done
         # As a dependency, so removing WallFlux with -Rns takes it too.
         (cd "$work/steamworks-sdk" && makepkg -si --asdeps "$@" <"$answers")
     fi
@@ -74,7 +108,26 @@ main() {
         "https://raw.githubusercontent.com/$repo/v$version/packaging/PKGBUILD"
     (cd "$work/wallflux" && makepkg -si "$@" <"$answers")
 
-    say "WallFlux $version is installed.${installed:+ Quit the running one from its tray icon and start it again.}"
+    # The one running is the old program until it is started again: quit it
+    # and start the new one, out of this terminal's session so that closing
+    # the terminal leaves it running. The wallpaper goes back to the
+    # desktop's own until one is chosen, as at any start.
+    local me
+    me=$(id -u)
+    if pgrep -xu "$me" wallflux >/dev/null; then
+        say "Starting the new WallFlux in place of the old one"
+        pkill -xu "$me" wallflux || true
+        local wait
+        for wait in {1..50}; do
+            pgrep -xu "$me" wallflux >/dev/null || break
+            sleep 0.1
+        done
+        pkill -KILL -xu "$me" wallflux 2>/dev/null || true
+        setsid -f wallflux >/dev/null 2>&1 </dev/null
+        say "WallFlux $version is installed and running."
+    else
+        say "WallFlux $version is installed. It is in the application menu."
+    fi
 }
 
 main "$@"
