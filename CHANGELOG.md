@@ -6,6 +6,8 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-11-17
+
 ### Changed
 
 - **The `i` in the footer turns yellow when a newer WallFlux is out**, and a
@@ -1726,7 +1728,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.3...v0.42.0
 [0.41.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.2...v0.41.3
 [0.41.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.1...v0.41.2
 [0.41.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.0...v0.41.1
