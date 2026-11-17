@@ -2272,8 +2272,8 @@ ApplicationWindow {
                         // window as the workshop's, behaving the same way.
                         // Blue while the panel it opens is open, so the
                         // button says which of its two states it is in.
-                        accent: filters.visible ? Look.highlight : "transparent"
-                        onClicked: filters.visible = !filters.visible
+                        accent: filters.open ? Look.highlight : "transparent"
+                        onClicked: filters.open = !filters.open
                     }
 
                     RoundedButton {
@@ -2529,9 +2529,11 @@ ApplicationWindow {
                     }
                 }
 
-                // The filter stands beside the grid, which reflows into
-                // what is left of the window.
+                // The filter stands beside the grid, and the grid shrinks
+                // into what is left of the window -- see `gridArea`.
                 RowLayout {
+                    id: stageRow
+
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.leftMargin: 24
@@ -2554,251 +2556,331 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         spacing: 14
 
-                        GridView {
-                            id: grid
+                        // What is left of the window beside the panels. The
+                        // grid is laid out once, at the width this will have
+                        // when the panels are still, and scaled to the width
+                        // it has meanwhile. Laid out every frame of a slide,
+                        // every card was resized eleven times and they all
+                        // moved a row at once half way through.
+                        Item {
+                            id: gridArea
 
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             clip: true
 
-                            // As many columns of about 240 as fit, then share the
-                            // width out between them: a fixed cell width leaves a
-                            // ragged empty strip down the side of every window that
-                            // is not an exact multiple of it.
-                            //
-                            // Not the whole width: a strip down the right is left
-                            // for the scrollbar, which otherwise draws over the last
-                            // column of previews and reads as part of the picture.
-                            readonly property int room: grid.width - 30
+                            /// The width with the panels where they are
+                            /// going: the row less each one that is out and
+                            /// the spacing before it, which is what the
+                            /// layout leaves once they stop.
+                            readonly property real held: stageRow.width
+                                - (filters.open ? filters.implicitWidth + stageRow.spacing : 0)
+                                - (details.open ? details.implicitWidth + stageRow.spacing : 0)
 
-                            // Two hundred and sixty, which puts five
-                            // across the window this opens at. It was three
-                            // hundred while a card was sixteen by nine and
-                            // carried its name in a row underneath: a square
-                            // of three hundred is half again as tall, so the
-                            // same number would have left one row and a half
-                            // showing.
-                            readonly property int columns: Math.max(1, Math.floor(grid.room / 260))
+                            GridView {
+                                id: grid
 
-                            cellWidth: Math.floor(grid.room / grid.columns)
-                            // A square, with the name inside the picture.
-                            // The eight of margin a card keeps on each side
-                            // is what leaves a gap between them, across and
-                            // down alike.
-                            cellHeight: cellWidth
+                                // Laid out at the width it is going to have,
+                                // and scaled to the room there is: while a
+                                // panel slides the cards shrink or grow as
+                                // one picture, and once it is still the
+                                // scale is one.
+                                width: gridArea.held
+                                height: gridArea.height / grid.scale
+                                scale: gridArea.held > 30
+                                       ? (gridArea.width - 30) / (gridArea.held - 30) : 1
+                                transformOrigin: Item.TopLeft
+                                clip: true
+                                // The rows a shrinking grid brings up from
+                                // under its bottom edge are there already,
+                                // pictures loaded, rather than appearing
+                                // empty and filling in.
+                                cacheBuffer: 800
 
-                            model: picker.shown
-
-                            // The arrows are answered below rather than by
-                            // the grid itself, which walks `currentIndex`
-                            // -- the one thing a model rebuild throws
-                            // away. See `ringOn`.
-                            keyNavigationEnabled: false
-
-                            // The grid is what the window hands the keyboard
-                            // to when it opens: arrows walk the cards, Enter
-                            // puts one on the desktop, Space ticks it into
-                            // the playlist. The search field takes the
-                            // keyboard back the moment it is clicked.
-                            focus: true
-
-                            /// Which row the ring is on, or -1 when the one
-                            /// it was on is not in the grid any more.
-                            function at() {
-                                for (let i = 0; i < picker.shown.length; ++i) {
-                                    if (picker.shown[i].id === picker.ringOn)
-                                        return i;
-                                }
-                                return -1;
-                            }
-
-                            /// The card the arrows are on, or null where the
-                            /// grid is empty or has not been walked yet.
-                            function here() {
-                                const row = grid.at();
-                                return row < 0 ? null : picker.shown[row];
-                            }
-
-                            /// Brings the card the ring is on back into
-                            /// view, after something has moved it: a
-                            /// rebuilt model, the panel opening, the
-                            /// window being resized, an arrow key.
-                            function keepTheRingInView() {
-                                const row = grid.at();
-                                if (row < 0)
-                                    return;
-
-                                // Rewound first, and only then sent where
-                                // it belongs. A view that was scrolled
-                                // when the window changed size is left
-                                // past the end of a grid that is now
-                                // shorter -- 2 588 down a grid 1 491 tall
-                                // -- and in that state it draws no cards
-                                // at all and will not be moved:
-                                // `positionViewAtIndex`, `returnToBounds`,
-                                // `forceLayout` and writing `contentY` by
-                                // hand were each measured doing nothing.
-                                // Going back to the beginning gives it
-                                // somewhere to count from again, and from
-                                // there it goes where it is asked. Both
-                                // calls are in the one function, so
-                                // nothing is drawn in between.
+                                // As many columns of about 240 as fit, then share the
+                                // width out between them: a fixed cell width leaves a
+                                // ragged empty strip down the side of every window that
+                                // is not an exact multiple of it.
                                 //
-                                // Only when it is actually stranded,
-                                // though. Rewinding destroys every
-                                // delegate on screen and the previews
-                                // come back as new Images loading
-                                // asynchronously -- the whole grid
-                                // visibly blinking on every resize, for a
-                                // repair that one case in many needs. In
-                                // bounds, `Contain` scrolls the least it
-                                // can and does nothing at all when the
-                                // card is on screen already.
-                                if (grid.contentY > Math.max(0, grid.contentHeight - grid.height))
-                                    grid.positionViewAtBeginning();
-                                grid.positionViewAtIndex(row, GridView.Contain);
-                            }
+                                // Not the whole width: a strip down the right is left
+                                // for the scrollbar, which otherwise draws over the last
+                                // column of previews and reads as part of the picture.
+                                readonly property int room: grid.width - 30
 
-                            /// Moves the ring by so many cards and brings it
-                            /// into view.
-                            ///
-                            /// The panel follows it only once it is open.
-                            /// Opening one because somebody pressed Right
-                            /// would be the window deciding what the
-                            /// question was.
-                            function walk(by) {
-                                if (picker.shown.length === 0)
-                                    return;
-                                const was = grid.at();
-                                const to = was < 0 ? 0
-                                    : Math.max(0, Math.min(picker.shown.length - 1,
-                                                           was + by));
-                                picker.ringOn = picker.shown[to].id;
-                                grid.keepTheRingInView();
-                                if (details.open)
-                                    picker.inspect(picker.ringOn);
-                            }
+                                // Two hundred and sixty, which puts five
+                                // across the window this opens at. It was three
+                                // hundred while a card was sixteen by nine and
+                                // carried its name in a row underneath: a square
+                                // of three hundred is half again as tall, so the
+                                // same number would have left one row and a half
+                                // showing.
+                                //
+                                // Counted off the width with no panel out,
+                                // so that a panel opening or shutting makes
+                                // the cards smaller or larger rather than
+                                // moving them to other rows -- unless that
+                                // would leave them under 170 across.
+                                readonly property int columns: Math.max(1, Math.min(
+                                    Math.floor((stageRow.width - 30) / 260), Math.floor(grid.room / 170)))
 
-                            // Any rebuild of the model below -- a video
-                            // answering with its size, the workshop
-                            // answering about the whole library, a
-                            // download arriving -- puts the view back to
-                            // its first row. The card the ring is on is
-                            // where somebody is working, so it is brought
-                            // back. Nothing moves while that card is on
-                            // screen already, so this is quiet except
-                            // when the view has actually been thrown.
-                            onModelChanged: settle.restart()
-
-                            // And the panel opening takes the grid from
-                            // three columns to two, which moves every card
-                            // down -- measured, a click near the bottom
-                            // put the card that was clicked off the
-                            // screen. Answered here rather than where the
-                            // panel is opened, because this is the moment
-                            // the cards actually move, and without the
-                            // wait that a `Qt.callLater` from there would
-                            // have needed.
-                            onWidthChanged: settle.restart()
-
-                            // The height as well: a window being
-                            // maximised changes the two one after the
-                            // other, and where the cards belong is not
-                            // known while only one of them has arrived.
-                            onHeightChanged: settle.restart()
-
-                            // Both of those are answered a beat later,
-                            // which is also what puts several of them
-                            // together: the model and the width often
-                            // change in the same breath, and the view is
-                            // only worth moving once the cards have their
-                            // new places.
-                            Timer {
-                                id: settle
-
-                                interval: 150
-                                onTriggered: grid.keepTheRingInView()
-                            }
-
-                            // The arrows start on the first card, as they
-                            // did while the grid kept the ring itself.
-                            // Nothing is drawn until the grid has the
-                            // keyboard, so this is not a choice anybody
-                            // sees being made for them.
-                            Component.onCompleted: {
-                                if (picker.ringOn === "" && picker.shown.length > 0)
-                                    picker.ringOn = picker.shown[0].id;
-                            }
-
-                            Keys.onLeftPressed: grid.walk(-1)
-                            Keys.onRightPressed: grid.walk(1)
-                            Keys.onUpPressed: grid.walk(-grid.columns)
-                            Keys.onDownPressed: grid.walk(grid.columns)
-
-                            Keys.onReturnPressed: {
-                                const one = grid.here();
-                                if (one)
-                                    picker.apply(one.id);
-                            }
-                            Keys.onEnterPressed: {
-                                const one = grid.here();
-                                if (one)
-                                    picker.apply(one.id);
-                            }
-                            // Delete asks first, in a window of its own: a
-                            // key is easier to press by mistake than a
-                            // button that has to be clicked twice.
-                            Keys.onDeletePressed: {
-                                const one = grid.here();
-                                if (picker.canRemove(one)) {
-                                    removing.one = one;
-                                    removing.open();
+                                /// The cell and the columns the grid was laid
+                                /// out with last, to keep the same rows in view
+                                /// when it is laid out again at another size.
+                                property real laidCell: 0
+                                property int laidColumns: 0
+                                onCellWidthChanged: {
+                                    if (grid.laidCell > 0 && grid.columns === grid.laidColumns)
+                                        grid.contentY = grid.contentY * grid.cellWidth / grid.laidCell;
+                                    else if (grid.laidColumns > 0)
+                                        glide.restart();
+                                    grid.laidCell = grid.cellWidth;
+                                    grid.laidColumns = grid.columns;
                                 }
-                            }
-                            Keys.onSpacePressed: {
-                                const one = grid.here();
-                                if (one && one.playable)
-                                    picker.tick(one.id);
-                            }
 
-                            delegate: Item {
-                                id: cell
+                                /// Whether the cards are gliding to new rows:
+                                /// the columns changed, so they do move.
+                                readonly property bool gliding: glide.running
+                                Timer {
+                                    id: glide
+                                    interval: 300
+                                }
 
-                                required property var modelData
+                                cellWidth: Math.floor(grid.room / grid.columns)
+                                // A square, with the name inside the picture.
+                                // The eight of margin a card keeps on each side
+                                // is what leaves a gap between them, across and
+                                // down alike.
+                                cellHeight: cellWidth
 
-                                width: grid.cellWidth
-                                height: grid.cellHeight
-                                // Over its neighbours, or they would cover
-                                // the glow on two sides.
-                                z: shownCard.current ? 1 : 0
+                                model: picker.shown
 
-                                WallpaperCard {
-                                    id: shownCard
+                                // The arrows are answered below rather than by
+                                // the grid itself, which walks `currentIndex`
+                                // -- the one thing a model rebuild throws
+                                // away. See `ringOn`.
+                                keyNavigationEnabled: false
 
-                                    anchors.fill: parent
-                                    anchors.margins: 8
-                                    wallpaper: cell.modelData
-                                    current: grid.activeFocus
-                                             && cell.modelData.id === picker.ringOn
-                                    // A click moves the arrows here as well,
-                                    // so the two ways of walking the grid do
-                                    // not each keep a place of their own.
-                                    onChose: (id) => {
-                                        grid.forceActiveFocus();
-                                        picker.chooseOrApply(id);
+                                // The grid is what the window hands the keyboard
+                                // to when it opens: arrows walk the cards, Enter
+                                // puts one on the desktop, Space ticks it into
+                                // the playlist. The search field takes the
+                                // keyboard back the moment it is clicked.
+                                focus: true
+
+                                /// Which row the ring is on, or -1 when the one
+                                /// it was on is not in the grid any more.
+                                function at() {
+                                    for (let i = 0; i < picker.shown.length; ++i) {
+                                        if (picker.shown[i].id === picker.ringOn)
+                                            return i;
                                     }
-                                    onApplied: (id) => picker.apply(id)
-                                    ticked: picker.inPlaylist.indexOf(cell.modelData.id) >= 0
-                                    outdated: picker.outdated.indexOf(cell.modelData.id) >= 0
-                                    showTick: picker.picking
-                                    onTickAsked: picker.tick(cell.modelData.id)
-                                    canFavorite: Steamworks.available && picker.fromWorkshop(cell.modelData)
-                                    favorite: Steamworks.favorites.indexOf(cell.modelData.id) >= 0
-                                    onFavoriteAsked: Steamworks.favorite(cell.modelData.id, !favorite)
+                                    return -1;
                                 }
-                            }
 
-                            ScrollBar.vertical: Scroller {}
+                                /// The card the arrows are on, or null where the
+                                /// grid is empty or has not been walked yet.
+                                function here() {
+                                    const row = grid.at();
+                                    return row < 0 ? null : picker.shown[row];
+                                }
+
+                                /// Brings the card the ring is on back into
+                                /// view, after something has moved it: a
+                                /// rebuilt model, the panel opening, the
+                                /// window being resized, an arrow key.
+                                function keepTheRingInView() {
+                                    const row = grid.at();
+                                    if (row < 0)
+                                        return;
+
+                                    // Rewound first, and only then sent where
+                                    // it belongs. A view that was scrolled
+                                    // when the window changed size is left
+                                    // past the end of a grid that is now
+                                    // shorter -- 2 588 down a grid 1 491 tall
+                                    // -- and in that state it draws no cards
+                                    // at all and will not be moved:
+                                    // `positionViewAtIndex`, `returnToBounds`,
+                                    // `forceLayout` and writing `contentY` by
+                                    // hand were each measured doing nothing.
+                                    // Going back to the beginning gives it
+                                    // somewhere to count from again, and from
+                                    // there it goes where it is asked. Both
+                                    // calls are in the one function, so
+                                    // nothing is drawn in between.
+                                    //
+                                    // Only when it is actually stranded,
+                                    // though. Rewinding destroys every
+                                    // delegate on screen and the previews
+                                    // come back as new Images loading
+                                    // asynchronously -- the whole grid
+                                    // visibly blinking on every resize, for a
+                                    // repair that one case in many needs. In
+                                    // bounds, `Contain` scrolls the least it
+                                    // can and does nothing at all when the
+                                    // card is on screen already.
+                                    if (grid.contentY > Math.max(0, grid.contentHeight - grid.height))
+                                        grid.positionViewAtBeginning();
+                                    grid.positionViewAtIndex(row, GridView.Contain);
+                                }
+
+                                /// Moves the ring by so many cards and brings it
+                                /// into view.
+                                ///
+                                /// The panel follows it only once it is open.
+                                /// Opening one because somebody pressed Right
+                                /// would be the window deciding what the
+                                /// question was.
+                                function walk(by) {
+                                    if (picker.shown.length === 0)
+                                        return;
+                                    const was = grid.at();
+                                    const to = was < 0 ? 0
+                                        : Math.max(0, Math.min(picker.shown.length - 1,
+                                                               was + by));
+                                    picker.ringOn = picker.shown[to].id;
+                                    grid.keepTheRingInView();
+                                    if (details.open)
+                                        picker.inspect(picker.ringOn);
+                                }
+
+                                // Any rebuild of the model below -- a video
+                                // answering with its size, the workshop
+                                // answering about the whole library, a
+                                // download arriving -- puts the view back to
+                                // its first row. The card the ring is on is
+                                // where somebody is working, so it is brought
+                                // back. Nothing moves while that card is on
+                                // screen already, so this is quiet except
+                                // when the view has actually been thrown.
+                                onModelChanged: settle.restart()
+
+                                // And the panel opening takes the grid from
+                                // three columns to two, which moves every card
+                                // down -- measured, a click near the bottom
+                                // put the card that was clicked off the
+                                // screen. Answered here rather than where the
+                                // panel is opened, because this is the moment
+                                // the cards actually move, and without the
+                                // wait that a `Qt.callLater` from there would
+                                // have needed.
+                                onWidthChanged: settle.restart()
+
+                                // The height as well: a window being
+                                // maximised changes the two one after the
+                                // other, and where the cards belong is not
+                                // known while only one of them has arrived.
+                                onHeightChanged: settle.restart()
+
+                                // Both of those are answered a beat later,
+                                // which is also what puts several of them
+                                // together: the model and the width often
+                                // change in the same breath, and the view is
+                                // only worth moving once the cards have their
+                                // new places.
+                                Timer {
+                                    id: settle
+
+                                    interval: 150
+                                    onTriggered: grid.keepTheRingInView()
+                                }
+
+                                // The arrows start on the first card, as they
+                                // did while the grid kept the ring itself.
+                                // Nothing is drawn until the grid has the
+                                // keyboard, so this is not a choice anybody
+                                // sees being made for them.
+                                Component.onCompleted: {
+                                    if (picker.ringOn === "" && picker.shown.length > 0)
+                                        picker.ringOn = picker.shown[0].id;
+                                }
+
+                                Keys.onLeftPressed: grid.walk(-1)
+                                Keys.onRightPressed: grid.walk(1)
+                                Keys.onUpPressed: grid.walk(-grid.columns)
+                                Keys.onDownPressed: grid.walk(grid.columns)
+
+                                Keys.onReturnPressed: {
+                                    const one = grid.here();
+                                    if (one)
+                                        picker.apply(one.id);
+                                }
+                                Keys.onEnterPressed: {
+                                    const one = grid.here();
+                                    if (one)
+                                        picker.apply(one.id);
+                                }
+                                // Delete asks first, in a window of its own: a
+                                // key is easier to press by mistake than a
+                                // button that has to be clicked twice.
+                                Keys.onDeletePressed: {
+                                    const one = grid.here();
+                                    if (picker.canRemove(one)) {
+                                        removing.one = one;
+                                        removing.open();
+                                    }
+                                }
+                                Keys.onSpacePressed: {
+                                    const one = grid.here();
+                                    if (one && one.playable)
+                                        picker.tick(one.id);
+                                }
+
+                                delegate: Item {
+                                    id: cell
+
+                                    required property var modelData
+
+                                    // Placed once by the grid before it may
+                                    // glide: a card made in the middle of a
+                                    // glide comes up where it belongs, not
+                                    // flying in from the corner.
+                                    property bool placed: false
+                                    onXChanged: cell.placed = true
+                                    onYChanged: cell.placed = true
+                                    Behavior on x {
+                                        enabled: grid.gliding && cell.placed
+                                        NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                                    }
+                                    Behavior on y {
+                                        enabled: grid.gliding && cell.placed
+                                        NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                                    }
+
+                                    width: grid.cellWidth
+                                    height: grid.cellHeight
+                                    // Over its neighbours, or they would cover
+                                    // the glow on two sides.
+                                    z: shownCard.current ? 1 : 0
+
+                                    WallpaperCard {
+                                        id: shownCard
+
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        wallpaper: cell.modelData
+                                        current: grid.activeFocus
+                                                 && cell.modelData.id === picker.ringOn
+                                        // A click moves the arrows here as well,
+                                        // so the two ways of walking the grid do
+                                        // not each keep a place of their own.
+                                        onChose: (id) => {
+                                            grid.forceActiveFocus();
+                                            picker.chooseOrApply(id);
+                                        }
+                                        onApplied: (id) => picker.apply(id)
+                                        ticked: picker.inPlaylist.indexOf(cell.modelData.id) >= 0
+                                        outdated: picker.outdated.indexOf(cell.modelData.id) >= 0
+                                        showTick: picker.picking
+                                        onTickAsked: picker.tick(cell.modelData.id)
+                                        canFavorite: Steamworks.available && picker.fromWorkshop(cell.modelData)
+                                        favorite: Steamworks.favorites.indexOf(cell.modelData.id) >= 0
+                                        onFavoriteAsked: Steamworks.favorite(cell.modelData.id, !favorite)
+                                    }
+                                }
+
+                                ScrollBar.vertical: Scroller {}
+                            }
                         }
 
                         Label {

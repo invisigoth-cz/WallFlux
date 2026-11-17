@@ -134,11 +134,33 @@ Rectangle {
     }
 
     implicitWidth: 300
-    // Shown by the Filters button, which is the only way in.
-    visible: false
+
+    /// Whether it is out. Shown by the Filters button, which is the only
+    /// way in.
+    property bool open: false
+
+    /// How far out it is, nought to one. It slides as the details panel
+    /// does: the width is what moves, and the grid beside it shrinks as a
+    /// picture while it does (see `gridArea` in Picker.qml).
+    property real slide: panel.open ? 1 : 0
+
+    Behavior on slide {
+        NumberAnimation {
+            duration: 220
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Layout.preferredWidth: Math.round(panel.implicitWidth * panel.slide)
+    // Away means away: a layout leaves no spacing for something invisible.
+    visible: panel.slide > 0
+    // The chips keep their full width and the moving edge cuts them off,
+    // so nothing in here reflows on the way.
+    clip: true
+
     // Every section folded each time the panel is shown.
-    onVisibleChanged: {
-        if (!panel.visible)
+    onOpenChanged: {
+        if (!panel.open)
             return;
         for (let i = 0; i < body.children.length; ++i) {
             if (body.children[i].chosenHere !== undefined)
@@ -152,8 +174,11 @@ Rectangle {
     radius: 8
 
     ColumnLayout {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.margins: 14
+        width: panel.implicitWidth - 28
         spacing: 12
 
         Flickable {

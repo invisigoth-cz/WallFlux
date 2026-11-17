@@ -8,6 +8,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The library's grid no longer reshuffles when a panel slides out.** The
+  details panel and the filter panel still take their room beside it, but
+  the grid keeps its columns and shrinks as one picture while a panel
+  slides, and grows back when it goes; it is laid out once rather than on
+  every frame of the slide, where it resized every card eleven times and
+  jumped a column at a time. Only where the cards would come out under 170
+  pixels across is there a column fewer, and then they glide to their new
+  places. The filter panel slides out too, where it used to appear at once.
+
 - **Settings and the README no longer promise the password once.** CachyOS
   asks for it again before installing a package built outside its
   repositories and the AUR, on purpose, so they say only that it is asked

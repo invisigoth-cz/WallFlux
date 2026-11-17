@@ -434,6 +434,25 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   settings show and the same one under `/sys/class/drm`. Checked against
   all three on this machine.
 
+- **A panel sliding out does not reflow the grid** (17 November, the user's
+  choice after trying a panel over the grid -- "the wallpapers must always
+  be seen" -- and one standing beside it for good -- an empty panel at
+  start). Both panels take their room beside the grid, and `gridArea` in
+  `Picker.qml` lays the grid out once, at `held`: the width it will have
+  when the panels have stopped, worked out from which are `open` rather
+  than read off the layout, which reads a width a frame stale when the
+  animation ends and laid the grid out twice. Meanwhile the grid is
+  `scale`d to the room there is, the scrollbar's 30 pixels left out of the
+  ratio so that the cards land where the new layout puts them, its height
+  divided by the scale so the rows below come up, and `cacheBuffer` keeps
+  those rows' pictures loaded. `columns` is counted off the width with no
+  panel out, so a panel shrinks the cards rather than moving them to other
+  rows -- under 170 across a column goes, and the cards glide (`gliding`,
+  a `Behavior` on x and y enabled for 300 ms, and only on a card the grid
+  has placed once, or a new one flies in from the corner). `contentY` is
+  scaled with the cell so the same rows stay in view. Measured in a
+  virtual KWin: opening the details panel laid the grid out 11 times
+  (5, 4, 3, 2 columns), now once at 5.
 - **A panel beside the grid saying what a wallpaper is.** A click opens
   it and a click on the same card puts it away again, in either tab; so
   does the cross in the picture's top right corner, back since 10 November
