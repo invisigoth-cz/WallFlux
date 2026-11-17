@@ -6,6 +6,13 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings and the README no longer promise the password once.** CachyOS
+  asks for it again before installing a package built outside its
+  repositories and the AUR, on purpose, so they say only that it is asked
+  for.
+
 ## [0.40.2] — 2026-11-17
 
 ### Added

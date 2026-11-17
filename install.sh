@@ -10,7 +10,7 @@
 # AUR account or helper is needed to build from it), then the PKGBUILD of the
 # newest WallFlux release, built with makepkg on this machine and installed
 # as an ordinary pacman package -- `sudo pacman -R wallflux` removes it.
-# It asks once whether to go ahead, and sudo for the password once; then it
+# It asks once whether to go ahead, and sudo asks for the password; then it
 # runs to the end, and starts the new WallFlux if the old one was running.
 # `--noconfirm` after it (`| bash -s -- --noconfirm`) asks nothing at all;
 # whatever is given there goes to pacman and makepkg alike.
@@ -59,7 +59,7 @@ main() {
     done
     if ((asked)); then
         local reply
-        printf '\nWallFlux is built on this computer, which takes a few minutes, and sudo asks\nfor your password once.\n\n'
+        printf '\nWallFlux is built on this computer, which takes a few minutes, and sudo asks\nfor your password.\n\n'
         local question="Install WallFlux $version?"
         [[ -z $installed ]] || question="Update WallFlux $installed to $version?"
         read -rp "$question [Y/n] " reply <"$answers"
@@ -67,8 +67,10 @@ main() {
         set -- --noconfirm "$@"
     fi
 
-    # The password once: sudo is kept from forgetting it for as long as the
-    # build runs, which can be longer than sudo remembers on its own.
+    # sudo is kept from forgetting the password for as long as the build
+    # runs, which can be longer than it remembers on its own. CachyOS asks
+    # again before installing a package from outside its repositories and
+    # the AUR, on purpose: that second question is the system's, and stays.
     sudo -v <"$answers"
     ( while sleep 50; do kill -0 "$$" 2>/dev/null || exit 0; sudo -n -v 2>/dev/null || exit 0; done ) &
     keeper=$!

@@ -509,8 +509,9 @@ Item {
                                 return qsTr("Konsole could not be opened. To update, paste this line "
                                             + "into a terminal.");
                             return qsTr("WallFlux %1 is out; this is %2. Update opens a terminal, asks "
-                                        + "once and for your password, builds the new version and starts "
-                                        + "it again. Or paste the line into a terminal yourself.")
+                                        + "whether to go ahead, asks for your password, builds the new "
+                                        + "version and starts it again. Or paste the line into a terminal "
+                                        + "yourself.")
                                       .arg(Updater.latest).arg(Application.version);
                         case Updater.Failed:
                             return qsTr("That did not work: %1").arg(Updater.detail);

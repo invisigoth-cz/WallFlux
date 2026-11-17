@@ -302,12 +302,17 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   `/dev/tty`; `| bash -s -- --noconfirm` asks nothing, which is how it is
   tested in a clean `archlinux` container. It asks one question itself and
   then tells pacman and makepkg `--noconfirm`; keeps sudo's password alive
-  while it builds (`sudo -v` and a loop), so it is asked for once; and if a
+  while it builds (`sudo -v` and a loop); and if a
   `wallflux` of the user's is running, ends it and starts the new one with
   `setsid -f`. **Update** in Settings is `Updater::install()`: that line in
   `konsole -e bash -c`, started detached so it outlives the WallFlux it
   ends, and held open at the end for a key; `Updater.command` is the line,
   in one place. Released 0.40.1 and earlier have only the line and Copy.
+  **On CachyOS the password is asked for twice**, after the question and
+  again before the package is installed: the system's own check on a
+  package from outside its repositories and the AUR. The user's word of
+  17 November: it stays, nothing is to get round it, and nothing is to
+  promise the password once.
   **The trap's variables are global**: it runs after `main` has returned,
   and with `local` ones 0.40.1's script died on `work: unbound variable`
   and left the build behind. Before 17 November the advice was

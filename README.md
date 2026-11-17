@@ -67,8 +67,8 @@ The script ([install.sh](install.sh)) installs Valve's Steamworks SDK from
 the AUR if it is missing -- the Steam Workshop tab needs it, and no AUR
 account or helper is needed for it -- and then builds the newest release of
 WallFlux on your machine and installs it as an ordinary pacman package. The
-build takes a few minutes. It asks once whether to go ahead and once for
-your password, and then runs to the end.
+build takes a few minutes. It asks whether to go ahead, asks for your
+password, and then runs to the end.
 
 WallFlux is then in the application menu. Start it and its icon appears in
 the panel; click the icon to choose a wallpaper.
