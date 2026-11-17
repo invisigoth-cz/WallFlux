@@ -211,6 +211,28 @@ Item {
         // window belonging to one would be dragged down there with it.
         transientParent: null
         onChose: (id) => Wallpapers.select(id)
+
+        /// Whether peeking at the desktop put this window away, and so
+        /// whether it comes back when the peeking stops. A window that was
+        /// shut or minimised already stays as it was.
+        property bool tucked: false
+
+        // Out of the way while somebody peeks at the desktop, as every
+        // other program's windows are -- KWin leaves this one, see
+        // `ScreenCover.tuckAway`.
+        Connections {
+            target: ScreenCover
+            function onShowingDesktopChanged() {
+                if (ScreenCover.showingDesktop) {
+                    picker.tucked = picker.visible && picker.visibility !== Window.Minimized;
+                    if (picker.tucked)
+                        ScreenCover.tuckAway(true);
+                } else if (picker.tucked) {
+                    picker.tucked = false;
+                    ScreenCover.tuckAway(false);
+                }
+            }
+        }
     }
 
     // ---- Transitions ---------------------------------------------------

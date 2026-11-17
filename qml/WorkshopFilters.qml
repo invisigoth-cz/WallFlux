@@ -181,16 +181,7 @@ Rectangle {
                 onClicked: panel.clear()
             }
 
-            Label {
-                Layout.fillWidth: true
-                // Worth saying, because it is the opposite of what a row of
-                // chips usually means: Steam requires every tag given, so
-                // two picture sizes at once match nothing at all.
-                text: qsTr("Everything ticked has to match")
-                font.pixelSize: 11
-                opacity: 0.55
-                wrapMode: Text.WordWrap
-            }
+            Item { Layout.fillWidth: true }
         }
     }
 }

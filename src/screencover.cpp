@@ -173,8 +173,28 @@ void ScreenCover::setShowingDesktop(bool showing)
 {
     if (!fromKWin(*this))
         return;
+    const bool changed = showing != m_showingDesktop;
     m_showingDesktop = showing;
     settle();
+    if (changed)
+        emit showingDesktopChanged();
+}
+
+void ScreenCover::tuckAway(bool away)
+{
+    // Only normal windows: the wallpaper's own surfaces are this program's
+    // too, and are not KWin's to minimise.
+    const QString source = QStringLiteral(
+        "for (const w of workspace.windowList()) {\n"
+        "    if (w.pid === %1 && w.normalWindow && w.minimized !== %2)\n"
+        "        w.minimized = %2;\n"
+        "}\n")
+        .arg(QCoreApplication::applicationPid())
+        .arg(away ? QStringLiteral("true") : QStringLiteral("false"));
+    qCInfo(lcCover) << (away ? "putting the window away while the desktop is shown"
+                             : "bringing the window back");
+    if (!m_tuck.load(source))
+        qCWarning(lcCover) << "KWin would not" << (away ? "minimise" : "bring back") << "the window";
 }
 
 void ScreenCover::settle()

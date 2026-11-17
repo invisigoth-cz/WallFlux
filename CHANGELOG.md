@@ -18,7 +18,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   places. The filter panel slides out too, where it used to appear at once.
   The Steam tab's Workshop grid does the same.
 - **The filters' scrollbar shows only when there is something to scroll**,
-  and Clear selection sits at the left under the chips, in both tabs.
+  and Clear selection sits at the left under the chips, in both tabs. The
+  Steam tab's line beside it is gone.
+
+### Fixed
+
+- **Peek at Desktop puts WallFlux's window away like any other.** It used to
+  stay on screen while every other window went, and now it is minimised to
+  the panel and comes back when the peeking stops -- unless it was shut or
+  minimised already.
 
 - **Settings and the README no longer promise the password once.** CachyOS
   asks for it again before installing a package built outside its

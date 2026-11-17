@@ -33,6 +33,9 @@ class ScreenCover : public QObject, protected QDBusContext
     /// Whether another program's window has the keyboard, however small it
     /// is -- Wallpaper Engine's "other application focused".
     Q_PROPERTY(bool focused READ isFocused NOTIFY focusedChanged)
+    /// Whether KWin is showing the desktop -- "Peek at Desktop" in the panel,
+    /// or the Show Desktop shortcut.
+    Q_PROPERTY(bool showingDesktop READ isShowingDesktop NOTIFY showingDesktopChanged)
 
 public:
     explicit ScreenCover(QObject *parent = nullptr);
@@ -40,6 +43,14 @@ public:
 
     bool isCovered() const { return m_covered; }
     bool isFocused() const { return m_focused; }
+    bool isShowingDesktop() const { return m_showingDesktop; }
+
+    /// Minimises this program's own windows, or brings them back, through
+    /// KWin. Peeking at the desktop leaves them where they are: KWin keeps
+    /// a window that belongs to the same program as a desktop, and the
+    /// wallpaper's surface is one to it. And a Wayland program can minimise
+    /// itself but not bring itself back, so KWin does both.
+    Q_INVOKABLE void tuckAway(bool away);
 
 public slots:
     /// Called by the KWin script over D-Bus. Not meant for QML, which reads
@@ -60,6 +71,7 @@ public slots:
 signals:
     void coveredChanged();
     void focusedChanged();
+    void showingDesktopChanged();
 
 private:
     void watchShowDesktop(QDBusConnection &bus);
@@ -70,6 +82,7 @@ private:
 
     /// The script that watches the windows, for as long as this lives.
     KWinScript m_script{QStringLiteral("wallflux-screencover")};
+    KWinScript m_tuck{QStringLiteral("wallflux-tuck")};
     /// What the two sources say, and the answer the two of them make.
     bool m_windowCovers = false;
     bool m_showingDesktop = false;

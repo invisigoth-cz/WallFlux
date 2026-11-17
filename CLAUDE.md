@@ -1993,6 +1993,22 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   wallpaper is the thing somebody asked to look at. `workspace.showingDesktop`
   is `undefined` in the scripting API; KWin announces it on D-Bus instead, as
   `org.kde.KWin.showingDesktopChanged`, which is what `ScreenCover` listens to.
+- **KWin does not put WallFlux's window away when the desktop is shown.**
+  The wallpaper's layer-shell scope is `desktop`, so KWin types that surface
+  a desktop window, and a window of the same program belongs to the desktop
+  as far as Peek at Desktop is concerned: the picker stayed while Firefox
+  and the rest went. Changing the scope was weighed and not done -- with
+  any name KWin does not know the surface is a normal window, which the
+  cover script's `covers()` would count as covering itself, and which might
+  turn up in the Overview. So `Main.qml` hears `ScreenCover.showingDesktop`
+  and has KWin minimise the picker and bring it back
+  (`ScreenCover::tuckAway`, a one-off script on `w.pid`): a Wayland client
+  can minimise itself but cannot bring itself back. Only a picker that was
+  open is brought back. **To test it, use the shortcut**, `qdbus6
+  org.kde.kglobalaccel /component/kwin invokeShortcut "Show Desktop"`:
+  `org.kde.KWin.showDesktop true` over D-Bus is undone by KWin within 0.3 s
+  here, WallFlux running or not, and reads as the feature not working.
+
 - **`loadScript` with a name KWin already has reads nothing.** It hands back
   the script that is loaded, so after a restart the compositor is left running
   one that calls a bus name nobody answers to any more. Unload first, always.
