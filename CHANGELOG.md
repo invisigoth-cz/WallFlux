@@ -6,6 +6,14 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Programs WallFlux starts get the desktop's language again.** Valve's
+  Steam library sets `LC_ALL=C` in WallFlux's environment when it connects
+  for the Steam tab, and everything started afterwards inherited it -- the
+  terminal an update runs in, and the WallFlux started at its end. WallFlux
+  puts the setting back as it was right after connecting.
+
 ## [0.41.1] — 2026-11-17
 
 ### Fixed

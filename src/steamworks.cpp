@@ -4,6 +4,7 @@
 
 #include "steamworks.h"
 
+#include <QScopeGuard>
 #include <QRegularExpression>
 #include "wallpapercore.h"
 
@@ -301,6 +302,20 @@ bool Steamworks::open()
     // application is asking, and asks the Steam client to relaunch us.
     qputenv("SteamAppId", WallpaperEngineAppId);
     qputenv("SteamGameId", WallpaperEngineAppId);
+
+    // Valve's steamclient.so sets LC_ALL=C in this process's environment as
+    // it loads -- found with an LD_PRELOAD logging every setenv -- and every
+    // program started from here after it inherited that: the terminal an
+    // update runs in, and through it WallFlux started again at its end, in
+    // C whatever the desktop's language. Put back as it was, set or not.
+    const bool hadLcAll = qEnvironmentVariableIsSet("LC_ALL");
+    const QByteArray lcAll = qgetenv("LC_ALL");
+    const auto putBack = qScopeGuard([&] {
+        if (hadLcAll)
+            qputenv("LC_ALL", lcAll);
+        else
+            qunsetenv("LC_ALL");
+    });
 
     // Asked first because it is cheap: without Steam, InitSafe still loads
     // steamclient.so and takes 1.3 s of this thread to say no -- measured,

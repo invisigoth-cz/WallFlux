@@ -2407,6 +2407,17 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   at 24 and the tags at 8183, a callback envelope is 20 bytes with the
   payload pointer at 8, and the structs are packed to 4. Get one wrong and
   the build stops rather than reading somebody else's bytes.
+- **Steam's library sets `LC_ALL=C` in our environment.** `steamclient.so`
+  calls `setenv("LC_ALL", "C")` as `SteamAPI_InitSafe` loads it -- found
+  with an `LD_PRELOAD` logging every `setenv` with its caller, 17 November.
+  Our own locale is untouched (Qt has called `setlocale` by then), but every
+  child inherits it: the Konsole of Update, the makepkg in it, and the
+  WallFlux it starts at the end, which then sorted by code point. A
+  restart from the menu did not help, since the new copy connects to
+  Steam again. `Steamworks::open` puts `LC_ALL` back, set or unset, with a
+  scope guard round the init. `pactl` prints English whatever the locale
+  (checked under `cs_CZ`), so nothing here leaned on the C.
+
 - **`SteamAPI_Init` is not an exported symbol** -- it is inline in Valve's
   header and calls `SteamInternal_SteamAPI_Init`. Through dlopen what there
   is to call is `SteamAPI_InitSafe`, with `SteamAPI_GetHSteamUser` and
