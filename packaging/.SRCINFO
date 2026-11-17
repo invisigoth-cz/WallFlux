@@ -1,6 +1,6 @@
 pkgbase = wallflux
 	pkgdesc = Plays the Wallpaper Engine wallpapers you already own
-	pkgver = 0.40.0
+	pkgver = 0.40.1
 	pkgrel = 1
 	url = https://github.com/invisigoth-cz/WallFlux
 	arch = x86_64
@@ -25,7 +25,7 @@ pkgbase = wallflux
 	depends = steamworks-sdk
 	optdepends = steam: to install Wallpaper Engine and fetch wallpapers from its workshop
 	options = !lto
-	source = wallflux::git+https://github.com/invisigoth-cz/WallFlux.git#tag=v0.40.0
+	source = wallflux::git+https://github.com/invisigoth-cz/WallFlux.git#tag=v0.40.1
 	sha256sums = SKIP
 
 pkgname = wallflux
