@@ -1216,6 +1216,20 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Vyšel WallFlux %1, tohle je %2. Aktualizovat otevře terminál, zeptá se, zda pokračovat, řekne si o heslo, sestaví novou verzi a znovu ji spustí. Nebo vlož řádek do terminálu sám.</translation>
     </message>
     <message>
+        <location filename="../qml/SettingsView.qml" line="1154"/>
+        <source>Updates of WallFlux</source>
+        <translation>Aktualizace WallFluxu</translation>
+    </message>
+    <message>
+        <location filename="../qml/SettingsView.qml" line="1155"/>
+        <source>• The i in the footer says which version this is. It turns yellow when a newer one is out, and a click on it opens General.
+• Update there opens a terminal: it asks whether to go ahead and asks for your password, builds the new version on this computer, which takes a few minutes, and starts WallFlux again.
+• Check for updates (General) switches the asking off.</source>
+        <translation>• Ikona i v patičce říká, jaká verze je nainstalovaná. Když vyjde novější, zežloutne a kliknutí na ni otevře Obecné.
+• Aktualizovat tam otevře terminál: zeptá se, zda pokračovat, řekne si o heslo, sestaví novou verzi na tomto počítači, což trvá pár minut, a WallFlux znovu spustí.
+• Kontrolovat aktualizace (Obecné) dotazování vypne.</translation>
+    </message>
+    <message>
         <source>WallFlux %1 is out; this is %2. Installing asks for your password, and WallFlux starts again on its own.</source>
         <translation type="vanished">Vyšel WallFlux %1, toto je %2. Instalace se zeptá na heslo a WallFlux se pak sám znovu spustí.</translation>
     </message>
@@ -1289,7 +1303,18 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Na chvíli spustí každou tapetu v knihovně, neviditelně a potichu, a označí ji Funguje, Drobné potíže nebo Nefunkční. Po stažení nových tapet ho spusť znovu.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1119"/>
+        <location filename="../qml/SettingsView.qml" line="1091"/>
+        <source>• A click opens this window.
+• A right click pauses and resumes the wallpaper, goes to the next or previous wallpaper -- of the playlist, if one is running, and otherwise in the library&apos;s order -- mutes, offers the last five wallpapers and quits.
+• With Minimise on close (General), closing this window leaves WallFlux running in the tray.
+• Peek at Desktop in the panel puts this window away with the others and brings it back afterwards.</source>
+        <translation>• Klik otevře toto okno.
+• Pravým klikem tapetu pozastavíš a pustíš, přejdeš na další nebo předchozí tapetu (playlistu, pokud běží, jinak v pořadí knihovny), vypneš zvuk, vybereš jednu z posledních pěti tapet nebo WallFlux ukončíš.
+• Se zapnutým Při zavření minimalizovat (Obecné) zůstane WallFlux po zavření okna běžet v liště.
+• Nakouknout na pracovní plochu v panelu toto okno schová spolu s ostatními a pak ho zase vrátí.</translation>
+    </message>
+    <message>
+        <location filename="../qml/SettingsView.qml" line="1121"/>
         <source>• The wallpaper goes quiet while another program plays sound, and quiet and still under a maximised window, while you work in another program or while the screens are off or locked -- each as Audio and Performance say: keep playing, mute, pause or stop and free its memory. It comes back by itself.
 • On a battery it can drop to Low quality and stop when the battery runs low (Performance).
 • The speaker in the status bar mutes it.</source>
@@ -1388,19 +1413,19 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 • Reproduktor ve stavovém řádku ji ztlumí.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1132"/>
+        <location filename="../qml/SettingsView.qml" line="1134"/>
         <source>• In the library&apos;s panel, under the tags: the colours, sliders and switches its author offered. A change shows at once; Defaults puts them back.
 • Quality in the panel sets this one wallpaper apart from Performance in Settings -- a heavy scene on Low while the rest stay High.</source>
         <translation>• V panelu knihovny pod štítky: barvy, posuvníky a přepínače, které autor nabídl. Změna se projeví hned; Výchozí je vrátí.
 • Kvalita v panelu nastaví tuhle jednu tapetu jinak než Výkon v Nastavení – těžká scéna na Nízké, zatímco ostatní zůstanou na Vysoké.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1141"/>
+        <location filename="../qml/SettingsView.qml" line="1143"/>
         <source>Compatibility</source>
         <translation>Kompatibilita</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1142"/>
+        <location filename="../qml/SettingsView.qml" line="1144"/>
         <source>• The panel says how a wallpaper plays here: Works, Minor issues (something in it is not drawn yet) or Broken. It is filled in the first time the wallpaper plays.
 • Test the library (Performance) tries every wallpaper at once, unseen and unheard; run it again after downloading new ones.
 • Filters › Compatibility finds them by it.</source>
@@ -1454,38 +1479,37 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation>Ikona v liště</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1091"/>
         <source>• A click opens this window.
 • A right click pauses and resumes the wallpaper, goes to the next or previous wallpaper -- of the playlist, if one is running, and otherwise in the library&apos;s order -- mutes, offers the last five wallpapers and quits.
 • With Minimise on close (General), closing this window leaves WallFlux running in the tray.</source>
-        <translation>• Klik otevře toto okno.
+        <translation type="vanished">• Klik otevře toto okno.
 • Pravým klikem tapetu pozastavíš a pustíš, přejdeš na další nebo předchozí tapetu (playlistu, pokud běží, jinak v pořadí knihovny), vypneš zvuk, vybereš jednu z posledních pěti tapet nebo WallFlux ukončíš.
 • Se zapnutým Při zavření minimalizovat (Obecné) zůstane WallFlux po zavření okna běžet v liště.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1101"/>
+        <location filename="../qml/SettingsView.qml" line="1103"/>
         <source>The keyboard</source>
         <translation>Klávesnice</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1102"/>
+        <location filename="../qml/SettingsView.qml" line="1104"/>
         <source>• Arrows walk the library&apos;s grid; Enter puts the wallpaper on the desktop; Space ticks it for a playlist; Delete removes it, after asking.
 • Escape closes whatever popup is open.</source>
         <translation>• Šipkami se pohybuješ po mřížce knihovny; Enter nastaví tapetu na plochu; Mezerník ji zaškrtne do playlistu; Delete ji po potvrzení odebere.
 • Escape zavře otevřené vyskakovací okno.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1110"/>
+        <location filename="../qml/SettingsView.qml" line="1112"/>
         <source>Screens</source>
         <translation>Obrazovky</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1111"/>
+        <location filename="../qml/SettingsView.qml" line="1113"/>
         <source>• The Displays tab shows your monitors as they are arranged. Switch on each one the wallpaper should be on; the same wallpaper plays on all of them.</source>
         <translation>• Karta Obrazovky ukazuje monitory tak, jak je máš rozmístěné. Zapni ty, na kterých má tapeta být; na všech hraje stejná tapeta.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1118"/>
+        <location filename="../qml/SettingsView.qml" line="1120"/>
         <source>Sound and pausing</source>
         <translation>Zvuk a pozastavení</translation>
     </message>
@@ -1496,7 +1520,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 • Reproduktor ve stavovém řádku vypne zvuk.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1131"/>
+        <location filename="../qml/SettingsView.qml" line="1133"/>
         <source>A wallpaper&apos;s own settings</source>
         <translation>Vlastní nastavení tapety</translation>
     </message>
@@ -1507,7 +1531,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 • Kvalita v panelu nastaví jen tuto tapetu jinak, než říká Výkon / Zobrazení v Nastavení – těžká scéna na Nízkou, zatímco ostatní zůstanou na Vysoké.</translation>
     </message>
     <message>
-        <location filename="../qml/SettingsView.qml" line="1206"/>
+        <location filename="../qml/SettingsView.qml" line="1219"/>
         <source>Desktop&apos;s</source>
         <translation>Systémové</translation>
     </message>

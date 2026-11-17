@@ -1093,7 +1093,9 @@ Item {
                                 + "previous wallpaper -- of the playlist, if one is running, and "
                                 + "otherwise in the library's order -- mutes, offers the last five wallpapers and quits.\n"
                                 + "• With Minimise on close (General), closing this window leaves "
-                                + "WallFlux running in the tray.")
+                                + "WallFlux running in the tray.\n"
+                                + "• Peek at Desktop in the panel puts this window away with the others "
+                                + "and brings it back afterwards.")
                 }
 
                 Guide {
@@ -1145,6 +1147,17 @@ Item {
                                 + "• Test the library (Performance) tries every wallpaper at once, "
                                 + "unseen and unheard; run it again after downloading new ones.\n"
                                 + "• Filters › Compatibility finds them by it.")
+                }
+
+                Guide {
+                    glyph: "update-none"
+                    title: qsTr("Updates of WallFlux")
+                    about: qsTr("• The i in the footer says which version this is. It turns yellow "
+                                + "when a newer one is out, and a click on it opens General.\n"
+                                + "• Update there opens a terminal: it asks whether to go ahead and asks "
+                                + "for your password, builds the new version on this computer, which "
+                                + "takes a few minutes, and starts WallFlux again.\n"
+                                + "• Check for updates (General) switches the asking off.")
                 }
             }
         }

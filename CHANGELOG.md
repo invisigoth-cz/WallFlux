@@ -6,6 +6,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.1] — 2026-11-17
+
+### Changed
+
+- **Settings › Controls tells about updates and Peek at Desktop**: a card of
+  its own on the yellow `i` and Update, and a line under the tray icon on
+  the window going away while peeking. The rest was checked against what
+  WallFlux does now and stands.
+
 ## [0.42.0] — 2026-11-17
 
 ### Changed
@@ -1728,7 +1737,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.1...HEAD
+[0.42.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.3...v0.42.0
 [0.41.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.2...v0.41.3
 [0.41.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.1...v0.41.2
