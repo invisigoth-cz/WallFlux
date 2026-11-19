@@ -79,6 +79,16 @@ Rectangle {
         }
     }
 
+    /// The least the list is worth standing the picture still for: four or
+    /// five of its rows.
+    readonly property int roomForTheList: 200
+    /// Whether the window is too short for the picture to stand still: it
+    /// then scrolls with the list. Worked out from the column's height,
+    /// which the window sets, and from what the picture, the name and the
+    /// buttons ask for -- none of which this changes, so it cannot loop.
+    readonly property bool short: column.height - head.implicitHeight - doing.implicitHeight
+                                  - 2 * column.spacing - 16 < panel.roomForTheList
+
     implicitWidth: 360
     Layout.preferredWidth: Math.round(panel.implicitWidth * panel.slide)
     // Away means away: a layout leaves no spacing for something invisible,
@@ -107,77 +117,14 @@ Rectangle {
         width: panel.implicitWidth - 36
         spacing: 14
 
-        PreviewTile {
-            // Narrower than the panel, and centred.
-            //
-            // Sixteen by nine, where the grid's cards are squares: this
-            // is the one place a whole preview is looked at, and a square
-            // here would crop a third of it off for nothing. A tile takes
-            // the shape it is given, so both of these are read.
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: Math.min(column.width, 280)
-            Layout.preferredHeight: Math.round(Math.min(column.width, 280) * 9 / 16)
-            preview: panel.preview
-            // The name goes under this in its own type, where it can wrap.
-            label: ""
-            clickable: false
+        // Where the picture and the name stand while there is room for them
+        // to stand still; see `short`.
+        Item {
+            id: atTop
 
-            Heart {
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.margins: 8
-                visible: panel.canFavorite
-                on: panel.favorite
-                onAsked: panel.favoriteAsked()
-            }
-
-            // The cross, drawn as the heart is: a dark disc that reads on
-            // any picture.
-            Rectangle {
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: 8
-                implicitWidth: 26
-                implicitHeight: 26
-                radius: width / 2
-                color: shut.containsMouse ? "#cc000000" : "#99000000"
-                Behavior on color { ColorAnimation { duration: 120 } }
-
-                IconImage {
-                    anchors.centerIn: parent
-                    width: 14
-                    height: 14
-                    name: "window-close"
-                    color: "#ffffff"
-                    scale: shut.pressed ? 0.85 : 1
-                    Behavior on scale { NumberAnimation { duration: 90 } }
-                }
-
-                MouseArea {
-                    id: shut
-
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: panel.closeAsked()
-                }
-
-                ToolTip.visible: shut.containsMouse
-                ToolTip.delay: 600
-                ToolTip.text: qsTr("Close")
-            }
-        }
-
-        Label {
             Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            text: panel.title
-            textFormat: Text.PlainText   // off the workshop: never HTML
-            font.pixelSize: 15
-            font.weight: Font.Bold
-            wrapMode: Text.Wrap
-            maximumLineCount: 3
-            elide: Text.ElideRight
+            Layout.preferredHeight: head.implicitHeight
+            visible: !panel.short
         }
 
         // The picture and the name stay put; everything under them scrolls.
@@ -187,12 +134,19 @@ Rectangle {
         // photograph is most of what the panel has, so the content was
         // always taller than the room. What is worth scrolling is the list,
         // and the author sitting over it.
+        //
+        // Unless the window is short. At 1366x768 the panel is about 380
+        // high, and the picture, the name and the buttons took all of it:
+        // the list was squeezed to ten pixels and the wallpaper seemed to
+        // have no properties at all (19 November, on the laptop). So where
+        // the list would get less than `roomForTheList`, the picture and the
+        // name scroll with it and the buttons still stay put.
         Flickable {
             Layout.fillWidth: true
             Layout.fillHeight: true
             // A clear step down the page from the name to the small print,
             // on top of the column's own spacing.
-            Layout.topMargin: 16
+            Layout.topMargin: panel.short ? 0 : 16
 
             contentWidth: width
             contentHeight: told.implicitHeight
@@ -211,6 +165,16 @@ Rectangle {
                 // bar was against the ends of the values.
                 width: parent.width - 30
                 spacing: 0
+
+                // Where the picture and the name go in a short window, with
+                // the same step down to the list as above.
+                Item {
+                    id: inList
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: head.implicitHeight + 16
+                    visible: panel.short
+                }
 
                 // Who made it, and the way to the rest of their work.
                 // Nothing at all where nobody knows, rather than a row
@@ -411,6 +375,89 @@ Rectangle {
 
             Layout.fillWidth: true
             spacing: 6
+        }
+    }
+
+    // The picture and the name, as one: they stand in `atTop`, or in
+    // `inList` in a short window, where they scroll with the list.
+    ColumnLayout {
+        id: head
+
+        parent: panel.short ? inList : atTop
+        width: parent.width
+        spacing: 14
+
+        PreviewTile {
+            // Narrower than the panel, and centred.
+            //
+            // Sixteen by nine, where the grid's cards are squares: this
+            // is the one place a whole preview is looked at, and a square
+            // here would crop a third of it off for nothing. A tile takes
+            // the shape it is given, so both of these are read.
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: Math.min(head.width, 280)
+            Layout.preferredHeight: Math.round(Math.min(head.width, 280) * 9 / 16)
+            preview: panel.preview
+            // The name goes under this in its own type, where it can wrap.
+            label: ""
+            clickable: false
+
+            Heart {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.margins: 8
+                visible: panel.canFavorite
+                on: panel.favorite
+                onAsked: panel.favoriteAsked()
+            }
+
+            // The cross, drawn as the heart is: a dark disc that reads on
+            // any picture.
+            Rectangle {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 8
+                implicitWidth: 26
+                implicitHeight: 26
+                radius: width / 2
+                color: shut.containsMouse ? "#cc000000" : "#99000000"
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                IconImage {
+                    anchors.centerIn: parent
+                    width: 14
+                    height: 14
+                    name: "window-close"
+                    color: "#ffffff"
+                    scale: shut.pressed ? 0.85 : 1
+                    Behavior on scale { NumberAnimation { duration: 90 } }
+                }
+
+                MouseArea {
+                    id: shut
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: panel.closeAsked()
+                }
+
+                ToolTip.visible: shut.containsMouse
+                ToolTip.delay: 600
+                ToolTip.text: qsTr("Close")
+            }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: panel.title
+            textFormat: Text.PlainText   // off the workshop: never HTML
+            font.pixelSize: 15
+            font.weight: Font.Bold
+            wrapMode: Text.Wrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
         }
     }
 }
