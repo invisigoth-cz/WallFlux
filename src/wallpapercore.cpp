@@ -664,7 +664,19 @@ QList<Wallpaper> WallpaperCore::scan(const QStringList &steamRoots)
 {
     QList<Wallpaper> found;
 
-    for (const QString &root : steamRoots) {
+    // One id, once. Wallpaper Engine installed into another library leaves
+    // its workshop folder behind and Steam downloads every item again beside
+    // the app (19 November, the laptop: 57 of 70 in both). Steam keeps the
+    // copy in the library that holds the app, so that one is read first and
+    // a later one of the same id is passed over.
+    QStringList libraries = steamRoots;
+    std::ranges::stable_partition(libraries, [](const QString &root) {
+        return QFile::exists(root + QLatin1StringView("/steamapps/appmanifest_")
+                             + WallpaperEngineAppId + QLatin1StringView(".acf"));
+    });
+    QSet<QString> seen;
+
+    for (const QString &root : libraries) {
         QDir content(root + QLatin1StringView("/steamapps/workshop/content/")
                      + WallpaperEngineAppId);
         if (!content.exists())
@@ -675,10 +687,13 @@ QList<Wallpaper> WallpaperCore::scan(const QStringList &steamRoots)
         const QStringList folders =
             content.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
         for (const QString &folder : folders) {
+            if (seen.contains(folder))
+                continue;
             std::optional<Wallpaper> wallpaper = readWallpaper(QDir(content.filePath(folder)));
             if (!wallpaper)
                 continue;
             std::tie(wallpaper->installedAt, wallpaper->latestAt) = times.value(folder);
+            seen.insert(folder);
             found.append(*wallpaper);
         }
     }

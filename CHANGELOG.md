@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A wallpaper's panel shows its properties on a short screen.** At
+  1366x768 the picture, the name and the buttons took the whole panel and
+  the list under them -- author, facts, tags and the wallpaper's own
+  settings -- was squeezed to nothing. Where the list would get less than
+  200 pixels, the picture and the name now scroll with it; the buttons stay
+  put. Taller screens draw the panel exactly as before.
+- **A wallpaper in two Steam libraries is listed once.** Wallpaper Engine
+  installed into another library leaves its workshop folder behind and
+  Steam downloads every wallpaper again beside it, and both copies were
+  listed. The copy in the library that holds Wallpaper Engine is the one
+  shown.
+
 ## [0.42.1] — 2026-11-17
 
 ### Changed

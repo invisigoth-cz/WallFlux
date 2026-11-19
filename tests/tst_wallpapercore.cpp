@@ -73,6 +73,10 @@ class TestWallpaperCore : public QObject
 
 private slots:
     void findsALibraryOnAnotherDrive();
+    /// Wallpaper Engine moved to another library leaves its workshop
+    /// behind, and Steam downloads it all again beside the app: one id in
+    /// two folders, shown once, from where Wallpaper Engine is.
+    void showsAWallpaperInTwoLibrariesOnce();
     void leavesOutWhatOnlyEastAsiaReads();
     void putsLettersBeforeDigitsBeforeTheRest();
     void readsAConditionWithoutRunningIt();
@@ -161,6 +165,27 @@ void TestWallpaperCore::findsALibraryOnAnotherDrive()
     const QList<Wallpaper> found = WallpaperCore::scan(roots);
     QCOMPARE(found.size(), 1);
     QCOMPARE(found.at(0).title, QStringLiteral("Far away"));
+}
+
+void TestWallpaperCore::showsAWallpaperInTwoLibrariesOnce()
+{
+    QTemporaryDir left;
+    QTemporaryDir now;
+    const QByteArray page = R"({"title":"Twice","type":"web","file":"index.html"})";
+    makeWallpaper(left.path(), QStringLiteral("7"), page, {QStringLiteral("index.html")});
+    makeWallpaper(left.path(), QStringLiteral("8"),
+                  R"({"title":"Only here","type":"web","file":"index.html"})",
+                  {QStringLiteral("index.html")});
+    makeWallpaper(now.path(), QStringLiteral("7"), page, {QStringLiteral("index.html")});
+    QFile manifest(now.path() + QStringLiteral("/steamapps/appmanifest_431960.acf"));
+    QVERIFY(manifest.open(QIODevice::WriteOnly));
+    manifest.close();
+
+    const QList<Wallpaper> found = WallpaperCore::scan({left.path(), now.path()});
+    QCOMPARE(found.size(), 2);
+    QCOMPARE(found.at(0).title, QStringLiteral("Only here"));
+    QCOMPARE(found.at(1).title, QStringLiteral("Twice"));
+    QVERIFY(found.at(1).source.toLocalFile().startsWith(now.path() + QLatin1Char('/')));
 }
 
 void TestWallpaperCore::drawsAPresetAsTheWallpaperItSitsOn()
