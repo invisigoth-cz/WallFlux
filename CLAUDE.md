@@ -2771,9 +2771,14 @@ registering there is no longer to be reminded of.
 - **The grid**, to be optimised.
 - **WallFlux itself, checked**: speed, size, installing, uninstalling,
   what it takes of the machine.
-- **Scenes on the laptop** (AMD A8-6410, Radeon R5, 2014): only videos and
-  pages play there, no scene; the cause is not known -- its log, `glxinfo
-  -B` and the compatibility test, with the user.
+- **On the laptop** (AMD A8-6410, Radeon R5, 2014, 1366x768): the battery
+  and a second monitor, with the user. **Its scenes are solved** (19
+  November): Wallpaper Engine itself was not installed there, so no scene
+  had its stock shaders and all 42 graded Broken ("nothing could be
+  drawn"); installed, all 42 grade Works and DOOM plays on Medium and Low.
+  Radeonsi with OpenGL 4.6 was never the trouble. 0.42.2 was released from
+  the laptop with two things found there: the details panel on a short
+  screen, and wallpapers listed twice from two Steam libraries.
 - **SCP Terminal Lockdown with following the mouse off** gets the unknown
   mouse's `-10` and shows a red copy of its bar; what Wallpaper Engine hands
   then was not found.
@@ -2792,8 +2797,8 @@ filters' sections in one order (0.39.2), the three wallpapers' minor issues
      WallFlux goes to the AUR as `wallflux`, built from the tag, and the
      updater only says a new version is out.
    - **Trying it on the laptop** (the user's, with help asked for): a
-     battery and several monitors there; then the repository public and an
-     update installed end to end. Properties on a web wallpaper changing
+     battery and several monitors there -- still to do; the repository is
+     public and updates have been installed end to end. Properties on a web wallpaper changing
      live and pausing for another program's focus were confirmed by eye on
      10 November.
 
