@@ -53,6 +53,12 @@ bool Desktop::asWallpaper(QQuickWindow *window)
     // one as a desktop rather than as a panel.
     layer->setScope(QStringLiteral("desktop"));
 
+    // Named outright. Left to QWindow::screen(), which is read only when the
+    // surface is made, every window landed on the screen its position (0,0)
+    // falls on -- the first one -- whichever screen QML had given it: on a
+    // laptop with a monitor beside it, both surfaces lay on the laptop's.
+    layer->setScreen(window->screen());
+
     qCInfo(lcDesktop) << "wallpaper surface asked for on"
                       << (window->screen() ? window->screen()->name() : QStringLiteral("no screen"));
     return true;
