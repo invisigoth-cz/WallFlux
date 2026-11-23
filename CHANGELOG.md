@@ -6,6 +6,21 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.3] — 2026-11-23
+
+### Fixed
+
+- **A wallpaper reaches a second monitor.** Every screen's surface was put
+  on the first screen, so a laptop with a monitor beside it showed the
+  wallpaper on the laptop only, whatever the Displays tab said. Each
+  surface now tells the compositor which screen it is for -- however many
+  there are.
+- **A window covering one screen leaves the wallpaper going on the others.**
+  A maximised window on the laptop paused it on the monitor beside it too,
+  where it was in plain view. It stands still, goes quiet or stops as
+  Settings say only when every screen it is on is covered. Settings ›
+  Controls says so under Screens.
+
 ## [0.42.2] — 2026-11-19
 
 ### Fixed
@@ -1753,7 +1768,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.3...HEAD
+[0.42.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.41.3...v0.42.0

@@ -438,6 +438,15 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   --virtual --output-count 2` under `dbus-run-session`, so that the real
   KWin's scripts are left alone: the two screens' grabs identical to the pixel.
 
+  **A window covers the wallpaper only where it covers every ticked screen**
+  (23 November, found on the laptop with a monitor beside it): the KWin
+  script names the outputs a window fills, `Main.qml` hands `ScreenCover`
+  the ticked ones as `shownOn`, and `covered` is all of them. Until then a
+  maximised VS Code on the laptop paused the wallpaper on the monitor too.
+  The first screen keeps drawing while it is covered and the others in
+  view -- measured, the mirror moves -- so nothing had to change about
+  which screen works the wallpaper out.
+
   **The screens are Qt's own**, `Qt.application.screens`. No `xrandr`, no
   `wlr-randr`, no `kscreen-doctor`, nobody's output parsed: Qt names a
   screen after its connector, which is the same name KDE's display
@@ -1804,6 +1813,15 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   not draw the same picture twice -- 900 apart with the mouse in one place
   -- and its "follows the mouse" had been that noise all along.
 
+- **A layer-shell surface is told its screen, or it lands on the first.**
+  LayerShellQt reads `QWindow::screen()` only when the surface is made, and
+  by then Qt has put every surface back on the screen its position (0,0)
+  is on: with a monitor beside the laptop both surfaces lay on the laptop,
+  1366x768, the monitor showing Plasma's own wallpaper -- while the log
+  said "asked for on HDMI-A-1". `layer->setScreen(window->screen())` in
+  `Desktop::asWallpaper`. Check with a KWin script printing each window's
+  `output.name`, not with our own log.
+
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
   anything else in that layer — the wallpaper vanished and the system one
@@ -2772,7 +2790,12 @@ registering there is no longer to be reminded of.
 - **WallFlux itself, checked**: speed, size, installing, uninstalling,
   what it takes of the machine.
 - **On the laptop** (AMD A8-6410, Radeon R5, 2014, 1366x768): the battery
-  and a second monitor, with the user. **Its scenes are solved** (19
+  and a second monitor, with the user -- both done on 23 November (the
+  battery drops to Low as it should; the monitor, an ENC CS2420 at
+  1920x1200 on HDMI, found the two fixes of 0.42.3). Once, before those
+  fixes, the monitor showed plain white and it could not be made to again
+  in half an hour of trying; if it comes back, note what was on each
+  screen. **Its scenes are solved** (19
   November): Wallpaper Engine itself was not installed there, so no scene
   had its stock shaders and all 42 graded Broken ("nothing could be
   drawn"); installed, all 42 grade Works and DOOM plays on Medium and Low.
