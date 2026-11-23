@@ -2779,6 +2779,15 @@ accounts stayed closed, and WallFlux is installed and updated by
 16 November -- no releases until the AUR -- no longer stands, and
 registering there is no longer to be reminded of.
 
+**Next, chosen by the user on 23 November: a different wallpaper on each
+monitor, and their sounds** -- Wallpaper Engine's mode beside "Clone single
+wallpaper", which stays as a choice. Go through how it is worked with the
+user before writing any of it: how a monitor is chosen and where a click
+in the library goes, whose sound plays when both have one, and whether
+playlists, the tray's Next and Recent, a wallpaper's properties and the
+quality are per monitor. `ScreenCover` already knows which outputs are
+covered (`m_coveredScreens`).
+
 **Then the list as the user left it on 16 November, to be offered:**
 
 - **Wallpapers against Windows**: Augmentation's bolts (white-violet there,
