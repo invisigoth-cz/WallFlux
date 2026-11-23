@@ -65,11 +65,9 @@ Item {
     /// rather than going on decoding frames and running JavaScript behind a
     /// game; the other two are somebody's choice to save the machine.
     ///
-    /// One answer for every screen, because that is all `ScreenCover` can
-    /// say: KWin is asked whether *a* window covers the wallpaper, not
-    /// which screen it is on. A second monitor nobody has covered is
-    /// stopped along with the first; worth knowing before it is called a
-    /// bug.
+    /// A window counts only where every screen the wallpaper is on is
+    /// covered: one wallpaper is worked out for all of them, and a monitor
+    /// left in view beside a covered laptop is still being looked at.
     readonly property bool covered: root.paused
         || root.reasons.some(r => r.on && (r.mode === "pause" || r.mode === "stop"))
         || (Power.onBattery && Power.hasBattery && Power.percent < picker.batteryFloor)
@@ -101,6 +99,14 @@ Item {
         target: Pointer
         property: "watching"
         value: root.showingScene && !root.covered && picker.mouse
+    }
+
+    // Which screens the wallpaper is on, so that a window covering one of
+    // them does not stop it on the others.
+    Binding {
+        target: ScreenCover
+        property: "shownOn"
+        value: Application.screens.map(s => s.name).filter(n => picker.screensWanted.indexOf(n) >= 0)
     }
 
     // How strongly the music is heard, for scenes and pages alike.

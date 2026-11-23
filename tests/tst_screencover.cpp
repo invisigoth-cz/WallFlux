@@ -27,13 +27,14 @@ private slots:
     void reportsEachChangeOnce()
     {
         ScreenCover cover;
+        cover.setShownOn({QStringLiteral("eDP-1")});
         QSignalSpy changes(&cover, &ScreenCover::coveredChanged);
 
-        cover.setCovered(true);
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
         QCOMPARE(changes.count(), 1);
         QVERIFY(cover.isCovered());
 
-        cover.setCovered(false);
+        cover.setCoveredScreens(QString());
         QCOMPARE(changes.count(), 2);
         QVERIFY(!cover.isCovered());
     }
@@ -41,7 +42,8 @@ private slots:
     void forgetsTheWindowsWhileTheDesktopIsBeingShown()
     {
         ScreenCover cover;
-        cover.setCovered(true);
+        cover.setShownOn({QStringLiteral("eDP-1")});
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
         QVERIFY(cover.isCovered());
 
         cover.setShowingDesktop(true);
@@ -56,13 +58,34 @@ private slots:
     void staysQuietWhenTheAnswerIsTheSame()
     {
         ScreenCover cover;
+        cover.setShownOn({QStringLiteral("eDP-1")});
         QSignalSpy changes(&cover, &ScreenCover::coveredChanged);
 
-        cover.setCovered(true);
-        cover.setCovered(true);
-        cover.setCovered(true);
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
         QVERIFY2(changes.count() == 1,
                  "the players were handed a change that was not one, which stops them");
+    }
+
+    /// One wallpaper on two screens is covered only when both are: a window
+    /// filling the laptop leaves the monitor beside it in view.
+    void isCoveredOnlyWhereEveryScreenIs()
+    {
+        ScreenCover cover;
+        cover.setShownOn({QStringLiteral("eDP-1"), QStringLiteral("HDMI-A-1")});
+
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
+        QVERIFY2(!cover.isCovered(), "stopped on a monitor nobody had covered");
+
+        cover.setCoveredScreens(QStringLiteral("HDMI-A-1,eDP-1"));
+        QVERIFY(cover.isCovered());
+
+        // The screen with the window taken off the wallpaper.
+        cover.setShownOn({QStringLiteral("HDMI-A-1")});
+        QVERIFY(cover.isCovered());
+        cover.setCoveredScreens(QStringLiteral("eDP-1"));
+        QVERIFY(!cover.isCovered());
     }
 
     /// Another program's window with the keyboard is said once, and not

@@ -1112,7 +1112,9 @@ Item {
                     title: qsTr("Screens")
                     about: qsTr("• The Displays tab shows your monitors as they are arranged. Switch "
                                 + "on each one the wallpaper should be on; the same wallpaper plays on "
-                                + "all of them.")
+                                + "all of them.\n"
+                                + "• A window covering one of them does not stop it on the others: it "
+                                + "stands still only when every one is covered.")
                 }
 
                 Guide {

@@ -9,6 +9,7 @@
 #include <QDBusConnection>
 #include <QObject>
 #include <QQmlEngine>
+#include <QStringList>
 
 /// Says whether an ordinary window is covering the screen.
 ///
@@ -29,7 +30,11 @@ class ScreenCover : public QObject, protected QDBusContext
     // the class, because the script on the other side has to spell it out.
     Q_CLASSINFO("D-Bus Interface", "cz.invisigoth.WallFlux.ScreenCover")
 
+    /// Whether every screen the wallpaper is on has a window in front of it.
     Q_PROPERTY(bool covered READ isCovered NOTIFY coveredChanged)
+    /// The screens the wallpaper is on, by connector name, which QML knows
+    /// and the script inside KWin does not.
+    Q_PROPERTY(QStringList shownOn READ shownOn WRITE setShownOn NOTIFY shownOnChanged)
     /// Whether another program's window has the keyboard, however small it
     /// is -- Wallpaper Engine's "other application focused".
     Q_PROPERTY(bool focused READ isFocused NOTIFY focusedChanged)
@@ -44,6 +49,8 @@ public:
     bool isCovered() const { return m_covered; }
     bool isFocused() const { return m_focused; }
     bool isShowingDesktop() const { return m_showingDesktop; }
+    QStringList shownOn() const { return m_shownOn; }
+    void setShownOn(const QStringList &screens);
 
     /// Minimises this program's own windows, or brings them back, through
     /// KWin. Peeking at the desktop leaves them where they are: KWin keeps
@@ -53,9 +60,10 @@ public:
     Q_INVOKABLE void tuckAway(bool away);
 
 public slots:
-    /// Called by the KWin script over D-Bus. Not meant for QML, which reads
+    /// Called by the KWin script over D-Bus with the names of the screens a
+    /// window covers, joined by commas. Not meant for QML, which reads
     /// `covered` instead.
-    void setCovered(bool covered);
+    void setCoveredScreens(const QString &names);
     /// Called by the script too, when the window with the keyboard changes.
     void setFocused(bool focused);
 
@@ -70,6 +78,7 @@ public slots:
 
 signals:
     void coveredChanged();
+    void shownOnChanged();
     void focusedChanged();
     void showingDesktopChanged();
 
@@ -84,7 +93,8 @@ private:
     KWinScript m_script{QStringLiteral("wallflux-screencover")};
     KWinScript m_tuck{QStringLiteral("wallflux-tuck")};
     /// What the two sources say, and the answer the two of them make.
-    bool m_windowCovers = false;
+    QStringList m_coveredScreens;
+    QStringList m_shownOn;
     bool m_showingDesktop = false;
     bool m_covered = false;
     bool m_otherHasFocus = false;

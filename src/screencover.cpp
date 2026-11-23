@@ -9,6 +9,8 @@
 #include <QDBusInterface>
 #include <QLoggingCategory>
 
+#include <algorithm>
+
 Q_LOGGING_CATEGORY(lcCover, "wallflux.cover")
 
 namespace {
@@ -50,21 +52,27 @@ function covers(w) {
 
 var told = null;
 
+// Which screens are covered, by name, and not merely whether one is: a
+// window filling the laptop's screen leaves the monitor beside it in view,
+// and the wallpaper on show there.
 function look() {
     var list = workspace.windowList();
-    var covered = false;
+    var names = [];
     for (var i = 0; i < list.length; ++i) {
-        if (covers(list[i])) {
-            covered = true;
-            break;
-        }
+        var w = list[i];
+        if (covers(w) && w.output && names.indexOf(w.output.name) < 0)
+            names.push(w.output.name);
     }
+    names.sort();
+    // A string rather than an array, whose D-Bus type callDBus would have to
+    // guess. Connector names have no commas in them.
+    var covered = names.join(",");
     // Dragging a window emits a geometry change per frame, and all but the
     // one that crosses the edge say the same thing as the last.
     if (covered === told)
         return;
     told = covered;
-    callDBus(wallflux, path, iface, "setCovered", covered);
+    callDBus(wallflux, path, iface, "setCoveredScreens", covered);
 }
 
 function watch(w) {
@@ -153,11 +161,20 @@ void ScreenCover::watchShowDesktop(QDBusConnection &bus)
 
 ScreenCover::~ScreenCover() = default;
 
-void ScreenCover::setCovered(bool covered)
+void ScreenCover::setCoveredScreens(const QString &names)
 {
     if (!fromKWin(*this))
         return;
-    m_windowCovers = covered;
+    m_coveredScreens = names.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    settle();
+}
+
+void ScreenCover::setShownOn(const QStringList &screens)
+{
+    if (screens == m_shownOn)
+        return;
+    m_shownOn = screens;
+    emit shownOnChanged();
     settle();
 }
 
@@ -201,9 +218,14 @@ void ScreenCover::settle()
 {
     settleFocus();
 
-    // A window in front of the wallpaper only counts while the windows are
-    // where they were put.
-    const bool covered = m_windowCovers && !m_showingDesktop;
+    // Covered only where every screen the wallpaper is on has a window in
+    // front of it: one wallpaper is worked out for all of them, and one
+    // screen left in view is somebody looking at it. And a window only
+    // counts while the windows are where they were put.
+    const bool everyScreen = !m_shownOn.isEmpty()
+        && std::all_of(m_shownOn.cbegin(), m_shownOn.cend(),
+                       [this](const QString &name) { return m_coveredScreens.contains(name); });
+    const bool covered = everyScreen && !m_showingDesktop;
 
     // Silent when the answer has not changed. The same trap as select() in
     // WallpaperCore: handing QML a change that is not one makes it reload a

@@ -1505,8 +1505,10 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
     </message>
     <message>
         <location filename="../qml/SettingsView.qml" line="1113"/>
-        <source>• The Displays tab shows your monitors as they are arranged. Switch on each one the wallpaper should be on; the same wallpaper plays on all of them.</source>
-        <translation>• Karta Obrazovky ukazuje monitory tak, jak je máš rozmístěné. Zapni ty, na kterých má tapeta být; na všech hraje stejná tapeta.</translation>
+        <source>• The Displays tab shows your monitors as they are arranged. Switch on each one the wallpaper should be on; the same wallpaper plays on all of them.
+• A window covering one of them does not stop it on the others: it stands still only when every one is covered.</source>
+        <translation>• Karta Obrazovky ukazuje monitory tak, jak je máš rozmístěné. Zapni ty, na kterých má tapeta být; na všech hraje stejná tapeta.
+• Okno přes jeden z nich ji na ostatních nezastaví: stojí, jen když jsou zakryté všechny.</translation>
     </message>
     <message>
         <location filename="../qml/SettingsView.qml" line="1120"/>
