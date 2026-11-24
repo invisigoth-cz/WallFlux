@@ -233,8 +233,8 @@ Item {
             msaa: display.options.drawnWith.msaa
             bloom: display.options.drawnWith.bloom
             halfTextures: display.options.halfTextures
-            properties: display.options.propertiesFor(shown.current)
-            values: display.options.valuesFor(shown.current)
+            properties: display.options.propertiesFor(shown.current, display.key, display.options.propertiesOf)
+            values: display.options.valuesFor(shown.current, display.key, display.options.propertiesOf)
             music: display.options.music
             parallax: display.options.parallax
             particles: display.options.particles

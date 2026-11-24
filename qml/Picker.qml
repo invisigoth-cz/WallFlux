@@ -31,12 +31,38 @@ ApplicationWindow {
     /// Whether the sound is off. Read by the players in Main.qml, together
     /// with `volume`: the controls in this window are the setting itself, so
     /// there is one place it lives and nothing to keep in step.
-    /// The playlist running on the wallpaper, which the strip, the
-    /// Playlists button and Turn off read and drive.
-    required property PlaylistRun run
+    /// Main.qml's root: the displays, and what can be done with them.
+    property var stage: null
 
-    /// What is on show, which the footer and Turn off read and drive.
-    required property Showing showing
+    /// The monitor the library works on, by connector name: where a double
+    /// click puts a wallpaper, whose playlist the strip shows and whose
+    /// settings the panel changes. Remembered, as Wallpaper Engine does.
+    property string selectedKey: ""
+
+    /// Whether the window comes up with the monitor chooser open, when
+    /// there are several -- Wallpaper Engine's "Show on start".
+    property bool chooserOnOpen: true
+
+    /// Whether there is a monitor to choose: a wallpaper per monitor, and
+    /// more than one of them.
+    readonly property bool manyMonitors: picker.layout !== "clone" && Application.screens.length > 1
+
+    /// The display the library works on: the chosen monitor's, the first
+    /// one where it is not here, or the clone.
+    readonly property var selected: {
+        if (!picker.stage)
+            return null;
+        const all = picker.stage.displays;
+        return all.find(d => d.key === picker.selectedKey && d.connected) || all[0]
+            || picker.stage.display("clone");
+    }
+
+    /// The playlist running on the chosen display, which the strip, the
+    /// Playlists button and Turn off read and drive.
+    readonly property PlaylistRun run: picker.selected ? picker.selected.run : null
+
+    /// What the chosen display shows, which the footer and Turn off read.
+    readonly property Showing showing: picker.selected ? picker.selected.showing : null
 
     property bool muted: false
 
@@ -263,7 +289,7 @@ ApplicationWindow {
             const one = all[i];
             if (one.playable && kinds[one.kind])
                 list.push({ id: one.id, kind: kinds[one.kind], source: one.source.toString(),
-                            values: picker.valuesFor(one) });
+                            values: picker.valuesFor(one, "") });
         }
         Compatibility.test(list);
     }
@@ -291,24 +317,44 @@ ApplicationWindow {
         return qsTr("Not tried yet");
     }
 
-    function setProperty(id, name, value) {
+    /// What was set for a wallpaper on one display -- a connector name, or
+    /// "clone" -- by the setting's name. Each monitor has its own; until it
+    /// does, it has what was set before there was a wallpaper per monitor,
+    /// which is kept under the id alone.
+    function ownProperties(id, key, all) {
+        const set = all || picker.propertiesOf;
+        return set[key + "|" + id] || set[id] || {};
+    }
+    function setOwnProperties(id, key, values) {
         const all = Object.assign({}, picker.propertiesOf);
-        all[id] = Object.assign({}, all[id] || {});
-        all[id][name] = value;
+        all[key + "|" + id] = Object.assign({}, values);
         picker.propertiesOf = all;
     }
+    /// One display's settings for a wallpaper put on another.
+    function copyProperties(id, fromKey, toKey) {
+        picker.setOwnProperties(id, toKey, picker.ownProperties(id, fromKey));
+    }
+    function setProperty(id, name, value) {
+        const key = picker.selected ? picker.selected.key : "";
+        const values = Object.assign({}, picker.ownProperties(id, key));
+        values[name] = value;
+        picker.setOwnProperties(id, key, values);
+    }
+    /// Back to what the wallpaper declares, on the chosen display. Written
+    /// as nothing rather than taken out, or the settings from before there
+    /// was a wallpaper per monitor would come back in their place.
     function resetProperties(id) {
-        const all = Object.assign({}, picker.propertiesOf);
-        delete all[id];
-        picker.propertiesOf = all;
+        picker.setOwnProperties(id, picker.selected ? picker.selected.key : "", {});
     }
     /// A wallpaper's settings as project.json declares them, with what was
-    /// set laid over: the JSON a page is handed by `applyUserProperties`.
-    function propertiesFor(one) {
+    /// set for it on one display laid over: the JSON a page is handed by
+    /// `applyUserProperties`. `all` is read so that a binding asking is
+    /// told when something is set.
+    function propertiesFor(one, key, all) {
         if (!one || !one.properties)
             return "";
         const declared = JSON.parse(one.properties);
-        const set = picker.propertiesOf[one.id] || {};
+        const set = picker.ownProperties(one.id, key, all);
         for (const name in set) {
             if (declared[name])
                 declared[name].value = set[name];
@@ -316,8 +362,8 @@ ApplicationWindow {
         return JSON.stringify(declared);
     }
     /// The same as name to value, which is what the renderer takes.
-    function valuesFor(one) {
-        const all = picker.propertiesFor(one);
+    function valuesFor(one, key, set) {
+        const all = picker.propertiesFor(one, key, set);
         if (!all)
             return "";
         const declared = JSON.parse(all);
@@ -425,6 +471,8 @@ ApplicationWindow {
         property alias usage: picker.usage
         property alias tint: picker.tint
         property alias layout: picker.layout
+        property alias lastMonitor: picker.selectedKey
+        property alias chooserOnOpen: picker.chooserOnOpen
         property alias excludedFromClone: picker.excludedFromClone
         property alias cloneSource: picker.cloneSource
         property alias flippedMonitors: picker.flippedMonitors
@@ -490,8 +538,12 @@ ApplicationWindow {
             return;
         // Taking the file out from under a player that is drawing it
         // leaves a black screen with no reason given.
-        if (picker.showing.current.id === one.id)
-            picker.showing.clear();
+        if (picker.stage) {
+            for (const d of picker.stage.displays) {
+                if (d.showing.current.id === one.id)
+                    d.clear();
+            }
+        }
         // Two halves of the same thing: Steam lets go of it, and the
         // folder goes. Steam leaves the folder exactly where it is --
         // measured -- so the second half is ours.
@@ -1393,6 +1445,10 @@ ApplicationWindow {
     property bool askedAboutThemAll: false
 
     onVisibleChanged: {
+        // Wallpaper Engine asks which monitor first, when there are several.
+        // Later, so the toolbar has been laid out to hang it from.
+        if (picker.visible && picker.manyMonitors && picker.chooserOnOpen)
+            Qt.callLater(() => chooser.open());
         if (!picker.visible || picker.askedAboutThemAll)
             return;
         picker.askedAboutThemAll = true;
@@ -2300,6 +2356,64 @@ ApplicationWindow {
                         placeholderText: qsTr("Search wallpapers…")
                     }
 
+                    // Which monitor a double click puts a wallpaper on, and
+                    // whose playlist and settings are below -- Wallpaper
+                    // Engine's "Choose display", there only while there
+                    // is a choice to make.
+                    RoundedButton {
+                        id: chooseMonitor
+
+                        visible: picker.manyMonitors
+                        text: picker.selected && picker.stage
+                              ? picker.stage.monitorLabel(picker.selected.key, picker.stage.connectedNames)
+                              : ""
+                        icon.name: "video-display"
+                        accent: chooser.opened ? Look.highlight : "transparent"
+                        onClicked: chooser.opened ? chooser.close() : chooser.open()
+
+                        Popup {
+                            id: chooser
+
+                            y: chooseMonitor.height + 4
+                            width: 420
+                            padding: 14
+                            focus: true
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+                            background: Rectangle {
+                                color: picker.palette.base
+                                border.color: picker.palette.mid
+                                border.width: 1
+                                radius: 14
+                            }
+
+                            contentItem: ColumnLayout {
+                                spacing: 10
+
+                                Label {
+                                    text: qsTr("Choose monitor")
+                                    font.weight: Font.Bold
+                                }
+
+                                DisplayMap {
+                                    Layout.fillWidth: true
+                                    stage: picker.stage
+                                    selectedName: picker.selected ? picker.selected.key : ""
+                                    onChosen: (name) => {
+                                        picker.selectedKey = name;
+                                        chooser.close();
+                                    }
+                                }
+
+                                CheckBox {
+                                    text: qsTr("Show when the window opens")
+                                    checked: picker.chooserOnOpen
+                                    onToggled: picker.chooserOnOpen = checked
+                                }
+                            }
+                        }
+                    }
+
                     RoundedButton {
                         text: filters.chosen > 0 ? qsTr("Filters (%1)").arg(filters.chosen)
                                                  : qsTr("Filters")
@@ -2956,7 +3070,8 @@ ApplicationWindow {
                             Layout.topMargin: 20
                             Layout.bottomMargin: 10
                             wallpaper: picker.inspected
-                            values: picker.inspected ? (picker.propertiesOf[picker.inspected.id] || {}) : {}
+                            values: picker.inspected && picker.selected
+                                    ? picker.ownProperties(picker.inspected.id, picker.selected.key, picker.propertiesOf) : {}
                             catalogue: Language.czech ? "cs-cz" : "en-us"
                             onChosen: (name, value) => picker.setProperty(picker.inspected.id, name, value)
                             onRestored: picker.resetProperties(picker.inspected.id)
@@ -3173,9 +3288,13 @@ ApplicationWindow {
                 spacing: 8
 
                 Label {
-                    // The screen's own name, which is what the compositor
-                    // calls the output this window is on.
-                    text: qsTr("%1  |  %2").arg(Screen.name).arg(
+                    // The monitor whose wallpaper this is: the chosen one
+                    // where each has its own, else the screen's own name,
+                    // which is what the compositor calls the output this
+                    // window is on.
+                    text: qsTr("%1  |  %2").arg(picker.manyMonitors && picker.selected
+                                                ? picker.stage.monitorLabel(picker.selected.key, picker.stage.connectedNames)
+                                                : Screen.name).arg(
                               picker.showing.current.playable ? picker.showing.current.title
                                                           : qsTr("No active wallpaper"))
                     elide: Text.ElideRight

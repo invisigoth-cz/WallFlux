@@ -85,9 +85,42 @@ Item {
     /// a monitor can be chosen.
     readonly property var primary: root.displays.length > 0 ? root.displays[0] : clone
 
+    /// The displays muted on their own, by key. Handed to `isMuted` so
+    /// that a binding calling it is told when the list changes.
+    readonly property var mutedKeys: picker.mutedMonitors
+
     /// Whether a display's sound is off on its own, kept by key.
-    function isMuted(key) {
-        return picker.mutedMonitors.indexOf(key) >= 0;
+    function isMuted(key, keys) {
+        return (keys || root.mutedKeys).indexOf(key) >= 0;
+    }
+
+    /// The display drawing on the monitor of this connector name: its own,
+    /// or the clone unless the monitor is left out of it. `displays` is
+    /// read so that a binding asking is told when they change.
+    function displayOn(name, displays) {
+        if (!root.perDisplay)
+            return clone.screens.some(s => s.name === name) ? clone : null;
+        return (displays || root.displays).find(d => d.key === name) || null;
+    }
+
+    /// A monitor's number, counted left to right and then top to bottom,
+    /// as the tray and the window call it. `names` is read for the same
+    /// reason as above.
+    function monitorNumber(name, names) {
+        const placed = Application.screens.slice()
+            .sort((a, b) => a.virtualX - b.virtualX || a.virtualY - b.virtualY)
+            .map(s => s.name);
+        void names;
+        const at = placed.indexOf(name);
+        return at < 0 ? placed.length + 1 : at + 1;
+    }
+
+    /// "Monitor 2 · ENC CS2420": its number and what it is, or its
+    /// connector where Qt does not know the make.
+    function monitorLabel(name, names) {
+        const screen = Application.screens.find(s => s.name === name);
+        const made = screen ? (screen.manufacturer + " " + screen.model).trim() : "";
+        return qsTr("Monitor %1 · %2").arg(root.monitorNumber(name, names)).arg(made !== "" ? made : name);
     }
 
     function setMuted(key, on) {
@@ -117,9 +150,11 @@ Item {
             return;
         root.settleTransitions();
         if (layout === "clone") {
-            const from = root.primary;
-            if (from.showing.current.id !== "")
+            const from = picker.selected;
+            if (from.showing.current.id !== "") {
+                picker.copyProperties(from.showing.current.id, from.key, "clone");
                 clone.select(from.showing.current.id);
+            }
             else
                 clone.clear();
             if (from.run.playing !== "")
@@ -138,8 +173,10 @@ Item {
         picker.layout = "perDisplay";
         const all = root.displays;
         for (let i = 0; i < all.length; ++i) {
-            if (id !== "")
+            if (id !== "") {
+                picker.copyProperties(id, "clone", all[i].key);
                 all[i].select(id);
+            }
             else
                 all[i].clear();
         }
@@ -154,10 +191,13 @@ Item {
         if (!from || !to || from === to)
             return;
         to.run.stop();
-        if (from.showing.current.id !== "")
-            to.select(from.showing.current.id);
-        else
+        const id = from.showing.current.id;
+        if (id !== "") {
+            picker.copyProperties(id, from.key, to.key);
+            to.select(id);
+        } else {
             to.clear();
+        }
     }
 
     /// Swaps two displays' wallpapers and playlists, and their mute.
@@ -179,6 +219,12 @@ Item {
                 d.run.start(Playlists.named(what.playlist));
             root.setMuted(key, what.muted);
         };
+        if (was.id !== "")
+            picker.copyProperties(was.id, aKey, "swap");
+        if (other.id !== "")
+            picker.copyProperties(other.id, bKey, aKey);
+        if (was.id !== "")
+            picker.copyProperties(was.id, "swap", bKey);
         put(a, aKey, other);
         put(b, bKey, was);
     }
@@ -212,7 +258,8 @@ Item {
         const displays = {};
         const put = (key, d) => {
             displays[key] = { wallpaper: d.showing.current.id, playlist: d.run.playing,
-                              muted: root.isMuted(key) };
+                              muted: root.isMuted(key),
+                              properties: picker.ownProperties(d.showing.current.id, key) };
         };
         if (root.perDisplay) {
             for (let i = 0; i < perMonitor.count; ++i) {
@@ -249,8 +296,10 @@ Item {
             if (!d)
                 continue;
             d.run.stop();
-            if (what.wallpaper)
+            if (what.wallpaper) {
+                picker.setOwnProperties(what.wallpaper, key, what.properties || {});
                 d.select(what.wallpaper);
+            }
             else
                 d.clear();
             if (what.playlist)
@@ -269,7 +318,7 @@ Item {
         options: picker
         pausedAll: root.paused
         mutedAll: picker.muted
-        mutedHere: root.isMuted("clone")
+        mutedHere: root.isMuted("clone", root.mutedKeys)
         anyCovered: root.anyCovered
         order: picker.shown
         screens: {
@@ -297,7 +346,7 @@ Item {
             options: picker
             pausedAll: root.paused
             mutedAll: picker.muted
-            mutedHere: root.isMuted(modelData)
+            mutedHere: root.isMuted(modelData, root.mutedKeys)
             anyCovered: root.anyCovered
             order: picker.shown
             screens: root.perDisplay ? Application.screens.filter(s => s.name === modelData) : []
@@ -339,9 +388,8 @@ Item {
         // compositor keeps in the background and which take no input, and a
         // window belonging to one would be dragged down there with it.
         transientParent: null
-        run: root.primary.run
-        showing: root.primary.showing
-        onChose: (id) => root.primary.select(id)
+        stage: root
+        onChose: (id) => picker.selected.select(id)
 
         /// Whether peeking at the desktop put this window away, and so
         /// whether it comes back when the peeking stops. A window that was
@@ -377,9 +425,9 @@ Item {
             const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
             return Emblem.svg(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
         }
-        tooltip: !root.primary.showing.current.playable ? qsTr("WallFlux")
-                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(root.primary.showing.current.title)
-                 : qsTr("WallFlux — %1").arg(root.primary.showing.current.title)
+        tooltip: !picker.selected.showing.current.playable ? qsTr("WallFlux")
+                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(picker.selected.showing.current.title)
+                 : qsTr("WallFlux — %1").arg(picker.selected.showing.current.title)
 
         // Not one checkable item here: the words say the state. Recent is
         // the last five chosen in this run, the one on show among them and
@@ -389,7 +437,7 @@ Item {
             { separator: true },
             { id: "pause", text: root.paused ? qsTr("Resume") : qsTr("Pause"),
               icon: root.paused ? "media-playback-start" : "media-playback-pause",
-              enabled: root.primary.playing },
+              enabled: picker.selected.playing },
             { id: "previous", text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
             { id: "next", text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
             { id: "mute", text: picker.muted ? qsTr("Unmute") : qsTr("Mute"),
@@ -397,7 +445,7 @@ Item {
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
               submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== root.primary.showing.current.id })) },
+                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== picker.selected.showing.current.id })) },
             { separator: true },
             { id: "quit", text: qsTr("Quit") }
         ]
@@ -407,13 +455,13 @@ Item {
             switch (id) {
             case "choose": root.showPicker(); break;
             case "pause": root.paused = !root.paused; break;
-            case "previous": root.primary.step(-1); break;
-            case "next": root.primary.step(1); break;
+            case "previous": picker.selected.step(-1); break;
+            case "next": picker.selected.step(1); break;
             case "mute": picker.muted = !picker.muted; break;
             case "quit": Qt.quit(); break;
             default:
                 if (id.startsWith("recent:"))
-                    root.primary.select(id.slice(7));
+                    picker.selected.select(id.slice(7));
             }
         }
     }
