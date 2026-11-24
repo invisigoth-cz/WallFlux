@@ -909,9 +909,11 @@ Item {
                                                                   : view.picker.underWindow.replace("all", ""))
 
                                 text: windowOption.modelData.name
-                                accent: windowOption.lit ? windowOption.palette.highlight : "transparent"
-                                palette.buttonText: windowOption.lit ? view.ink(windowOption.palette.highlight)
-                                                                     : windowOption.palette.buttonText
+                                // The page's colours, not the button's own: a button
+                                // reading the colour it sets is a binding loop.
+                                accent: windowOption.lit ? view.palette.highlight : "transparent"
+                                palette.buttonText: windowOption.lit ? view.ink(view.palette.highlight)
+                                                                     : view.palette.buttonText
                                 onClicked: view.picker.whenCovered = windowOption.modelData.value
                             }
                         }
