@@ -73,6 +73,9 @@ Window {
     /// a texture, which costs a copy and is not made for nobody.
     property bool cloned: false
 
+    /// Whether this copy of the clone is turned over, left for right.
+    property bool flipped: false
+
     /// What this screen draws, for the others to show.
     readonly property Item picture: content
 
@@ -509,5 +512,10 @@ Window {
         anchors.fill: parent
         visible: !surface.primary
         source: surface.mirrorOf
+        // A copy of the clone turned over, left for right.
+        transform: Scale {
+            origin.x: surface.width / 2
+            xScale: surface.flipped ? -1 : 1
+        }
     }
 }

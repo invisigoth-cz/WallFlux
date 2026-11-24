@@ -1459,7 +1459,7 @@ ApplicationWindow {
     onVisibleChanged: {
         // Wallpaper Engine asks which monitor first, when there are several.
         // Later, so the toolbar has been laid out to hang it from.
-        if (picker.visible && picker.manyMonitors && picker.chooserOnOpen)
+        if (picker.visible && picker.manyMonitors && picker.chooserOnOpen && tabs.currentIndex === 0)
             Qt.callLater(() => chooser.open());
         if (!picker.visible || picker.askedAboutThemAll)
             return;
@@ -2268,6 +2268,8 @@ ApplicationWindow {
                     else if (steam.item)
                         steam.item.shut();
                     secondClick.stop();
+                    // The chooser hangs off the library's toolbar.
+                    chooser.close();
                 }
 
                 anchors.fill: parent
@@ -3261,14 +3263,11 @@ ApplicationWindow {
             DisplaysView {
                 id: displays
 
-                // Until this tab knows layouts, a tick is a monitor in the
-                // clone.
-                wanted: Application.screens.map(s => s.name)
-                    .filter(n => picker.excludedFromClone.indexOf(n) < 0)
-                onToggled: (name) => {
-                    const out = picker.excludedFromClone;
-                    picker.excludedFromClone = out.indexOf(name) >= 0 ? out.filter(n => n !== name)
-                                                                      : out.concat([name]);
+                stage: picker.stage
+                options: picker
+                onChangeAsked: (name) => {
+                    picker.selectedKey = name;
+                    tabs.currentIndex = 0;
                 }
             }
 

@@ -221,6 +221,7 @@ Item {
             // its picture, as Wallpaper Engine's "Clone single wallpaper".
             primary: index === 0
             mirrorOf: index === 0 ? null : display.firstPicture
+            flipped: index > 0 && display.options.flippedMonitors.indexOf(modelData.name) >= 0
             cloned: index === 0 && surfaces.count > 1
             showingWeb: index === 0 && display.showingWeb && !display.stopped
             showingVideo: index === 0 && display.showingVideo && !display.stopped

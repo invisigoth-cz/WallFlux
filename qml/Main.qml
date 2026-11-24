@@ -247,6 +247,11 @@ Item {
             picker.excludedFromClone = picker.excludedFromClone.concat([key]);
     }
 
+    /// The monitor the clone is worked out on, or empty while it is on none.
+    function cloneSourceName() {
+        return clone.screens.length > 0 ? clone.screens[0].name : "";
+    }
+
     /// Puts a monitor back into the clone, if it was left out.
     function includeInClone(key) {
         picker.excludedFromClone = picker.excludedFromClone.filter(k => k !== key);
