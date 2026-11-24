@@ -522,6 +522,22 @@ Item {
         return qsTr("%1 — %2").arg(root.monitorLabel(d.key, root.connectedNames)).arg(title);
     }
 
+    /// The last five wallpapers chosen, for a display's menu: always five
+    /// places, the unused ones hidden, so that the menu keeps its shape as
+    /// the list fills -- a menu that changes shape is built again, and the
+    /// panel is not to have one pulled apart under it.
+    function recentItems(key, onShow) {
+        const ids = Wallpapers.recent.slice(0, 5);
+        const items = [];
+        for (let i = 0; i < 5; ++i) {
+            const id = ids[i];
+            items.push(id === undefined ? { id: "", text: "", visible: false }
+                                        : { id: "recent@" + key + ":" + id, text: picker.titleOf(id),
+                                            enabled: id !== onShow });
+        }
+        return items;
+    }
+
     /// What a display's own menu holds. `key` is put into every id, so the
     /// one menu works for the single display of today and for each of
     /// several.
@@ -538,9 +554,7 @@ Item {
               icon: root.isMuted(key, root.mutedKeys) ? "audio-volume-high" : "audio-volume-muted" },
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
-              submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent@" + key + ":" + id, text: picker.titleOf(id),
-                  enabled: id !== d.showing.current.id })) },
+              submenu: root.recentItems(key, d.showing.current.id) },
             { text: qsTr("Playlists"), icon: "view-media-playlist",
               enabled: Playlists.all.length > 0,
               submenu: Playlists.all.map(one => ({
@@ -548,7 +562,7 @@ Item {
                   text: (d.run.playing === one.name ? "▶  " : "") + one.name })) },
             { id: "remove@" + key, text: qsTr("Remove wallpaper"), icon: "edit-clear",
               enabled: d.showing.current.id !== "", visible: own }
-        ].filter(one => one.visible !== false);
+        ];
     }
 
     /// The menu with one display: today's, Pause and Mute being the whole
@@ -566,9 +580,7 @@ Item {
               icon: picker.muted ? "audio-volume-high" : "audio-volume-muted" },
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
-              submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent@" + d.key + ":" + id, text: picker.titleOf(id),
-                  enabled: id !== d.showing.current.id })) },
+              submenu: root.recentItems(d.key, d.showing.current.id) },
             { separator: true },
             { id: "quit", text: qsTr("Quit") }
         ];

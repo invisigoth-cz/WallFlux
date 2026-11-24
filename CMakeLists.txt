@@ -284,6 +284,16 @@ if(Qt6Test_FOUND)
     target_link_libraries(tst_usage PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME usage COMMAND tst_usage)
 
+    qt_add_executable(tst_tray
+        tests/tst_tray.cpp
+        src/tray.cpp
+    )
+    target_include_directories(tst_tray PRIVATE src)
+    target_link_libraries(tst_tray PRIVATE Qt6::Qml Qt6::Widgets Qt6::Test)
+    add_test(NAME tray COMMAND tst_tray)
+    # No panel is needed to check what the menu holds, and none is touched.
+    set_tests_properties(tray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     qt_add_executable(tst_playlists
         tests/tst_playlists.cpp
         src/playlists.cpp

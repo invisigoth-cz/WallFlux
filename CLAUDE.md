@@ -2022,6 +2022,19 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   AUR builds it on the machine it is for, so the PKGBUILD no longer builds
   for v2 or takes `.note.gnu.property` off. A binary built here and copied
   elsewhere still needs both.
+- **The tray's menu is changed in place, and reshaped only a moment later.**
+  plasmashell builds menus of its own out of ours over D-Bus, and a submenu
+  of ours thrown away while it had the menu open -- or was closing it, after
+  a profile chosen there switched the layout -- crashed it in
+  `QMenu::timerEvent` (24 November); the log said `DBusMenuExporterDBus::
+  GetLayout: Condition failed: menu` around every rebuild. `Tray::setItems`
+  keeps every action where the shape is the same (words, icons, ids,
+  `enabled`, `visible`) and rebuilds 1.5 s later where it is not. Whether
+  the panel has the menu open cannot be known: Qt says `aboutToShow` once
+  and `aboutToHide` never. So keep the shape: Recent is always five places,
+  the unused hidden, and a monitor's Remove is hidden, not left out.
+  `tst_tray`; `~/WallFlux-ukazky/2026-11-24/vk/layoutrev.py` reads the ids.
+
 - **Qt.labs.platform hands the panel a submenu with nothing in it.** Read
   over D-Bus (`com.canonical.dbusmenu GetLayout`): the submenu is a bare
   label, no `children-display`, no children -- a static one too, and

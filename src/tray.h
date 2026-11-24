@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <QSystemTrayIcon>
+#include <QTimer>
 #include <QVariantList>
 
 /// The icon in the panel and its menu, built with Qt Widgets.
@@ -26,8 +27,10 @@ class Tray : public QObject
     Q_PROPERTY(QString tooltip READ tooltip WRITE setTooltip NOTIFY tooltipChanged)
     /// The icon as SVG text; empty for the installed one.
     Q_PROPERTY(QString svg READ svg WRITE setSvg NOTIFY svgChanged)
-    /// Each `{ id, text, icon, enabled, separator, submenu }`: `icon` a
-    /// theme name, `enabled` true unless said, `submenu` a list of the same.
+    /// Each `{ id, text, icon, enabled, visible, separator, submenu }`: `icon`
+    /// a theme name, `enabled` and `visible` true unless said, `submenu` a
+    /// list of the same. Hide an item rather than leave it out where it comes
+    /// and goes: a menu of the same shape is changed in place.
     Q_PROPERTY(QVariantList items READ items WRITE setItems NOTIFY itemsChanged)
 
 public:
@@ -42,6 +45,9 @@ public:
     void setSvg(const QString &svg);
     QVariantList items() const { return m_items; }
     void setItems(const QVariantList &items);
+
+    /// The menu the panel is handed, for a test to read.
+    QMenu *menu() { return &m_menu; }
 
     /// The picture SVG text makes, at the sizes a panel asks for.
     static QIcon drawn(const QString &svg);
@@ -58,9 +64,18 @@ signals:
 
 private:
     void fill(QMenu *menu, const QVariantList &items);
+    /// Puts new words, icons and ids on the items already there, for a list
+    /// of the same shape. Nothing is taken away, so the panel reading the
+    /// menu over D-Bus has nothing pulled out from under it.
+    void refresh(QMenu *menu, const QVariantList &items);
+    /// Throws the menu away and builds it again, for a list of another shape.
+    void rebuild();
+    static bool sameShape(const QVariantList &a, const QVariantList &b);
 
     QSystemTrayIcon m_icon;
     QMenu m_menu;
     QString m_svg;
     QVariantList m_items;
+    /// A change of shape, made a moment later; see `setItems`.
+    QTimer m_reshape;
 };
