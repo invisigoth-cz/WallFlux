@@ -748,49 +748,24 @@ void WallpaperCore::rescan(const QStringList &steamRoots)
 
     readResolutions();
 
-    // A wallpaper that was chosen before may be gone now.
-    if (!m_current.id.isEmpty() && !select(m_current.id))
-        clear();
-
     emit wallpapersChanged();
 }
 
-bool WallpaperCore::select(const QString &id)
+Wallpaper WallpaperCore::find(const QString &id) const
 {
     const auto match = std::ranges::find(m_wallpapers, id, &Wallpaper::id);
-    if (match == m_wallpapers.cend())
-        return false;
-
-    // Saying nothing when nothing has changed is not an optimisation here,
-    // it is the difference between a wallpaper that plays and one that does
-    // not. Clicking the wallpaper that is already playing used to report a
-    // change; QML then handed the video player the same file again, which
-    // stops it and reports no change of its own, so nothing was left to
-    // start it. The screen went black until something else was chosen.
-    //
-    // A rescan still refreshes what we hold: the same wallpaper whose file
-    // has moved is a change, and is announced as one.
-    if (m_current.id == match->id && m_current.source == match->source)
-        return true;
-
-    m_current = *match;
-    emit currentChanged();
-
-    // Newest first, and only once in the list: picking the same wallpaper
-    // again with another in between should move it, not list it twice.
-    m_recent.removeAll(m_current.id);
-    m_recent.prepend(m_current.id);
-    emit recentChanged();
-
-    return true;
+    return match == m_wallpapers.cend() ? Wallpaper{} : *match;
 }
 
-void WallpaperCore::clear()
+void WallpaperCore::played(const QString &id)
 {
-    if (m_current.id.isEmpty())
+    if (find(id).id.isEmpty())
         return;
-    m_current = Wallpaper{};
-    emit currentChanged();
+    // Newest first, and only once in the list: picking the same wallpaper
+    // again with another in between should move it, not list it twice.
+    m_recent.removeAll(id);
+    m_recent.prepend(id);
+    emit recentChanged();
 }
 
 bool WallpaperCore::discard(const QString &id)
@@ -918,9 +893,6 @@ void WallpaperCore::readResolutions()
                 one.hasSound = told.sound;
             };
             tell(*match);
-            // The one that is playing carries its own copy.
-            if (m_current.id == id)
-                tell(m_current);
             emit wallpapersChanged();
         });
         probe->start(QStringLiteral("ffprobe"), probeArguments(wallpaper.source.toLocalFile()));

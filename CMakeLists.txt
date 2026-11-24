@@ -118,6 +118,8 @@ qt_add_qml_module(wallflux
         src/playlists.cpp
         src/playlistrun.h
         src/playlistrun.cpp
+        src/showing.h
+        src/showing.cpp
         src/language.h
         src/language.cpp
         src/screencover.h
@@ -238,6 +240,7 @@ if(Qt6Test_FOUND)
     # so the test needs neither main() nor the web engine.
     qt_add_executable(tst_wallpapercore
         tests/tst_wallpapercore.cpp
+        src/showing.cpp
         src/wallpapercore.cpp
     )
     target_include_directories(tst_wallpapercore PRIVATE src)

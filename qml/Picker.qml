@@ -35,6 +35,9 @@ ApplicationWindow {
     /// Playlists button and Turn off read and drive.
     required property PlaylistRun run
 
+    /// What is on show, which the footer and Turn off read and drive.
+    required property Showing showing
+
     property bool muted: false
 
     /// How loud a video wallpaper plays, 0 to 1.
@@ -343,7 +346,7 @@ ApplicationWindow {
     readonly property var drawnWith: {
         if (picker.batteryLow && Power.onBattery)
             return picker.presets.low;
-        const own = picker.presets[picker.qualityOf[Wallpapers.current.id]];
+        const own = picker.presets[picker.qualityOf[picker.showing.current.id]];
         return own ? own : { fps: picker.fps, msaa: picker.msaa, bloom: picker.bloom };
     }
     /// A new map, not the old one changed: see the trap about putting an
@@ -458,8 +461,8 @@ ApplicationWindow {
             return;
         // Taking the file out from under a player that is drawing it
         // leaves a black screen with no reason given.
-        if (Wallpapers.current.id === one.id)
-            Wallpapers.clear();
+        if (picker.showing.current.id === one.id)
+            picker.showing.clear();
         // Two halves of the same thing: Steam lets go of it, and the
         // folder goes. Steam leaves the folder exactly where it is --
         // measured -- so the second half is ours.
@@ -3148,7 +3151,7 @@ ApplicationWindow {
                     // The screen's own name, which is what the compositor
                     // calls the output this window is on.
                     text: qsTr("%1  |  %2").arg(Screen.name).arg(
-                              Wallpapers.current.playable ? Wallpapers.current.title
+                              picker.showing.current.playable ? picker.showing.current.title
                                                           : qsTr("No active wallpaper"))
                     elide: Text.ElideRight
                     Layout.fillWidth: true
@@ -3227,12 +3230,12 @@ ApplicationWindow {
                     flat: true
                     // Nothing to turn off until something plays, which is the
                     // state the program starts in.
-                    enabled: Wallpapers.current.playable
+                    enabled: picker.showing.current.playable
                     // A playlist too, or its clock would put the next one
                     // on the desktop by itself a moment later.
                     onClicked: {
                         picker.run.stop();
-                        Wallpapers.clear();
+                        picker.showing.clear();
                     }
                 }
 

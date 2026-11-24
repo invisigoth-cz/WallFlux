@@ -31,6 +31,9 @@ Window {
     /// The playlist running on this wallpaper, which a video ending turns.
     required property PlaylistRun run
 
+    /// The wallpaper this surface shows.
+    required property Showing showing
+
     /// What is on it, handed down rather than read here.
     required property bool showingWeb
     required property bool showingVideo
@@ -234,7 +237,7 @@ Window {
             // the spaces, brackets and Chinese characters these file names carry
             // get escaped properly; pasting "file://" onto the front of a plain
             // path here would break exactly those.
-            url: surface.showingWeb ? Wallpapers.current.source : "about:blank"
+            url: surface.showingWeb ? surface.showing.current.source : "about:blank"
 
             /// Whether the page asked to hear the speakers.
             property bool listens: false
@@ -302,9 +305,9 @@ Window {
             onLoadingChanged: request => {
                 web.listens = false;
                 if (surface.showingWeb && request.status === WebEngineView.LoadSucceededStatus)
-                    surface.tried(Wallpapers.current.id, "perfect", []);
+                    surface.tried(surface.showing.current.id, "perfect", []);
                 else if (surface.showingWeb && request.status === WebEngineView.LoadFailedStatus)
-                    surface.tried(Wallpapers.current.id, "broken", [request.errorString]);
+                    surface.tried(surface.showing.current.id, "broken", [request.errorString]);
                 if (request.status !== WebEngineView.LoadSucceededStatus || !surface.showingWeb)
                     return;
                 web.told = surface.properties || "{}";
@@ -380,7 +383,7 @@ Window {
             id: player
 
             videoOutput: video
-            source: surface.showingVideo ? Wallpapers.current.source : ""
+            source: surface.showingVideo ? surface.showing.current.source : ""
             // Round and round, unless a playlist is waiting for the end of it:
             // a video told to loop for ever never reports an end, so there
             // would be nothing to turn on.
@@ -404,7 +407,7 @@ Window {
 
             onMediaStatusChanged: {
                 if (surface.showingVideo && player.mediaStatus === MediaPlayer.LoadedMedia)
-                    surface.tried(Wallpapers.current.id, "perfect", []);
+                    surface.tried(surface.showing.current.id, "perfect", []);
                 if (player.mediaStatus !== MediaPlayer.EndOfMedia)
                     return;
 
@@ -425,9 +428,9 @@ Window {
             }
 
             onErrorOccurred: (error, errorString) => {
-                console.warn("wallflux: cannot play", Wallpapers.current.title, "--", errorString);
+                console.warn("wallflux: cannot play", surface.showing.current.title, "--", errorString);
                 if (surface.showingVideo)
-                    surface.tried(Wallpapers.current.id, "broken", [errorString]);
+                    surface.tried(surface.showing.current.id, "broken", [errorString]);
             }
         }
 
@@ -439,7 +442,7 @@ Window {
 
             anchors.fill: parent
             visible: surface.showingScene
-            source: surface.showingScene ? Wallpapers.current.source : ""
+            source: surface.showingScene ? surface.showing.current.source : ""
             running: surface.showingScene && !surface.covered
             fps: surface.fps
             music: surface.music
@@ -460,13 +463,13 @@ Window {
             onErrorChanged: {
                 if (scene.error === "")
                     return;
-                console.warn("wallflux: cannot draw", Wallpapers.current.title, "--", scene.error);
+                console.warn("wallflux: cannot draw", surface.showing.current.title, "--", scene.error);
                 if (surface.showingScene)
-                    surface.tried(Wallpapers.current.id, "broken", [scene.error]);
+                    surface.tried(surface.showing.current.id, "broken", [scene.error]);
             }
             onLoaded: skipped => {
                 if (surface.showingScene)
-                    surface.tried(Wallpapers.current.id, skipped.length ? "minor" : "perfect", skipped);
+                    surface.tried(surface.showing.current.id, skipped.length ? "minor" : "perfect", skipped);
             }
         }
 

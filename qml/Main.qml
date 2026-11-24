@@ -22,12 +22,12 @@ Item {
 
     /// Which drawer the chosen wallpaper belongs to. All three want a file
     /// on disk, so a kind alone is not enough to start on.
-    readonly property bool showingWeb: Wallpapers.current.kind === WallpaperKind.Web
-                                       && Wallpapers.current.hasFile
-    readonly property bool showingVideo: Wallpapers.current.kind === WallpaperKind.Video
-                                         && Wallpapers.current.hasFile
-    readonly property bool showingScene: Wallpapers.current.kind === WallpaperKind.Scene
-                                         && Wallpapers.current.hasFile
+    readonly property bool showingWeb: onDisplay.current.kind === WallpaperKind.Web
+                                       && onDisplay.current.hasFile
+    readonly property bool showingVideo: onDisplay.current.kind === WallpaperKind.Video
+                                         && onDisplay.current.hasFile
+    readonly property bool showingScene: onDisplay.current.kind === WallpaperKind.Scene
+                                         && onDisplay.current.hasFile
 
     /// Whether what is chosen is of a kind this program can draw today.
     readonly property bool playing: root.showingWeb || root.showingVideo || root.showingScene
@@ -159,6 +159,7 @@ Item {
 
             onScreen: modelData
             run: playlistRun
+            showing: onDisplay
             // The first screen works the wallpaper out and the others show
             // its picture, as Wallpaper Engine's "Clone single wallpaper".
             primary: index === 0
@@ -175,8 +176,8 @@ Item {
             msaa: picker.drawnWith.msaa
             bloom: picker.drawnWith.bloom
             halfTextures: picker.halfTextures
-            properties: picker.propertiesFor(Wallpapers.current)
-            values: picker.valuesFor(Wallpapers.current)
+            properties: picker.propertiesFor(onDisplay.current)
+            values: picker.valuesFor(onDisplay.current)
             music: picker.music
             parallax: picker.parallax
             particles: picker.particles
@@ -190,7 +191,7 @@ Item {
     // a player on every surface would play it as many times over as there
     // are monitors.
     Repeater {
-        model: root.showingScene && !root.stopped ? SceneSounds.of(Wallpapers.current.source) : []
+        model: root.showingScene && !root.stopped ? SceneSounds.of(onDisplay.current.source) : []
 
         delegate: SceneSound {
             required property var modelData
@@ -219,7 +220,8 @@ Item {
         // window belonging to one would be dragged down there with it.
         transientParent: null
         run: playlistRun
-        onChose: (id) => Wallpapers.select(id)
+        showing: onDisplay
+        onChose: (id) => onDisplay.select(id)
 
         /// Whether peeking at the desktop put this window away, and so
         /// whether it comes back when the peeking stops. A window that was
@@ -274,7 +276,7 @@ Item {
         // nothing asked for in the other two cases.
         if (root.fading === "" || root.fading === "none" || !root.playing
             || surfaces.count === 0) {
-            Wallpapers.select(id);
+            onDisplay.select(id);
             return;
         }
 
@@ -313,7 +315,7 @@ Item {
         root.waiting = 0;
 
         if (id !== "")
-            Wallpapers.select(id);
+            onDisplay.select(id);
         if (surfaces.count > 0)
             surfaces.objectAt(0).release(how, playlistRun.transitionMs);
     }
@@ -333,6 +335,12 @@ Item {
     /// where a wallpaper starts playing rather than two.
     PlaylistRun {
         id: playlistRun
+    }
+
+    /// What is on show.
+    Showing {
+        id: onDisplay
+        library: Wallpapers
     }
 
     // A playlist renamed or thrown away in the library reaches the run.
@@ -375,11 +383,11 @@ Item {
         const order = picker.shown.filter(w => w.playable);
         if (order.length === 0)
             return;
-        const from = Wallpapers.current.id || Wallpapers.recent[0] || "";
+        const from = onDisplay.current.id || Wallpapers.recent[0] || "";
         const at = order.findIndex(w => w.id === from);
         const to = at < 0 ? (by > 0 ? 0 : order.length - 1)
                           : (at + by + order.length) % order.length;
-        Wallpapers.select(order[to].id);
+        onDisplay.select(order[to].id);
     }
 
     Tray {
@@ -393,9 +401,9 @@ Item {
             const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
             return Emblem.svg(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
         }
-        tooltip: !Wallpapers.current.playable ? qsTr("WallFlux")
-                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(Wallpapers.current.title)
-                 : qsTr("WallFlux — %1").arg(Wallpapers.current.title)
+        tooltip: !onDisplay.current.playable ? qsTr("WallFlux")
+                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(onDisplay.current.title)
+                 : qsTr("WallFlux — %1").arg(onDisplay.current.title)
 
         // Not one checkable item here: the words say the state. Recent is
         // the last five chosen in this run, the one on show among them and
@@ -413,7 +421,7 @@ Item {
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
               submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== Wallpapers.current.id })) },
+                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== onDisplay.current.id })) },
             { separator: true },
             { id: "quit", text: qsTr("Quit") }
         ]
@@ -429,7 +437,7 @@ Item {
             case "quit": Qt.quit(); break;
             default:
                 if (id.startsWith("recent:"))
-                    Wallpapers.select(id.slice(7));
+                    onDisplay.select(id.slice(7));
             }
         }
     }

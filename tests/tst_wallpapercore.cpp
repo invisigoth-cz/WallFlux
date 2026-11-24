@@ -2,6 +2,7 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+#include "showing.h"
 #include "wallpapercore.h"
 
 #include <QDir>
@@ -112,6 +113,10 @@ private slots:
 
     /// What was played in this run, newest first and each one only once.
     void remembersWhatWasPlayedInThisRun();
+
+    /// A wallpaper whose folder went away while it was on show is let go of
+    /// at the next scan, rather than held as if it were still there.
+    void forgetsAWallpaperThatLeftTheDisk();
 
     /// A wallpaper that appears on disk is noticed without being asked for,
     /// which is what makes a download in Steam turn up here by itself.
@@ -461,23 +466,25 @@ void TestWallpaperCore::selectsByIdAndRefusesUnknownOnes()
                   {QStringLiteral("index.html")});
 
     WallpaperCore core;
-    QSignalSpy currentChanges(&core, &WallpaperCore::currentChanged);
+    Showing showing;
+    showing.setLibrary(&core);
+    QSignalSpy currentChanges(&showing, &Showing::currentChanged);
 
     core.rescan({steam.path()});
     QCOMPARE(core.wallpapers().size(), 1);
-    QVERIFY(core.current().id.isEmpty());
+    QVERIFY(showing.current().id.isEmpty());
 
-    QVERIFY(!core.select(QStringLiteral("nobody")));
-    QVERIFY2(core.current().id.isEmpty(), "an unknown id changed the choice");
+    QVERIFY(!showing.select(QStringLiteral("nobody")));
+    QVERIFY2(showing.current().id.isEmpty(), "an unknown id changed the choice");
     QCOMPARE(currentChanges.count(), 0);
 
-    QVERIFY(core.select(QStringLiteral("777")));
-    QCOMPARE(core.current().id, QStringLiteral("777"));
-    QCOMPARE(core.current().title, QStringLiteral("Only one"));
+    QVERIFY(showing.select(QStringLiteral("777")));
+    QCOMPARE(showing.current().id, QStringLiteral("777"));
+    QCOMPARE(showing.current().title, QStringLiteral("Only one"));
     QCOMPARE(currentChanges.count(), 1);
 
-    core.clear();
-    QVERIFY(core.current().id.isEmpty());
+    showing.clear();
+    QVERIFY(showing.current().id.isEmpty());
     QCOMPARE(currentChanges.count(), 2);
 }
 
@@ -490,16 +497,18 @@ void TestWallpaperCore::staysQuietWhenTheChoiceIsTheSame()
                   {QStringLiteral("a.mp4")});
 
     WallpaperCore core;
+    Showing showing;
+    showing.setLibrary(&core);
     core.rescan({steam.path()});
-    QSignalSpy currentChanges(&core, &WallpaperCore::currentChanged);
+    QSignalSpy currentChanges(&showing, &Showing::currentChanged);
 
-    QVERIFY(core.select(QStringLiteral("888")));
+    QVERIFY(showing.select(QStringLiteral("888")));
     QCOMPARE(currentChanges.count(), 1);
 
     // The same one again: it is chosen, so true, but nothing changed and
     // nothing may be announced.
-    QVERIFY(core.select(QStringLiteral("888")));
-    QCOMPARE(core.current().id, QStringLiteral("888"));
+    QVERIFY(showing.select(QStringLiteral("888")));
+    QCOMPARE(showing.current().id, QStringLiteral("888"));
     QVERIFY2(currentChanges.count() == 1, "choosing the same wallpaper announced a change");
 
     // A rescan goes through select() too, and must stay just as quiet.
@@ -561,16 +570,37 @@ void TestWallpaperCore::remembersWhatWasPlayedInThisRun()
                   {QStringLiteral("b.mp4")});
 
     WallpaperCore core;
+    Showing showing;
+    showing.setLibrary(&core);
     core.rescan({steam.path()});
     QVERIFY2(core.recent().isEmpty(), "something was played before anything was played");
 
-    QVERIFY(core.select(QStringLiteral("111")));
-    QVERIFY(core.select(QStringLiteral("222")));
-    QVERIFY(core.select(QStringLiteral("111")));
+    QVERIFY(showing.select(QStringLiteral("111")));
+    QVERIFY(showing.select(QStringLiteral("222")));
+    QVERIFY(showing.select(QStringLiteral("111")));
 
     // Going back to the first one moves it to the front rather than putting
     // it in the list twice, which an order in a menu has to get right.
     QCOMPARE(core.recent(), QStringList({QStringLiteral("111"), QStringLiteral("222")}));
+}
+
+void TestWallpaperCore::forgetsAWallpaperThatLeftTheDisk()
+{
+    QTemporaryDir steam;
+    QVERIFY(steam.isValid());
+    makeWallpaper(steam.path(), QStringLiteral("888"),
+                  R"({"title":"Going","type":"web","file":"index.html"})",
+                  {QStringLiteral("index.html")});
+
+    WallpaperCore core;
+    Showing showing;
+    showing.setLibrary(&core);
+    core.rescan({steam.path()});
+    QVERIFY(showing.select(QStringLiteral("888")));
+
+    QVERIFY(QDir(steam.path() + QStringLiteral("/steamapps/workshop/content/431960/888")).removeRecursively());
+    core.rescan({steam.path()});
+    QVERIFY2(showing.current().id.isEmpty(), "a wallpaper no longer on the disk was still on show");
 }
 
 void TestWallpaperCore::noticesAWallpaperArriving()

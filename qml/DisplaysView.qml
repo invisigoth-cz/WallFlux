@@ -14,7 +14,7 @@ import WallFlux
 ///
 /// One wallpaper, drawn on the screens that are ticked. Not a wallpaper
 /// per screen: that needs a player and a web view per screen at once, and
-/// `Wallpapers.current` stops being one answer.
+/// what is on show stops being one answer.
 ///
 /// The screens are Qt's own -- `Application.screens` -- so there is no
 /// `xrandr`, no `kscreen-doctor` and nobody's output to parse. Qt names a

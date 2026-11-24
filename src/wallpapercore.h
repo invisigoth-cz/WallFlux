@@ -215,7 +215,6 @@ class WallpaperCore : public QObject
     QML_SINGLETON
 
     Q_PROPERTY(QList<Wallpaper> wallpapers READ wallpapers NOTIFY wallpapersChanged)
-    Q_PROPERTY(Wallpaper current READ current NOTIFY currentChanged)
     Q_PROPERTY(QStringList recent READ recent NOTIFY recentChanged)
 
     /// The ids of everything on the disk, for anyone who has an id and
@@ -232,7 +231,12 @@ public:
     ~WallpaperCore() override;
 
     QList<Wallpaper> wallpapers() const { return m_wallpapers; }
-    Wallpaper current() const { return m_current; }
+    /// The wallpaper with this id, or an empty one where none has it.
+    Q_INVOKABLE Wallpaper find(const QString &id) const;
+
+    /// Says this one was put on show, which puts it first in `recent`. An
+    /// id not in the library is ignored.
+    Q_INVOKABLE void played(const QString &id);
 
     /// The wallpapers chosen in this run, the last one first.
     ///
@@ -260,13 +264,6 @@ public:
     /// Looks through these Steam installs rather than the ones found on this
     /// machine, so a test can work on a folder of its own making.
     void rescan(const QStringList &steamRoots);
-
-    /// Makes the wallpaper with this id the current one. Returns false, and
-    /// changes nothing, if no wallpaper has that id.
-    Q_INVOKABLE bool select(const QString &id);
-
-    /// Forgets the current wallpaper, leaving the screen blank.
-    Q_INVOKABLE void clear();
 
     /// Takes one wallpaper off the disk, folder and all, and says whether
     /// it went.
@@ -332,7 +329,6 @@ public:
 
 signals:
     void wallpapersChanged();
-    void currentChanged();
     void recentChanged();
 
 private:
@@ -371,5 +367,4 @@ private:
     QStringList m_roots;
 
     QList<Wallpaper> m_wallpapers;
-    Wallpaper m_current;
 };
