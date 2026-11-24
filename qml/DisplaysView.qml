@@ -407,7 +407,9 @@ Item {
         anchors.centerIn: parent
         modal: true
         padding: 18
-        implicitWidth: 460
+        // As wide as the playlists' own, and held there: at 460 the row of
+        // buttons ran out past the edge once Delete asked "Really delete?".
+        width: 560
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         // Escape reaches a popup only where it has the keyboard.
         focus: true

@@ -2876,6 +2876,12 @@ on the branch `tapeta-na-monitor` until the user has looked at it.
 
 **Then the list as the user left it on 16 November, to be offered:**
 
+- **Two wallpapers to look into** (the user's word of 24 November):
+  *fallout_wallpaper by sodaz* (a video, 2594612552) plays no sound though
+  it surely has one; *Stargate Dialing Computer* (a page, 1795132779) has
+  interactive parts -- the right sequence opens the gate -- and the
+  wallpaper's surfaces take no input, so whether and how it can be played
+  with is the question.
 - **Wallpapers against Windows**: Augmentation's bolts (white-violet there,
   blue here), Space Visualizer's lava spark fans (fewer a minute), DOOM's D
   and M (follow the music at 0.75), red specks in Star Citizen (unchecked),
