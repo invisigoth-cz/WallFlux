@@ -430,44 +430,146 @@ Item {
             const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
             return Emblem.svg(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
         }
-        tooltip: !picker.selected.showing.current.playable ? qsTr("WallFlux")
-                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(picker.selected.showing.current.title)
-                 : qsTr("WallFlux — %1").arg(picker.selected.showing.current.title)
+        tooltip: {
+            if (picker.manyMonitors)
+                return [qsTr("WallFlux")].concat(root.displays.filter(d => d.connected).map(d => root.trayLine(d))).join("\n");
+            const d = picker.selected;
+            return !d.showing.current.playable ? qsTr("WallFlux")
+                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(d.showing.current.title)
+                 : qsTr("WallFlux — %1").arg(d.showing.current.title);
+        }
 
         // Not one checkable item here: the words say the state. Recent is
         // the last five chosen in this run, the one on show among them and
-        // greyed out; nothing of it is kept for the next start.
-        items: [
+        // greyed out; nothing of it is kept for the next start. With a
+        // wallpaper on each of several monitors, each monitor has a menu of
+        // its own with the same things in it, and pausing and muting
+        // everything stay at the top -- two things apart from each
+        // monitor's own, so that Resume all leaves a monitor paused on its
+        // own standing still.
+        items: picker.manyMonitors ? root.manyItems() : root.oneItems(picker.selected)
+
+        onClicked: root.showPicker()
+        onTriggered: (id) => {
+            // "<what>@<monitor>", or "<what>@<monitor>:<which>".
+            const at = id.indexOf("@");
+            if (at >= 0) {
+                const what = id.slice(0, at);
+                const rest = id.slice(at + 1);
+                const colon = rest.indexOf(":");
+                const key = colon >= 0 ? rest.slice(0, colon) : rest;
+                const which = colon >= 0 ? rest.slice(colon + 1) : "";
+                root.onDisplay(root.display(key), what, which);
+                return;
+            }
+            switch (id) {
+            case "choose": root.showPicker(); break;
+            case "pauseall": root.paused = !root.paused; break;
+            case "muteall": picker.muted = !picker.muted; break;
+            case "quit": Qt.quit(); break;
+            default:
+                if (id.startsWith("profile:"))
+                    root.applyProfile(Profiles.named(id.slice(8)));
+            }
+        }
+    }
+
+    /// One monitor's line: its label and what it shows.
+    function trayLine(d) {
+        const title = d.showing.current.id !== "" ? d.showing.current.title : qsTr("nothing");
+        return qsTr("%1 — %2").arg(root.monitorLabel(d.key, root.connectedNames)).arg(title);
+    }
+
+    /// What a display's own menu holds. `key` is put into every id, so the
+    /// one menu works for the single display of today and for each of
+    /// several.
+    function displayItems(d) {
+        const key = d.key;
+        const own = root.perDisplay;
+        return [
+            { id: "pause@" + key, text: d.pausedHere ? qsTr("Resume") : qsTr("Pause"),
+              icon: d.pausedHere ? "media-playback-start" : "media-playback-pause",
+              enabled: d.playing },
+            { id: "previous@" + key, text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
+            { id: "next@" + key, text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
+            { id: "mute@" + key, text: root.isMuted(key, root.mutedKeys) ? qsTr("Unmute") : qsTr("Mute"),
+              icon: root.isMuted(key, root.mutedKeys) ? "audio-volume-high" : "audio-volume-muted" },
+            { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
+              enabled: Wallpapers.recent.length > 0,
+              submenu: Wallpapers.recent.slice(0, 5).map(id => ({
+                  id: "recent@" + key + ":" + id, text: picker.titleOf(id),
+                  enabled: id !== d.showing.current.id })) },
+            { text: qsTr("Playlists"), icon: "view-media-playlist",
+              enabled: Playlists.all.length > 0,
+              submenu: Playlists.all.map(one => ({
+                  id: "playlist@" + key + ":" + one.name,
+                  text: (d.run.playing === one.name ? "▶  " : "") + one.name })) },
+            { id: "remove@" + key, text: qsTr("Remove wallpaper"), icon: "edit-clear",
+              enabled: d.showing.current.id !== "", visible: own }
+        ].filter(one => one.visible !== false);
+    }
+
+    /// The menu with one display: today's, Pause and Mute being the whole
+    /// program's.
+    function oneItems(d) {
+        return [
             { id: "choose", text: qsTr("Choose wallpaper…") },
             { separator: true },
-            { id: "pause", text: root.paused ? qsTr("Resume") : qsTr("Pause"),
+            { id: "pauseall", text: root.paused ? qsTr("Resume") : qsTr("Pause"),
               icon: root.paused ? "media-playback-start" : "media-playback-pause",
-              enabled: picker.selected.playing },
-            { id: "previous", text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
-            { id: "next", text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
-            { id: "mute", text: picker.muted ? qsTr("Unmute") : qsTr("Mute"),
+              enabled: d.playing },
+            { id: "previous@" + d.key, text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
+            { id: "next@" + d.key, text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
+            { id: "muteall", text: picker.muted ? qsTr("Unmute") : qsTr("Mute"),
               icon: picker.muted ? "audio-volume-high" : "audio-volume-muted" },
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
               submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== picker.selected.showing.current.id })) },
+                  id: "recent@" + d.key + ":" + id, text: picker.titleOf(id),
+                  enabled: id !== d.showing.current.id })) },
             { separator: true },
             { id: "quit", text: qsTr("Quit") }
-        ]
+        ];
+    }
 
-        onClicked: root.showPicker()
-        onTriggered: (id) => {
-            switch (id) {
-            case "choose": root.showPicker(); break;
-            case "pause": root.paused = !root.paused; break;
-            case "previous": picker.selected.step(-1); break;
-            case "next": picker.selected.step(1); break;
-            case "mute": picker.muted = !picker.muted; break;
-            case "quit": Qt.quit(); break;
-            default:
-                if (id.startsWith("recent:"))
-                    picker.selected.select(id.slice(7));
-            }
+    /// The menu with a wallpaper on each of several monitors.
+    function manyItems() {
+        const monitors = root.displays.filter(d => d.connected).map(d => ({
+            text: root.trayLine(d), icon: "video-display", submenu: root.displayItems(d) }));
+        return [
+            { id: "choose", text: qsTr("Choose wallpaper…") },
+            { separator: true }
+        ].concat(monitors).concat([
+            { separator: true },
+            { id: "pauseall", text: root.paused ? qsTr("Resume all") : qsTr("Pause all"),
+              icon: root.paused ? "media-playback-start" : "media-playback-pause" },
+            { id: "muteall", text: picker.muted ? qsTr("Unmute all") : qsTr("Mute all"),
+              icon: picker.muted ? "audio-volume-high" : "audio-volume-muted" },
+            { text: qsTr("Profiles"), icon: "document-open",
+              enabled: Profiles.all.length > 0,
+              submenu: Profiles.all.map(one => ({ id: "profile:" + one.name, text: one.name })) },
+            { separator: true },
+            { id: "quit", text: qsTr("Quit") }
+        ]);
+    }
+
+    /// One display's menu item chosen.
+    function onDisplay(d, what, which) {
+        if (!d)
+            return;
+        switch (what) {
+        case "pause": d.pausedHere = !d.pausedHere; break;
+        case "previous": d.step(-1); break;
+        case "next": d.step(1); break;
+        case "mute": root.setMuted(d.key, !root.isMuted(d.key)); break;
+        case "recent": d.select(which); break;
+        case "playlist":
+            if (d.run.playing === which)
+                d.run.stop();
+            else
+                d.run.start(Playlists.named(which));
+            break;
+        case "remove": root.removeFrom(d.key); break;
         }
     }
 }

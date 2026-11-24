@@ -422,15 +422,46 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   put. **And every offscreen picture is cleared when it is made** -- see the
   trap about memory given back.
 
-- **A wallpaper on every screen that is ticked for it.** The Displays tab
-  draws the monitors as they are arranged -- read off their positions on
-  the shared desktop, so it is the arrangement somebody set up in their own
-  display settings -- and gives each a switch. One wallpaper, drawn on the
-  ticked ones; not a wallpaper per screen.
+- **A wallpaper on each monitor, or one cloned onto all** (24 November,
+  Wallpaper Engine's "Wallpaper per display" and "Clone single wallpaper",
+  copied whole at the user's word but for stretching and splitting, read
+  off its `ui/dist/scripts/scripts.js` and `locale/`; the design is
+  `docs/superpowers/specs/2026-11-24-tapeta-na-kazdy-monitor-design.md`).
+  What plays is a `Display` (`qml/Display.qml`): the wallpaper (`Showing`),
+  the playlist running on it (`PlaylistRun`), its pause and mute, its
+  transitions, the scene's music and a surface on each of its screens.
+  Per monitor there is one `Display` for every connector name seen in this
+  run, kept while the monitor is unplugged -- its playlist held -- and
+  picked up when it comes back; cloned there is one, on every monitor not
+  left out of it (`excludedFromClone`). `picker.layout` is `perDisplay` (the
+  default) or `clone`; the old ticks were read once as monitors left out
+  (`screensCarried`).
 
-  **Worked out once, as Wallpaper Engine's "Clone single wallpaper".** The
-  first ticked screen plays the wallpaper -- the scene, the video, the page and
-  the transitions -- with its picture as a layer, and every other screen is a
+  **Every monitor's sound plays at once**, each muted on its own
+  (`mutedMonitors`, by key) apart from Mute all (`picker.muted`); **pause is
+  the same, two things** -- a monitor's own (`pausedHere`) and everything's
+  (`root.paused`), and Resume all leaves a monitor paused on its own
+  standing (the user's word). The library works on the chosen monitor
+  (`picker.selectedKey`, remembered; Choose monitor beside Filters, open
+  with the window while there are several, `chooserOnOpen`): a double click,
+  the strip, the panel's settings -- `propertiesOf` keyed `key|id`, the old
+  bare-id values standing in -- and the footer. The Monitors tab (Displays)
+  draws them with `DisplayMap`, and a right click changes, removes, copies
+  to, swaps with and mutes, and while cloning makes a monitor the source
+  (`cloneSource`) or flips its copy (`flippedMonitors`). **Profiles**
+  (`Profiles`, `profiles.json`) are the whole arrangement under a name,
+  loaded from the tab or the tray; nothing plays at start still. The tray
+  has a menu per monitor with two or more and the layout per monitor, and
+  today's menu otherwise. A window covering a monitor pauses that one, or
+  every one with "Pause all"/"Stop all" (`whenCovered` `pauseall`/`stopall`).
+  Measured on this laptop (A8-6410) at 1920x1200 on two virtual outputs:
+  one cloned light scene 9 % of a core, two light scenes 21 %, DOOM alone
+  124 %, DOOM and Space Visualizer 161 % -- the four cores saturate there,
+  and a heavy scene simply draws fewer frames, as in Wallpaper Engine; no
+  brake was built (the user's choice).
+
+  **Worked out once while cloned.** The first screen of the clone plays the
+  wallpaper with its picture as a layer, and every other screen is a
   `Mirror` showing that texture, cropped to fill. Until 6 November each screen
   ran a simulation, a decoder and a page of its own: twice the CPU on two
   screens (Space Visualizer 13 % of a core against 7 now, 6 on one), a video's
@@ -438,14 +469,23 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   --virtual --output-count 2` under `dbus-run-session`, so that the real
   KWin's scripts are left alone: the two screens' grabs identical to the pixel.
 
-  **A window covers the wallpaper only where it covers every ticked screen**
-  (23 November, found on the laptop with a monitor beside it): the KWin
-  script names the outputs a window fills, `Main.qml` hands `ScreenCover`
-  the ticked ones as `shownOn`, and `covered` is all of them. Until then a
-  maximised VS Code on the laptop paused the wallpaper on the monitor too.
-  The first screen keeps drawing while it is covered and the others in
-  view -- measured, the mirror moves -- so nothing had to change about
-  which screen works the wallpaper out.
+  **A window covers a display only where it covers every one of its
+  screens** (23 November, found on the laptop with a monitor beside it):
+  the KWin script names the outputs a window fills, `ScreenCover.coveredScreens`
+  lists them, and each `Display` checks its own. Until then a maximised VS
+  Code on the laptop paused the wallpaper on the monitor too.
+
+  **Testing it without touching the desktop**: a `kwin_wayland --virtual
+  --output-count 2` under `dbus-run-session --config-file` with a bus whose
+  only `servicedir` is empty, so nothing is activated (no portal, no
+  ksecretd crashing into DrKonqi), a bare `StatusNotifierWatcher` in Python
+  for the tray, `XDG_RUNTIME_DIR` and `XDG_CONFIG_HOME` of its own (the
+  single-copy lock and the settings) and `PIPEWIRE_RUNTIME_DIR` the real
+  one for sound. Outputs are unplugged with `kscreen-doctor
+  output.Virtual-1.disable` **with that session's environment** -- without
+  it the command reaches the real desktop. Grabs with `spectacle -b -n -f`
+  inside it; the tray read over `com.canonical.dbusmenu GetLayout` and
+  clicked with `Event`.
 
   **The screens are Qt's own**, `Qt.application.screens`. No `xrandr`, no
   `wlr-randr`, no `kscreen-doctor`, nobody's output parsed: Qt names a
@@ -560,6 +600,12 @@ src/language.h        Language: the EN/CZ switch, and what it has to call
 src/language.cpp      installs a QTranslator and retranslates the engine
 src/playlists.h       Playlists: wallpapers that take turns, and the file
 src/playlists.cpp     reading and writing ~/.config/WallFlux/wallflux/
+src/playlistrun.h     PlaylistRun: one playlist running, one per display
+src/playlistrun.cpp   the clock, the shuffle, holding and turning
+src/showing.h         Showing: the wallpaper one display shows
+src/showing.cpp       quiet when nothing changes, reread on a rescan
+src/profiles.h        Profiles: the arrangement of the monitors under a name
+src/profiles.cpp      profiles.json beside the playlists
 src/otheraudio.h      OtherAudio: is another program using the speakers
 src/otheraudio.cpp    `pactl subscribe` for when, `pw-dump` for what is running
 src/steamworks.h      Steamworks: can the workshop be asked, and the way in
@@ -574,8 +620,8 @@ src/pointer.h         Pointer: where the mouse is, for the scenes
 src/pointer.cpp       another KWin script, loaded only while it is watched
 src/kwinscript.h      KWinScript: a script run inside KWin, shared by both
 src/kwinscript.cpp    written to a file, unloaded first, loaded, started
-qml/Main.qml          the program: the tray icon, the picker, one surface
-                      per screen, and the transitions they share
+qml/Main.qml          the program: the tray icon, the picker, a Display per
+                      monitor or one cloned, and what is done across them
 qml/SceneSound.qml    one sound object of a scene, played as it asks
 qml/WallpaperSurface.qml  one screen's wallpaper: the layer-shell window,
                       the web view, the player, and what a transition
@@ -604,8 +650,12 @@ src/tray.h            Tray: the panel's icon and its menu, built with Qt Widgets
 src/tray.cpp          the menu built from QML's list, the icon drawn per size
 icons/wallflux.svg    the application's icon, installed to hicolor
 fonts/                the seven typefaces and their OFL licences
-qml/DisplaysView.qml  the Displays tab: the screens drawn to scale and a
-                      switch for each
+qml/DisplaysView.qml  the Displays tab: the layout, the monitors and each
+                      one's menu, profiles
+qml/DisplayMap.qml    the monitors drawn to scale with what they show, their
+                      numbers and speakers -- the tab's and the chooser's
+qml/Display.qml       what plays on one monitor, or cloned on all: the
+                      wallpaper, its playlist, pause, transitions, music
 qml/Picker.qml        the picker window: header, search, grid, footer
 qml/WallpaperCard.qml one preview, its band and its name
 qml/Details.qml       what is known about one wallpaper, beside the grid --
@@ -639,6 +689,7 @@ tests/tst_wallpapercore.cpp   QtTest against a fake Steam tree in a temp dir
 tests/tst_otheraudio.cpp      reading pw-dump's answer, no sound card needed
 tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
 tests/tst_pointer.cpp         known only while watched, the same way
+tests/tst_profiles.cpp        a profile kept whole, monitors away included
 tests/tst_playlists.cpp       what a playlist remembers and how long a
                               wallpaper stays -- five seconds of suite time
                               on purpose, see below
@@ -681,8 +732,9 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
 `QML_NAMED_ELEMENT` + `QML_SINGLETON` (**not** `setContextProperty` or
 `qmlRegisterType`, which qmllint cannot see):
 
-- properties: `wallpapers` (QList<Wallpaper>), `current`
-- methods: `rescan()`, `rescan(roots)`, `select(id)`, `clear()`,
+- properties: `wallpapers` (QList<Wallpaper>)
+- methods: `rescan()`, `rescan(roots)`, `find(id)`, `played(id)` (first in
+  `recent`),
   `discard(id)` (deletes the workshop folder -- the other half of giving a
   wallpaper back, see the trap), `details(id)` (`{ size, resolution }`,
   read off the disk when the picker shows one card and kept afterwards)
@@ -697,6 +749,11 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
   `resolution`, `sizeOnDisk`, `added`, `bytes`, `soundKnown`, `hasSound`,
   `hasFile`, `playable`
 - also on the singleton: `recent` (ids chosen in this run, newest first)
+
+What a display shows is a `Showing` (`QML_ELEMENT`, `src/showing.h`):
+`library` (`Wallpapers`), `current`, `select(id)` -- **silent when the
+choice has not changed**, the trap below -- and `clear()`; it rereads the
+library on a rescan and lets go of a wallpaper that left the disk.
 
 `Steamworks` and `Tags` are singletons of the same module:
 
@@ -721,14 +778,10 @@ tools/sweep.sh        `shot` over every scene wallpaper on the machine,
 remembers anything between runs:
 
 - `all` (each `{ name, ids, hours, minutes, seconds, shuffle, videoEnds,
-  whilePaused, alwaysFirst, transition, transitionMs }`), `playing` (a
-  name or empty), `changesOnVideoEnd`, `changesWhilePaused`, `transition`
-  and `transitionMs` (what the *running* one was told, empty or false
-  while none is); `save(name, ids, how)` -- `how` being those
-  settings by name rather than nine positional arguments --
-  `forget(name)`, `named(name)`, `start(name)`, `stop()`, `next()` (on to
-  the next one now and wind the clock again), `hold(bool)` (stop the clock
-  without stopping the playlist, and pick it up where it left off), and
+  whilePaused, alwaysFirst, transition, transitionMs }`); `save(name, ids,
+  how)` -- `how` being those settings by name rather than nine positional
+  arguments -- `forget(name)` and `rename(from, to)`, which say
+  `forgotten`/`renamed` so every run of it follows, `named(name)`, and
   the public static `staysFor(one)` -- the three numbers added up in seconds, never
   less than five, worked out in one place because that is the sum a test
   can check; and `asClock(seconds)` -- the same rule read backwards,
@@ -736,8 +789,16 @@ remembers anything between runs:
   three typed boxes to. An exact inverse, so the boxes can never show an
   interval that is not the one that will run: three noughts typed in read
   back as five seconds, which is what the playlist will actually wait
-- it plays nothing itself: it says `plays(id)` and `Main.qml` hands that to
-  `Wallpapers.select()`, the same place a click on a card goes
+- running one is a `PlaylistRun` (`QML_ELEMENT`, one per `Display`):
+  `playing`, `changesOnVideoEnd`, `changesWhilePaused`, `transition` and
+  `transitionMs` (what the *running* one was told, empty or false while
+  none is), `start(Playlists.named(name))`, `stop()`, `next()` (on to the
+  next one now and wind the clock again), `previous()`, `hold(bool)` (stop
+  the clock without stopping the playlist, and pick it up where it left
+  off). It plays nothing itself: it says `plays(id)` and its `Display`
+  puts that on show, the same place a click on a card goes
+- `Profiles` is the same shape for whole arrangements (`profiles.json`
+  beside it): `all`, `save(name, arrangement)`, `forget`, `rename`, `named`
 - the file is `playlists.json` under `QStandardPaths::AppConfigLocation`,
   which on this machine is `~/.config/WallFlux/wallflux/`
 
@@ -747,16 +808,18 @@ view. Each screen's `SceneView` is handed `pointer` -- the position less
 `Screen.virtualX/Y`, or undefined -- and passes it on as a fraction.
 
 `OtherAudio` and `ScreenCover` are singletons of the same module -- `playing`,
-and `covered` with `focused` (another program's normal window has the
+and `coveredScreens` (by connector name, none while the desktop is shown)
+with `focused` (another program's normal window has the
 keyboard; the KWin script is handed our pid, so the picker does not count) --
 with no business of their own in what the answer is used for. So is `Power`
-(`hasBattery`, `onBattery`, `percent`). `Main.qml`'s `covered` is a window in
+(`hasBattery`, `onBattery`, `percent`). A `Display`'s `covered` is a window in
 front where `quietUnderWindows` asks, `focused` where `pauseOnFocus` asks, or
 a battery under `batteryFloor`; `drawnWith` is Low on a battery where
 `batteryLow` asks. It is put together with the rest in one line:
 
 ```qml
-readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover.covered
+readonly property bool silent: display.mutedHere || display.mutedAll || display.covered
+    || display.reasons.some(r => r.on && r.mode !== "keep")
 ```
 
 ## Decisions that are settled — do not reopen without being asked
@@ -2791,14 +2854,8 @@ accounts stayed closed, and WallFlux is installed and updated by
 16 November -- no releases until the AUR -- no longer stands, and
 registering there is no longer to be reminded of.
 
-**Next, chosen by the user on 23 November: a different wallpaper on each
-monitor, and their sounds** -- Wallpaper Engine's mode beside "Clone single
-wallpaper", which stays as a choice. Go through how it is worked with the
-user before writing any of it: how a monitor is chosen and where a click
-in the library goes, whose sound plays when both have one, and whether
-playlists, the tray's Next and Recent, a wallpaper's properties and the
-quality are per monitor. `ScreenCover` already knows which outputs are
-covered (`m_coveredScreens`).
+**Done on 24 November: a wallpaper on each monitor** (see What works today),
+on the branch `tapeta-na-monitor` until the user has looked at it.
 
 **Then the list as the user left it on 16 November, to be offered:**
 

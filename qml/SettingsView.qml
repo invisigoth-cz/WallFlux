@@ -50,6 +50,18 @@ Item {
         { value: "stop", name: qsTr("Stop") }
     ]
 
+    /// The same for a window over the wallpaper, where each of several
+    /// monitors has its own: pausing or stopping only the monitor that is
+    /// covered, or every one -- Wallpaper Engine's "per monitor" and "all".
+    readonly property var windowCases: view.picker.manyMonitors ? [
+        { value: "keep", name: qsTr("Keep playing") },
+        { value: "mute", name: qsTr("Mute", "what the wallpaper does: one of four") },
+        { value: "pause", name: qsTr("Pause that monitor") },
+        { value: "pauseall", name: qsTr("Pause all") },
+        { value: "stop", name: qsTr("Stop that monitor") },
+        { value: "stopall", name: qsTr("Stop all") }
+    ] : view.cases
+
     /// Wallpaper Engine's presets, by the pictures a second each draws.
     readonly property var rates: [
         { value: 10, name: "10" },
@@ -870,10 +882,30 @@ Item {
                                 + "and quiet; Stop lets go of it altogether, freeing its memory, and "
                                 + "loads it again when the window goes.")
 
-                    Choice {
-                        options: view.cases
-                        current: view.picker.underWindow
-                        onChosen: (value) => view.picker.whenCovered = value
+                    // Under the words, since six do not fit a row beside them.
+                    below: Flow {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Repeater {
+                            model: view.windowCases
+
+                            delegate: RoundedButton {
+                                id: windowOption
+
+                                required property var modelData
+                                // With one monitor, "all" is that one.
+                                readonly property bool lit: windowOption.modelData.value
+                                    === (view.picker.manyMonitors ? view.picker.underWindow
+                                                                  : view.picker.underWindow.replace("all", ""))
+
+                                text: windowOption.modelData.name
+                                accent: windowOption.lit ? windowOption.palette.highlight : "transparent"
+                                palette.buttonText: windowOption.lit ? view.ink(windowOption.palette.highlight)
+                                                                     : windowOption.palette.buttonText
+                                onClicked: view.picker.whenCovered = windowOption.modelData.value
+                            }
+                        }
                     }
                 }
 
@@ -1092,6 +1124,10 @@ Item {
                                 + "• A right click pauses and resumes the wallpaper, goes to the next or "
                                 + "previous wallpaper -- of the playlist, if one is running, and "
                                 + "otherwise in the library's order -- mutes, offers the last five wallpapers and quits.\n"
+                                + "• With a wallpaper on each of several monitors, each monitor has a "
+                                + "menu of its own with all of that, its playlists and Remove; Pause all "
+                                + "and Mute all stay at the top, apart from each monitor's own, and so "
+                                + "do the saved profiles.\n"
                                 + "• With Minimise on close (General), closing this window leaves "
                                 + "WallFlux running in the tray.\n"
                                 + "• Peek at Desktop in the panel puts this window away with the others "
@@ -1110,11 +1146,20 @@ Item {
                 Guide {
                     glyph: "preferences-desktop-display"
                     title: qsTr("Screens")
-                    about: qsTr("• The Displays tab shows your monitors as they are arranged. Switch "
-                                + "on each one the wallpaper should be on; the same wallpaper plays on "
-                                + "all of them.\n"
-                                + "• A window covering one of them does not stop it on the others: it "
-                                + "stands still only when every one is covered.")
+                    about: qsTr("• Each monitor has a wallpaper of its own, with its own playlist, "
+                                + "sound and settings. Choose monitor, beside Filters in the library, "
+                                + "says which one a double click goes to; it opens with the window "
+                                + "while there are several, unless told not to.\n"
+                                + "• The Displays tab shows your monitors as they are arranged. A click "
+                                + "chooses one, the speaker mutes it, and a right click changes or "
+                                + "removes its wallpaper, copies it to another monitor or swaps the two.\n"
+                                + "• Layout there switches to Clone one wallpaper: one wallpaper on every "
+                                + "monitor. Remove leaves one monitor out of it; a right click makes a "
+                                + "monitor the one it is worked out on, or turns a copy over.\n"
+                                + "• Save profile keeps what every monitor shows under a name, to load "
+                                + "again there or from the tray.\n"
+                                + "• A window covering one monitor stops that one only, or all of them, "
+                                + "as Performance says.")
                 }
 
                 Guide {
