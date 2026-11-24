@@ -85,7 +85,8 @@ Rectangle {
     /// Whether the window is too short for the picture to stand still: it
     /// then scrolls with the list. Worked out from the column's height,
     /// which the window sets, and from what the picture, the name and the
-    /// buttons ask for -- none of which this changes, so it cannot loop.
+    /// buttons ask for -- none of which this changes, so it cannot loop:
+    /// the picture and the name are the list's width in either place.
     readonly property bool short: column.height - head.implicitHeight - doing.implicitHeight
                                   - 2 * column.spacing - 16 < panel.roomForTheList
 
@@ -384,7 +385,12 @@ Rectangle {
         id: head
 
         parent: panel.short ? inList : atTop
-        width: parent.width
+        // The list's width wherever it stands, never its parent's: `short`
+        // is worked out from how tall this is, and a height that changed
+        // with the place it stands in -- the place not yet shown is nought
+        // wide -- moved it there and back for ever, the window frozen
+        // (24 November, opening the panel in a window 760 high).
+        width: told.width
         spacing: 14
 
         PreviewTile {
