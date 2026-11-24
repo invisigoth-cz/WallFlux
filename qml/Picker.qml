@@ -647,6 +647,18 @@ ApplicationWindow {
         picker.run.start(Playlists.named(name));
     }
 
+    // Choosing another monitor puts its playlist on the strip. One with
+    // none running leaves the strip as it was, so a playlist being put
+    // together is not thrown away by looking at another monitor.
+    // Read off `selected` itself: `run`, bound to it, may not have caught
+    // up yet when this runs.
+    onSelectedChanged: {
+        const now = picker.selected ? picker.selected.run.playing : "";
+        picker.lastPlaying = now;
+        if (now !== "")
+            picker.loadPlaylist(now);
+    }
+
     /// The playlist that played last, to tell a rename from another start.
     property string lastPlaying: ""
 
