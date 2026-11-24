@@ -97,10 +97,10 @@ Item {
     /// paused, and it is why its own playlists look stuck to people who
     /// leave a window maximised.
     readonly property bool holdingThePlaylist:
-        (Playlists.changesOnVideoEnd && root.showingVideo)
-        || (root.covered && !Playlists.changesWhilePaused)
+        (playlistRun.changesOnVideoEnd && root.showingVideo)
+        || (root.covered && !playlistRun.changesWhilePaused)
 
-    onHoldingThePlaylistChanged: Playlists.hold(root.holdingThePlaylist)
+    onHoldingThePlaylistChanged: playlistRun.hold(root.holdingThePlaylist)
 
     // The mouse is asked after only while a scene is on show and in view:
     // nothing else here follows it, and every move is a call over the bus.
@@ -158,6 +158,7 @@ Item {
             required property int index
 
             onScreen: modelData
+            run: playlistRun
             // The first screen works the wallpaper out and the others show
             // its picture, as Wallpaper Engine's "Clone single wallpaper".
             primary: index === 0
@@ -217,6 +218,7 @@ Item {
         // compositor keeps in the background and which take no input, and a
         // window belonging to one would be dragged down there with it.
         transientParent: null
+        run: playlistRun
         onChose: (id) => Wallpapers.select(id)
 
         /// Whether peeking at the desktop put this window away, and so
@@ -265,7 +267,7 @@ Item {
     /// would leave the slowest screen holding a picture of the *new*
     /// wallpaper -- a fade from a thing to itself, which is a cut.
     function changeTo(id) {
-        const asked = Playlists.transition;
+        const asked = playlistRun.transition;
         root.fading = asked === "random" ? (Math.random() < 0.5 ? "fade" : "black") : asked;
 
         // Nothing to cross from on the first wallpaper of a playlist, and
@@ -288,7 +290,7 @@ Item {
         // meant to be the darkest moment of it.
         if (root.fading !== "black")
             rescue.restart();
-        surfaces.objectAt(0).holdStill(root.fading, Playlists.transitionMs);
+        surfaces.objectAt(0).holdStill(root.fading, playlistRun.transitionMs);
     }
 
     /// One screen is holding. The last one to say so is what lets the
@@ -313,7 +315,7 @@ Item {
         if (id !== "")
             Wallpapers.select(id);
         if (surfaces.count > 0)
-            surfaces.objectAt(0).release(how, Playlists.transitionMs);
+            surfaces.objectAt(0).release(how, playlistRun.transitionMs);
     }
 
     /// The screen that never answered. A grab comes back only while the
@@ -329,8 +331,19 @@ Item {
     /// A playlist puts its wallpapers on the desktop the same way a click
     /// does -- it says which one and nothing more, so there is one place
     /// where a wallpaper starts playing rather than two.
+    PlaylistRun {
+        id: playlistRun
+    }
+
+    // A playlist renamed or thrown away in the library reaches the run.
     Connections {
         target: Playlists
+        function onRenamed(from, to) { playlistRun.renamed(from, to); }
+        function onForgotten(name) { playlistRun.forgotten(name); }
+    }
+
+    Connections {
+        target: playlistRun
         function onPlays(id) {
             root.changeTo(id);
         }
@@ -339,7 +352,7 @@ Item {
         // wallpaper has to be told so: the binding above has not changed,
         // so nothing else would say it.
         function onPlayingChanged() {
-            Playlists.hold(root.holdingThePlaylist);
+            playlistRun.hold(root.holdingThePlaylist);
         }
     }
 
@@ -352,11 +365,11 @@ Item {
     /// show, or -- switched off, which leaves nothing on show -- from the one
     /// played last, so that Next after Off is the next one and not the first.
     function step(by) {
-        if (Playlists.playing !== "") {
+        if (playlistRun.playing !== "") {
             if (by > 0)
-                Playlists.next();
+                playlistRun.next();
             else
-                Playlists.previous();
+                playlistRun.previous();
             return;
         }
         const order = picker.shown.filter(w => w.playable);

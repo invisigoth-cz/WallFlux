@@ -116,6 +116,8 @@ qt_add_qml_module(wallflux
         src/otheraudio.cpp
         src/playlists.h
         src/playlists.cpp
+        src/playlistrun.h
+        src/playlistrun.cpp
         src/language.h
         src/language.cpp
         src/screencover.h
@@ -278,6 +280,7 @@ if(Qt6Test_FOUND)
     qt_add_executable(tst_playlists
         tests/tst_playlists.cpp
         src/playlists.cpp
+        src/playlistrun.cpp
     )
     target_include_directories(tst_playlists PRIVATE src)
     target_link_libraries(tst_playlists PRIVATE Qt6::Qml Qt6::Test)

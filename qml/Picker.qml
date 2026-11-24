@@ -31,6 +31,10 @@ ApplicationWindow {
     /// Whether the sound is off. Read by the players in Main.qml, together
     /// with `volume`: the controls in this window are the setting itself, so
     /// there is one place it lives and nothing to keep in step.
+    /// The playlist running on the wallpaper, which the strip, the
+    /// Playlists button and Turn off read and drive.
+    required property PlaylistRun run
+
     property bool muted: false
 
     /// How loud a video wallpaper plays, 0 to 1.
@@ -556,7 +560,7 @@ ApplicationWindow {
     /// button to hear from it was a step nobody wanted.
     function playPlaylist(name) {
         picker.loadPlaylist(name);
-        Playlists.start(name);
+        picker.run.start(Playlists.named(name));
     }
 
     /// The playlist that played last, to tell a rename from another start.
@@ -569,10 +573,10 @@ ApplicationWindow {
     // another. A rename of the one playing is the same playlist under a new
     // name, and keeps whatever is on the strip.
     Connections {
-        target: Playlists
+        target: picker.run
 
         function onPlayingChanged() {
-            const now = Playlists.playing;
+            const now = picker.run.playing;
             const before = picker.lastPlaying;
             picker.lastPlaying = now;
             if (now === "")
@@ -1758,7 +1762,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 visible: !newName.visible
                                 elide: Text.ElideRight
-                                text: (Playlists.playing === row.modelData.name ? "▶  " : "")
+                                text: (picker.run.playing === row.modelData.name ? "▶  " : "")
                                       + row.modelData.name
                                 color: loading.picked === row.modelData.name
                                            ? picker.palette.highlightedText
@@ -2344,7 +2348,7 @@ ApplicationWindow {
                                         }
                                         Label {
                                             text: "✓"
-                                            visible: Playlists.playing
+                                            visible: picker.run.playing
                                                      === oneList.modelData.name
                                             color: oneList.palette.windowText
                                         }
@@ -2358,10 +2362,10 @@ ApplicationWindow {
                                     }
 
                                     onTriggered: {
-                                        if (Playlists.playing === oneList.modelData.name)
-                                            Playlists.stop();
+                                        if (picker.run.playing === oneList.modelData.name)
+                                            picker.run.stop();
                                         else
-                                            Playlists.start(oneList.modelData.name);
+                                            picker.run.start(Playlists.named(oneList.modelData.name));
                                     }
                                 }
                             }
@@ -3227,7 +3231,7 @@ ApplicationWindow {
                     // A playlist too, or its clock would put the next one
                     // on the desktop by itself a moment later.
                     onClicked: {
-                        Playlists.stop();
+                        picker.run.stop();
                         Wallpapers.clear();
                     }
                 }

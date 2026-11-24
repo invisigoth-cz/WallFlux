@@ -2,6 +2,7 @@
 // Copyright (C) 2026 invisigoth
 // With the Steamworks SDK linking exception; see LICENSE-EXCEPTION.
 
+#include "playlistrun.h"
 #include "playlists.h"
 
 #include <QSignalSpy>
@@ -49,7 +50,7 @@ private slots:
         QCOMPARE(one.value(QStringLiteral("alwaysFirst")).toBool(), true);
     }
 
-    /// A new name keeps everything else, goes on playing, and is refused
+    /// A new name keeps everything else, and is refused
     /// where it is empty or another playlist's.
     void renamesWithoutTakingAnotherName()
     {
@@ -57,7 +58,6 @@ private slots:
         p.save(QStringLiteral("a"), {QStringLiteral("1"), QStringLiteral("2")},
                {{QStringLiteral("seconds"), 30}});
         p.save(QStringLiteral("b"), {QStringLiteral("3")}, {});
-        p.start(QStringLiteral("a"));
 
         QVERIFY(!p.rename(QStringLiteral("a"), QStringLiteral("b")));
         QVERIFY(!p.rename(QStringLiteral("a"), QStringLiteral("  ")));
@@ -66,10 +66,8 @@ private slots:
 
         QVERIFY(p.named(QStringLiteral("a")).isEmpty());
         QCOMPARE(p.named(QStringLiteral("c")).value(QStringLiteral("seconds")).toInt(), 30);
-        QCOMPARE(p.playing(), QStringLiteral("c"));
         QCOMPARE(Playlists().named(QStringLiteral("c")).value(QStringLiteral("ids")).toStringList(),
                  (QStringList{QStringLiteral("1"), QStringLiteral("2")}));
-        p.stop();
     }
 
     /// Hours, minutes and seconds are added up rather than one of them
@@ -96,13 +94,14 @@ private slots:
         QFETCH(int, stays);
 
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("timed"), {QStringLiteral("1"), QStringLiteral("2")},
                        {{QStringLiteral("hours"), hours},
                         {QStringLiteral("minutes"), minutes},
                         {QStringLiteral("seconds"), seconds}});
 
-        QSignalSpy plays(&playlists, &Playlists::plays);
-        playlists.start(QStringLiteral("timed"));
+        QSignalSpy plays(&run, &PlaylistRun::plays);
+        run.start(playlists.named(QStringLiteral("timed")));
         // The first wallpaper goes on at once; what is being measured is
         // how long until the second.
         QCOMPARE(plays.count(), 1);
@@ -110,7 +109,7 @@ private slots:
         // Reading it off the playlist rather than off the timer, which is
         // private -- the two come from the same place.
         QCOMPARE(Playlists::staysFor(playlists.named(QStringLiteral("timed"))), stays);
-        playlists.stop();
+        run.stop();
     }
 
     /// What the settings popup does with whatever was typed into its three
@@ -145,6 +144,7 @@ private slots:
         QFETCH(int, rest);
 
         Playlists playlists;
+        PlaylistRun run;
         const QVariantMap clock = playlists.asClock(seconds);
         QCOMPARE(clock.value(QStringLiteral("hours")).toInt(), hours);
         QCOMPARE(clock.value(QStringLiteral("minutes")).toInt(), minutes);
@@ -162,16 +162,17 @@ private slots:
                               QStringLiteral("e"), QStringLiteral("f")};
 
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("held"), ids,
                        {{QStringLiteral("shuffle"), true},
                         {QStringLiteral("alwaysFirst"), true}});
 
         for (int go = 0; go < 20; ++go) {
-            QSignalSpy plays(&playlists, &Playlists::plays);
-            playlists.start(QStringLiteral("held"));
+            QSignalSpy plays(&run, &PlaylistRun::plays);
+            run.start(playlists.named(QStringLiteral("held")));
             QCOMPARE(plays.count(), 1);
             QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("first"));
-            playlists.stop();
+            run.stop();
         }
     }
 
@@ -186,15 +187,16 @@ private slots:
                               QStringLiteral("e"), QStringLiteral("f")};
 
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("loose"), ids,
                        {{QStringLiteral("shuffle"), true}});
 
         bool moved = false;
         for (int go = 0; go < 20 && !moved; ++go) {
-            QSignalSpy plays(&playlists, &Playlists::plays);
-            playlists.start(QStringLiteral("loose"));
+            QSignalSpy plays(&run, &PlaylistRun::plays);
+            run.start(playlists.named(QStringLiteral("loose")));
             moved = plays.takeFirst().at(0).toString() != QStringLiteral("first");
-            playlists.stop();
+            run.stop();
         }
         QVERIFY(moved);
     }
@@ -210,26 +212,27 @@ private slots:
     void holdingKeepsWhatWasLeft()
     {
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("held"), {QStringLiteral("a"), QStringLiteral("b")},
                        {{QStringLiteral("seconds"), 5}});
 
-        QSignalSpy plays(&playlists, &Playlists::plays);
-        playlists.start(QStringLiteral("held"));
+        QSignalSpy plays(&run, &PlaylistRun::plays);
+        run.start(playlists.named(QStringLiteral("held")));
         QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("a"));
 
         // Three seconds in, two to go.
         QTest::qWait(3000);
-        playlists.hold(true);
+        run.hold(true);
 
         // Held, so the two seconds never run out however long it sits.
         QVERIFY(!plays.wait(3000));
         QCOMPARE(plays.count(), 0);
 
         // And the two seconds are still two, not five.
-        playlists.hold(false);
+        run.hold(false);
         QVERIFY(plays.wait(3000));
         QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("b"));
-        playlists.stop();
+        run.stop();
     }
 
     /// A video reaching its end is `next()`, and it winds the clock again
@@ -237,43 +240,45 @@ private slots:
     void nextMovesOnAndRewindsTheClock()
     {
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("ends"), {QStringLiteral("a"), QStringLiteral("b")},
                        {{QStringLiteral("seconds"), 5}});
 
-        QSignalSpy plays(&playlists, &Playlists::plays);
-        playlists.start(QStringLiteral("ends"));
+        QSignalSpy plays(&run, &PlaylistRun::plays);
+        run.start(playlists.named(QStringLiteral("ends")));
         QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("a"));
 
         QTest::qWait(3000);
-        playlists.next();
+        run.next();
         QCOMPARE(plays.count(), 1);
         QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("b"));
 
         // Five seconds from now, not the two that were left: without the
         // rewind this would turn again almost at once.
         QVERIFY(!plays.wait(3000));
-        playlists.stop();
+        run.stop();
     }
 
     /// The tray's Previous goes back round from the first to the last.
     void previousGoesBackRound()
     {
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("back"),
                        {QStringLiteral("a"), QStringLiteral("b"), QStringLiteral("c")},
                        {{QStringLiteral("seconds"), 30}});
 
-        QSignalSpy plays(&playlists, &Playlists::plays);
-        playlists.start(QStringLiteral("back"));
-        playlists.previous();
-        playlists.next();
-        playlists.next();
-        playlists.previous();
+        QSignalSpy plays(&run, &PlaylistRun::plays);
+        run.start(playlists.named(QStringLiteral("back")));
+        run.previous();
+        run.next();
+        run.next();
+        run.previous();
         QStringList seen;
         for (const auto &one : std::as_const(plays))
             seen << one.at(0).toString();
         QCOMPARE(seen, (QStringList{"a", "c", "a", "b", "a"}));
-        playlists.stop();
+        run.stop();
     }
 
     /// What is running says what it was told, and says nothing once it
@@ -282,21 +287,75 @@ private slots:
     void saysWhatTheRunningPlaylistWasTold()
     {
         Playlists playlists;
+        PlaylistRun run;
         playlists.save(QStringLiteral("told"), {QStringLiteral("a")},
                        {{QStringLiteral("seconds"), 30},
                         {QStringLiteral("videoEnds"), true},
                         {QStringLiteral("whilePaused"), true}});
 
-        QCOMPARE(playlists.changesOnVideoEnd(), false);
-        QCOMPARE(playlists.changesWhilePaused(), false);
+        QCOMPARE(run.changesOnVideoEnd(), false);
+        QCOMPARE(run.changesWhilePaused(), false);
 
-        playlists.start(QStringLiteral("told"));
-        QCOMPARE(playlists.changesOnVideoEnd(), true);
-        QCOMPARE(playlists.changesWhilePaused(), true);
+        run.start(playlists.named(QStringLiteral("told")));
+        QCOMPARE(run.changesOnVideoEnd(), true);
+        QCOMPARE(run.changesWhilePaused(), true);
 
-        playlists.stop();
-        QCOMPARE(playlists.changesOnVideoEnd(), false);
-        QCOMPARE(playlists.changesWhilePaused(), false);
+        run.stop();
+        QCOMPARE(run.changesOnVideoEnd(), false);
+        QCOMPARE(run.changesWhilePaused(), false);
+    }
+
+    /// A playlist renamed while it runs on two monitors goes on running on
+    /// both, under its new name.
+    void renameReachesEveryRun()
+    {
+        Playlists p;
+        p.save(QStringLiteral("a"), {QStringLiteral("1"), QStringLiteral("2")},
+               {{QStringLiteral("seconds"), 30}});
+        PlaylistRun left;
+        PlaylistRun right;
+        for (PlaylistRun *run : {&left, &right}) {
+            connect(&p, &Playlists::renamed, run, &PlaylistRun::renamed);
+            run->start(p.named(QStringLiteral("a")));
+        }
+
+        QVERIFY(p.rename(QStringLiteral("a"), QStringLiteral("c")));
+        QCOMPARE(left.playing(), QStringLiteral("c"));
+        QCOMPARE(right.playing(), QStringLiteral("c"));
+    }
+
+    /// Throwing away a playlist stops it wherever it runs, once each.
+    void forgettingStopsEveryRun()
+    {
+        Playlists p;
+        p.save(QStringLiteral("a"), {QStringLiteral("1"), QStringLiteral("2")},
+               {{QStringLiteral("seconds"), 30}});
+        PlaylistRun left;
+        PlaylistRun right;
+        for (PlaylistRun *run : {&left, &right}) {
+            connect(&p, &Playlists::forgotten, run, &PlaylistRun::forgotten);
+            run->start(p.named(QStringLiteral("a")));
+        }
+        QSignalSpy leftChanges(&left, &PlaylistRun::playingChanged);
+        QSignalSpy rightChanges(&right, &PlaylistRun::playingChanged);
+
+        p.forget(QStringLiteral("a"));
+        QVERIFY(left.playing().isEmpty());
+        QVERIFY(right.playing().isEmpty());
+        QCOMPARE(leftChanges.count(), 1);
+        QCOMPARE(rightChanges.count(), 1);
+    }
+
+    /// Nothing to start is nothing started.
+    void refusesAnEmptyPlaylist()
+    {
+        PlaylistRun run;
+        QSignalSpy plays(&run, &PlaylistRun::plays);
+        run.start({});
+        run.start({{QStringLiteral("name"), QStringLiteral("x")},
+                   {QStringLiteral("ids"), QStringList{}}});
+        QVERIFY(run.playing().isEmpty());
+        QCOMPARE(plays.count(), 0);
     }
 };
 

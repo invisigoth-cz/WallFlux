@@ -28,6 +28,9 @@ Window {
     /// a layer-shell surface is given to a screen once and does not move.
     required property var onScreen
 
+    /// The playlist running on this wallpaper, which a video ending turns.
+    required property PlaylistRun run
+
     /// What is on it, handed down rather than read here.
     required property bool showingWeb
     required property bool showingVideo
@@ -381,7 +384,7 @@ Window {
             // Round and round, unless a playlist is waiting for the end of it:
             // a video told to loop for ever never reports an end, so there
             // would be nothing to turn on.
-            loops: Playlists.changesOnVideoEnd ? 1 : MediaPlayer.Infinite
+            loops: surface.run.changesOnVideoEnd ? 1 : MediaPlayer.Infinite
 
             audioOutput: AudioOutput {
                 muted: surface.silent
@@ -408,8 +411,8 @@ Window {
                 // Told to turn when the video ends, so that is what its end
                 // means. The playlist picks the next one and `onPlays` puts it
                 // on, the same way a click does.
-                if (Playlists.changesOnVideoEnd)
-                    Playlists.next();
+                if (surface.run.changesOnVideoEnd)
+                    surface.run.next();
 
                 // Then play whatever is on the screen now. Usually the next
                 // wallpaper, which `onSourceChanged` has already started and
