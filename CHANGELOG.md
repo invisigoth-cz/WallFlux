@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.4] — 2026-11-24
+
+### Fixed
+
+- **Opening a wallpaper's panel no longer freezes the window.** On a screen
+  where the window's height sat near the point at which the picture and the
+  name move down into the list (0.42.2), the two were moved there and back
+  for ever and WallFlux stopped answering -- on the laptop, a click on a card
+  with the filters open. Whether the window is short no longer depends on
+  where the picture stands.
+
 ## [0.42.3] — 2026-11-23
 
 ### Fixed
@@ -1768,7 +1779,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.4...HEAD
+[0.42.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.0...v0.42.1
