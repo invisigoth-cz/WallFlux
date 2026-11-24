@@ -31,10 +31,11 @@ Item {
     /// Everything Qt can see, in the order it hands them over.
     readonly property var screens: Application.screens
 
+    /// A switch was flipped; the picker decides what that means.
+    signal toggled(string name)
+
     function toggle(name) {
-        view.wanted = view.wanted.indexOf(name) >= 0
-            ? view.wanted.filter((kept) => kept !== name)
-            : view.wanted.concat([name]);
+        view.toggled(name);
     }
 
     /// How the screens sit next to each other, drawn to scale.

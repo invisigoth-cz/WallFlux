@@ -47,9 +47,21 @@ ApplicationWindow {
     /// remembers nothing.
     property real volume: 1
 
-    /// The names of the screens the wallpaper is wanted on. Read by
-    /// `Main.qml`, which builds one surface per name.
-    readonly property var screensWanted: displays.wanted
+    /// "perDisplay" for a wallpaper on each monitor, Wallpaper Engine's
+    /// default, or "clone" for one worked out once and shown on all.
+    property string layout: "perDisplay"
+
+    /// Monitors left out of the clone, by connector name.
+    property var excludedFromClone: []
+
+    /// The monitor the clone is worked out on, or empty for the first.
+    property string cloneSource: ""
+
+    /// Monitors whose copy of the clone is turned over, by connector name.
+    property var flippedMonitors: []
+
+    /// Displays muted on their own, by key: a connector name, or "clone".
+    property var mutedMonitors: []
 
     /// Which set of colours the window wears: `light`, `dark`, `system`
     /// (whichever the desktop is), `steam`, `hardLight` or `hardDark` -- the
@@ -412,12 +424,29 @@ ApplicationWindow {
         property alias showAnime: picker.showAnime
         property alias usage: picker.usage
         property alias tint: picker.tint
+        property alias layout: picker.layout
+        property alias excludedFromClone: picker.excludedFromClone
+        property alias cloneSource: picker.cloneSource
+        property alias flippedMonitors: picker.flippedMonitors
+        property alias mutedMonitors: picker.mutedMonitors
         property bool czech: false
+        /// The screens ticked before there was a wallpaper per monitor,
+        /// read once to leave the unticked ones out of the clone.
         property var screens: []
+        property bool screensCarried: false
     }
 
     Component.onCompleted: {
         Language.czech = remembered.czech;
+        // A monitor somebody left unticked -- a television, a projector --
+        // stays without the wallpaper now that ticks are gone.
+        if (!remembered.screensCarried) {
+            const ticked = remembered.screens || [];
+            if (ticked.length > 0)
+                picker.excludedFromClone = Application.screens.map(s => s.name)
+                    .filter(n => ticked.indexOf(n) < 0);
+            remembered.screensCarried = true;
+        }
         // Kept as dark or not before there were themes.
         if (String(remembered.value("theme", "")) === "" && String(remembered.value("dark", "true")) === "false")
             picker.theme = "light";
@@ -3105,19 +3134,15 @@ ApplicationWindow {
             DisplaysView {
                 id: displays
 
-                // Every screen to begin with. Done here rather than as a
-                // default on the view, because the list of screens is not
-                // there yet when the view is built.
-                // Or the ones ticked last time, those of them still plugged in.
-                Component.onCompleted: {
-                    const names = [];
-                    const all = Application.screens;
-                    for (let i = 0; i < all.length; ++i)
-                        names.push(all[i].name);
-                    const kept = (remembered.screens || []).filter((name) => names.indexOf(name) >= 0);
-                    displays.wanted = kept.length > 0 ? kept : names;
+                // Until this tab knows layouts, a tick is a monitor in the
+                // clone.
+                wanted: Application.screens.map(s => s.name)
+                    .filter(n => picker.excludedFromClone.indexOf(n) < 0)
+                onToggled: (name) => {
+                    const out = picker.excludedFromClone;
+                    picker.excludedFromClone = out.indexOf(name) >= 0 ? out.filter(n => n !== name)
+                                                                      : out.concat([name]);
                 }
-                onWantedChanged: remembered.screens = displays.wanted
             }
 
             SettingsView {

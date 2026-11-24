@@ -20,13 +20,248 @@ import "emblem.js" as Emblem
 Item {
     id: root
 
-    /// Paused from the tray: stood still and quiet as under a window, and
-    /// a playlist held unless it was told to change while paused -- what
-    /// Wallpaper Engine's own Pause does. Forgotten at quit, like the rest.
+    /// Paused from the tray, every monitor at once: stood still and quiet
+    /// as under a window, and a playlist held unless it was told to change
+    /// while paused -- what Wallpaper Engine's own Pause does. A monitor
+    /// paused on its own is its `Display`'s, and resuming everything leaves
+    /// it standing. Forgotten at quit, like the rest.
     property bool paused: false
 
-    /// Every monitor that is ticked, showing one wallpaper worked out once
-    /// -- Wallpaper Engine's "Clone single wallpaper".
+    /// Every connector name seen in this run, in the order they came. A
+    /// monitor unplugged keeps its `Display` -- its wallpaper, playlist and
+    /// pause -- for when it comes back, until the program quits.
+    property var seenNames: []
+
+    readonly property var connectedNames: Application.screens.map(s => s.name)
+    // The monitors there at the start count as seen; a change handler is
+    // not told the first value.
+    Component.onCompleted: {
+        root.seenNames = root.connectedNames.slice();
+        if (!picker.startMinimized)
+            root.showPicker();
+    }
+    onConnectedNamesChanged: {
+        const more = root.connectedNames.filter(n => root.seenNames.indexOf(n) < 0);
+        if (more.length > 0)
+            root.seenNames = root.seenNames.concat(more);
+    }
+
+    readonly property bool perDisplay: picker.layout !== "clone"
+
+    /// Whether any screen showing a wallpaper has a window in front of it:
+    /// what "pause all" and "stop all" answer to.
+    readonly property bool anyCovered: root.displays.some(d => d.connected && d.showing.current.id !== ""
+        && d.screens.some(s => ScreenCover.coveredScreens.indexOf(s.name) >= 0))
+
+    /// The displays in play, in monitor order: left to right, then top to
+    /// bottom, one whose monitor is away last. One, the clone, when cloning.
+    readonly property var displays: {
+        if (!root.perDisplay)
+            return [clone];
+        const all = [];
+        for (let i = 0; i < perMonitor.count; ++i) {
+            const one = perMonitor.objectAt(i);
+            if (one)
+                all.push(one);
+        }
+        const place = d => d.connected ? d.screens[0].virtualX * 100000 + d.screens[0].virtualY
+                                       : Number.MAX_SAFE_INTEGER;
+        return all.sort((a, b) => place(a) - place(b));
+    }
+
+    /// The display a key names -- a connector name, or "clone" -- or null.
+    function display(key) {
+        if (key === "clone")
+            return clone;
+        for (let i = 0; i < perMonitor.count; ++i) {
+            const one = perMonitor.objectAt(i);
+            if (one && one.key === key)
+                return one;
+        }
+        return null;
+    }
+
+    /// The first display in play: what the window and the tray drive until
+    /// a monitor can be chosen.
+    readonly property var primary: root.displays.length > 0 ? root.displays[0] : clone
+
+    /// Whether a display's sound is off on its own, kept by key.
+    function isMuted(key) {
+        return picker.mutedMonitors.indexOf(key) >= 0;
+    }
+
+    function setMuted(key, on) {
+        const rest = picker.mutedMonitors.filter(k => k !== key);
+        picker.mutedMonitors = on ? rest.concat([key]) : rest;
+    }
+
+    /// A transition left running would fire into a display that has just
+    /// been changed under it; finished at once instead.
+    function settleTransitions() {
+        clone.swapNow();
+        for (let i = 0; i < perMonitor.count; ++i) {
+            const one = perMonitor.objectAt(i);
+            if (one && one.arriving !== "")
+                one.swapNow();
+        }
+    }
+
+    /// Changes between a wallpaper per monitor and one cloned.
+    ///
+    /// To clone, the clone takes the chosen display's wallpaper and running
+    /// playlist and every monitor's own is let go of. Back to one per
+    /// monitor, every monitor starts with what was cloned, its playlist on
+    /// the first.
+    function setLayout(layout) {
+        if (layout === picker.layout)
+            return;
+        root.settleTransitions();
+        if (layout === "clone") {
+            const from = root.primary;
+            if (from.showing.current.id !== "")
+                clone.select(from.showing.current.id);
+            else
+                clone.clear();
+            if (from.run.playing !== "")
+                clone.run.start(Playlists.named(from.run.playing));
+            for (let i = 0; i < perMonitor.count; ++i) {
+                const one = perMonitor.objectAt(i);
+                if (one)
+                    one.clear();
+            }
+            picker.layout = "clone";
+            return;
+        }
+        const id = clone.showing.current.id;
+        const playlist = clone.run.playing;
+        clone.clear();
+        picker.layout = "perDisplay";
+        const all = root.displays;
+        for (let i = 0; i < all.length; ++i) {
+            if (id !== "")
+                all[i].select(id);
+            else
+                all[i].clear();
+        }
+        if (playlist !== "" && all.length > 0)
+            all[0].run.start(Playlists.named(playlist));
+    }
+
+    /// Puts one display's wallpaper on another.
+    function copyTo(fromKey, toKey) {
+        const from = root.display(fromKey);
+        const to = root.display(toKey);
+        if (!from || !to || from === to)
+            return;
+        to.run.stop();
+        if (from.showing.current.id !== "")
+            to.select(from.showing.current.id);
+        else
+            to.clear();
+    }
+
+    /// Swaps two displays' wallpapers and playlists, and their mute.
+    function swap(aKey, bKey) {
+        const a = root.display(aKey);
+        const b = root.display(bKey);
+        if (!a || !b || a === b)
+            return;
+        root.settleTransitions();
+        const was = { id: a.showing.current.id, playlist: a.run.playing, muted: root.isMuted(aKey) };
+        const other = { id: b.showing.current.id, playlist: b.run.playing, muted: root.isMuted(bKey) };
+        const put = (d, key, what) => {
+            d.run.stop();
+            if (what.id !== "")
+                d.select(what.id);
+            else
+                d.clear();
+            if (what.playlist !== "")
+                d.run.start(Playlists.named(what.playlist));
+            root.setMuted(key, what.muted);
+        };
+        put(a, aKey, other);
+        put(b, bKey, was);
+    }
+
+    /// Takes the wallpaper off a monitor. Cloned, a monitor is left out of
+    /// the clone -- unless it is the one the clone is worked out on, which
+    /// turns the clone off.
+    function removeFrom(key) {
+        if (root.perDisplay) {
+            const one = root.display(key);
+            if (one)
+                one.clear();
+            return;
+        }
+        if (key === "clone" || (clone.screens.length > 0 && clone.screens[0].name === key)) {
+            clone.clear();
+            return;
+        }
+        if (picker.excludedFromClone.indexOf(key) < 0)
+            picker.excludedFromClone = picker.excludedFromClone.concat([key]);
+    }
+
+    /// Puts a monitor back into the clone, if it was left out.
+    function includeInClone(key) {
+        picker.excludedFromClone = picker.excludedFromClone.filter(k => k !== key);
+    }
+
+    /// The whole arrangement, for a profile: the layout and, for every
+    /// display, what it shows, its playlist and its mute.
+    function arrangement() {
+        const displays = {};
+        const put = (key, d) => {
+            displays[key] = { wallpaper: d.showing.current.id, playlist: d.run.playing,
+                              muted: root.isMuted(key) };
+        };
+        if (root.perDisplay) {
+            for (let i = 0; i < perMonitor.count; ++i) {
+                const one = perMonitor.objectAt(i);
+                if (one)
+                    put(one.key, one);
+            }
+        } else {
+            put("clone", clone);
+        }
+        return { layout: picker.layout, displays: displays,
+                 excluded: picker.excludedFromClone, cloneSource: picker.cloneSource };
+    }
+
+    /// A profile's arrangement put in place. Monitors it names that are not
+    /// here are kept for when they come; monitors it says nothing of stay
+    /// as they are.
+    function applyProfile(profile) {
+        if (!profile || !profile.displays)
+            return;
+        root.settleTransitions();
+        picker.layout = profile.layout === "clone" ? "clone" : "perDisplay";
+        if (profile.layout === "clone") {
+            picker.excludedFromClone = profile.excluded || [];
+            picker.cloneSource = profile.cloneSource || "";
+        }
+        const names = Object.keys(profile.displays);
+        const more = names.filter(n => n !== "clone" && root.seenNames.indexOf(n) < 0);
+        if (more.length > 0)
+            root.seenNames = root.seenNames.concat(more);
+        for (const key of names) {
+            const what = profile.displays[key];
+            const d = root.display(key);
+            if (!d)
+                continue;
+            d.run.stop();
+            if (what.wallpaper)
+                d.select(what.wallpaper);
+            else
+                d.clear();
+            if (what.playlist)
+                d.run.start(Playlists.named(what.playlist));
+            root.setMuted(key, !!what.muted);
+        }
+    }
+
+    /// Every monitor that is not left out, showing one wallpaper worked out
+    /// once -- Wallpaper Engine's "Clone single wallpaper". The source, the
+    /// one that works it out, first.
     Display {
         id: clone
 
@@ -34,17 +269,38 @@ Item {
         options: picker
         pausedAll: root.paused
         mutedAll: picker.muted
+        mutedHere: root.isMuted("clone")
+        anyCovered: root.anyCovered
         order: picker.shown
-
-        // The screens the Displays tab has ticked, as screen objects.
         screens: {
-            const kept = [];
-            const all = Application.screens;
-            for (let i = 0; i < all.length; ++i) {
-                if (picker.screensWanted.indexOf(all[i].name) >= 0)
-                    kept.push(all[i]);
-            }
+            if (root.perDisplay)
+                return [];
+            const kept = Application.screens.filter(s => picker.excludedFromClone.indexOf(s.name) < 0);
+            const source = kept.findIndex(s => s.name === picker.cloneSource);
+            if (source > 0)
+                kept.unshift(kept.splice(source, 1)[0]);
             return kept;
+        }
+    }
+
+    /// A wallpaper per monitor, as Wallpaper Engine's default: one display
+    /// for every monitor seen in this run.
+    Instantiator {
+        id: perMonitor
+
+        model: root.seenNames
+
+        delegate: Display {
+            required property string modelData
+
+            key: modelData
+            options: picker
+            pausedAll: root.paused
+            mutedAll: picker.muted
+            mutedHere: root.isMuted(modelData)
+            anyCovered: root.anyCovered
+            order: picker.shown
+            screens: root.perDisplay ? Application.screens.filter(s => s.name === modelData) : []
         }
     }
 
@@ -53,7 +309,7 @@ Item {
     Binding {
         target: Pointer
         property: "watching"
-        value: clone.showingScene && !clone.covered && picker.mouse
+        value: picker.mouse && root.displays.some(d => d.connected && d.showingScene && !d.covered)
     }
 
     // How strongly the music is heard, for scenes and pages alike.
@@ -65,7 +321,6 @@ Item {
 
     // The window at the start only when the Settings tab says so; otherwise
     // the program comes up as the tray icon alone.
-    Component.onCompleted: if (!picker.startMinimized) root.showPicker()
 
     function showPicker() {
         picker.show();
@@ -84,9 +339,9 @@ Item {
         // compositor keeps in the background and which take no input, and a
         // window belonging to one would be dragged down there with it.
         transientParent: null
-        run: clone.run
-        showing: clone.showing
-        onChose: (id) => clone.select(id)
+        run: root.primary.run
+        showing: root.primary.showing
+        onChose: (id) => root.primary.select(id)
 
         /// Whether peeking at the desktop put this window away, and so
         /// whether it comes back when the peeking stops. A window that was
@@ -122,9 +377,9 @@ Item {
             const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
             return Emblem.svg(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
         }
-        tooltip: !clone.showing.current.playable ? qsTr("WallFlux")
-                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(clone.showing.current.title)
-                 : qsTr("WallFlux — %1").arg(clone.showing.current.title)
+        tooltip: !root.primary.showing.current.playable ? qsTr("WallFlux")
+                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(root.primary.showing.current.title)
+                 : qsTr("WallFlux — %1").arg(root.primary.showing.current.title)
 
         // Not one checkable item here: the words say the state. Recent is
         // the last five chosen in this run, the one on show among them and
@@ -134,7 +389,7 @@ Item {
             { separator: true },
             { id: "pause", text: root.paused ? qsTr("Resume") : qsTr("Pause"),
               icon: root.paused ? "media-playback-start" : "media-playback-pause",
-              enabled: clone.playing },
+              enabled: root.primary.playing },
             { id: "previous", text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
             { id: "next", text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
             { id: "mute", text: picker.muted ? qsTr("Unmute") : qsTr("Mute"),
@@ -142,7 +397,7 @@ Item {
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
               submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== clone.showing.current.id })) },
+                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== root.primary.showing.current.id })) },
             { separator: true },
             { id: "quit", text: qsTr("Quit") }
         ]
@@ -152,13 +407,13 @@ Item {
             switch (id) {
             case "choose": root.showPicker(); break;
             case "pause": root.paused = !root.paused; break;
-            case "previous": clone.step(-1); break;
-            case "next": clone.step(1); break;
+            case "previous": root.primary.step(-1); break;
+            case "next": root.primary.step(1); break;
             case "mute": picker.muted = !picker.muted; break;
             case "quit": Qt.quit(); break;
             default:
                 if (id.startsWith("recent:"))
-                    clone.select(id.slice(7));
+                    root.primary.select(id.slice(7));
             }
         }
     }

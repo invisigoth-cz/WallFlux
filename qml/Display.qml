@@ -39,6 +39,10 @@ Item {
     property bool mutedHere: false
     property bool mutedAll: false
 
+    /// Whether a window covers any screen that shows a wallpaper, this
+    /// display's or another's: what "pause all" and "stop all" answer to.
+    property bool anyCovered: false
+
     /// The order Next and Previous go through when no playlist runs: the
     /// library as the grid shows it.
     property var order: []
@@ -69,9 +73,11 @@ Item {
 
     /// What is happening that the wallpaper may answer, each with what
     /// Settings › Performance says to do about it: "keep", "mute", "pause"
-    /// or "stop".
+    /// or "stop". A window answers on the screens it covers, or -- told
+    /// "pause all" or "stop all" -- on every display once it covers any.
     readonly property var reasons: [
-        { on: display.everyScreenCovered, mode: display.options.underWindow },
+        { on: display.options.underWindow.endsWith("all") ? display.anyCovered : display.everyScreenCovered,
+          mode: display.options.underWindow.replace("all", "") },
         { on: ScreenCover.focused, mode: display.options.forFocus },
         { on: OtherAudio.playing, mode: display.options.forOtherSound },
         { on: Asleep.asleep, mode: display.options.whenAsleep }
