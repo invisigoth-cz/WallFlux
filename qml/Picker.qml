@@ -15,6 +15,7 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import WallFlux
 import "steamprofile.js" as Steam
+import "selection.js" as Selection
 
 /// The window for choosing a wallpaper: everything installed, in a grid of
 /// previews, and what the one that is playing sounds like.
@@ -535,6 +536,32 @@ ApplicationWindow {
 
     /// Gives a wallpaper back -- the panel's Remove and the Delete key both
     /// come here, each after asking.
+    /// The wallpapers chosen together in the library, by id -- with Ctrl,
+    /// Shift or a band, as Wallpaper Engine chooses several -- to be removed
+    /// at once. Forgotten by a plain click, as there.
+    property var selection: []
+    /// Where a Shift click or Shift and an arrow counts from.
+    property string selectionAnchor: ""
+
+    function clearSelection() {
+        picker.selection = [];
+        picker.selectionAnchor = "";
+    }
+
+    /// The grid's ids in the order it shows them, for Shift.
+    function shownIds() {
+        return picker.shown.map(w => w.id);
+    }
+
+    /// Asks before removing these -- the chosen ones, or the one the arrows
+    /// are on -- and says why where Steam is not there to take them back.
+    function askToRemove(list) {
+        if (list.length === 0)
+            return;
+        removing.many = list;
+        removing.open();
+    }
+
     function remove(one) {
         if (!picker.canRemove(one))
             return;
@@ -1993,7 +2020,12 @@ ApplicationWindow {
     Popup {
         id: removing
 
-        property var one: null
+        /// What is to go: one wallpaper, or the several chosen.
+        property var many: []
+        /// Those of them that can go now, and those that cannot -- a
+        /// workshop wallpaper only goes back through Steam.
+        readonly property var able: removing.many.filter(one => picker.canRemove(one))
+        readonly property int unable: removing.many.length - removing.able.length
 
         anchors.centerIn: parent
         modal: true
@@ -2006,9 +2038,13 @@ ApplicationWindow {
         onClosed: grid.forceActiveFocus()
 
         function confirm() {
-            const one = removing.one;
+            const going = removing.able;
             removing.close();
-            picker.remove(one);
+            if (going.length === 0)
+                return;
+            for (const one of going)
+                picker.remove(one);
+            picker.clearSelection();
         }
 
         background: Rectangle {
@@ -2025,7 +2061,8 @@ ApplicationWindow {
             Keys.onEnterPressed: removing.confirm()
 
             Label {
-                text: qsTr("Remove the wallpaper?")
+                text: removing.many.length > 1 ? qsTr("Remove %n wallpapers?", "", removing.many.length)
+                                               : qsTr("Remove the wallpaper?")
                 font.pixelSize: 17
                 font.weight: Font.Bold
             }
@@ -2033,12 +2070,25 @@ ApplicationWindow {
             Label {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
-                text: !removing.one ? ""
-                    : removing.one.official
-                      ? qsTr("“%1” will be hidden, as Wallpaper Engine hides its own.")
-                            .arg(removing.one.title)
-                      : qsTr("“%1” will be unsubscribed in Steam and deleted from the disk.")
-                            .arg(removing.one.title)
+                readonly property var one: removing.many.length === 1 ? removing.many[0] : null
+                visible: removing.able.length > 0
+                text: one ? (one.official
+                             ? qsTr("“%1” will be hidden, as Wallpaper Engine hides its own.").arg(one.title)
+                             : qsTr("“%1” will be unsubscribed in Steam and deleted from the disk.").arg(one.title))
+                    : qsTr("Each will be unsubscribed in Steam and deleted from the disk; "
+                           + "Wallpaper Engine's own are hidden.")
+            }
+
+            // Said rather than nothing happening: a workshop wallpaper goes
+            // back through Steam, or Steam would fetch it again.
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                visible: removing.unable > 0
+                color: Look.negative
+                text: removing.many.length === 1
+                      ? qsTr("Steam has to be running to give a wallpaper back.")
+                      : qsTr("%n of them can only go while Steam is running, and stay.", "", removing.unable)
             }
 
             RowLayout {
@@ -2051,6 +2101,7 @@ ApplicationWindow {
                     text: qsTr("Remove")
                     icon.name: "edit-delete"
                     accent: Look.negative
+                    visible: removing.able.length > 0
                     onClicked: removing.confirm()
                 }
 
@@ -2723,6 +2774,35 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         spacing: 14
 
+                        // What is chosen, and what can be done with it all
+                        // at once -- there only while something is.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.rightMargin: 30
+                            visible: picker.selection.length > 0
+                            spacing: 10
+
+                            Label {
+                                text: qsTr("Chosen: %1").arg(picker.selection.length)
+                                font.weight: Font.Bold
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            RoundedButton {
+                                text: qsTr("Remove chosen")
+                                icon.name: "edit-delete"
+                                accent: Look.negative
+                                onClicked: picker.askToRemove(picker.selection.map(id => Wallpapers.find(id))
+                                                                             .filter(one => one.id !== ""))
+                            }
+
+                            RoundedButton {
+                                text: qsTr("Clear choice")
+                                onClicked: picker.clearSelection()
+                            }
+                        }
+
                         // What is left of the window beside the panels. The
                         // grid is laid out once, at the width this will have
                         // when the panels are still, and scaled to the width
@@ -2763,6 +2843,84 @@ ApplicationWindow {
                                 // pictures loaded, rather than appearing
                                 // empty and filling in.
                                 cacheBuffer: 800
+                                // A drag draws a band that chooses the cards
+                                // it touches, as in Wallpaper Engine, so the
+                                // mouse does not drag the grid along: the
+                                // wheel and the scrollbar scroll it. Not
+                                // interactive, a GridView takes no wheel
+                                // either -- measured -- hence the handler.
+                                interactive: false
+
+                                WheelHandler {
+                                    orientation: Qt.Vertical
+                                    onWheel: (event) => {
+                                        const most = Math.max(0, grid.contentHeight - grid.height);
+                                        grid.contentY = Math.max(0, Math.min(most, grid.contentY - event.angleDelta.y));
+                                    }
+                                }
+
+                                /// Where the band was started, in the grid's
+                                /// content, and what was chosen before it --
+                                /// kept where it was started with Ctrl held.
+                                property point bandFrom
+                                property var bandBefore: []
+
+                                DragHandler {
+                                    id: band
+
+                                    target: null
+                                    acceptedDevices: PointerDevice.Mouse
+                                    // Over a card too: past the threshold the
+                                    // drag is the band's, and the card under
+                                    // it is not clicked.
+                                    grabPermissions: PointerHandler.CanTakeOverFromAnything
+                                    onActiveChanged: {
+                                        if (!band.active)
+                                            return;
+                                        grid.forceActiveFocus();
+                                        grid.bandFrom = Qt.point(band.centroid.pressPosition.x,
+                                                                 band.centroid.pressPosition.y + grid.contentY);
+                                        grid.bandBefore = (band.centroid.modifiers & Qt.ControlModifier)
+                                                          ? picker.selection : [];
+                                    }
+                                    onCentroidChanged: {
+                                        if (!band.active)
+                                            return;
+                                        const rect = grid.bandRect();
+                                        const touched = Selection.inBand(picker.shown.length, grid.columns,
+                                                                         grid.cellWidth, grid.cellHeight, rect)
+                                                                 .map(i => picker.shown[i].id);
+                                        const all = grid.bandBefore.slice();
+                                        for (const id of touched) {
+                                            if (all.indexOf(id) < 0)
+                                                all.push(id);
+                                        }
+                                        picker.selection = all;
+                                        if (touched.length > 0)
+                                            picker.selectionAnchor = touched[0];
+                                    }
+                                }
+
+                                /// The band in the grid's content, from where
+                                /// it was started to where the pointer is.
+                                function bandRect() {
+                                    const at = band.centroid.position;
+                                    return Qt.rect(grid.bandFrom.x, grid.bandFrom.y,
+                                                   at.x - grid.bandFrom.x, at.y + grid.contentY - grid.bandFrom.y);
+                                }
+
+                                Rectangle {
+                                    visible: band.active
+                                    z: 10
+                                    readonly property rect r: band.active ? grid.bandRect() : Qt.rect(0, 0, 0, 0)
+                                    x: Math.min(r.x, r.x + r.width)
+                                    y: Math.min(r.y, r.y + r.height) - grid.contentY
+                                    width: Math.abs(r.width)
+                                    height: Math.abs(r.height)
+                                    color: Qt.alpha(Look.highlight, 0.2)
+                                    border.width: 1
+                                    border.color: Look.highlight
+                                }
 
                                 // As many columns of about 240 as fit, then share the
                                 // width out between them: a fixed cell width leaves a
@@ -2898,13 +3056,22 @@ ApplicationWindow {
                                 /// Opening one because somebody pressed Right
                                 /// would be the window deciding what the
                                 /// question was.
-                                function walk(by) {
+                                function walk(by, extend) {
                                     if (picker.shown.length === 0)
                                         return;
                                     const was = grid.at();
                                     const to = was < 0 ? 0
                                         : Math.max(0, Math.min(picker.shown.length - 1,
                                                                was + by));
+                                    // Shift and an arrow choose everything
+                                    // from where it started to here.
+                                    if (extend) {
+                                        const from = picker.selectionAnchor !== "" ? picker.selectionAnchor
+                                            : picker.shown[was < 0 ? to : was].id;
+                                        picker.selectionAnchor = from;
+                                        picker.selection = Selection.between(picker.shownIds(), from,
+                                                                             picker.shown[to].id);
+                                    }
                                     picker.ringOn = picker.shown[to].id;
                                     grid.keepTheRingInView();
                                     if (details.open)
@@ -2962,10 +3129,18 @@ ApplicationWindow {
                                         picker.ringOn = picker.shown[0].id;
                                 }
 
-                                Keys.onLeftPressed: grid.walk(-1)
-                                Keys.onRightPressed: grid.walk(1)
-                                Keys.onUpPressed: grid.walk(-grid.columns)
-                                Keys.onDownPressed: grid.walk(grid.columns)
+                                Keys.onLeftPressed: (event) => grid.walk(-1, event.modifiers & Qt.ShiftModifier)
+                                Keys.onRightPressed: (event) => grid.walk(1, event.modifiers & Qt.ShiftModifier)
+                                Keys.onUpPressed: (event) => grid.walk(-grid.columns, event.modifiers & Qt.ShiftModifier)
+                                Keys.onDownPressed: (event) => grid.walk(grid.columns, event.modifiers & Qt.ShiftModifier)
+                                // Escape lets go of what was chosen, while
+                                // something is; otherwise it is not ours.
+                                Keys.onEscapePressed: (event) => {
+                                    if (picker.selection.length > 0)
+                                        picker.clearSelection();
+                                    else
+                                        event.accepted = false;
+                                }
 
                                 Keys.onReturnPressed: {
                                     const one = grid.here();
@@ -2980,17 +3155,30 @@ ApplicationWindow {
                                 // Delete asks first, in a window of its own: a
                                 // key is easier to press by mistake than a
                                 // button that has to be clicked twice.
+                                // The chosen ones where there are any, the
+                                // one the arrows are on otherwise.
                                 Keys.onDeletePressed: {
-                                    const one = grid.here();
-                                    if (picker.canRemove(one)) {
-                                        removing.one = one;
-                                        removing.open();
+                                    if (picker.selection.length > 0) {
+                                        picker.askToRemove(picker.selection.map(id => Wallpapers.find(id))
+                                                                           .filter(one => one.id !== ""));
+                                        return;
                                     }
-                                }
-                                Keys.onSpacePressed: {
                                     const one = grid.here();
-                                    if (one && one.playable)
+                                    if (one)
+                                        picker.askToRemove([one]);
+                                }
+                                // Space ticks it for a playlist; with Ctrl it
+                                // chooses it, or lets go of it.
+                                Keys.onSpacePressed: (event) => {
+                                    const one = grid.here();
+                                    if (!one)
+                                        return;
+                                    if (event.modifiers & Qt.ControlModifier) {
+                                        picker.selection = Selection.toggled(picker.selection, one.id);
+                                        picker.selectionAnchor = one.id;
+                                    } else if (one.playable) {
                                         picker.tick(one.id);
+                                    }
                                 }
 
                                 delegate: Item {
@@ -3031,8 +3219,30 @@ ApplicationWindow {
                                         // A click moves the arrows here as well,
                                         // so the two ways of walking the grid do
                                         // not each keep a place of their own.
-                                        onChose: (id) => {
+                                        selected: picker.selection.indexOf(cell.modelData.id) >= 0
+                                        // Ctrl chooses one more, or lets go
+                                        // of it; Shift everything from the
+                                        // last one to this; a plain click
+                                        // lets go of them all, as in
+                                        // Wallpaper Engine, and opens the
+                                        // panel as always.
+                                        onChose: (id, modifiers) => {
                                             grid.forceActiveFocus();
+                                            if (modifiers & Qt.ControlModifier) {
+                                                picker.selection = Selection.toggled(picker.selection, id);
+                                                picker.selectionAnchor = id;
+                                                picker.ringOn = id;
+                                                return;
+                                            }
+                                            if (modifiers & Qt.ShiftModifier) {
+                                                const from = picker.selectionAnchor !== "" ? picker.selectionAnchor
+                                                                                           : picker.ringOn;
+                                                picker.selection = Selection.between(picker.shownIds(), from, id);
+                                                picker.selectionAnchor = from !== "" ? from : id;
+                                                picker.ringOn = id;
+                                                return;
+                                            }
+                                            picker.clearSelection();
                                             picker.chooseOrApply(id);
                                         }
                                         onApplied: (id) => picker.apply(id)

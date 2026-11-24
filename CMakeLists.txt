@@ -65,6 +65,9 @@ set_source_files_properties(qml/Heart.qml PROPERTIES QT_RESOURCE_ALIAS Heart.qml
 set_source_files_properties(qml/PropertiesView.qml PROPERTIES QT_RESOURCE_ALIAS PropertiesView.qml)
 set_source_files_properties(qml/steamprofile.js PROPERTIES QT_RESOURCE_ALIAS steamprofile.js)
 set_source_files_properties(qml/emblem.js PROPERTIES QT_RESOURCE_ALIAS emblem.js)
+set_source_files_properties(qml/selection.js PROPERTIES QT_RESOURCE_ALIAS selection.js)
+set_source_files_properties(qml/Display.qml PROPERTIES QT_RESOURCE_ALIAS Display.qml)
+set_source_files_properties(qml/DisplayMap.qml PROPERTIES QT_RESOURCE_ALIAS DisplayMap.qml)
 
 # The QML lives in the binary rather than beside it, so the program runs from
 # wherever it is put without losing its interface.
@@ -104,6 +107,7 @@ qt_add_qml_module(wallflux
         qml/Heart.qml
         qml/PropertiesView.qml
         qml/steamprofile.js
+        qml/selection.js
         qml/emblem.js
     SOURCES
         src/autostart.h
@@ -291,6 +295,11 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_tray PRIVATE src)
     target_link_libraries(tst_tray PRIVATE Qt6::Qml Qt6::Widgets Qt6::Test)
     add_test(NAME tray COMMAND tst_tray)
+
+    # The library's choosing of several wallpapers, plain JavaScript.
+    find_program(QMLTESTRUNNER qmltestrunner HINTS "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS}" /usr/lib/qt6/bin)
+    add_test(NAME selection COMMAND ${QMLTESTRUNNER} -input ${CMAKE_SOURCE_DIR}/tests/tst_selection.qml)
+    set_tests_properties(selection PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     # No panel is needed to check what the menu holds, and none is touched.
     set_tests_properties(tray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

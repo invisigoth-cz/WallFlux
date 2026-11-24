@@ -24,7 +24,7 @@ Item {
     /// Asked for when this card is clicked, whether it can be played or
     /// not: one that cannot be put on the desktop can still be read about
     /// and given back.
-    signal chose(string id)
+    signal chose(string id, int modifiers)
 
     /// Asked for when it is clicked twice, which is what puts a wallpaper
     /// on the desktop. One click used to do it, and with a panel to fill
@@ -54,6 +54,10 @@ Item {
     /// round the whole card: the band along the preview already says
     /// whether it can be played, and a second band would be a riddle.
     property bool current: false
+
+    /// Among several chosen at once -- with Ctrl, Shift or a band -- to be
+    /// removed together.
+    property bool selected: false
 
     /// Whether the tick box shows without the pointer being on the card --
     /// what Add wallpaper in the playlist strip switches on, so several
@@ -199,8 +203,38 @@ Item {
         Behavior on band {
             ColorAnimation { duration: 150 }
         }
-        onClicked: card.chose(card.wallpaper.id)
+        onClicked: (modifiers) => card.chose(card.wallpaper.id, modifiers)
         onDoubleClicked: card.applied(card.wallpaper.id)
+    }
+
+    // Chosen with several others: the accent over the whole picture and a
+    // tick in its corner, plainly another thing than the arrows' band and
+    // the playlist's box.
+    Rectangle {
+        anchors.fill: parent
+        visible: card.selected
+        radius: 8
+        color: Qt.alpha(Look.highlight, 0.28)
+        border.width: 3
+        border.color: Look.highlight
+
+        Rectangle {
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 8
+            width: 22
+            height: 22
+            radius: 11
+            color: Look.highlight
+
+            Label {
+                anchors.centerIn: parent
+                text: "✓"
+                font.pixelSize: 13
+                font.weight: Font.Bold
+                color: Look.ink(Look.highlight)
+            }
+        }
     }
 
     /// The tick that puts this one in a playlist.

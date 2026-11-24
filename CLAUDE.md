@@ -549,6 +549,19 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   that can answer it. **Coming back is the Workshop button**, which clears
   the author and asks again: clearing alone does nothing, because the grid
   is already in the Workshop's own mode and `onModeChanged` never fires.
+- **Several wallpapers chosen and removed at once** (24 November, the
+  user's word, as Wallpaper Engine chooses several): Ctrl and a click,
+  Shift and a click, a band dragged over the grid, Ctrl and Space, Shift
+  and an arrow; Escape lets go. `picker.selection`, the logic in
+  `qml/selection.js` (`tests/tst_selection.qml`, run by qmltestrunner). A
+  bar above the grid says how many and removes them after one question,
+  which says which cannot go without Steam. The grid is not interactive --
+  a mouse drag is the band -- so a `WheelHandler` scrolls it: a GridView
+  that is not interactive takes no wheel either, measured. **A new .js or
+  .qml file wants its `QT_RESOURCE_ALIAS` line in CMakeLists.txt**, or it
+  lands under `qml/` in the resources and an import of it fails at start
+  -- the build says nothing.
+
 - **A grid the arrow keys walk.** The window hands the keyboard to the
   grid when it opens: arrows turn one card's band blue, Enter puts that one
   on the desktop, Space ticks it into the playlist. A click moves

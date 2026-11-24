@@ -1115,7 +1115,11 @@ Item {
                                 + "card means the workshop has a newer version of it; Update all, beside "
                                 + "Refresh, fetches every one.\n"
                                 + "• Remove in the panel gives the wallpaper back to Steam and deletes "
-                                + "its folder.")
+                                + "its folder; Steam has to be running.\n"
+                                + "• Several at once: Ctrl and a click chooses one more, Shift and a click "
+                                + "everything between, and dragging over the grid every card the band "
+                                + "touches. Remove chosen, above the grid, removes them all after one "
+                                + "question; a plain click lets go of them.")
                 }
 
                 Guide {
@@ -1169,7 +1173,10 @@ Item {
                     about: qsTr("• Arrows walk the library's grid; Enter puts the wallpaper on the "
                                 + "desktop; Space ticks it for a playlist; Delete removes it, after "
                                 + "asking.\n"
-                                + "• Escape closes whatever popup is open.")
+                                + "• Ctrl and Space chooses it among several, Shift and an arrow "
+                                + "chooses everything along the way; Delete then removes all of them, "
+                                + "after one question.\n"
+                                + "• Escape lets go of the chosen ones, or closes whatever popup is open.")
                 }
 
                 Guide {

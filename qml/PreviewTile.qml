@@ -43,7 +43,8 @@ Item {
     /// Whether a click means anything here.
     property bool clickable: true
 
-    signal clicked()
+    /// With the keys held while it was clicked: Ctrl and Shift choose several.
+    signal clicked(int modifiers)
     /// Two clicks, which in the library means "put this one on the desktop".
     /// A double click delivers `clicked` first, so one picks the wallpaper
     /// out and the other acts on it, in that order.
@@ -191,9 +192,9 @@ Item {
             // in the details panel, which is a picture and not an
             // offer.
             cursorShape: tile.clickable ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: {
+            onClicked: (mouse) => {
                 if (tile.clickable)
-                    tile.clicked();
+                    tile.clicked(mouse.modifiers);
             }
             onDoubleClicked: {
                 if (tile.clickable)
