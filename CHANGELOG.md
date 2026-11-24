@@ -6,6 +6,48 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.0] — 2026-11-24
+
+### Added
+
+- **A wallpaper on each monitor**, Wallpaper Engine's "Wallpaper per
+  display", now the default; one wallpaper cloned onto every monitor stays
+  as the other layout. Each monitor has its own wallpaper, playlist, pause,
+  mute and wallpaper settings, and every monitor's sound plays at once. A
+  monitor unplugged keeps what it had until it comes back.
+- **Choose monitor** beside the filters in the library: a double click
+  puts a wallpaper on the chosen monitor, and the playlist strip, the
+  panel's settings and the status bar are that monitor's. With several
+  monitors it opens with the window, unless told not to.
+- **The Monitors tab** (it was Displays): the layout as two buttons, the
+  monitors drawn as they stand with what they show and a speaker each, and
+  on a right click Change, Remove, Copy to, Swap with and Mute -- and while
+  cloning, which monitor the clone comes from and a copy turned over.
+- **Profiles**: what every monitor shows, its playlist, its sound and the
+  wallpaper's settings kept under a name, saved and loaded in the Monitors
+  tab and loaded from the tray. Nothing still plays when WallFlux starts.
+- **The tray has a menu for each monitor** -- pause, previous, next, mute,
+  recent wallpapers, playlists, remove -- with Pause all, Mute all and the
+  profiles at the top. A monitor paused on its own stays paused when
+  everything is resumed.
+- **Pausing for a window or another program, per monitor or for all**:
+  Settings › Performance offers stopping only the monitor that a window
+  covers, or that the program with the keyboard is on, or every monitor.
+
+### Changed
+
+- The screens' ticks are gone; a monitor that was left unticked stays out
+  of the clone.
+- Czech: the tab is Monitory, Refresh is Obnovit and Add wallpaper is
+  Přidat tapetu, as Controls calls them.
+
+### Fixed
+
+- **The tray's menu is changed in place** instead of being built again at
+  every change. With a menu per monitor it changed at every turn of a
+  playlist, and a menu rebuilt while Plasma had it open, or was closing it,
+  could crash plasmashell.
+
 ## [0.42.4] — 2026-11-24
 
 ### Fixed
@@ -1779,7 +1821,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.4...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.4...v0.43.0
 [0.42.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.1...v0.42.2

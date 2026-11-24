@@ -2872,7 +2872,7 @@ accounts stayed closed, and WallFlux is installed and updated by
 registering there is no longer to be reminded of.
 
 **Done on 24 November: a wallpaper on each monitor** (see What works today),
-on the branch `tapeta-na-monitor` until the user has looked at it.
+released in 0.43.0 after the user tried it on the laptop with a monitor.
 
 **Then the list as the user left it on 16 November, to be offered:**
 
