@@ -52,10 +52,18 @@ Item {
             Layout.fillWidth: true
             spacing: 10
 
-            Label { text: qsTr("Layout") }
+            // A layout is a choice between monitors: with one there is
+            // nothing to choose, and it goes the moment the other is
+            // unplugged.
+            Label {
+                text: qsTr("Layout")
+                visible: layoutBox.visible
+            }
 
             RoundedCombo {
                 id: layoutBox
+
+                visible: Application.screens.length > 1
 
                 /// What each row is called in the settings, never translated:
                 /// a translated model is rebuilt on a change of language and
@@ -172,7 +180,10 @@ Item {
                             Label {
                                 // Numbered only where there is more than one,
                                 // as the tray and the library do.
-                                text: Application.screens.length > 1
+                                // Nothing while the row goes with an unplugged
+                                // monitor, whose screen is already gone.
+                                text: !row.modelData || !row.modelData.name ? ""
+                                      : Application.screens.length > 1
                                       ? view.stage.monitorLabel(row.modelData.name, view.stage.connectedNames)
                                       : row.modelData.name
                                 font.pixelSize: 15
@@ -185,7 +196,7 @@ Item {
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                                 // What is on it, how big it is and where.
-                                text: view.showsOn(row.modelData.name, view.stage.displays,
+                                text: !row.modelData || !row.modelData.name ? "" : view.showsOn(row.modelData.name, view.stage.displays,
                                                    view.options.excludedFromClone)
                                       + "  ·  " + row.modelData.width + " × " + row.modelData.height
                                       + "  ·  " + row.modelData.name
