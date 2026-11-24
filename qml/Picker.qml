@@ -3362,43 +3362,60 @@ ApplicationWindow {
                             onClicked: picker.update([picker.inspected.id])
                         }
 
-                        RoundedButton {
-                            id: giveBack
-
-                            /// Asked once on the button itself, as a
-                            /// playlist's Delete does: Wallpaper Engine asks
-                            /// too, and one click is one too few for this.
-                            property bool asking: false
-
-                            readonly property bool official:
-                                !!picker.inspected && picker.inspected.official
-
+                        // Remove asks once on itself, and while it asks
+                        // Cancel beside it takes the question back -- the
+                        // user's word of 24 November.
+                        RowLayout {
                             Layout.fillWidth: true
-                            text: giveBack.asking ? qsTr("Really remove?") : qsTr("Remove")
-                            icon.name: "edit-delete"
-                            // Red, because it is the one thing in this
-                            // window that takes something away.
-                            accent: Look.negative
+                            spacing: 8
                             // See `canRemove`: shown for what could be given
-                            // back, and live only while it can be now.
-                            visible: giveBack.official || picker.fromWorkshop(picker.inspected)
-                            enabled: picker.canRemove(picker.inspected)
-                            onClicked: {
-                                if (!giveBack.asking) {
-                                    giveBack.asking = true;
-                                    return;
+                            // back, and live only while it can be now. Here
+                            // and not on the button, whose visibility is the
+                            // row's too.
+                            visible: !!picker.inspected
+                                     && (picker.inspected.official || picker.fromWorkshop(picker.inspected))
+
+                            RoundedButton {
+                                id: giveBack
+
+                                /// Asked once on the button itself, as a
+                                /// playlist's Delete does: Wallpaper Engine asks
+                                /// too, and one click is one too few for this.
+                                property bool asking: false
+
+                                readonly property bool official:
+                                    !!picker.inspected && picker.inspected.official
+
+                                Layout.fillWidth: true
+                                text: giveBack.asking ? qsTr("Really remove?") : qsTr("Remove")
+                                icon.name: "edit-delete"
+                                // Red, because it is the one thing in this
+                                // window that takes something away.
+                                accent: Look.negative
+                                enabled: picker.canRemove(picker.inspected)
+                                onClicked: {
+                                    if (!giveBack.asking) {
+                                        giveBack.asking = true;
+                                        return;
+                                    }
+                                    giveBack.asking = false;
+                                    picker.remove(picker.inspected);
                                 }
-                                giveBack.asking = false;
-                                picker.remove(picker.inspected);
+
+                                // Another wallpaper in the panel takes the
+                                // question back: a button left saying "Really
+                                // remove?" about something else is how the
+                                // wrong one goes.
+                                Connections {
+                                    target: picker
+                                    function onInspectedChanged() { giveBack.asking = false; }
+                                }
                             }
 
-                            // Another wallpaper in the panel takes the
-                            // question back: a button left saying "Really
-                            // remove?" about something else is how the
-                            // wrong one goes.
-                            Connections {
-                                target: picker
-                                function onInspectedChanged() { giveBack.asking = false; }
+                            RoundedButton {
+                                text: qsTr("Cancel")
+                                visible: giveBack.asking
+                                onClicked: giveBack.asking = false
                             }
                         }
 

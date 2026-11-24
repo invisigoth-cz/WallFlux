@@ -733,27 +733,27 @@
         <translation>Zrušit výběr</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3315"/>
+        <location filename="../qml/Picker.qml" line="3308"/>
         <source>Quality</source>
         <translation>Kvalita</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3364"/>
+        <location filename="../qml/Picker.qml" line="3357"/>
         <source>Update</source>
         <translation>Aktualizovat</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3365"/>
+        <location filename="../qml/Picker.qml" line="3358"/>
         <source>Steam would not update it</source>
         <translation>Steam ji nechtěl aktualizovat</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3366"/>
+        <location filename="../qml/Picker.qml" line="3359"/>
         <source>Updating… %1 %</source>
         <translation>Aktualizuje se… %1 %</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3426"/>
+        <location filename="../qml/Picker.qml" line="3436"/>
         <source>Steam unsubscribes it and takes the folder away. Subscribing to it again is all it takes to have it back.</source>
         <translation>Steam ji odhlásí z odběru a složku odstraní. Stačí ji začít znovu odebírat a bude zpátky.</translation>
     </message>
@@ -943,12 +943,12 @@
         <translation type="vanished">Nový playlist</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3554"/>
+        <location filename="../qml/Picker.qml" line="3564"/>
         <source>CPU</source>
         <translation>CPU</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3557"/>
+        <location filename="../qml/Picker.qml" line="3567"/>
         <source>GPU</source>
         <translation>GPU</translation>
     </message>
@@ -1004,7 +1004,7 @@
     <message>
         <location filename="../qml/Picker.qml" line="1942"/>
         <source>Wallpapers: %1</source>
-        <translation>Pozadí: %1</translation>
+        <translation>Tapety: %1</translation>
     </message>
     <message>
         <source>Throw this playlist away</source>
@@ -1032,6 +1032,7 @@
         <location filename="../qml/Picker.qml" line="2012"/>
         <location filename="../qml/Picker.qml" line="2109"/>
         <location filename="../qml/Picker.qml" line="2202"/>
+        <location filename="../qml/Picker.qml" line="3416"/>
         <source>Cancel</source>
         <translation>Zrušit</translation>
     </message>
@@ -1093,36 +1094,36 @@
         <translation>Vzestupně</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3270"/>
+        <location filename="../qml/Picker.qml" line="3263"/>
         <source>Nothing installed.
 Wallpaper Engine&apos;s workshop folder is empty or missing.</source>
         <translation>Nic není nainstalováno.
 Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3271"/>
+        <location filename="../qml/Picker.qml" line="3264"/>
         <source>Nothing here by that name.</source>
         <translation>Nic takového tu není.</translation>
     </message>
     <message>
         <location filename="../qml/Picker.qml" line="2101"/>
-        <location filename="../qml/Picker.qml" line="3384"/>
+        <location filename="../qml/Picker.qml" line="3390"/>
         <source>Remove</source>
         <translation>Odebrat</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3422"/>
+        <location filename="../qml/Picker.qml" line="3432"/>
         <source>It comes with Wallpaper Engine, which keeps its files and hides it, as Wallpaper Engine does itself. Hidden here, it is hidden in Wallpaper Engine too.</source>
         <translation>Je součástí Wallpaper Engine: jeho soubory zůstanou a tapeta se skryje, stejně jako to dělá Wallpaper Engine sám. Skrytá tady je skrytá i ve Wallpaper Engine.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3384"/>
+        <location filename="../qml/Picker.qml" line="3390"/>
         <source>Really remove?</source>
         <translation>Opravdu odebrat?</translation>
     </message>
     <message>
         <location filename="../qml/Picker.qml" line="2090"/>
-        <location filename="../qml/Picker.qml" line="3428"/>
+        <location filename="../qml/Picker.qml" line="3438"/>
         <source>Steam has to be running to give a wallpaper back.</source>
         <translation>Aby šlo tapetu vrátit, musí běžet Steam.</translation>
     </message>
@@ -1131,12 +1132,12 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Připravuje se</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3518"/>
+        <location filename="../qml/Picker.qml" line="3528"/>
         <source>%1  |  %2</source>
         <translation>%1  |  %2</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3522"/>
+        <location filename="../qml/Picker.qml" line="3532"/>
         <source>No active wallpaper</source>
         <translation>Žádná tapeta neběží</translation>
     </message>
@@ -1145,27 +1146,27 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">CPU %1 %  ·  GPU %2  ·  RAM %3 MB</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3558"/>
+        <location filename="../qml/Picker.qml" line="3568"/>
         <source>n/a</source>
         <translation>neuvádí</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3560"/>
+        <location filename="../qml/Picker.qml" line="3570"/>
         <source>RAM</source>
         <translation>RAM</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3563"/>
+        <location filename="../qml/Picker.qml" line="3573"/>
         <source>%1 MB / %2 GB free</source>
         <translation>%1 MB / volné %2 GB</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3584"/>
+        <location filename="../qml/Picker.qml" line="3594"/>
         <source>WallFlux %1 is out; this is %2. Click to update.</source>
         <translation>Vyšel WallFlux %1, tohle je %2. Klikni pro aktualizaci.</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3586"/>
+        <location filename="../qml/Picker.qml" line="3596"/>
         <source>WallFlux %1</source>
         <translation>WallFlux %1</translation>
     </message>
@@ -1174,17 +1175,17 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <translation type="vanished">Vyšel WallFlux %1</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3596"/>
+        <location filename="../qml/Picker.qml" line="3606"/>
         <source>Turn off</source>
         <translation>Vypnout</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3614"/>
+        <location filename="../qml/Picker.qml" line="3624"/>
         <source>Turn the sound on</source>
         <translation>Zapnout zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/Picker.qml" line="3615"/>
+        <location filename="../qml/Picker.qml" line="3625"/>
         <source>Turn the sound off</source>
         <translation>Vypnout zvuk</translation>
     </message>
@@ -1222,7 +1223,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
     <message>
         <location filename="../qml/PlaylistBar.qml" line="121"/>
         <source>Wallpapers: %1</source>
-        <translation>Pozadí: %1</translation>
+        <translation>Tapety: %1</translation>
     </message>
     <message>
         <source>Nothing in the playlist yet. Tick a wallpaper in the grid, or press Add wallpaper to tick several.</source>
@@ -2271,7 +2272,12 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>WallpaperCard</name>
     <message>
-        <location filename="../qml/WallpaperCard.qml" line="313"/>
+        <location filename="../qml/WallpaperCard.qml" line="286"/>
+        <source>WallFlux cannot play this one, so it cannot go in a playlist.</source>
+        <translation>Tuhle tapetu WallFlux neumí přehrát, takže do playlistu nepatří.</translation>
+    </message>
+    <message>
+        <location filename="../qml/WallpaperCard.qml" line="321"/>
         <source>Update</source>
         <translation>Aktualizovat</translation>
     </message>

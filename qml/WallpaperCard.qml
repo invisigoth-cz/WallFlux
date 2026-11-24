@@ -240,9 +240,10 @@ Item {
     /// The tick that puts this one in a playlist.
     ///
     /// Out of the way until the pointer is on the card, and then it stays
-    /// as long as it is ticked. Only on a wallpaper that can be played: a
-    /// playlist of ones that cannot would be a quarter of an hour of
-    /// nothing happening.
+    /// as long as it is ticked. On every card, so that they all look alike
+    /// -- the user's word of 24 November -- but greyed on a wallpaper that
+    /// cannot be played, and saying so: a playlist of ones that cannot
+    /// would be a quarter of an hour of nothing happening.
     Rectangle {
         id: box
 
@@ -253,7 +254,8 @@ Item {
         width: 16
         height: 16
         radius: 4
-        visible: card.usable && (pointer.hovered || card.ticked || card.showTick)
+        visible: pointer.hovered || card.ticked || card.showTick
+        opacity: card.usable ? 1 : 0.4
         // White with a black edge, blue with a black edge when it is
         // ticked -- fixed colours rather than the palette's, because this
         // box sits on a picture and not on the window: against a dark
@@ -272,10 +274,16 @@ Item {
         }
 
         MouseArea {
+            id: boxArea
+
             anchors.fill: parent
             anchors.margins: -5
-            cursorShape: Qt.PointingHandCursor
-            onClicked: card.tickAsked()
+            hoverEnabled: true
+            cursorShape: card.usable ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: if (card.usable) card.tickAsked()
+
+            ToolTip.visible: !card.usable && boxArea.containsMouse
+            ToolTip.text: qsTr("WallFlux cannot play this one, so it cannot go in a playlist.")
         }
     }
 
