@@ -60,28 +60,33 @@ Item {
                 visible: layoutBox.visible
             }
 
-            RoundedCombo {
+            // The same buttons as Settings' choices, lit the same way and
+            // with the same colours from whichever theme is on.
+            Row {
                 id: layoutBox
 
-                visible: Application.screens.length > 1
-
-                /// What each row is called in the settings, never translated:
-                /// a translated model is rebuilt on a change of language and
-                /// drops back to its first row (see CLAUDE.md).
+                /// What each is called in the settings, never translated.
                 readonly property var words: ["perDisplay", "clone"]
 
-                Layout.preferredWidth: 260
-                model: layoutBox.words
-                currentIndex: Math.max(0, layoutBox.words.indexOf(view.options.layout))
-                displayText: view.layoutName(currentIndex, Language.czech)
-                onActivated: (index) => view.stage.setLayout(layoutBox.words[index])
+                visible: Application.screens.length > 1
+                spacing: 6
 
-                delegate: ItemDelegate {
-                    required property int index
+                Repeater {
+                    model: layoutBox.words
 
-                    width: layoutBox.width
-                    text: view.layoutName(index, Language.czech)
-                    highlighted: layoutBox.highlightedIndex === index
+                    delegate: RoundedButton {
+                        id: layoutOption
+
+                        required property string modelData
+                        required property int index
+                        readonly property bool lit: view.options.layout === layoutOption.modelData
+
+                        text: view.layoutName(layoutOption.index, Language.czech)
+                        accent: layoutOption.lit ? view.palette.highlight : "transparent"
+                        palette.buttonText: layoutOption.lit ? view.ink(view.palette.highlight)
+                                                             : view.palette.buttonText
+                        onClicked: view.stage.setLayout(layoutOption.modelData)
+                    }
                 }
             }
 
@@ -206,6 +211,11 @@ Item {
                 }
             }
         }
+    }
+
+    /// Black or white, whichever reads on this colour -- as Settings' choices.
+    function ink(c) {
+        return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) > 0.7 ? "#000000" : "#ffffff";
     }
 
     function layoutName(index, language) {
