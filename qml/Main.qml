@@ -32,6 +32,15 @@ Item {
     /// Whether what is chosen is of a kind this program can draw today.
     readonly property bool playing: root.showingWeb || root.showingVideo || root.showingScene
 
+    /// Whether a window is in front of every screen the wallpaper is on:
+    /// one wallpaper is worked out for all of them, and one screen left in
+    /// view is somebody looking at it.
+    readonly property bool everyScreenCovered: {
+        const shown = Application.screens.map(s => s.name)
+            .filter(n => picker.screensWanted.indexOf(n) >= 0);
+        return shown.length > 0 && shown.every(n => ScreenCover.coveredScreens.indexOf(n) >= 0);
+    }
+
     /// Whether the wallpaper should be making no sound.
     ///
     /// Sound is on to begin with and goes off on its own for anything that
@@ -46,7 +55,7 @@ Item {
     /// Settings › Performance says to do about it: "keep", "mute", "pause"
     /// or "stop".
     readonly property var reasons: [
-        { on: ScreenCover.covered, mode: picker.underWindow },
+        { on: root.everyScreenCovered, mode: picker.underWindow },
         { on: ScreenCover.focused, mode: picker.forFocus },
         { on: OtherAudio.playing, mode: picker.forOtherSound },
         { on: Asleep.asleep, mode: picker.whenAsleep }
@@ -99,14 +108,6 @@ Item {
         target: Pointer
         property: "watching"
         value: root.showingScene && !root.covered && picker.mouse
-    }
-
-    // Which screens the wallpaper is on, so that a window covering one of
-    // them does not stop it on the others.
-    Binding {
-        target: ScreenCover
-        property: "shownOn"
-        value: Application.screens.map(s => s.name).filter(n => picker.screensWanted.indexOf(n) >= 0)
     }
 
     // How strongly the music is heard, for scenes and pages alike.

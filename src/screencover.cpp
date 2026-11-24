@@ -169,15 +169,6 @@ void ScreenCover::setCoveredScreens(const QString &names)
     settle();
 }
 
-void ScreenCover::setShownOn(const QStringList &screens)
-{
-    if (screens == m_shownOn)
-        return;
-    m_shownOn = screens;
-    emit shownOnChanged();
-    settle();
-}
-
 void ScreenCover::setFocused(bool focused)
 {
     if (!fromKWin(*this))
@@ -218,25 +209,18 @@ void ScreenCover::settle()
 {
     settleFocus();
 
-    // Covered only where every screen the wallpaper is on has a window in
-    // front of it: one wallpaper is worked out for all of them, and one
-    // screen left in view is somebody looking at it. And a window only
-    // counts while the windows are where they were put.
-    const bool everyScreen = !m_shownOn.isEmpty()
-        && std::all_of(m_shownOn.cbegin(), m_shownOn.cend(),
-                       [this](const QString &name) { return m_coveredScreens.contains(name); });
-    const bool covered = everyScreen && !m_showingDesktop;
+    // A window only counts while the windows are where they were put.
+    const QStringList covered = m_showingDesktop ? QStringList{} : m_coveredScreens;
 
-    // Silent when the answer has not changed. The same trap as select() in
-    // WallpaperCore: handing QML a change that is not one makes it reload a
-    // player that was playing perfectly well.
+    // Silent when the answer has not changed. The same trap as select():
+    // handing QML a change that is not one makes it reload a player that
+    // was playing perfectly well.
     if (covered == m_covered)
         return;
 
     m_covered = covered;
-    qCDebug(lcCover) << (covered ? "a window is covering the wallpaper"
-                                 : "the wallpaper is in view");
-    emit coveredChanged();
+    qCDebug(lcCover) << "covered:" << covered;
+    emit coveredScreensChanged();
 }
 
 void ScreenCover::settleFocus()
