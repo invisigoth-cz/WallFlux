@@ -87,7 +87,11 @@ Item {
         { on: display.options.underWindow.endsWith("all") && display.key !== "clone"
               ? display.anyCovered : display.everyScreenCovered,
           mode: display.options.underWindow.replace("all", "") },
-        { on: ScreenCover.focused, mode: display.options.forFocus },
+        // Another program with the keyboard answers on the monitor it is on,
+        // or -- told "all" -- on every display; cloned, on the clone.
+        { on: ScreenCover.focused && (display.options.forFocus.endsWith("all") || display.key === "clone"
+              || display.screens.some(s => s.name === ScreenCover.focusedScreen)),
+          mode: display.options.forFocus.replace("all", "") },
         { on: OtherAudio.playing, mode: display.options.forOtherSound },
         { on: Asleep.asleep, mode: display.options.whenAsleep }
     ]

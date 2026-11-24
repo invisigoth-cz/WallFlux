@@ -37,6 +37,10 @@ class ScreenCover : public QObject, protected QDBusContext
     /// Whether another program's window has the keyboard, however small it
     /// is -- Wallpaper Engine's "other application focused".
     Q_PROPERTY(bool focused READ isFocused NOTIFY focusedChanged)
+    /// The screen that window is on, by connector name, or empty -- so that
+    /// only that monitor's wallpaper need stand still, as Wallpaper Engine's
+    /// "pause per monitor". Empty too while the desktop is shown.
+    Q_PROPERTY(QString focusedScreen READ focusedScreen NOTIFY focusedScreenChanged)
     /// Whether KWin is showing the desktop -- "Peek at Desktop" in the panel,
     /// or the Show Desktop shortcut.
     Q_PROPERTY(bool showingDesktop READ isShowingDesktop NOTIFY showingDesktopChanged)
@@ -47,6 +51,7 @@ public:
 
     QStringList coveredScreens() const { return m_covered; }
     bool isFocused() const { return m_focused; }
+    QString focusedScreen() const { return m_focusedScreen; }
     bool isShowingDesktop() const { return m_showingDesktop; }
 
     /// Minimises this program's own windows, or brings them back, through
@@ -63,6 +68,9 @@ public slots:
     void setCoveredScreens(const QString &names);
     /// Called by the script too, when the window with the keyboard changes.
     void setFocused(bool focused);
+    /// Called by the script too, with the screen the window with the
+    /// keyboard is on, or nothing where no other program has it.
+    void setFocusedScreen(const QString &name);
 
     /// Called by KWin itself, which announces this one.
     ///
@@ -76,6 +84,7 @@ public slots:
 signals:
     void coveredScreensChanged();
     void focusedChanged();
+    void focusedScreenChanged();
     void showingDesktopChanged();
 
 private:
@@ -94,4 +103,6 @@ private:
     QStringList m_covered;
     bool m_otherHasFocus = false;
     bool m_focused = false;
+    QString m_otherScreen;
+    QString m_focusedScreen;
 };

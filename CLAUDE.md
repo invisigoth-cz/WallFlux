@@ -453,7 +453,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   loaded from the tab or the tray; nothing plays at start still. The tray
   has a menu per monitor with two or more and the layout per monitor, and
   today's menu otherwise. A window covering a monitor pauses that one, or
-  every one with "Pause all"/"Stop all" (`whenCovered` `pauseall`/`stopall`).
+  every one with "Pause all"/"Stop all" (`whenCovered` `pauseall`/`stopall`);
+  so does another program with the keyboard (`whenFocused`, the same six,
+  `ScreenCover.focusedScreen` saying which monitor it is on -- the user's
+  word of 24 November, after dragging VS Code to the other monitor paused
+  both).
   Measured on this laptop (A8-6410) at 1920x1200 on two virtual outputs:
   one cloned light scene 9 % of a core, two light scenes 21 %, DOOM alone
   124 %, DOOM and Space Visualizer 161 % -- the four cores saturate there,

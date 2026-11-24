@@ -56,6 +56,7 @@ var told = null;
 // window filling the laptop's screen leaves the monitor beside it in view,
 // and the wallpaper on show there.
 function look() {
+    focus();
     var list = workspace.windowList();
     var names = [];
     for (var i = 0; i < list.length; ++i) {
@@ -87,14 +88,23 @@ function watch(w) {
 // Another program has the keyboard: an ordinary window that is not one of
 // ours. Not the desktop or a panel, which are not normal windows, and not
 // the picker, or choosing a wallpaper would stop the one being chosen.
+// And which screen it is on, so that only that monitor need stand still;
+// asked again whenever a window moves, which is how dragging one to the
+// other monitor is noticed.
 var hadFocus = null;
+var hadScreen = null;
 function focus() {
     var w = workspace.activeWindow;
     var other = !!w && w.normalWindow && w.pid !== ours;
-    if (other === hadFocus)
-        return;
-    hadFocus = other;
-    callDBus(wallflux, path, iface, "setFocused", other);
+    var screen = other && w.output ? w.output.name : "";
+    if (other !== hadFocus) {
+        hadFocus = other;
+        callDBus(wallflux, path, iface, "setFocused", other);
+    }
+    if (screen !== hadScreen) {
+        hadScreen = screen;
+        callDBus(wallflux, path, iface, "setFocusedScreen", screen);
+    }
 }
 workspace.windowActivated.connect(focus);
 focus();
@@ -177,6 +187,14 @@ void ScreenCover::setFocused(bool focused)
     settle();
 }
 
+void ScreenCover::setFocusedScreen(const QString &name)
+{
+    if (!fromKWin(*this))
+        return;
+    m_otherScreen = name;
+    settleFocus();
+}
+
 void ScreenCover::setShowingDesktop(bool showing)
 {
     if (!fromKWin(*this))
@@ -226,6 +244,13 @@ void ScreenCover::settle()
 void ScreenCover::settleFocus()
 {
     // "Show desktop" hands the keyboard to the desktop, which is no program.
+    const QString screen = m_showingDesktop ? QString() : m_otherScreen;
+    if (screen != m_focusedScreen) {
+        m_focusedScreen = screen;
+        qCDebug(lcCover) << "the program with the keyboard is on" << screen;
+        emit focusedScreenChanged();
+    }
+
     const bool focused = m_otherHasFocus && !m_showingDesktop;
     if (focused == m_focused)
         return;

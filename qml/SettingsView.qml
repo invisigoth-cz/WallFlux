@@ -304,6 +304,37 @@ Item {
         }
     }
 
+    /// The six choices where each of several monitors has its own -- only
+    /// the monitor concerned, or every one -- wrapped under the card's words.
+    component MonitorChoice: Flow {
+        id: perMonitor
+
+        property string current
+        signal chosen(string value)
+
+        Layout.fillWidth: true
+        spacing: 6
+
+        Repeater {
+            model: view.windowCases
+
+            delegate: RoundedButton {
+                id: monitorOption
+
+                required property var modelData
+                readonly property bool lit: monitorOption.modelData.value === perMonitor.current
+
+                text: monitorOption.modelData.name
+                // The page's colours, not the button's own: a button
+                // reading the colour it sets is a binding loop.
+                accent: monitorOption.lit ? view.palette.highlight : "transparent"
+                palette.buttonText: monitorOption.lit ? view.ink(view.palette.highlight)
+                                                      : view.palette.buttonText
+                onClicked: perMonitor.chosen(monitorOption.modelData.value)
+            }
+        }
+    }
+
     /// One of a few choices, as a segmented control: the chosen one lit.
     component Choice: RowLayout {
         id: choice
@@ -892,31 +923,9 @@ Item {
                     }
 
                     belowShown: view.picker.manyMonitors
-                    below: Flow {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        Repeater {
-                            model: view.windowCases
-
-                            delegate: RoundedButton {
-                                id: windowOption
-
-                                required property var modelData
-                                // With one monitor, "all" is that one.
-                                readonly property bool lit: windowOption.modelData.value
-                                    === (view.picker.manyMonitors ? view.picker.underWindow
-                                                                  : view.picker.underWindow.replace("all", ""))
-
-                                text: windowOption.modelData.name
-                                // The page's colours, not the button's own: a button
-                                // reading the colour it sets is a binding loop.
-                                accent: windowOption.lit ? view.palette.highlight : "transparent"
-                                palette.buttonText: windowOption.lit ? view.ink(view.palette.highlight)
-                                                                     : view.palette.buttonText
-                                onClicked: view.picker.whenCovered = windowOption.modelData.value
-                            }
-                        }
+                    below: MonitorChoice {
+                        current: view.picker.underWindow
+                        onChosen: (value) => view.picker.whenCovered = value
                     }
                 }
 
@@ -927,8 +936,17 @@ Item {
                                 + "it is; clicking the desktop brings the wallpaper back. This "
                                 + "window does not count.")
 
+                    // As for a window over the wallpaper: the monitor that
+                    // program is on, or every one, where there are several.
                     Choice {
+                        visible: !view.picker.manyMonitors
                         options: view.cases
+                        current: view.picker.forFocus.replace("all", "")
+                        onChosen: (value) => view.picker.whenFocused = value
+                    }
+
+                    belowShown: view.picker.manyMonitors
+                    below: MonitorChoice {
                         current: view.picker.forFocus
                         onChosen: (value) => view.picker.whenFocused = value
                     }
@@ -1169,8 +1187,8 @@ Item {
                                 + "monitor the one it is worked out on, or turns a copy over.\n"
                                 + "• Save profile keeps what every monitor shows under a name, to load "
                                 + "again there or from the tray.\n"
-                                + "• A window covering one monitor stops that one only, or all of them, "
-                                + "as Performance says.")
+                                + "• A window covering one monitor, or another program with the keyboard "
+                                + "on it, stops that one only, or all of them, as Performance says.")
                 }
 
                 Guide {

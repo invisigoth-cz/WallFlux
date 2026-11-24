@@ -52,6 +52,29 @@ private slots:
         QCOMPARE(changes.count(), 4);
     }
 
+    /// Which screen that window is on, so that only that monitor's
+    /// wallpaper need stand still -- and none while the desktop is shown.
+    void saysWhichScreenTheProgramWithTheKeyboardIsOn()
+    {
+        ScreenCover cover;
+        QSignalSpy changes(&cover, &ScreenCover::focusedScreenChanged);
+        QVERIFY(cover.focusedScreen().isEmpty());
+
+        cover.setFocusedScreen(QStringLiteral("HDMI-A-1"));
+        cover.setFocusedScreen(QStringLiteral("HDMI-A-1"));
+        QCOMPARE(cover.focusedScreen(), QStringLiteral("HDMI-A-1"));
+        QCOMPARE(changes.count(), 1);
+
+        cover.setShowingDesktop(true);
+        QVERIFY(cover.focusedScreen().isEmpty());
+        cover.setShowingDesktop(false);
+        QCOMPARE(cover.focusedScreen(), QStringLiteral("HDMI-A-1"));
+
+        cover.setFocusedScreen(QString());
+        QVERIFY(cover.focusedScreen().isEmpty());
+        QCOMPARE(changes.count(), 4);
+    }
+
     /// Another program's window with the keyboard is said once, and not
     /// while the desktop is being shown, which hands the keyboard to nobody.
     void saysWhenAnotherProgramHasTheKeyboard()
