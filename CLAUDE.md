@@ -814,7 +814,7 @@ keyboard; the KWin script is handed our pid, so the picker does not count) --
 with no business of their own in what the answer is used for. So is `Power`
 (`hasBattery`, `onBattery`, `percent`). A `Display`'s `covered` is a window in
 front where `quietUnderWindows` asks, `focused` where `pauseOnFocus` asks, or
-a battery under `batteryFloor`; `drawnWith` is Low on a battery where
+a battery under `batteryFloor`; `drawnFor` is Low on a battery where
 `batteryLow` asks. It is put together with the rest in one line:
 
 ```qml
@@ -2171,7 +2171,7 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   thirty. Two packages here have bloom at all.
 
   **And a wallpaper's own preset is the picker's `qualityOf`**, by id, read
-  by `drawnWith` for whatever is on show; the panel's drop down writes it.
+  by `drawnFor`, which each display asks for its own wallpaper; the panel's drop down writes it.
 
 - **A `Switch` with its padding taken away is nought wide.** Fusion counts
   its width from the padding and the indicator's place in it, so the pill

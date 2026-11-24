@@ -399,13 +399,15 @@ ApplicationWindow {
         picker.msaa = p.msaa;
         picker.bloom = p.bloom;
     }
-    /// What the wallpaper on show is drawn with: its own preset where it
-    /// has one, the settings where it has not.
-    readonly property var drawnWith: {
-        if (picker.batteryLow && Power.onBattery)
+    /// What a wallpaper is drawn with: its own preset where it has one, the
+    /// settings where it has not, Low on a battery where that is asked.
+    /// Each display asks for its own wallpaper. Everything it depends on is
+    /// an argument, so that a binding calling it is told when any changes.
+    function drawnFor(id, qualityOf, fps, msaa, bloom, onBattery, batteryLow) {
+        if (batteryLow && onBattery)
             return picker.presets.low;
-        const own = picker.presets[picker.qualityOf[picker.showing.current.id]];
-        return own ? own : { fps: picker.fps, msaa: picker.msaa, bloom: picker.bloom };
+        const own = picker.presets[qualityOf[id]];
+        return own ? own : { fps: fps, msaa: msaa, bloom: bloom };
     }
     /// A new map, not the old one changed: see the trap about putting an
     /// answer back.

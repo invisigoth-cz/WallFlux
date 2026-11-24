@@ -30,21 +30,40 @@ Item {
     /// Every connector name seen in this run, in the order they came. A
     /// monitor unplugged keeps its `Display` -- its wallpaper, playlist and
     /// pause -- for when it comes back, until the program quits.
-    property var seenNames: []
+    ///
+    /// A ListModel that is only ever appended to, never a JS array: an
+    /// Instantiator over an array builds every delegate again when the
+    /// array is replaced, so plugging in a new monitor threw away what all
+    /// the others were showing.
+    ListModel { id: seen }
+
+    function seenNames() {
+        const names = [];
+        for (let i = 0; i < seen.count; ++i)
+            names.push(seen.get(i).name);
+        return names;
+    }
+
+    /// Adds the monitors not seen yet in this run.
+    function noteSeen(names) {
+        const known = root.seenNames();
+        for (const name of names) {
+            if (known.indexOf(name) < 0) {
+                seen.append({ name: name });
+                known.push(name);
+            }
+        }
+    }
 
     readonly property var connectedNames: Application.screens.map(s => s.name)
     // The monitors there at the start count as seen; a change handler is
     // not told the first value.
     Component.onCompleted: {
-        root.seenNames = root.connectedNames.slice();
+        root.noteSeen(root.connectedNames);
         if (!picker.startMinimized)
             root.showPicker();
     }
-    onConnectedNamesChanged: {
-        const more = root.connectedNames.filter(n => root.seenNames.indexOf(n) < 0);
-        if (more.length > 0)
-            root.seenNames = root.seenNames.concat(more);
-    }
+    onConnectedNamesChanged: root.noteSeen(root.connectedNames)
 
     readonly property bool perDisplay: picker.layout !== "clone"
 
@@ -159,20 +178,17 @@ Item {
                 clone.clear();
             if (from.run.playing !== "")
                 clone.run.start(Playlists.named(from.run.playing));
-            for (let i = 0; i < perMonitor.count; ++i) {
-                const one = perMonitor.objectAt(i);
-                if (one)
-                    one.clear();
-            }
+            root.letGoOf("perDisplay");
             picker.layout = "clone";
             return;
         }
         const id = clone.showing.current.id;
         const playlist = clone.run.playing;
-        clone.clear();
+        root.letGoOf("clone");
         picker.layout = "perDisplay";
         const all = root.displays;
         for (let i = 0; i < all.length; ++i) {
+            all[i].run.stop();
             if (id !== "") {
                 picker.copyProperties(id, "clone", all[i].key);
                 all[i].select(id);
@@ -182,6 +198,20 @@ Item {
         }
         if (playlist !== "" && all.length > 0)
             all[0].run.start(Playlists.named(playlist));
+    }
+
+    /// Lets go of every display of a layout: the clone, or every monitor's
+    /// own -- what they show and the playlists running on them.
+    function letGoOf(layout) {
+        if (layout === "clone") {
+            clone.clear();
+            return;
+        }
+        for (let i = 0; i < perMonitor.count; ++i) {
+            const one = perMonitor.objectAt(i);
+            if (one)
+                one.clear();
+        }
     }
 
     /// Puts one display's wallpaper on another.
@@ -207,24 +237,27 @@ Item {
         if (!a || !b || a === b)
             return;
         root.settleTransitions();
-        const was = { id: a.showing.current.id, playlist: a.run.playing, muted: root.isMuted(aKey) };
-        const other = { id: b.showing.current.id, playlist: b.run.playing, muted: root.isMuted(bKey) };
+        const was = { id: a.showing.current.id, playlist: a.run.playing, muted: root.isMuted(aKey),
+                      properties: picker.ownProperties(a.showing.current.id, aKey) };
+        const other = { id: b.showing.current.id, playlist: b.run.playing, muted: root.isMuted(bKey),
+                        properties: picker.ownProperties(b.showing.current.id, bKey) };
         const put = (d, key, what) => {
             d.run.stop();
-            if (what.id !== "")
-                d.select(what.id);
-            else
-                d.clear();
-            if (what.playlist !== "")
+            // The playlist first and its first turn finished at once, then
+            // the wallpaper swapped in, or the playlist's first wallpaper
+            // would take its place straight away.
+            if (what.playlist !== "") {
                 d.run.start(Playlists.named(what.playlist));
+                d.swapNow();
+            }
+            if (what.id !== "") {
+                picker.setOwnProperties(what.id, key, what.properties);
+                d.select(what.id);
+            } else {
+                d.clear();
+            }
             root.setMuted(key, what.muted);
         };
-        if (was.id !== "")
-            picker.copyProperties(was.id, aKey, "swap");
-        if (other.id !== "")
-            picker.copyProperties(other.id, bKey, aKey);
-        if (was.id !== "")
-            picker.copyProperties(was.id, "swap", bKey);
         put(a, aKey, other);
         put(b, bKey, was);
     }
@@ -286,15 +319,18 @@ Item {
         if (!profile || !profile.displays)
             return;
         root.settleTransitions();
-        picker.layout = profile.layout === "clone" ? "clone" : "perDisplay";
+        const layout = profile.layout === "clone" ? "clone" : "perDisplay";
+        // The side being left is let go of, as `setLayout` does, or its
+        // playlists would run on held and unseen and come back later.
+        if (layout !== picker.layout)
+            root.letGoOf(picker.layout);
+        picker.layout = layout;
         if (profile.layout === "clone") {
             picker.excludedFromClone = profile.excluded || [];
             picker.cloneSource = profile.cloneSource || "";
         }
         const names = Object.keys(profile.displays);
-        const more = names.filter(n => n !== "clone" && root.seenNames.indexOf(n) < 0);
-        if (more.length > 0)
-            root.seenNames = root.seenNames.concat(more);
+        root.noteSeen(names.filter(n => n !== "clone"));
         for (const key of names) {
             const what = profile.displays[key];
             const d = root.display(key);
@@ -342,19 +378,19 @@ Item {
     Instantiator {
         id: perMonitor
 
-        model: root.seenNames
+        model: seen
 
         delegate: Display {
-            required property string modelData
+            required property string name
 
-            key: modelData
+            key: name
             options: picker
             pausedAll: root.paused
             mutedAll: picker.muted
-            mutedHere: root.isMuted(modelData, root.mutedKeys)
+            mutedHere: root.isMuted(name, root.mutedKeys)
             anyCovered: root.anyCovered
             order: picker.shown
-            screens: root.perDisplay ? Application.screens.filter(s => s.name === modelData) : []
+            screens: root.perDisplay ? Application.screens.filter(s => s.name === name) : []
         }
     }
 
@@ -450,27 +486,33 @@ Item {
         items: picker.manyMonitors ? root.manyItems() : root.oneItems(picker.selected)
 
         onClicked: root.showPicker()
-        onTriggered: (id) => {
-            // "<what>@<monitor>", or "<what>@<monitor>:<which>".
-            const at = id.indexOf("@");
-            if (at >= 0) {
-                const what = id.slice(0, at);
-                const rest = id.slice(at + 1);
-                const colon = rest.indexOf(":");
-                const key = colon >= 0 ? rest.slice(0, colon) : rest;
-                const which = colon >= 0 ? rest.slice(colon + 1) : "";
-                root.onDisplay(root.display(key), what, which);
-                return;
-            }
-            switch (id) {
-            case "choose": root.showPicker(); break;
-            case "pauseall": root.paused = !root.paused; break;
-            case "muteall": picker.muted = !picker.muted; break;
-            case "quit": Qt.quit(); break;
-            default:
-                if (id.startsWith("profile:"))
-                    root.applyProfile(Profiles.named(id.slice(8)));
-            }
+        onTriggered: (id) => root.trayChose(id)
+    }
+
+    /// A tray item chosen, by its id: "<what>@<monitor>",
+    /// "<what>@<monitor>:<which>", or one of the program's own.
+    function trayChose(id) {
+        // A profile first: its name is anybody's and may hold an "@".
+        if (id.startsWith("profile:")) {
+            root.applyProfile(Profiles.named(id.slice(8)));
+            return;
+        }
+        // "<what>@<monitor>", or "<what>@<monitor>:<which>".
+        const at = id.indexOf("@");
+        if (at >= 0) {
+            const what = id.slice(0, at);
+            const rest = id.slice(at + 1);
+            const colon = rest.indexOf(":");
+            const key = colon >= 0 ? rest.slice(0, colon) : rest;
+            const which = colon >= 0 ? rest.slice(colon + 1) : "";
+            root.onDisplay(root.display(key), what, which);
+            return;
+        }
+        switch (id) {
+        case "choose": root.showPicker(); break;
+        case "pauseall": root.paused = !root.paused; break;
+        case "muteall": picker.muted = !picker.muted; break;
+        case "quit": Qt.quit(); break;
         }
     }
 

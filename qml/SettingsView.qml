@@ -882,7 +882,16 @@ Item {
                                 + "and quiet; Stop lets go of it altogether, freeing its memory, and "
                                 + "loads it again when the window goes.")
 
-                    // Under the words, since six do not fit a row beside them.
+                    // Beside the words with one monitor, as it always was; under
+                    // them with several, since six do not fit a row beside them.
+                    Choice {
+                        visible: !view.picker.manyMonitors
+                        options: view.cases
+                        current: view.picker.underWindow.replace("all", "")
+                        onChosen: (value) => view.picker.whenCovered = value
+                    }
+
+                    belowShown: view.picker.manyMonitors
                     below: Flow {
                         Layout.fillWidth: true
                         spacing: 6

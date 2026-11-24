@@ -99,8 +99,10 @@ Item {
                 opacity: shape.shown && shape.shown.covered ? 0.5 : 1
             }
 
-            // The number, which is what the tray and the window call it.
+            // The number, which is what the tray and the window call it --
+            // where there is more than one to tell apart.
             Rectangle {
+                visible: map.screens.length > 1
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.margins: 6

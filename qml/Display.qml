@@ -53,6 +53,12 @@ Item {
 
     readonly property bool connected: display.screens.length > 0
 
+    /// The quality this display's wallpaper is drawn with: its own preset,
+    /// or the settings.
+    readonly property var drawn: display.options.drawnFor(shown.current.id, display.options.qualityOf,
+        display.options.fps, display.options.msaa, display.options.bloom,
+        Power.onBattery, display.options.batteryLow)
+
     /// Which drawer the chosen wallpaper belongs to. All three want a file
     /// on disk, so a kind alone is not enough to start on.
     readonly property bool showingWeb: shown.current.kind === WallpaperKind.Web
@@ -76,7 +82,10 @@ Item {
     /// or "stop". A window answers on the screens it covers, or -- told
     /// "pause all" or "stop all" -- on every display once it covers any.
     readonly property var reasons: [
-        { on: display.options.underWindow.endsWith("all") ? display.anyCovered : display.everyScreenCovered,
+        // Cloned, there is one wallpaper and today's rule stands: still only
+        // when every screen it is on is covered, whatever "all" says.
+        { on: display.options.underWindow.endsWith("all") && display.key !== "clone"
+              ? display.anyCovered : display.everyScreenCovered,
           mode: display.options.underWindow.replace("all", "") },
         { on: ScreenCover.focused, mode: display.options.forFocus },
         { on: OtherAudio.playing, mode: display.options.forOtherSound },
@@ -230,9 +239,9 @@ Item {
             silent: display.silent
             covered: display.covered
             volume: display.options.volume
-            fps: display.options.drawnWith.fps
-            msaa: display.options.drawnWith.msaa
-            bloom: display.options.drawnWith.bloom
+            fps: display.drawn.fps
+            msaa: display.drawn.msaa
+            bloom: display.drawn.bloom
             halfTextures: display.options.halfTextures
             properties: display.options.propertiesFor(shown.current, display.key, display.options.propertiesOf)
             values: display.options.valuesFor(shown.current, display.key, display.options.propertiesOf)

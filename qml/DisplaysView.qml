@@ -99,8 +99,9 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 220
             stage: view.stage
-            selectedName: view.options.selectedKey !== "" ? view.options.selectedKey
-                          : (view.options.selected ? view.options.selected.key : "")
+            // The monitor the library acts on, which is the chosen one only
+            // while it is plugged in.
+            selectedName: view.options.selected ? view.options.selected.key : ""
             onChosen: (name) => view.options.selectedKey = name
             onContextAsked: (name, x, y) => {
                 monitorMenu.name = name;
@@ -169,7 +170,11 @@ Item {
                             spacing: 2
 
                             Label {
-                                text: view.stage.monitorLabel(row.modelData.name, view.stage.connectedNames)
+                                // Numbered only where there is more than one,
+                                // as the tray and the library do.
+                                text: Application.screens.length > 1
+                                      ? view.stage.monitorLabel(row.modelData.name, view.stage.connectedNames)
+                                      : row.modelData.name
                                 font.pixelSize: 15
                                 font.weight: Font.Bold
                             }
