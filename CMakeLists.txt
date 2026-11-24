@@ -120,6 +120,8 @@ qt_add_qml_module(wallflux
         src/playlistrun.cpp
         src/showing.h
         src/showing.cpp
+        src/profiles.h
+        src/profiles.cpp
         src/language.h
         src/language.cpp
         src/screencover.h
@@ -288,6 +290,14 @@ if(Qt6Test_FOUND)
     target_include_directories(tst_playlists PRIVATE src)
     target_link_libraries(tst_playlists PRIVATE Qt6::Qml Qt6::Test)
     add_test(NAME playlists COMMAND tst_playlists)
+
+    qt_add_executable(tst_profiles
+        tests/tst_profiles.cpp
+        src/profiles.cpp
+    )
+    target_include_directories(tst_profiles PRIVATE src)
+    target_link_libraries(tst_profiles PRIVATE Qt6::Qml Qt6::Test)
+    add_test(NAME profiles COMMAND tst_profiles)
 
     qt_add_executable(tst_tags
         tests/tst_tags.cpp
