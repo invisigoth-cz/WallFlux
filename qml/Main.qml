@@ -20,94 +20,40 @@ import "emblem.js" as Emblem
 Item {
     id: root
 
-    /// Which drawer the chosen wallpaper belongs to. All three want a file
-    /// on disk, so a kind alone is not enough to start on.
-    readonly property bool showingWeb: onDisplay.current.kind === WallpaperKind.Web
-                                       && onDisplay.current.hasFile
-    readonly property bool showingVideo: onDisplay.current.kind === WallpaperKind.Video
-                                         && onDisplay.current.hasFile
-    readonly property bool showingScene: onDisplay.current.kind === WallpaperKind.Scene
-                                         && onDisplay.current.hasFile
-
-    /// Whether what is chosen is of a kind this program can draw today.
-    readonly property bool playing: root.showingWeb || root.showingVideo || root.showingScene
-
-    /// Whether a window is in front of every screen the wallpaper is on:
-    /// one wallpaper is worked out for all of them, and one screen left in
-    /// view is somebody looking at it.
-    readonly property bool everyScreenCovered: {
-        const shown = Application.screens.map(s => s.name)
-            .filter(n => picker.screensWanted.indexOf(n) >= 0);
-        return shown.length > 0 && shown.every(n => ScreenCover.coveredScreens.indexOf(n) >= 0);
-    }
-
-    /// Whether the wallpaper should be making no sound.
-    ///
-    /// Sound is on to begin with and goes off on its own for anything that
-    /// has better claim to the speakers or to the screen: another program
-    /// playing something, or a window pulled up to cover the wallpaper
-    /// nobody can then see anyway. Neither is a setting -- what is left to
-    /// choose is whether the wallpaper has sound at all.
-    readonly property bool silent: picker.muted || root.covered
-        || root.reasons.some(r => r.on && r.mode !== "keep")
-
-    /// What is happening that the wallpaper may answer, each with what
-    /// Settings › Performance says to do about it: "keep", "mute", "pause"
-    /// or "stop".
-    readonly property var reasons: [
-        { on: root.everyScreenCovered, mode: picker.underWindow },
-        { on: ScreenCover.focused, mode: picker.forFocus },
-        { on: OtherAudio.playing, mode: picker.forOtherSound },
-        { on: Asleep.asleep, mode: picker.whenAsleep }
-    ]
-
-    /// Let go of altogether while one of those holds and was told Stop:
-    /// the first screen draws nothing, so the scene, the video or the page
-    /// is freed, and it is loaded again from the start afterwards.
-    readonly property bool stopped: root.reasons.some(r => r.on && r.mode === "stop")
-
-    /// Whether the wallpaper is to stand still: a window filling the screen
-    /// in front of it, another program with the keyboard where that was
-    /// asked for, or a battery below the floor set in Settings.
-    ///
-    /// Nothing of the wallpaper is on screen in the first case, so it stops
-    /// rather than going on decoding frames and running JavaScript behind a
-    /// game; the other two are somebody's choice to save the machine.
-    ///
-    /// A window counts only where every screen the wallpaper is on is
-    /// covered: one wallpaper is worked out for all of them, and a monitor
-    /// left in view beside a covered laptop is still being looked at.
-    readonly property bool covered: root.paused
-        || root.reasons.some(r => r.on && (r.mode === "pause" || r.mode === "stop"))
-        || (Power.onBattery && Power.hasBattery && Power.percent < picker.batteryFloor)
-
     /// Paused from the tray: stood still and quiet as under a window, and
     /// a playlist held unless it was told to change while paused -- what
     /// Wallpaper Engine's own Pause does. Forgotten at quit, like the rest.
     property bool paused: false
 
-    /// Whether the running playlist's clock should be standing still.
-    ///
-    /// Two reasons, and this program is the only place that knows either.
-    /// A playlist told to turn when a video ends is waiting on the video
-    /// and not on the clock -- and only here is it known that what is on
-    /// the screen is a video at all. And a playlist not told to carry on
-    /// while the wallpaper is stopped behind a window should not count the
-    /// minutes nobody is watching; that is what Wallpaper Engine means by
-    /// paused, and it is why its own playlists look stuck to people who
-    /// leave a window maximised.
-    readonly property bool holdingThePlaylist:
-        (playlistRun.changesOnVideoEnd && root.showingVideo)
-        || (root.covered && !playlistRun.changesWhilePaused)
+    /// Every monitor that is ticked, showing one wallpaper worked out once
+    /// -- Wallpaper Engine's "Clone single wallpaper".
+    Display {
+        id: clone
 
-    onHoldingThePlaylistChanged: playlistRun.hold(root.holdingThePlaylist)
+        key: "clone"
+        options: picker
+        pausedAll: root.paused
+        mutedAll: picker.muted
+        order: picker.shown
+
+        // The screens the Displays tab has ticked, as screen objects.
+        screens: {
+            const kept = [];
+            const all = Application.screens;
+            for (let i = 0; i < all.length; ++i) {
+                if (picker.screensWanted.indexOf(all[i].name) >= 0)
+                    kept.push(all[i]);
+            }
+            return kept;
+        }
+    }
 
     // The mouse is asked after only while a scene is on show and in view:
     // nothing else here follows it, and every move is a call over the bus.
     Binding {
         target: Pointer
         property: "watching"
-        value: root.showingScene && !root.covered && picker.mouse
+        value: clone.showingScene && !clone.covered && picker.mouse
     }
 
     // How strongly the music is heard, for scenes and pages alike.
@@ -127,87 +73,6 @@ Item {
         picker.requestActivate();
     }
 
-    /// What the first screen draws, which every other one shows.
-    readonly property Item firstPicture: surfaces.count > 0 && surfaces.objectAt(0)
-                                         ? surfaces.objectAt(0).picture : null
-
-    // One window per screen. The model is Qt's own list of screens, so
-    // plugging a monitor in builds another surface and unplugging one
-    // takes its surface with it -- there is nothing here to keep in step
-    // with the compositor.
-    //
-    // Qt names a screen after its connector, which is the same name KDE's
-    // display settings and /sys/class/drm use. No `xrandr`, no
-    // `kscreen-doctor`, no parsing anybody's output.
-    Instantiator {
-        id: surfaces
-
-        // The screens the Displays tab has ticked, as screen objects.
-        model: {
-            const kept = [];
-            const all = Application.screens;
-            for (let i = 0; i < all.length; ++i) {
-                if (picker.screensWanted.indexOf(all[i].name) >= 0)
-                    kept.push(all[i]);
-            }
-            return kept;
-        }
-
-        delegate: WallpaperSurface {
-            required property var modelData
-            required property int index
-
-            onScreen: modelData
-            run: playlistRun
-            showing: onDisplay
-            // The first screen works the wallpaper out and the others show
-            // its picture, as Wallpaper Engine's "Clone single wallpaper".
-            primary: index === 0
-            mirrorOf: index === 0 ? null : root.firstPicture
-            cloned: index === 0 && surfaces.count > 1
-            showingWeb: index === 0 && root.showingWeb && !root.stopped
-            showingVideo: index === 0 && root.showingVideo && !root.stopped
-            showingScene: index === 0 && root.showingScene && !root.stopped
-            playing: root.playing
-            silent: root.silent
-            covered: root.covered
-            volume: picker.volume
-            fps: picker.drawnWith.fps
-            msaa: picker.drawnWith.msaa
-            bloom: picker.drawnWith.bloom
-            halfTextures: picker.halfTextures
-            properties: picker.propertiesFor(onDisplay.current)
-            values: picker.valuesFor(onDisplay.current)
-            music: picker.music
-            parallax: picker.parallax
-            particles: picker.particles
-            scaling: picker.scaling
-            onHeld: root.oneIsHolding()
-            onTried: (id, grade, why) => picker.noteCompatibility(id, grade, why)
-        }
-    }
-
-    // A scene's own music, once for the program rather than once per screen:
-    // a player on every surface would play it as many times over as there
-    // are monitors.
-    Repeater {
-        model: root.showingScene && !root.stopped ? SceneSounds.of(onDisplay.current.source) : []
-
-        delegate: SceneSound {
-            required property var modelData
-
-            files: modelData.files
-            mode: modelData.mode
-            volume: modelData.volume
-            mintime: modelData.mintime
-            maxtime: modelData.maxtime
-            startsilent: modelData.startsilent
-            silent: root.silent
-            covered: root.covered
-            loudness: picker.volume
-        }
-    }
-
     // Nothing is chosen at startup, by design: the program comes up as an
     // icon in the panel and the desktop keeps the wallpaper it already had
     // until somebody picks one from the grid.
@@ -219,9 +84,9 @@ Item {
         // compositor keeps in the background and which take no input, and a
         // window belonging to one would be dragged down there with it.
         transientParent: null
-        run: playlistRun
-        showing: onDisplay
-        onChose: (id) => onDisplay.select(id)
+        run: clone.run
+        showing: clone.showing
+        onChose: (id) => clone.select(id)
 
         /// Whether peeking at the desktop put this window away, and so
         /// whether it comes back when the peeking stops. A window that was
@@ -246,150 +111,6 @@ Item {
         }
     }
 
-    // ---- Transitions ---------------------------------------------------
-
-    /// The wallpaper a transition is on its way to, or empty while none is
-    /// running. Also what says a transition *is* running.
-    property string arriving: ""
-
-    /// Which transition is running. The playlist's, except that "random"
-    /// is rolled here -- once per change, and held for the length of it,
-    /// so every screen fades the same way and the end of a transition
-    /// matches its start.
-    property string fading: ""
-
-    /// How many screens have yet to say they are holding still.
-    property int waiting: 0
-
-    /// Puts a wallpaper on the desktop the way the running playlist asked
-    /// for.
-    ///
-    /// Every screen is asked to hold what it has, and the wallpaper is
-    /// changed only once they all have. Changing it as each one answers
-    /// would leave the slowest screen holding a picture of the *new*
-    /// wallpaper -- a fade from a thing to itself, which is a cut.
-    function changeTo(id) {
-        const asked = playlistRun.transition;
-        root.fading = asked === "random" ? (Math.random() < 0.5 ? "fade" : "black") : asked;
-
-        // Nothing to cross from on the first wallpaper of a playlist, and
-        // nothing asked for in the other two cases.
-        if (root.fading === "" || root.fading === "none" || !root.playing
-            || surfaces.count === 0) {
-            onDisplay.select(id);
-            return;
-        }
-
-        root.arriving = id;
-        // Only the first screen holds still: the others show its picture.
-        root.waiting = 1;
-
-        // Only the ways that hold a *picture* need rescuing. Going out
-        // through black holds nothing: its own animation says when it is
-        // ready, and that is half the transition away -- the rescue fired
-        // first and the veil never got off the ground, so the screen never
-        // went black at all. Measured: rgb 0.46 halfway through what was
-        // meant to be the darkest moment of it.
-        if (root.fading !== "black")
-            rescue.restart();
-        surfaces.objectAt(0).holdStill(root.fading, playlistRun.transitionMs);
-    }
-
-    /// One screen is holding. The last one to say so is what lets the
-    /// change happen.
-    function oneIsHolding() {
-        if (root.arriving === "")
-            return;
-        root.waiting -= 1;
-        if (root.waiting > 0)
-            return;
-        rescue.stop();
-        root.swapNow();
-    }
-
-    /// Changes the wallpaper and lets every screen go again.
-    function swapNow() {
-        const id = root.arriving;
-        const how = root.fading;
-        root.arriving = "";
-        root.waiting = 0;
-
-        if (id !== "")
-            onDisplay.select(id);
-        if (surfaces.count > 0)
-            surfaces.objectAt(0).release(how, playlistRun.transitionMs);
-    }
-
-    /// The screen that never answered. A grab comes back only while the
-    /// window is being drawn, and a covered screen is not -- without this
-    /// a playlist behind a maximised window would simply never change.
-    Timer {
-        id: rescue
-
-        interval: 400
-        onTriggered: root.swapNow()
-    }
-
-    /// A playlist puts its wallpapers on the desktop the same way a click
-    /// does -- it says which one and nothing more, so there is one place
-    /// where a wallpaper starts playing rather than two.
-    PlaylistRun {
-        id: playlistRun
-    }
-
-    /// What is on show.
-    Showing {
-        id: onDisplay
-        library: Wallpapers
-    }
-
-    // A playlist renamed or thrown away in the library reaches the run.
-    Connections {
-        target: Playlists
-        function onRenamed(from, to) { playlistRun.renamed(from, to); }
-        function onForgotten(name) { playlistRun.forgotten(name); }
-    }
-
-    Connections {
-        target: playlistRun
-        function onPlays(id) {
-            root.changeTo(id);
-        }
-
-        // A playlist started while a window is already covering the
-        // wallpaper has to be told so: the binding above has not changed,
-        // so nothing else would say it.
-        function onPlayingChanged() {
-            playlistRun.hold(root.holdingThePlaylist);
-        }
-    }
-
-    // The only thing a person can click: the wallpapers are in the
-    // background layer and transparent to input, so without this there
-    // would be no way to reach the picker at all.
-    /// The tray's Next and Previous: through the running playlist if there
-    /// is one, and otherwise through the library in the order the grid
-    /// shows it, round from the end to the start. Counted from the one on
-    /// show, or -- switched off, which leaves nothing on show -- from the one
-    /// played last, so that Next after Off is the next one and not the first.
-    function step(by) {
-        if (playlistRun.playing !== "") {
-            if (by > 0)
-                playlistRun.next();
-            else
-                playlistRun.previous();
-            return;
-        }
-        const order = picker.shown.filter(w => w.playable);
-        if (order.length === 0)
-            return;
-        const from = onDisplay.current.id || Wallpapers.recent[0] || "";
-        const at = order.findIndex(w => w.id === from);
-        const to = at < 0 ? (by > 0 ? 0 : order.length - 1)
-                          : (at + by + order.length) % order.length;
-        onDisplay.select(order[to].id);
-    }
-
     Tray {
         visible: picker.tray
         // Ours, in the window's colours: the theme's target colours rather
@@ -401,9 +122,9 @@ Item {
             const colours = { dark: set.dark, window: Qt.color(set.window), base: Qt.color(set.base) };
             return Emblem.svg(colours, Qt.color(picker.accent !== "" ? picker.accent : set.highlight));
         }
-        tooltip: !onDisplay.current.playable ? qsTr("WallFlux")
-                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(onDisplay.current.title)
-                 : qsTr("WallFlux — %1").arg(onDisplay.current.title)
+        tooltip: !clone.showing.current.playable ? qsTr("WallFlux")
+                 : root.paused ? qsTr("WallFlux — %1 (paused)").arg(clone.showing.current.title)
+                 : qsTr("WallFlux — %1").arg(clone.showing.current.title)
 
         // Not one checkable item here: the words say the state. Recent is
         // the last five chosen in this run, the one on show among them and
@@ -413,7 +134,7 @@ Item {
             { separator: true },
             { id: "pause", text: root.paused ? qsTr("Resume") : qsTr("Pause"),
               icon: root.paused ? "media-playback-start" : "media-playback-pause",
-              enabled: root.playing },
+              enabled: clone.playing },
             { id: "previous", text: qsTr("Previous wallpaper"), icon: "media-skip-backward" },
             { id: "next", text: qsTr("Next wallpaper"), icon: "media-skip-forward" },
             { id: "mute", text: picker.muted ? qsTr("Unmute") : qsTr("Mute"),
@@ -421,7 +142,7 @@ Item {
             { text: qsTr("Recent wallpapers"), icon: "document-open-recent",
               enabled: Wallpapers.recent.length > 0,
               submenu: Wallpapers.recent.slice(0, 5).map(id => ({
-                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== onDisplay.current.id })) },
+                  id: "recent:" + id, text: picker.titleOf(id), enabled: id !== clone.showing.current.id })) },
             { separator: true },
             { id: "quit", text: qsTr("Quit") }
         ]
@@ -431,13 +152,13 @@ Item {
             switch (id) {
             case "choose": root.showPicker(); break;
             case "pause": root.paused = !root.paused; break;
-            case "previous": root.step(-1); break;
-            case "next": root.step(1); break;
+            case "previous": clone.step(-1); break;
+            case "next": clone.step(1); break;
             case "mute": picker.muted = !picker.muted; break;
             case "quit": Qt.quit(); break;
             default:
                 if (id.startsWith("recent:"))
-                    onDisplay.select(id.slice(7));
+                    clone.select(id.slice(7));
             }
         }
     }

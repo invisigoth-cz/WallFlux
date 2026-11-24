@@ -95,6 +95,7 @@ qt_add_qml_module(wallflux
         qml/Details.qml
         qml/PlaylistBar.qml
         qml/WallpaperSurface.qml
+        qml/Display.qml
         qml/SceneSound.qml
         qml/DisplaysView.qml
         qml/SettingsView.qml
