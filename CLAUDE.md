@@ -555,9 +555,11 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   and an arrow; Escape lets go. `picker.selection`, the logic in
   `qml/selection.js` (`tests/tst_selection.qml`, run by qmltestrunner). A
   bar above the grid says how many and removes them after one question,
-  which says which cannot go without Steam. The grid is not interactive --
-  a mouse drag is the band -- so a `WheelHandler` scrolls it: a GridView
-  that is not interactive takes no wheel either, measured. **A new .js or
+  which says which cannot go without Steam. The grid takes no mouse drag
+  (`acceptedButtons: Qt.NoButton`, Qt 6.9 and later) -- the drag is the
+  band -- and keeps its own wheel. Made not interactive and scrolled by a
+  `WheelHandler` instead, it scrolled for a test's wheel and not for a real
+  one on the desktop. **A new .js or
   .qml file wants its `QT_RESOURCE_ALIAS` line in CMakeLists.txt**, or it
   lands under `qml/` in the resources and an import of it fails at start
   -- the build says nothing.

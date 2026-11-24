@@ -2845,19 +2845,12 @@ ApplicationWindow {
                                 cacheBuffer: 800
                                 // A drag draws a band that chooses the cards
                                 // it touches, as in Wallpaper Engine, so the
-                                // mouse does not drag the grid along: the
-                                // wheel and the scrollbar scroll it. Not
-                                // interactive, a GridView takes no wheel
-                                // either -- measured -- hence the handler.
-                                interactive: false
-
-                                WheelHandler {
-                                    orientation: Qt.Vertical
-                                    onWheel: (event) => {
-                                        const most = Math.max(0, grid.contentHeight - grid.height);
-                                        grid.contentY = Math.max(0, Math.min(most, grid.contentY - event.angleDelta.y));
-                                    }
-                                }
+                                // mouse does not drag the grid along. The grid
+                                // keeps its own wheel: made not interactive and
+                                // scrolled by a WheelHandler instead, it took
+                                // no turn of a real wheel on the desktop, while
+                                // a test's wheel scrolled it (24 November).
+                                acceptedButtons: Qt.NoButton
 
                                 /// Where the band was started, in the grid's
                                 /// content, and what was chosen before it --
