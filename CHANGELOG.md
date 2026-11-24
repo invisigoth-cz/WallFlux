@@ -6,6 +6,37 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.0] — 2026-11-24
+
+### Added
+
+- **Several wallpapers chosen and removed at once**, as Wallpaper Engine
+  chooses several: Ctrl and a click adds one, Shift and a click takes
+  everything between, and a band dragged over the library takes every card
+  it touches; Ctrl and Space and Shift and an arrow do the same from the
+  keyboard, and Escape lets go. A bar above the grid says how many are
+  chosen and removes them all after one question.
+- **Cancel beside Remove** in a wallpaper's panel, while Remove asks
+  whether it really should.
+
+### Changed
+
+- A mouse drag over the library is the band now and no longer drags the
+  grid along; the wheel and the scrollbar scroll it.
+- The playlist's tick box is on every card, Wallpaper Engine's own
+  wallpapers included -- greyed, and saying why, on one WallFlux cannot
+  play.
+- Czech: the playlist strip counts Tapety, as Add wallpaper is Přidat
+  tapetu.
+
+### Fixed
+
+- **Delete says why where Steam is not running**, instead of doing nothing:
+  a wallpaper from the workshop goes back through Steam, or Steam would
+  fetch it again.
+- No more Qt warning (QTP0004) while WallFlux is built: two of 0.43.0's
+  files were missing from the list that places them in the program.
+
 ## [0.43.0] — 2026-11-24
 
 ### Added
@@ -1821,7 +1852,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.4...v0.43.0
 [0.42.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.2...v0.42.3
