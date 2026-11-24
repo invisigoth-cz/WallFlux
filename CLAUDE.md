@@ -2329,6 +2329,18 @@ readonly property bool silent: picker.muted || OtherAudio.playing || ScreenCover
   -- a dark bruise across the bottom of every card in the light theme.
   Each stop names the base colour and changes only the alpha.
 
+- **A decision about where an item stands must not read the item's size
+  in that place.** The panel's `short` read how tall the picture and the
+  name are, and their height followed the width of whichever place they
+  stood in -- the one not yet shown is nought wide -- so near the boundary
+  they moved there and back for ever: a polish loop, the main thread at
+  full speed, the window frozen, and **not one line in the log** (24
+  November, on the laptop). Found by running the build under `gdb` (a
+  process gdb starts may be traced; `ptrace_scope` 1 forbids attaching
+  to one already running) and `kill -INT` when it hung: the stack was
+  `QQuickLayout::updatePolish` into a binding into `setParentItem`. The
+  picture and the name are the list's width in both places now.
+
 - **The details panel scrolls from the author's row down.** The picture
   and the name stay put; everything under them is in the Flickable. Two
   wrong answers were tried first: a floor under the list
