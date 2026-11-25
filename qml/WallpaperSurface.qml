@@ -135,7 +135,9 @@ Window {
     /// because "random" has to be rolled once for all the screens at a
     /// time and not once per screen.
     function holdStill(how, ms) {
+        surface.holding = true;
         if (how === "black") {
+            veilDown.stop();
             veilUp.duration = Math.max(1, ms / 2);
             veilUp.start();
             return;
@@ -148,7 +150,17 @@ Window {
             surface.held();
     }
 
+    /// Whether a hold has been asked for and not yet let go of. A grab
+    /// that comes back after the release -- the rescue's 400 ms, or a
+    /// wallpaper chosen in the middle -- would otherwise hang the old
+    /// picture over the new one for good.
+    property bool holding: false
+
     function holdThis(result) {
+        if (!surface.holding)
+            return;
+        crossOver.stop();
+        holdOn.stop();
         leaving.source = result.url;
         leaving.opacity = 1;
         surface.held();
@@ -157,6 +169,10 @@ Window {
     /// Lets go again, in the manner asked for, once the wallpaper
     /// underneath has been changed.
     function release(how, ms) {
+        surface.holding = false;
+        // Let go of while it was still going up, the veil would finish
+        // rising after it had been told to come down and stay black.
+        veilUp.stop();
         if (how === "black") {
             veilDown.duration = Math.max(1, ms / 2);
             veilDown.start();

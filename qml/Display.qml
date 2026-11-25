@@ -138,15 +138,29 @@ Item {
     onHoldingThePlaylistChanged: playlist.hold(display.holdingThePlaylist)
 
     /// Puts this wallpaper on show at once, with no transition.
+    ///
+    /// In the middle of one, the transition is taken over and goes to this
+    /// wallpaper instead: left to finish, it put the playlist's back over
+    /// a wallpaper somebody had just chosen (25 November, seen by the user).
     function select(id) {
+        if (display.arriving !== "") {
+            display.arriving = id;
+            display.swapNow();
+            return true;
+        }
         return shown.select(id);
     }
 
     /// Shows nothing, and stops the playlist, or its clock would put the
-    /// next one on by itself a moment later.
+    /// next one on by itself a moment later. A transition running is let
+    /// go of with it, or it would bring its wallpaper back after Off.
     function clear() {
+        const midway = display.arriving !== "";
+        display.arriving = "";
         playlist.stop();
         shown.clear();
+        if (midway)
+            display.swapNow();
     }
 
     /// What is on show.
@@ -203,7 +217,7 @@ Item {
         const at = order.findIndex(w => w.id === from);
         const to = at < 0 ? (by > 0 ? 0 : order.length - 1)
                           : (at + by + order.length) % order.length;
-        shown.select(order[to].id);
+        display.select(order[to].id);
     }
 
     /// What the first screen draws, which every other one shows.

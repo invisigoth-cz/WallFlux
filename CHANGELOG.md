@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.1] — 2026-11-25
+
+### Fixed
+
+- **A wallpaper chosen in the middle of a playlist's transition stays.**
+  The transition went on to the playlist's wallpaper and put it back over
+  the one just chosen; now it is taken over and ends on the choice --
+  a double click, Next and Previous, a recent wallpaper or a profile.
+- **Off in the middle of a transition stays off.** The playlist's
+  wallpaper came back as the transition finished.
+- A transition through black let go of halfway no longer stays black,
+  and a fade's picture of the old wallpaper that comes back late no
+  longer hangs over the new one.
+
 ## [0.45.0] — 2026-11-25
 
 ### Changed
@@ -1900,7 +1914,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.1...HEAD
+[0.45.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.0...v0.45.1
 [0.45.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.3...v0.45.0
 [0.44.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.2...v0.44.3
 [0.44.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.1...v0.44.2
