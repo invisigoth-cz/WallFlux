@@ -715,8 +715,8 @@ tests/tst_screencover.cpp     the states, with the session bus pointed nowhere
 tests/tst_pointer.cpp         known only while watched, the same way
 tests/tst_profiles.cpp        a profile kept whole, monitors away included
 tests/tst_playlists.cpp       what a playlist remembers and how long a
-                              wallpaper stays -- five seconds of suite time
-                              on purpose, see below
+                              wallpaper stays -- fourteen seconds of suite
+                              time on purpose, see below
 tests/tst_tags.cpp            tag names against Wallpaper Engine's catalogue
 tests/tst_autostart.cpp       the user's entry written hidden and not
 tests/tst_usage.cpp           /proc's lines read, and this process read
@@ -2723,8 +2723,9 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   and `spacing: 0`.
 
 - **The playlist timer is tested by letting it run.** `tst_playlists`
-  waits five real seconds for a turn, which is most of the suite's time
-  and is there on purpose: the one way to get this wrong is the
+  waits real seconds -- `holdingKeepsWhatWasLeft` about eight,
+  `nextMovesOnAndRewindsTheClock` six, fourteen of the suite's time, the
+  floor of five seconds being what each has to outwait -- on purpose: the one way to get this wrong is the
   multiplier, seconds read as minutes is a playlist sixty times too slow,
   and no unit test of the arithmetic catches that.
 

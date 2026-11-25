@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.3] — 2026-11-25
+
+### Fixed
+
+- **The tray's tooltip says which monitors are paused.** With a wallpaper
+  on each of several monitors, a paused one now reads "(paused)" after
+  its wallpaper, in the tooltip and at the head of its menu, as the
+  tooltip of one monitor always did -- paused on its own or with
+  everything. A monitor standing still behind a window is not paused by
+  anybody and is not called so.
+
 ## [0.45.2] — 2026-11-25
 
 ### Fixed
@@ -1924,7 +1935,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.3...HEAD
+[0.45.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.2...v0.45.3
 [0.45.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.0...v0.45.1
 [0.45.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.3...v0.45.0

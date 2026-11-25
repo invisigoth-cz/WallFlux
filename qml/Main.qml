@@ -520,9 +520,16 @@ Item {
     }
 
     /// One monitor's line: its label and what it shows.
+    /// A monitor and what it shows, for the tooltip and its menu: paused
+    /// said as the one-monitor tooltip says it, whether this monitor was
+    /// paused on its own or everything was.
     function trayLine(d) {
-        const title = d.showing.current.id !== "" ? d.showing.current.title : qsTr("nothing");
-        return qsTr("%1 — %2").arg(root.monitorLabel(d.key, root.connectedNames)).arg(title);
+        const monitor = root.monitorLabel(d.key, root.connectedNames);
+        if (d.showing.current.id === "")
+            return qsTr("%1 — %2").arg(monitor).arg(qsTr("nothing"));
+        return d.pausedHere || d.pausedAll
+            ? qsTr("%1 — %2 (paused)").arg(monitor).arg(d.showing.current.title)
+            : qsTr("%1 — %2").arg(monitor).arg(d.showing.current.title);
     }
 
     /// The last five wallpapers chosen, for a display's menu: always five

@@ -327,14 +327,14 @@
         <translation>WallFlux — %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="575"/>
-        <location filename="../qml/Main.qml" line="597"/>
+        <location filename="../qml/Main.qml" line="582"/>
+        <location filename="../qml/Main.qml" line="604"/>
         <source>Choose wallpaper…</source>
         <translation>Vybrat tapetu…</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="551"/>
-        <location filename="../qml/Main.qml" line="577"/>
+        <location filename="../qml/Main.qml" line="558"/>
+        <location filename="../qml/Main.qml" line="584"/>
         <source>Resume</source>
         <translation>Pokračovat</translation>
     </message>
@@ -344,89 +344,95 @@
         <translation>Monitor %1 · %2</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="524"/>
+        <location filename="../qml/Main.qml" line="529"/>
         <source>nothing</source>
         <translation>nic</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="525"/>
+        <location filename="../qml/Main.qml" line="529"/>
+        <location filename="../qml/Main.qml" line="532"/>
         <source>%1 — %2</source>
         <translation>%1 — %2</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="551"/>
-        <location filename="../qml/Main.qml" line="577"/>
-        <source>Pause</source>
-        <translation>Pozastavit</translation>
-    </message>
-    <message>
-        <location filename="../qml/Main.qml" line="554"/>
-        <location filename="../qml/Main.qml" line="580"/>
-        <source>Previous wallpaper</source>
-        <translation>Předchozí tapeta</translation>
-    </message>
-    <message>
-        <location filename="../qml/Main.qml" line="555"/>
-        <location filename="../qml/Main.qml" line="581"/>
-        <source>Next wallpaper</source>
-        <translation>Další tapeta</translation>
-    </message>
-    <message>
-        <location filename="../qml/Main.qml" line="556"/>
-        <location filename="../qml/Main.qml" line="582"/>
-        <source>Unmute</source>
-        <translation>Zapnout zvuk</translation>
-    </message>
-    <message>
-        <location filename="../qml/Main.qml" line="556"/>
-        <location filename="../qml/Main.qml" line="582"/>
-        <source>Mute</source>
-        <translation>Vypnout zvuk</translation>
+        <location filename="../qml/Main.qml" line="531"/>
+        <source>%1 — %2 (paused)</source>
+        <translation>%1 — %2 (pozastaveno)</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="558"/>
         <location filename="../qml/Main.qml" line="584"/>
+        <source>Pause</source>
+        <translation>Pozastavit</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="561"/>
+        <location filename="../qml/Main.qml" line="587"/>
+        <source>Previous wallpaper</source>
+        <translation>Předchozí tapeta</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="562"/>
+        <location filename="../qml/Main.qml" line="588"/>
+        <source>Next wallpaper</source>
+        <translation>Další tapeta</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="563"/>
+        <location filename="../qml/Main.qml" line="589"/>
+        <source>Unmute</source>
+        <translation>Zapnout zvuk</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="563"/>
+        <location filename="../qml/Main.qml" line="589"/>
+        <source>Mute</source>
+        <translation>Vypnout zvuk</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="565"/>
+        <location filename="../qml/Main.qml" line="591"/>
         <source>Recent wallpapers</source>
         <translation>Nedávné tapety</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="561"/>
+        <location filename="../qml/Main.qml" line="568"/>
         <source>Playlists</source>
         <translation>Playlisty</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="566"/>
+        <location filename="../qml/Main.qml" line="573"/>
         <source>Remove wallpaper</source>
         <translation>Odebrat tapetu</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="588"/>
-        <location filename="../qml/Main.qml" line="609"/>
+        <location filename="../qml/Main.qml" line="595"/>
+        <location filename="../qml/Main.qml" line="616"/>
         <source>Quit</source>
         <translation>Ukončit</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="601"/>
+        <location filename="../qml/Main.qml" line="608"/>
         <source>Resume all</source>
         <translation>Pokračovat vše</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="601"/>
+        <location filename="../qml/Main.qml" line="608"/>
         <source>Pause all</source>
         <translation>Pozastavit vše</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="603"/>
+        <location filename="../qml/Main.qml" line="610"/>
         <source>Unmute all</source>
         <translation>Zapnout zvuk všude</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="603"/>
+        <location filename="../qml/Main.qml" line="610"/>
         <source>Mute all</source>
         <translation>Vypnout zvuk všude</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="605"/>
+        <location filename="../qml/Main.qml" line="612"/>
         <source>Profiles</source>
         <translation>Profily</translation>
     </message>
