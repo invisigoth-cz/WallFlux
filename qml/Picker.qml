@@ -2037,11 +2037,18 @@ ApplicationWindow {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         onClosed: grid.forceActiveFocus()
 
+        /// All or nothing: with one of them waiting on Steam, none goes --
+        /// a dialog about seventeen that hid one of them and kept sixteen
+        /// read as nothing having happened (25 November).
+        readonly property bool possible: removing.many.length > 0 && removing.unable === 0
+        /// How many are Wallpaper Engine's own, which are only hidden.
+        readonly property int official: removing.many.filter(one => one.official).length
+
         function confirm() {
             const going = removing.able;
-            removing.close();
-            if (going.length === 0)
+            if (!removing.possible)
                 return;
+            removing.close();
             for (const one of going)
                 picker.remove(one);
             picker.clearSelection();
@@ -2071,12 +2078,16 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 readonly property var one: removing.many.length === 1 ? removing.many[0] : null
-                visible: removing.able.length > 0
+                visible: removing.possible
                 text: one ? (one.official
                              ? qsTr("“%1” will be hidden, as Wallpaper Engine hides its own.").arg(one.title)
                              : qsTr("“%1” will be unsubscribed in Steam and deleted from the disk.").arg(one.title))
-                    : qsTr("Each will be unsubscribed in Steam and deleted from the disk; "
-                           + "Wallpaper Engine's own are hidden.")
+                    : removing.official === removing.many.length
+                      ? qsTr("Each will be hidden, as Wallpaper Engine hides its own.")
+                    : removing.official === 0
+                      ? qsTr("Each will be unsubscribed in Steam and deleted from the disk.")
+                      : qsTr("Each will be unsubscribed in Steam and deleted from the disk; "
+                             + "Wallpaper Engine's own are hidden.")
             }
 
             // Said rather than nothing happening: a workshop wallpaper goes
@@ -2088,7 +2099,8 @@ ApplicationWindow {
                 color: Look.negative
                 text: removing.many.length === 1
                       ? qsTr("Steam has to be running to give a wallpaper back.")
-                      : qsTr("%n of them can only go while Steam is running, and stay.", "", removing.unable)
+                      : qsTr("%n of them come from the Steam Workshop and cannot be removed while Steam is not running. "
+                             + "Start Steam and try again.", "", removing.unable)
             }
 
             RowLayout {
@@ -2101,7 +2113,7 @@ ApplicationWindow {
                     text: qsTr("Remove")
                     icon.name: "edit-delete"
                     accent: Look.negative
-                    visible: removing.able.length > 0
+                    enabled: removing.possible
                     onClicked: removing.confirm()
                 }
 

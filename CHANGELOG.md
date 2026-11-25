@@ -6,6 +6,20 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.1] — 2026-11-25
+
+### Fixed
+
+- **Removing several wallpapers without Steam removes none of them.**
+  Chosen together with Steam closed, the workshop ones could not go and
+  stayed, while Wallpaper Engine's own among them were hidden all the
+  same -- a question about seventeen that hid one and kept sixteen read
+  as nothing having happened. Remove is greyed now while any of them
+  waits on Steam, as it is in the panel, and the question says how many
+  come from the workshop and to start Steam.
+- The question about several says only what will happen to them:
+  Wallpaper Engine's own are mentioned only when they are among them.
+
 ## [0.44.0] — 2026-11-24
 
 ### Added
@@ -1852,7 +1866,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.1...HEAD
+[0.44.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.4...v0.43.0
 [0.42.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.3...v0.42.4
