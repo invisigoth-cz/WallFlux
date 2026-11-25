@@ -1607,10 +1607,15 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   tenth of the way: a red copy of TERMINAL LOCKOUT hung over the logo. With
   the recording's cursor it is closer to Windows than without the effect
   (6.6 levels off against 7.7). Particles and the parallax still feel only a
-  mouse on their own screen (`point_at`). With following the mouse off in
-  Settings the mouse is unknown, `-10` goes in, and the copy comes back --
-  what Wallpaper Engine hands then was not found. **`shot` passes no mouse
-  unless `WALLFLUX_POINTER` says so**: judge SCP with it.
+  mouse on their own screen (`point_at`). **A mouse not known** -- following
+  it off in Settings, or not heard of yet -- **goes to a shader where it was
+  last, or in the middle** (the user's choice of 25 November; what Wallpaper
+  Engine hands then was not found). It was `-10`, ours, and the copy came
+  back with following off; Space Marine II's x-ray, the only other shader
+  here that reads the mouse, stays where it was left instead of going away.
+  The particles and the parallax still have no mouse then. `shot` passes
+  none unless `WALLFLUX_POINTER` says so, which is the middle now.
+  **`tools/sweep.sh` skipped SCP until then**: it looked for `scene.pkg`.
 
 - **A scene's scripts ask `thisScene` for the camera.** Magical Orb's
   ripple, fisheye, blur, god rays and pulse all start `if
@@ -2952,9 +2957,6 @@ released in 0.43.0 after the user tried it on the laptop with a monitor.
   Radeonsi with OpenGL 4.6 was never the trouble. 0.42.2 was released from
   the laptop with two things found there: the details panel on a short
   screen, and wallpapers listed twice from two Steam libraries.
-- **SCP Terminal Lockdown with following the mouse off** gets the unknown
-  mouse's `-10` and shows a red copy of its bar; what Wallpaper Engine hands
-  then was not found.
 - **Further improvements and changes** as the user brings them.
 
 Done on 16 November: playlists gone through with the user (0.39.1), the

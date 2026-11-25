@@ -20,7 +20,8 @@ cp target/debug/examples/shot "$out/shot" || exit 1
 : > "$out/sweep.log"
 for d in "$workshop"/*/; do
   id=$(basename "$d")
-  [ -f "$d/scene.pkg" ] || continue
+  # The package is the one project.json names -- SCP's is gifscene.pkg.
+  compgen -G "$d*.pkg" > /dev/null || continue
   echo "##### $id" >> "$out/sweep.log"
   timeout 240 "$out/shot" "$d" "$out/vse/$id.png" 640 360 6 >> "$out/sweep.log" 2>&1
   echo "##### exit=$?" >> "$out/sweep.log"

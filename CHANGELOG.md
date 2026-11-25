@@ -6,6 +6,18 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.6] — 2026-11-25
+
+### Fixed
+
+- **SCP Terminal Lockdown with following the mouse switched off no longer
+  shows a red copy of its TERMINAL LOCKOUT bar.** A mouse that is not known
+  was handed to a wallpaper's shaders as far off the screen, which that
+  wallpaper's colour fringe turned into a shift of a tenth of the picture.
+  It is handed where the mouse was last now, or the middle of the screen.
+  Space Marine 2 -- Honor and Glory, the other wallpaper here that reads the
+  mouse in a shader, keeps its x-ray where the mouse was left.
+
 ## [0.45.5] — 2026-11-25
 
 ### Fixed
@@ -1959,7 +1971,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.5...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.6...HEAD
+[0.45.6]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.5...v0.45.6
 [0.45.5]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.4...v0.45.5
 [0.45.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.3...v0.45.4
 [0.45.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.2...v0.45.3

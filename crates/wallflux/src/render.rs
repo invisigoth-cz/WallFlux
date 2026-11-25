@@ -460,7 +460,7 @@ impl Default for ObjectView {
     fn default() -> Self {
         Self {
             scene_per_pixel: 1.0,
-            pointer: [-10.0, -10.0],
+            pointer: [0.5, 0.5],
             from_clip: transform::IDENTITY,
             from_clip_to_unit: transform::IDENTITY,
             model: transform::IDENTITY,
@@ -1521,7 +1521,15 @@ impl Scene {
         // hundredth of it to every channel's offset, and the "well off it" of
         // an unknown mouse moved its whole picture a tenth of the way. The
         // parallax and the particles feel only a mouse on this screen.
-        self.pointer = pointer;
+        //
+        // An unknown mouse -- following it switched off in Settings, or not
+        // heard of yet -- is handed to a shader where it was last, or in the
+        // middle where it never was: the user's choice of 25 November. The
+        // -10 that stood for it was ours, not Wallpaper Engine's, and put
+        // SCP's red copy of TERMINAL LOCKOUT over its logo; Space Marine II's
+        // x-ray, the one other shader here that reads the mouse, now stays
+        // where it was left rather than going away.
+        self.pointer = pointer.or(self.pointer).or(Some((0.5, 0.5)));
         let pointer = pointer.filter(|(x, y)| (0.0..1.0).contains(x) && (0.0..1.0).contains(y));
         // Clip space runs up the screen, the pointer down it.
         let clip = pointer.map(|(x, y)| [x * 2.0 - 1.0, 1.0 - y * 2.0]);
@@ -1621,7 +1629,7 @@ impl Scene {
             self.zoom,
             shift,
         );
-        let pointer = self.pointer.map_or([-10.0, -10.0], |(x, y)| [x, y]);
+        let pointer = self.pointer.map_or([0.5, 0.5], |(x, y)| [x, y]);
         let lights = LightsNow::of(&self.lighting, time);
         for object in self.objects.iter_mut().filter(|o| matches!(o.drawing, Drawing::Image)) {
             if let Some(puppet) = &mut object.puppet {
