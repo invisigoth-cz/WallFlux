@@ -986,6 +986,17 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   lines. With the size: Star Citizen 7.62 to 6.94 levels off its recording,
   Terminator Resistance 3.73 to 3.22, Blue Dawn and the rest unmoved.
 
+  **Except the colour, which reaches a child as far as it moved the
+  parent** (25 November): the child's colours are moved by the scene's
+  colour less the *parent's* own, and not multiplied in again for an old
+  scene. Measured from its own and multiplied, Star Citizen's
+  `emberglow_small` -- a warm-white halo under embers set to orange --
+  burned orange over half the ground; against the recording, eight moments
+  averaged, warmth R-B beside the drill +13 and +11 became +7 and +5,
+  Windows +4 and +2. A sweep moved Star Citizen, Star Destroyer (its fire's
+  mean colour nearer the recording) and Blue Dawn a hair; 12 scenes here
+  have a recoloured system with children. The user could not tell by eye.
+
   **And a child that bursts at its parent's events is a whole system per
   event**, up to the child entry's `maxcount` of them at once (missing, it
   reads as nought and nothing stops it): Wallpaper Engine starts one for
@@ -2923,8 +2934,7 @@ released in 0.43.0 after the user tried it on the laptop with a monitor.
   with is the question.
 - **Wallpapers against Windows**: Augmentation's bolts (white-violet there,
   blue here), Space Visualizer's lava spark fans (fewer a minute), DOOM's D
-  and M (follow the music at 0.75), red specks in Star Citizen (unchecked),
-  Alien Isolation's reflections and lit particles, Blue Dawn's flare moved
+  and M (follow the music at 0.75), Alien Isolation's reflections and lit particles, Blue Dawn's flare moved
   by hand (`MOVED` in `render.rs`, until its cause is found).
 - **The grid**, to be optimised.
 - **WallFlux itself, checked**: speed, size, installing, uninstalling,

@@ -6,6 +6,19 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.5] — 2026-11-25
+
+### Fixed
+
+- **A particle system's children take the scene's colour as far as it
+  moved the system, and no further.** A child -- a glow, trails, embers
+  following a fire -- was turned all the way to the colour the scene set
+  on its parent, and in an older scene multiplied by it once more. Star
+  Citizen's soft glow round the drill, warm white under embers set to
+  orange, burned orange across half the ground where Wallpaper Engine has
+  it white; measured against the recording it is close now. Star
+  Destroyer's fire and Blue Dawn's flare move by a hair.
+
 ## [0.45.4] — 2026-11-25
 
 ### Fixed
@@ -1946,7 +1959,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.4...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.5...HEAD
+[0.45.5]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.4...v0.45.5
 [0.45.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.3...v0.45.4
 [0.45.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.2...v0.45.3
 [0.45.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.1...v0.45.2

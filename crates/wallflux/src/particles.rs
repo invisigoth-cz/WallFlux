@@ -604,7 +604,7 @@ fn to_hsv([r, g, b]: [f32; 3]) -> [f32; 3] {
 /// The colour a system's particles have before a scene says otherwise, as
 /// Wallpaper Engine takes it: the middle of the last colour initializer, the
 /// start of the first `colorchange` where there is none, or white.
-fn own_color(definition: &ParticleSystem) -> [f32; 3] {
+pub fn own_color(definition: &ParticleSystem) -> [f32; 3] {
     let middle = |r: &Range<[f32; 3]>| std::array::from_fn(|i| (r.min[i] + r.max[i]) / 2.0);
     definition
         .initializers
@@ -834,6 +834,12 @@ impl System {
     /// A system as its file describes it, changed by what the scene says
     /// about this one instance of it.
     pub fn new(definition: &ParticleSystem, over: &InstanceOverride, seed: u32) -> Self {
+        Self::measured_from(definition, over, seed, own_color(definition))
+    }
+
+    /// The same, with the scene's colour moved by how far it is from
+    /// `reference` rather than from this system's own colour.
+    pub fn measured_from(definition: &ParticleSystem, over: &InstanceOverride, seed: u32, reference: [f32; 3]) -> Self {
         let mut start = Start::default();
         for initializer in &definition.initializers {
             match initializer.clone() {
@@ -898,7 +904,7 @@ impl System {
         let mut operators = definition.operators.clone();
         if let Some(tint) = over.tint() {
             let by = std::array::from_fn::<f32, 3, _>(|i| {
-                to_hsv(tint)[i] - to_hsv(own_color(definition))[i]
+                to_hsv(tint)[i] - to_hsv(reference)[i]
             });
             let moved = |color: [f32; 3]| {
                 let [h, s, v] = to_hsv(color);

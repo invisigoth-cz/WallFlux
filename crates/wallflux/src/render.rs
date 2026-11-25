@@ -1065,7 +1065,7 @@ impl Scene {
             }
             match object.kind() {
                 ObjectKind::Particle(file) => {
-                    for system in load_particles(gl, &resolve, object, &file, 0, multiplies, &mut objects, &mut skipped)
+                    for system in load_particles(gl, &resolve, object, &file, 0, multiplies, None, &mut objects, &mut skipped)
                         .into_iter()
                         .flatten()
                     {
@@ -2104,6 +2104,7 @@ fn load_particles(
     path: &str,
     depth: u32,
     multiplies: bool,
+    reference: Option<[f32; 3]>,
     objects: &mut Vec<Object>,
     skipped: &mut Vec<String>,
 ) -> Option<std::ops::Range<usize>> {
@@ -2134,7 +2135,8 @@ fn load_particles(
             return None;
         }
     };
-    let mut built = build_particles(gl, resolve, object, &definition, skipped);
+    let reference = reference.unwrap_or_else(|| particles::own_color(&definition));
+    let mut built = build_particles(gl, resolve, object, &definition, reference, skipped);
     let tint = object.instanceoverride.as_ref().and_then(|o| o.tint());
     let colourless = !definition.initializers.iter().any(|i| {
         matches!(i, Initializer::Color(_) | Initializer::HsvColor { .. } | Initializer::ColorList(_))
@@ -2156,7 +2158,7 @@ fn load_particles(
             .filter_map(|renderer| {
                 let mut twin = definition.clone();
                 twin.renderer = renderer.clone();
-                let mut made = build_particles(gl, resolve, object, &twin, skipped)?;
+                let mut made = build_particles(gl, resolve, object, &twin, reference, skipped)?;
                 if let (Drawing::Particles(system), Some(tint), true) =
                     (&mut made.drawing, tint, multiplies || colourless)
                 {
@@ -2208,7 +2210,14 @@ fn load_particles(
         placed.origin.value.0 = transform::apply(&parent, child.origin);
         placed.scale.value.0 = std::array::from_fn(|i| object.scale.value.0[i] * child.scale[i]);
         placed.angles.value.0 = std::array::from_fn(|i| object.angles.value.0[i] + child.angles[i]);
-        let made = load_particles(gl, resolve, &placed, &child.file, depth + 1, multiplies, objects, skipped);
+        // The scene's colour reaches a child as far as it moved the parent,
+        // and is not multiplied in again: measured from the child's own
+        // colour and multiplied, Star Citizen's soft ember glow -- warm
+        // white, under embers set to orange -- burned orange over half the
+        // ground, where Windows has it white (25 November, against the
+        // recording, eight moments averaged: warmth R-B +13 and +11 beside
+        // the drill, Windows +4 and +2, now +7 and +5).
+        let made = load_particles(gl, resolve, &placed, &child.file, depth + 1, false, Some(reference), objects, skipped);
         if let Some((answer, made)) = answers.zip(made) {
             let parent = answer.parent;
             for made in made {
@@ -2234,6 +2243,7 @@ fn build_particles(
     resolve: &Resolver<'_>,
     object: &wpe_format::scene::Object,
     definition: &ParticleSystem,
+    reference: [f32; 3],
     skipped: &mut Vec<String>,
 ) -> Option<Object> {
     let mut trail = None;
@@ -2293,7 +2303,7 @@ fn build_particles(
     // Seeded from the object's own id so two systems in one scene do not
     // emit in step, and so a screenshot of a wallpaper is reproducible.
     let over = object.instanceoverride.clone().unwrap_or_default();
-    let system = particles::System::new(definition, &over, object.id as u32);
+    let system = particles::System::measured_from(definition, &over, object.id as u32, reference);
     Some(Object {
         name: object.name.clone(),
         origin: object.origin.value.0,
