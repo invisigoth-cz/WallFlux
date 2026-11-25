@@ -336,15 +336,27 @@ Item {
         implicitWidth: 460
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+        /// The monitors this profile keeps, with a wallpaper on each: the
+        /// chosen one ticked to begin with, the others for the asking. Only
+        /// these change when it is loaded. Cloned, there is one picture and
+        /// nothing to pick.
+        property var keys: []
+        readonly property bool picking: view.stage.perDisplay && Application.screens.length > 1
+
         onOpened: {
             profileName.text = "";
+            const names = Application.screens.map(s => s.name);
+            savingProfile.keys = [names.indexOf(view.options.selectedKey) >= 0 ? view.options.selectedKey
+                                                                                : names[0]];
             profileName.forceActiveFocus();
         }
 
         function keep() {
+            if (savingProfile.picking && savingProfile.keys.length === 0)
+                return;
             const name = profileName.text.trim() !== "" ? profileName.text.trim()
                                                          : profileName.placeholderText;
-            Profiles.save(name, view.stage.arrangement());
+            Profiles.save(name, view.stage.arrangement(savingProfile.picking ? savingProfile.keys : undefined));
             savingProfile.close();
         }
 
@@ -369,8 +381,39 @@ Item {
                 wrapMode: Text.Wrap
                 font.pixelSize: 12
                 opacity: 0.85
-                text: qsTr("What every monitor shows, its playlist, its sound and the wallpaper's "
-                           + "settings, kept under a name to load again from here or the tray.")
+                text: savingProfile.picking
+                      ? qsTr("What the ticked monitors show, their playlists, their sound and the "
+                             + "wallpapers' settings, kept under a name to load again from here or the "
+                             + "tray. Loading it changes those monitors and leaves the others as they are.")
+                      : qsTr("What every monitor shows, its playlist, its sound and the wallpaper's "
+                             + "settings, kept under a name to load again from here or the tray.")
+            }
+
+            ColumnLayout {
+                visible: savingProfile.picking
+                spacing: 0
+
+                Repeater {
+                    model: Application.screens
+
+                    CheckBox {
+                        id: keeps
+
+                        required property var modelData
+
+                        text: view.stage.monitorLabel(modelData.name, view.stage.connectedNames)
+                        checked: savingProfile.keys.indexOf(modelData.name) >= 0
+                        onToggled: {
+                            savingProfile.keys = keeps.checked
+                                ? savingProfile.keys.concat([keeps.modelData.name])
+                                : savingProfile.keys.filter(k => k !== keeps.modelData.name);
+                            // A click breaks the binding it was reading (see
+                            // the trap); the keys say again what is ticked,
+                            // the next opening included.
+                            keeps.checked = Qt.binding(() => savingProfile.keys.indexOf(keeps.modelData.name) >= 0);
+                        }
+                    }
+                }
             }
 
             TextField {
@@ -399,6 +442,7 @@ Item {
                 RoundedButton {
                     text: qsTr("Confirm")
                     accent: Look.positive
+                    enabled: !savingProfile.picking || savingProfile.keys.length > 0
                     onClicked: savingProfile.keep()
                 }
 

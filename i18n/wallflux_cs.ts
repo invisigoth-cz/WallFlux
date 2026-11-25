@@ -129,58 +129,63 @@
         <translation>Převrátit</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="362"/>
+        <location filename="../qml/DisplaysView.qml" line="374"/>
         <source>Save a profile</source>
         <translation>Uložit profil</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="372"/>
+        <location filename="../qml/DisplaysView.qml" line="385"/>
+        <source>What the ticked monitors show, their playlists, their sound and the wallpapers&apos; settings, kept under a name to load again from here or the tray. Loading it changes those monitors and leaves the others as they are.</source>
+        <translation>Co ukazují zaškrtnuté monitory, jejich playlisty, zvuk a nastavení tapet, uložené pod jménem k načtení odsud nebo z lišty. Načtení změní jen tyto monitory, ostatní nechá být.</translation>
+    </message>
+    <message>
+        <location filename="../qml/DisplaysView.qml" line="388"/>
         <source>What every monitor shows, its playlist, its sound and the wallpaper&apos;s settings, kept under a name to load again from here or the tray.</source>
         <translation>Co který monitor ukazuje, jeho playlist, zvuk a nastavení tapety, uložené pod jménem, aby šlo znovu načíst odsud nebo z lišty.</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="380"/>
+        <location filename="../qml/DisplaysView.qml" line="423"/>
         <source>Profile %1</source>
         <translation>Profil %1</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="390"/>
+        <location filename="../qml/DisplaysView.qml" line="433"/>
         <source>If a profile of this name exists already, it will be replaced.</source>
         <translation>Pokud profil tohoto jména už existuje, nahradí se.</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="400"/>
+        <location filename="../qml/DisplaysView.qml" line="443"/>
         <source>Confirm</source>
         <translation>Potvrdit</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="406"/>
-        <location filename="../qml/DisplaysView.qml" line="589"/>
+        <location filename="../qml/DisplaysView.qml" line="450"/>
+        <location filename="../qml/DisplaysView.qml" line="633"/>
         <source>Cancel</source>
         <translation>Zrušit</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="450"/>
+        <location filename="../qml/DisplaysView.qml" line="494"/>
         <source>Load a profile</source>
         <translation>Načíst profil</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="550"/>
+        <location filename="../qml/DisplaysView.qml" line="594"/>
         <source>Really delete?</source>
         <translation>Opravdu smazat?</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="550"/>
+        <location filename="../qml/DisplaysView.qml" line="594"/>
         <source>Delete</source>
         <translation>Smazat</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="572"/>
+        <location filename="../qml/DisplaysView.qml" line="616"/>
         <source>Rename</source>
         <translation>Přejmenovat</translation>
     </message>
     <message>
-        <location filename="../qml/DisplaysView.qml" line="582"/>
+        <location filename="../qml/DisplaysView.qml" line="626"/>
         <source>Load</source>
         <translation>Načíst</translation>
     </message>
@@ -306,30 +311,30 @@
 <context>
     <name>Main</name>
     <message>
-        <location filename="../qml/Main.qml" line="471"/>
-        <location filename="../qml/Main.qml" line="473"/>
+        <location filename="../qml/Main.qml" line="474"/>
+        <location filename="../qml/Main.qml" line="476"/>
         <source>WallFlux</source>
         <translation>WallFlux</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="474"/>
+        <location filename="../qml/Main.qml" line="477"/>
         <source>WallFlux — %1 (paused)</source>
         <translation>WallFlux — %1 (pozastaveno)</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="475"/>
+        <location filename="../qml/Main.qml" line="478"/>
         <source>WallFlux — %1</source>
         <translation>WallFlux — %1</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="572"/>
-        <location filename="../qml/Main.qml" line="594"/>
+        <location filename="../qml/Main.qml" line="575"/>
+        <location filename="../qml/Main.qml" line="597"/>
         <source>Choose wallpaper…</source>
         <translation>Vybrat tapetu…</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="548"/>
-        <location filename="../qml/Main.qml" line="574"/>
+        <location filename="../qml/Main.qml" line="551"/>
+        <location filename="../qml/Main.qml" line="577"/>
         <source>Resume</source>
         <translation>Pokračovat</translation>
     </message>
@@ -339,89 +344,89 @@
         <translation>Monitor %1 · %2</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="521"/>
+        <location filename="../qml/Main.qml" line="524"/>
         <source>nothing</source>
         <translation>nic</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="522"/>
+        <location filename="../qml/Main.qml" line="525"/>
         <source>%1 — %2</source>
         <translation>%1 — %2</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="548"/>
-        <location filename="../qml/Main.qml" line="574"/>
+        <location filename="../qml/Main.qml" line="551"/>
+        <location filename="../qml/Main.qml" line="577"/>
         <source>Pause</source>
         <translation>Pozastavit</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="551"/>
-        <location filename="../qml/Main.qml" line="577"/>
+        <location filename="../qml/Main.qml" line="554"/>
+        <location filename="../qml/Main.qml" line="580"/>
         <source>Previous wallpaper</source>
         <translation>Předchozí tapeta</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="552"/>
-        <location filename="../qml/Main.qml" line="578"/>
+        <location filename="../qml/Main.qml" line="555"/>
+        <location filename="../qml/Main.qml" line="581"/>
         <source>Next wallpaper</source>
         <translation>Další tapeta</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="553"/>
-        <location filename="../qml/Main.qml" line="579"/>
+        <location filename="../qml/Main.qml" line="556"/>
+        <location filename="../qml/Main.qml" line="582"/>
         <source>Unmute</source>
         <translation>Zapnout zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="553"/>
-        <location filename="../qml/Main.qml" line="579"/>
+        <location filename="../qml/Main.qml" line="556"/>
+        <location filename="../qml/Main.qml" line="582"/>
         <source>Mute</source>
         <translation>Vypnout zvuk</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="555"/>
-        <location filename="../qml/Main.qml" line="581"/>
+        <location filename="../qml/Main.qml" line="558"/>
+        <location filename="../qml/Main.qml" line="584"/>
         <source>Recent wallpapers</source>
         <translation>Nedávné tapety</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="558"/>
+        <location filename="../qml/Main.qml" line="561"/>
         <source>Playlists</source>
         <translation>Playlisty</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="563"/>
+        <location filename="../qml/Main.qml" line="566"/>
         <source>Remove wallpaper</source>
         <translation>Odebrat tapetu</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="585"/>
-        <location filename="../qml/Main.qml" line="606"/>
+        <location filename="../qml/Main.qml" line="588"/>
+        <location filename="../qml/Main.qml" line="609"/>
         <source>Quit</source>
         <translation>Ukončit</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="598"/>
+        <location filename="../qml/Main.qml" line="601"/>
         <source>Resume all</source>
         <translation>Pokračovat vše</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="598"/>
+        <location filename="../qml/Main.qml" line="601"/>
         <source>Pause all</source>
         <translation>Pozastavit vše</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="600"/>
+        <location filename="../qml/Main.qml" line="603"/>
         <source>Unmute all</source>
         <translation>Zapnout zvuk všude</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="600"/>
+        <location filename="../qml/Main.qml" line="603"/>
         <source>Mute all</source>
         <translation>Vypnout zvuk všude</translation>
     </message>
     <message>
-        <location filename="../qml/Main.qml" line="602"/>
+        <location filename="../qml/Main.qml" line="605"/>
         <source>Profiles</source>
         <translation>Profily</translation>
     </message>
@@ -1559,24 +1564,24 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
         <source>• Each monitor has a wallpaper of its own, with its own playlist, sound and settings. Choose monitor, beside Filters in the library, says which one a double click goes to; it opens with the window while there are several, unless told not to.
 • The Displays tab shows your monitors as they are arranged. A click chooses one, the speaker mutes it, and a right click changes or removes its wallpaper, copies it to another monitor or swaps the two.
 • Layout there switches to Clone one wallpaper: one wallpaper on every monitor. Remove leaves one monitor out of it; a right click makes a monitor the one it is worked out on, or turns a copy over.
-• Save profile keeps what every monitor shows under a name, to load again there or from the tray.
+• Save profile keeps what the ticked monitors show under a name, to load again there or from the tray; loading it changes those monitors only.
 • A window covering one monitor, or another program with the keyboard on it, stops that one only, or all of them, as Performance says.</source>
         <translation>• Každý monitor má svou tapetu, se svým playlistem, zvukem a nastavením. Vybrat monitor vedle Filtrů v knihovně říká, kam půjde dvojklik; při několika monitorech se otevře s oknem, pokud mu to nezakážeš.
 • Karta Monitory ukazuje monitory tak, jak je máš rozmístěné. Klikem monitor vybereš, reproduktorem mu vypneš zvuk a pravým klikem mu tapetu změníš nebo odebereš, zkopíruješ na jiný monitor nebo je prohodíš.
 • Rozložení tam přepne na Klonovat jednu tapetu: jedna tapeta na všech monitorech. Odebrat z ní jeden monitor vyřadí; pravým klikem určíš monitor, ze kterého se klonuje, nebo kopii převrátíš.
-• Uložit profil schová pod jménem, co který monitor ukazuje, aby šlo znovu načíst tam nebo z lišty.
+• Uložit profil schová pod jménem, co ukazují zaškrtnuté monitory, aby šlo znovu načíst tam nebo z lišty; načtení změní jen tyto monitory.
 • Okno přes jeden monitor nebo jiný program s klávesnicí na něm zastaví jen ten monitor, nebo všechny, podle Výkonu.</translation>
     </message>
     <message>
         <source>• Each monitor has a wallpaper of its own, with its own playlist, sound and settings. Choose monitor, beside Filters in the library, says which one a double click goes to; it opens with the window while there are several, unless told not to.
 • The Displays tab shows your monitors as they are arranged. A click chooses one, the speaker mutes it, and a right click changes or removes its wallpaper, copies it to another monitor or swaps the two.
 • Layout there switches to Clone one wallpaper: one wallpaper on every monitor. Remove leaves one monitor out of it; a right click makes a monitor the one it is worked out on, or turns a copy over.
-• Save profile keeps what every monitor shows under a name, to load again there or from the tray.
+• Save profile keeps what the ticked monitors show under a name, to load again there or from the tray; loading it changes those monitors only.
 • A window covering one monitor stops that one only, or all of them, as Performance says.</source>
         <translation type="vanished">• Každý monitor má svou tapetu, se svým playlistem, zvukem a nastavením. Vybrat monitor vedle Filtrů v knihovně říká, kam půjde dvojklik; při několika monitorech se otevře s oknem, pokud mu to nezakážeš.
 • Karta Monitory ukazuje monitory tak, jak je máš rozmístěné. Klikem monitor vybereš, reproduktorem mu vypneš zvuk a pravým klikem mu tapetu změníš nebo odebereš, zkopíruješ na jiný monitor nebo je prohodíš.
 • Rozložení tam přepne na Klonovat jednu tapetu: jedna tapeta na všech monitorech. Odebrat z ní jeden monitor vyřadí; pravým klikem určíš monitor, ze kterého se klonuje, nebo kopii převrátíš.
-• Uložit profil schová pod jménem, co který monitor ukazuje, aby šlo znovu načíst tam nebo z lišty.
+• Uložit profil schová pod jménem, co ukazují zaškrtnuté monitory, aby šlo znovu načíst tam nebo z lišty; načtení změní jen tyto monitory.
 • Okno přes jeden monitor nebo jiný program s klávesnicí na něm zastaví jen ten monitor, nebo všechny, podle Výkonu.</translation>
     </message>
     <message>
@@ -2304,7 +2309,7 @@ Složka s tapetami Wallpaper Engine je prázdná nebo chybí.</translation>
 <context>
     <name>WallpaperSurface</name>
     <message>
-        <location filename="../qml/WallpaperSurface.qml" line="119"/>
+        <location filename="../qml/WallpaperSurface.qml" line="124"/>
         <source>WallFlux</source>
         <translation>WallFlux</translation>
     </message>

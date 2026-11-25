@@ -1192,8 +1192,8 @@ Item {
                                 + "• Layout there switches to Clone one wallpaper: one wallpaper on every "
                                 + "monitor. Remove leaves one monitor out of it; a right click makes a "
                                 + "monitor the one it is worked out on, or turns a copy over.\n"
-                                + "• Save profile keeps what every monitor shows under a name, to load "
-                                + "again there or from the tray.\n"
+                                + "• Save profile keeps what the ticked monitors show under a name, to load "
+                                + "again there or from the tray; loading it changes those monitors only.\n"
                                 + "• A window covering one monitor, or another program with the keyboard "
                                 + "on it, stops that one only, or all of them, as Performance says.")
                 }

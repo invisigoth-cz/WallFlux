@@ -292,7 +292,10 @@ Item {
 
     /// The whole arrangement, for a profile: the layout and, for every
     /// display, what it shows, its playlist and its mute.
-    function arrangement() {
+    /// `keys`, where given, are the monitors to keep and no others: a
+    /// profile of one monitor touches that one alone when it is loaded --
+    /// the user's word of 25 November.
+    function arrangement(keys) {
         const displays = {};
         const put = (key, d) => {
             displays[key] = { wallpaper: d.showing.current.id, playlist: d.run.playing,
@@ -302,7 +305,7 @@ Item {
         if (root.perDisplay) {
             for (let i = 0; i < perMonitor.count; ++i) {
                 const one = perMonitor.objectAt(i);
-                if (one)
+                if (one && (!keys || keys.indexOf(one.key) >= 0))
                     put(one.key, one);
             }
         } else {

@@ -6,6 +6,19 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.0] — 2026-11-25
+
+### Changed
+
+- **A profile keeps the monitors ticked when it is saved, and loading it
+  changes those alone.** Save profile lists the monitors with the chosen
+  one ticked; a profile of one monitor puts its wallpaper back on that
+  monitor and leaves every other as it is. It used to keep every monitor,
+  as Wallpaper Engine's does, so loading a profile saved for one monitor
+  started or switched off whatever the others had shown when it was
+  saved. Profiles saved before this still hold every monitor; saved again,
+  they hold what is ticked.
+
 ## [0.44.3] — 2026-11-25
 
 ### Fixed
@@ -1887,7 +1900,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.3...v0.45.0
 [0.44.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.2...v0.44.3
 [0.44.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.1...v0.44.2
 [0.44.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.0...v0.44.1

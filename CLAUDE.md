@@ -449,8 +449,13 @@ Steam has already filled, and nothing of Steam's has to be running for that.
   draws them with `DisplayMap`, and a right click changes, removes, copies
   to, swaps with and mutes, and while cloning makes a monitor the source
   (`cloneSource`) or flips its copy (`flippedMonitors`). **Profiles**
-  (`Profiles`, `profiles.json`) are the whole arrangement under a name,
-  loaded from the tab or the tray; nothing plays at start still. The tray
+  (`Profiles`, `profiles.json`) are what the monitors ticked when saving
+  show, under a name -- the chosen one ticked to begin with -- loaded from
+  the tab or the tray onto those monitors alone, each the one it came from,
+  the others left as they are (the user's word of 25 November: a profile
+  of one monitor is not to start anything on the others; until 0.45.0 it
+  kept every monitor, as Wallpaper Engine's does); cloned, the one picture.
+  Nothing plays at start still. The tray
   has a menu per monitor with two or more and the layout per monitor, and
   today's menu otherwise. A window covering a monitor pauses that one, or
   every one with "Pause all"/"Stop all" (`whenCovered` `pauseall`/`stopall`);
