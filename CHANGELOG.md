@@ -6,6 +6,16 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.2] — 2026-11-25
+
+### Fixed
+
+- **A monitor unplugged in the middle of a playlist's transition no
+  longer skips a wallpaper.** The transition waited for a screen that had
+  gone, so the wallpaper on its way never came and the old one was back
+  when the monitor was; it finishes at once now, and the monitor comes
+  back showing the wallpaper the playlist had turned to.
+
 ## [0.45.1] — 2026-11-25
 
 ### Fixed
@@ -1914,7 +1924,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.2...HEAD
+[0.45.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.0...v0.45.1
 [0.45.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.3...v0.45.0
 [0.44.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.2...v0.44.3

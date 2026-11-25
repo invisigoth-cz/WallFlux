@@ -137,6 +137,16 @@ Item {
 
     onHoldingThePlaylistChanged: playlist.hold(display.holdingThePlaylist)
 
+    // A monitor unplugged in the middle of a transition takes its surface
+    // with it, and the screen that was to say it was holding never does:
+    // the wallpaper on its way was skipped, and the old one came back with
+    // the monitor (25 November, measured with kscreen-doctor). Finished at
+    // once, there being nothing left to animate.
+    onConnectedChanged: {
+        if (!display.connected && display.arriving !== "")
+            display.swapNow();
+    }
+
     /// Puts this wallpaper on show at once, with no transition.
     ///
     /// In the middle of one, the transition is taken over and goes to this
@@ -366,8 +376,9 @@ Item {
 
         if (id !== "")
             shown.select(id);
-        if (surfaces.count > 0)
-            display.firstSurface().release(how, playlist.transitionMs);
+        const first = surfaces.count > 0 ? display.firstSurface() : null;
+        if (first)
+            first.release(how, playlist.transitionMs);
     }
 
     /// The screen that never answered. A grab comes back only while the
