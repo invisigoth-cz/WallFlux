@@ -111,11 +111,16 @@ Window {
         Desktop.asWallpaper(surface);
         surface.visible = true;
     }
-    // Transparent while nothing is playing, so the desktop's own wallpaper
-    // shows through rather than being covered by a black rectangle. Black
-    // under a wallpaper that is playing, which is what a video's letterbox
-    // edges sit on in the moment before the first frame arrives.
-    color: surface.playing ? "black" : "transparent"
+    // Transparent always, so the desktop's own wallpaper shows through
+    // while nothing is playing; the black a wallpaper sits on is `backdrop`.
+    // **Never the window's own colour**: a window born opaque gets an opaque
+    // region from Qt that turning it transparent later does not take back,
+    // so KWin went on skipping what is under it -- a surface made while
+    // something played (a layout switched, a profile loaded, a monitor
+    // plugged in) left the desktop un-drawn after Off, with moved windows
+    // smearing over it (25 November, measured with WAYLAND_DEBUG: a window
+    // born black sends set_opaque_region, one turned black later never does).
+    color: "transparent"
     title: qsTr("WallFlux")
 
     /// Holds what is on this screen still, so that it can be changed
@@ -216,6 +221,16 @@ Window {
             leaving.opacity = 0;
             leaving.source = "";
         }
+    }
+
+    // What a video's letterbox edges sit on in the moment before the first
+    // frame arrives -- under everything, the other screens' copies too.
+    Rectangle {
+        id: backdrop
+
+        anchors.fill: parent
+        color: "black"
+        visible: surface.playing
     }
 
     // Everything the screen shows, gathered so that it can be one texture

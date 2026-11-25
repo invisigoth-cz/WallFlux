@@ -6,6 +6,18 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.3] — 2026-11-25
+
+### Fixed
+
+- **The desktop's own wallpaper comes back after Off, whatever was
+  switched before.** A wallpaper surface made while something was playing
+  -- the layout switched between one per monitor and cloned, a profile
+  loaded, a monitor plugged in -- told the compositor it was opaque and
+  never took it back, so after Off the desktop under it was not drawn and
+  moved windows left trails across it. The surface is transparent from
+  the start now, and the black a wallpaper sits on is drawn inside it.
+
 ## [0.44.2] — 2026-11-25
 
 ### Changed
@@ -1875,7 +1887,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.2...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.3...HEAD
+[0.44.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.2...v0.44.3
 [0.44.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.1...v0.44.2
 [0.44.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.43.0...v0.44.0
