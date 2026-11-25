@@ -1904,6 +1904,18 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   `Desktop::asWallpaper`. Check with a KWin script printing each window's
   `output.name`, not with our own log.
 
+- **A wallpaper's window is never coloured, only what is inside it.** Qt
+  gives a window born opaque an opaque region and does not take it back
+  when it turns transparent -- measured with `WAYLAND_DEBUG=client` on a
+  plain `Window`: born black, it sends `set_opaque_region`; born
+  transparent and turned black and back, never. A surface made while
+  something played (a layout switched, a profile loaded, a monitor
+  plugged in) then kept KWin from drawing the desktop under it after Off:
+  stale pixels, and windows dragged across them left trails. A screenshot
+  composes afresh and shows the desktop, so it cannot show this (25
+  November, the desktop PC with two monitors). The window is
+  `"transparent"` and the black is `backdrop`, a rectangle in it.
+
 - **`LayerBottom`, never `LayerBackground`.** Plasma draws its own desktop
   into a background-layer surface, and clicking the desktop raises it above
   anything else in that layer — the wallpaper vanished and the system one
