@@ -2939,8 +2939,15 @@ released in 0.43.0 after the user tried it on the laptop with a monitor.
   with is the question.
 - **Wallpapers against Windows**: Augmentation's bolts (white-violet there,
   blue here), Space Visualizer's lava spark fans (fewer a minute), DOOM's D
-  and M (follow the music at 0.75), Alien Isolation's reflections and lit particles, Blue Dawn's flare moved
-  by hand (`MOVED` in `render.rs`, until its cause is found).
+  and M (follow the music at 0.75), Alien Isolation's reflections and lit
+  particles. **Blue Dawn's flare stays moved by hand** (`MOVED` in
+  `render.rs`; closed on 25 November, the user's word): it looks as on
+  Windows, and the workshop preset it is (Lens Flare 2081838461) is in no
+  other wallpaper here. When one turns up that carries it, find the cause
+  with the two side by side -- the hand's offset will not reach it. On the
+  recording the flare's dots drift slowly round a point above the object's
+  origin, which says Wallpaper Engine turns the layer about a pivot the
+  script finds non-zero.
 - **The grid**, to be optimised.
 - **WallFlux itself, checked**: speed, size, installing, uninstalling,
   what it takes of the machine.
