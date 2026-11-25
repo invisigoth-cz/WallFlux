@@ -1995,7 +1995,12 @@ readonly property bool silent: display.mutedHere || display.mutedAll || display.
   `wallflux_scene_has_sound` -- the package's table and that one entry,
   45 ms for all 41 packages where reading them whole is hundreds of
   megabytes -- and a video's streams from the ffprobe that already asks
-  its size. Six of ten videos and 19 of 41 scenes carry one. A web page
+  its size -- **and then its sound track heard out** (`audible`, ffmpeg's
+  `astats` peak, a quarter of a second): fallout_wallpaper by sodaz and
+  Halo Echoes 5 carry a track of noughts from end to end, -inf dB, and
+  were "Sound of its own: yes" over a wallpaper that never makes one (25
+  November); below -70 dB is no sound. Six of twelve videos and 19 of
+  41 scenes carry one. A web page
   is left without the row: it plays what it likes.
 
 - **Who made an installed wallpaper takes two questions, not one.**
@@ -2909,9 +2914,10 @@ released in 0.43.0 after the user tried it on the laptop with a monitor.
 
 **Then the list as the user left it on 16 November, to be offered:**
 
-- **Two wallpapers to look into** (the user's word of 24 November):
-  *fallout_wallpaper by sodaz* (a video, 2594612552) plays no sound though
-  it surely has one; *Stargate Dialing Computer* (a page, 1795132779) has
+- **A wallpaper to look into** (the user's word of 24 November):
+  *fallout_wallpaper by sodaz*, said to play no sound, has none -- its
+  track is silent, and the panel says so since 0.45.4; *Stargate Dialing
+  Computer* (a page, 1795132779) has
   interactive parts -- the right sequence opens the gate -- and the
   wallpaper's surfaces take no input, so whether and how it can be played
   with is the question.

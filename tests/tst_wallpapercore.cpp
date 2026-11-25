@@ -797,6 +797,13 @@ void TestWallpaperCore::saysWhetherItHasASoundOfItsOwn()
     QVERIFY(!silent.sound);
     QCOMPARE(silent.resolution, QStringLiteral("3840x2160"));
     QVERIFY(!probedFrom("").answered);
+
+    // A sound track is a sound only where it can be heard.
+    QVERIFY(!audible("[Parsed_astats_0 @ 0x7f] Peak level dB: -inf\n"));
+    QVERIFY(!audible("[Parsed_astats_0 @ 0x7f] Peak level dB: -91.000000\n"));
+    QVERIFY(audible("[Parsed_astats_0 @ 0x7f] Peak level dB: -3.512345\n"));
+    // Nothing readable is given the benefit of the doubt.
+    QVERIFY(audible(""));
 }
 
 #include "tst_wallpapercore.moc"

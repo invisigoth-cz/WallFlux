@@ -199,6 +199,13 @@ struct Probed
 /// printed, read back.
 Probed probedFrom(const QByteArray &printed);
 
+/// Whether a sound track can be heard at all, from what ffmpeg's `astats`
+/// printed about its loudest moment. A track that is there and silent --
+/// fallout_wallpaper by sodaz, nought from end to end -- is no sound, or
+/// the panel says "Sound of its own: yes" over a wallpaper that never
+/// makes one. Where ffmpeg said nothing that can be read, it is heard.
+bool audible(const QByteArray &printed);
+
 /// Finds the Wallpaper Engine wallpapers installed by Steam and keeps the
 /// one that was chosen.
 ///
@@ -342,6 +349,9 @@ private:
     /// answer fills itself in and says so, so the picker shows what it has
     /// and gains the rest a moment later.
     void readResolutions();
+    /// Hears out a video's sound track, which ffprobe found, and says
+    /// whether it is more than silence.
+    void listenTo(const QString &id, const QString &file);
 
     /// Takes every outstanding question back.
     void stopProbes();

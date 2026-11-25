@@ -6,6 +6,17 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.45.4] — 2026-11-25
+
+### Fixed
+
+- **A video whose sound track is silent is no longer said to have a
+  sound of its own.** The panel read only whether a track was there;
+  fallout_wallpaper by sodaz and Halo Echoes 5 carry one that is silent
+  from end to end, and were said to have sound while playing none. The
+  track is heard out now, a quarter of a second per video in the
+  background, before the panel says anything about it.
+
 ## [0.45.3] — 2026-11-25
 
 ### Fixed
@@ -1935,7 +1946,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.3...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.4...HEAD
+[0.45.4]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.3...v0.45.4
 [0.45.3]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.2...v0.45.3
 [0.45.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.1...v0.45.2
 [0.45.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.45.0...v0.45.1

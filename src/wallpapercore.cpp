@@ -145,6 +145,23 @@ QStringList probeArguments(const QString &file)
             file};
 }
 
+/// What to ask ffmpeg about the loudest moment of the first sound track:
+/// the sound alone decoded, a quarter of a second for 26 s of 4K video.
+QStringList peakArguments(const QString &file)
+{
+    return {QStringLiteral("-nostdin"), QStringLiteral("-hide_banner"), QStringLiteral("-nostats"),
+            QStringLiteral("-v"), QStringLiteral("info"),
+            // As ffprobe is told, and for the same reason.
+            QStringLiteral("-protocol_whitelist"), QStringLiteral("file"),
+            QStringLiteral("-format_whitelist"),
+            QStringLiteral("mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,asf,mpegts,flv,ogg"),
+            QStringLiteral("-vn"), QStringLiteral("-sn"), QStringLiteral("-dn"),
+            QStringLiteral("-i"), file,
+            QStringLiteral("-map"), QStringLiteral("0:a:0"),
+            QStringLiteral("-af"), QStringLiteral("astats=measure_perchannel=none:measure_overall=Peak_level"),
+            QStringLiteral("-f"), QStringLiteral("null"), QStringLiteral("-")};
+}
+
 /// Everything under this folder, added up.
 ///
 /// A web wallpaper is a folder of files and its `index.html` is the least of
@@ -603,6 +620,21 @@ Probed probedFrom(const QByteArray &printed)
     return told;
 }
 
+bool audible(const QByteArray &printed)
+{
+    // "[Parsed_astats_0 @ 0x...] Peak level dB: -inf" -- nought throughout
+    // reads as -inf. Below -70 dB nobody hears it over a room either.
+    static const QRegularExpression peak(QStringLiteral("Peak level dB: (\\S+)"));
+    const auto said = peak.match(QString::fromLatin1(printed));
+    if (!said.hasMatch())
+        return true;
+    if (said.captured(1) == QLatin1StringView("-inf"))
+        return false;
+    bool number = false;
+    const double dB = said.captured(1).toDouble(&number);
+    return !number || dB > -70.0;
+}
+
 WallpaperCore::WallpaperCore(QObject *parent)
     : QObject(parent)
 {
@@ -886,17 +918,41 @@ void WallpaperCore::readResolutions()
             if (match == m_wallpapers.end())
                 return;
 
-            const auto tell = [&told](Wallpaper &one) {
-                if (!told.resolution.isEmpty())
-                    one.resolution = told.resolution;
-                one.soundKnown = true;
-                one.hasSound = told.sound;
-            };
-            tell(*match);
+            if (!told.resolution.isEmpty())
+                match->resolution = told.resolution;
+            // A sound track is heard out before the panel is told of it,
+            // so that it does not say yes and then no.
+            if (!told.sound) {
+                match->soundKnown = true;
+                match->hasSound = false;
+            } else {
+                listenTo(id, match->source.toLocalFile());
+            }
             emit wallpapersChanged();
         });
         probe->start(QStringLiteral("ffprobe"), probeArguments(wallpaper.source.toLocalFile()));
     }
+}
+
+void WallpaperCore::listenTo(const QString &id, const QString &file)
+{
+    auto *peak = new QProcess(this);
+    peak->setProcessChannelMode(QProcess::MergedChannels);
+    m_probes.append(peak);
+    connect(peak, &QProcess::finished, this, [this, peak, id]() {
+        m_probes.removeAll(peak);
+        peak->deleteLater();
+
+        const auto match = std::ranges::find(m_wallpapers, id, &Wallpaper::id);
+        if (match == m_wallpapers.end())
+            return;
+        match->soundKnown = true;
+        match->hasSound = audible(peak->readAllStandardOutput());
+        if (!match->hasSound)
+            qCInfo(lcScan) << "the sound track of" << id << "is silent";
+        emit wallpapersChanged();
+    });
+    peak->start(QStringLiteral("ffmpeg"), peakArguments(file));
 }
 
 WallpaperCore::~WallpaperCore()
