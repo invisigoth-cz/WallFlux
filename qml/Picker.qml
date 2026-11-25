@@ -2044,10 +2044,20 @@ ApplicationWindow {
         /// How many are Wallpaper Engine's own, which are only hidden.
         readonly property int official: removing.many.filter(one => one.official).length
 
+        /// Asked a second time on the button itself, as the panel's Remove
+        /// asks -- the user's word of 25 November. Every opening starts at
+        /// the first question.
+        property bool asking: false
+        onAboutToShow: removing.asking = false
+
         function confirm() {
             const going = removing.able;
             if (!removing.possible)
                 return;
+            if (!removing.asking) {
+                removing.asking = true;
+                return;
+            }
             removing.close();
             for (const one of going)
                 picker.remove(one);
@@ -2110,7 +2120,7 @@ ApplicationWindow {
                 Item { Layout.fillWidth: true }
 
                 RoundedButton {
-                    text: qsTr("Remove")
+                    text: removing.asking ? qsTr("Really remove?") : qsTr("Remove")
                     icon.name: "edit-delete"
                     accent: Look.negative
                     enabled: removing.possible

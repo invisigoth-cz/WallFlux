@@ -6,6 +6,15 @@ numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.2] — 2026-11-25
+
+### Changed
+
+- **Removing from the library asks twice, as the panel does.** The
+  question Delete and Remove chosen open turns its Remove into "Really
+  remove?" on the first click or Enter, with Cancel beside it; only the
+  second takes the wallpapers away.
+
 ## [0.44.1] — 2026-11-25
 
 ### Fixed
@@ -1866,7 +1875,8 @@ The first attempt: a renderer of its own in Rust and OpenGL, reading
 Wallpaper Engine's `.tex` and scene formats and drawing the scenes directly.
 Tagged for the record, and not continued — see 0.2.0.
 
-[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.1...HEAD
+[Unreleased]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.2...HEAD
+[0.44.2]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.1...v0.44.2
 [0.44.1]: https://github.com/invisigoth-cz/WallFlux/compare/v0.44.0...v0.44.1
 [0.44.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/invisigoth-cz/WallFlux/compare/v0.42.4...v0.43.0
